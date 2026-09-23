@@ -17,17 +17,17 @@ const SYSTEM_PROMPT = [
 
 async function main(): Promise<void> {
   const program = new Command()
-    .name("harness")
+    .name("garuda")
     .description("A terminal coding agent.")
     .version("0.1.0-m1")
     .requiredOption("-p, --prompt <task>", "run one task and exit")
-    .option("-m, --model <id>", "model id (or set HARNESS_MODEL)")
+    .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
     .parse();
 
   const options = program.opts<{ prompt: string; model?: string }>();
-  const model = options.model ?? process.env.HARNESS_MODEL;
+  const model = options.model ?? process.env.GARUDA_MODEL;
   if (!model) {
-    program.error("Set a model with --model <id> or the HARNESS_MODEL variable.");
+    program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
     return;
   }
 

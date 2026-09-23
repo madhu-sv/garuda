@@ -1,11 +1,11 @@
 {
-  "name": "agent-harness",
+  "name": "garuda",
   "version": "0.1.0-m1",
-  "description": "A terminal coding agent harness (lite coding-agent CLI).",
+  "description": "Garuda: a terminal coding agent.",
   "type": "module",
   "private": true,
   "bin": {
-    "harness": "dist/cli/index.js"
+    "garuda": "dist/cli/index.js"
   },
   "engines": {
     "node": ">=22"

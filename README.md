@@ -1,6 +1,6 @@
-# agent-harness
+# Garuda
 
-A terminal coding agent. Version 0.1 is in progress.
+Garuda is a terminal coding agent. Version 0.1 is in progress.
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
 ## Status
@@ -19,8 +19,9 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 pnpm install
 pnpm check          # typecheck + lint + tests
 pnpm build
+pnpm link --global   # puts `garuda` on your PATH
 export ANTHROPIC_API_KEY=...
-node dist/cli/index.js -p "Explain what this repo does" --model <model-id>
+garuda -p "Explain what this repo does" --model <model-id>
 ```
 
 M1 has no tools yet, so the agent can only talk. M2 adds the read-only tools.
