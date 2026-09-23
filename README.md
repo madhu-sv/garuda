@@ -48,6 +48,9 @@ Notes:
 - The binary is about 100–150 MB, because it contains the Node runtime.
 - Build on each platform that you want to run on. A binary built on an Apple silicon Mac runs only on Apple silicon Macs.
 - On macOS, the script signs the binary ad hoc (`codesign --sign -`), so it runs on the machine that built it.
+- Homebrew's Node has single executables turned off. The script then downloads the official Node build of
+  the same version from nodejs.org, checks its SHA-256 sum and keeps it in `~/.cache/garuda`.
+  Set `GARUDA_SEA_NODE=/path/to/node` to use a Node binary of your choice, or `NODEJS_ORG_MIRROR` to use a mirror.
 
 ## Layout
 
