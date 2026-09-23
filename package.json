@@ -16,7 +16,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",
-    "check": "pnpm typecheck && pnpm lint && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "package": "tsup && node scripts/package.mjs"
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
@@ -30,5 +31,10 @@
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

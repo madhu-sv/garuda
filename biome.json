@@ -1,13 +1,26 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": { "ignoreUnknown": false },
-  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": false
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
   "linter": {
     "enabled": true,
     "rules": {
       "preset": "recommended",
-      "suspicious": { "noExplicitAny": "error" },
+      "suspicious": {
+        "noExplicitAny": "error"
+      },
       "style": {
         "noRestrictedImports": {
           "level": "error",
@@ -24,10 +37,27 @@
   },
   "overrides": [
     {
-      "includes": ["src/sandbox/**"],
-      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+      "includes": ["src/sandbox/**", "scripts/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
     }
   ],
-  "javascript": { "formatter": { "quoteStyle": "double" } },
-  "assist": { "enabled": true, "actions": { "source": { "organizeImports": "on" } } }
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
 }

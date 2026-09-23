@@ -3,9 +3,11 @@ import { runAgent } from "../loop/runAgent.js";
 import { AnthropicClient } from "../model/anthropic.js";
 import { addUserMessage, createSession } from "../session/session.js";
 import { ToolRegistry } from "../tools/registry.js";
+import { VERSION } from "../version.js";
+import { describeError, greeting } from "./greeting.js";
 
 /**
- * M1 entry point: one-shot mode only, no tools yet.
+ * M1 entry point: a greeting with no task, one-shot mode with -p. No tools yet.
  * M5 adds interactive mode, Ctrl-C handling and the full renderer (F1–F4).
  */
 
@@ -19,12 +21,17 @@ async function main(): Promise<void> {
   const program = new Command()
     .name("garuda")
     .description("A terminal coding agent.")
-    .version("0.1.0-m1")
-    .requiredOption("-p, --prompt <task>", "run one task and exit")
+    .version(VERSION)
+    .option("-p, --prompt <task>", "run one task and exit")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
     .parse();
 
-  const options = program.opts<{ prompt: string; model?: string }>();
+  const options = program.opts<{ prompt?: string; model?: string }>();
+  if (options.prompt === undefined) {
+    process.stdout.write(greeting());
+    return;
+  }
+
   const model = options.model ?? process.env.GARUDA_MODEL;
   if (!model) {
     program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
@@ -50,6 +57,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`Error: ${describeError(error)}\n`);
   process.exitCode = 1;
 });

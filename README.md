@@ -15,16 +15,39 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 
 ## Use
 
+You need Node 22 or later and pnpm 10. Node 25 and later do not include corepack, so install pnpm with npm:
+
 ```sh
+npm install -g pnpm@10
 pnpm install
 pnpm check          # typecheck + lint + tests
 pnpm build
-pnpm link --global   # puts `garuda` on your PATH
 export ANTHROPIC_API_KEY=...
-garuda -p "Explain what this repo does" --model <model-id>
+export GARUDA_MODEL=<model-id>
+node dist/cli/index.js                                  # prints a greeting
+node dist/cli/index.js -p "Explain what this repo does" # runs one task
 ```
 
 M1 has no tools yet, so the agent can only talk. M2 adds the read-only tools.
+
+## Standalone binary
+
+`pnpm package` builds one executable file, `bin/garuda`, for the machine you build on.
+It holds Node and all of Garuda, so the target machine does not need Node.
+It needs Node 25.5 or later to build (it uses `node --build-sea`).
+
+```sh
+pnpm package
+./bin/garuda                 # greeting
+./bin/garuda --version
+sudo cp bin/garuda /usr/local/bin/   # optional: put it on your PATH
+```
+
+Notes:
+
+- The binary is about 100–150 MB, because it contains the Node runtime.
+- Build on each platform that you want to run on. A binary built on an Apple silicon Mac runs only on Apple silicon Macs.
+- On macOS, the script signs the binary ad hoc (`codesign --sign -`), so it runs on the machine that built it.
 
 ## Layout
 
@@ -34,7 +57,8 @@ M1 has no tools yet, so the agent can only talk. M2 adds the read-only tools.
 | `src/loop/` | `runAgent(session, deps)`: the agent loop |
 | `src/tools/` | `Tool<I, O>` and the registry (validation, error results) |
 | `src/session/` | In-memory session state |
-| `src/cli/` | Entry point (one-shot mode only in M1) |
+| `src/cli/` | Entry point: greeting, and one-shot mode with `-p` |
+| `scripts/` | Build helpers. `package.mjs` makes the standalone binary |
 | `test/` | Vitest suites. `loop.test.ts` holds the M1 acceptance test |
 
 ## Rules
