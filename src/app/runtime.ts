@@ -1,4 +1,4 @@
-import { buildSystemPrompt, loadInstructions } from "../context/instructions.js";
+import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
 import {
   type AgentEvent,
   type AgentResult,
@@ -79,7 +79,11 @@ export class Runtime {
 
   static async create(options: RuntimeOptions): Promise<Runtime> {
     const settings = options.settings ?? (await loadSettings(options.root));
-    const system = buildSystemPrompt(options.root, await loadInstructions(options.root));
+    const system = buildSystemPrompt(
+      options.root,
+      await loadInstructions(options.root),
+      await loadMemory(options.root),
+    );
     const runtime = new Runtime(options, settings, system);
     if (options.resume !== undefined) {
       runtime.current = await resumeSession({

@@ -21,7 +21,7 @@ function call(name: string, input: unknown) {
 }
 
 describe("tool registry", () => {
-  it("ships six tools with JSON schemas; only glob, grep and read_file are read-only", () => {
+  it("ships seven tools with JSON schemas; only glob, grep and read_file are read-only", () => {
     const specs = registry.specs();
     expect(specs.map((s) => s.name)).toEqual([
       "bash",
@@ -29,6 +29,7 @@ describe("tool registry", () => {
       "glob",
       "grep",
       "read_file",
+      "remember",
       "write_file",
     ]);
     for (const spec of specs) expect(spec.inputSchema).toMatchObject({ type: "object" });

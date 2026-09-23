@@ -113,6 +113,7 @@ function apply(
   extra: { summary?: ModelResponse; costUsd?: number | undefined } = {},
 ): CompactionResult {
   session.messages = messages;
+  session.files.forgetReads();
   session.contextTokens = result.afterTokens;
   session.journal?.write({
     type: "compaction",

@@ -93,6 +93,10 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
 - At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,
   the model summarises the older turns. The last 4 turns always stay in full.
 - `GARUDA.md` in the project root goes into the system prompt.
+- Project memory: the `remember` tool saves lasting facts (build and test commands, layout, conventions)
+  to `.garuda/memory.md`, with your approval. The next session loads them after `GARUDA.md`.
+  Edit or delete lines freely. Add `remember` to `permissions.allow` to skip the question.
+- `read_file` does not send the same lines of an unchanged file twice. After compaction it sends them again.
 - Garuda knows the price and context window of current Claude models. For other models, set them in settings.
 
 ## Permissions

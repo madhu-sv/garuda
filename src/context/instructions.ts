@@ -5,6 +5,23 @@ export const INSTRUCTIONS_FILE = "GARUDA.md";
 /** Longer files are cut, so one file cannot fill the context. */
 export const INSTRUCTIONS_MAX_CHARS = 40_000;
 
+/** Project memory: facts that the remember tool saved in earlier sessions. */
+export const MEMORY_FILE = ".garuda/memory.md";
+export const MEMORY_MAX_CHARS = 8_000;
+
+/** Read the project memory. Undefined when there is no file or it is empty. */
+export async function loadMemory(root: string): Promise<string | undefined> {
+  let text: string;
+  try {
+    text = await readFile(join(root, MEMORY_FILE), "utf8");
+  } catch {
+    return undefined;
+  }
+  text = text.trim();
+  if (text === "") return undefined;
+  return text.length <= MEMORY_MAX_CHARS ? text : text.slice(0, MEMORY_MAX_CHARS);
+}
+
 /** Read GARUDA.md from the working root (F21). Undefined when there is no file. */
 export async function loadInstructions(root: string): Promise<string | undefined> {
   let text: string;
@@ -24,7 +41,11 @@ export async function loadInstructions(root: string): Promise<string | undefined
  * The system prompt. Garuda builds it once per process and sends the same bytes
  * on every request, so the prompt cache stays valid (N2). It holds no time or counters.
  */
-export function buildSystemPrompt(root: string, instructions: string | undefined): string {
+export function buildSystemPrompt(
+  root: string,
+  instructions: string | undefined,
+  memory?: string,
+): string {
   const base = [
     "You are Garuda, a coding agent in a terminal.",
     `You work inside one project folder, the working root: ${root}`,
@@ -37,16 +58,29 @@ export function buildSystemPrompt(root: string, instructions: string | undefined
     "Each bash call starts in the working root. Do not cd to it, and do not use absolute paths.",
     "Do not pipe a command into tail or head: the pipe hides the exit code, and Garuda already cuts long output.",
     "If the user denies a call, do not retry it. Ask what to do instead.",
+    "When you learn a lasting fact about this project that will save work next time (how to build or test,",
+    "where things are, conventions), save it with remember. Do not save task details or secrets.",
     "Paths are relative to the working root.",
     "Be brief. Cite file paths and line numbers when you point to code.",
   ].join("\n");
-  if (instructions === undefined) return base;
-  return [
-    base,
-    "",
-    `# Project instructions (${INSTRUCTIONS_FILE})`,
-    "The project owner wrote these instructions. Follow them unless they conflict with the user's request.",
-    "",
-    instructions,
-  ].join("\n");
+  const parts = [base];
+  if (instructions !== undefined) {
+    parts.push(
+      "",
+      `# Project instructions (${INSTRUCTIONS_FILE})`,
+      "The project owner wrote these instructions. Follow them unless they conflict with the user's request.",
+      "",
+      instructions,
+    );
+  }
+  if (memory !== undefined) {
+    parts.push(
+      "",
+      `# Project memory (${MEMORY_FILE})`,
+      "Facts from earlier sessions. They can be out of date: check a fact before you rely on it.",
+      "",
+      memory,
+    );
+  }
+  return parts.join("\n");
 }
