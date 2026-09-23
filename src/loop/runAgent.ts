@@ -100,8 +100,9 @@ async function callModel(
 }
 
 /**
- * Run the tool calls of one step, in order.
- * M2 runs read-only calls in parallel (F8). Results keep the call order in all cases.
+ * Run the tool calls of one step (F8). Consecutive read-only calls run in parallel.
+ * Other calls (writes, shell, unknown tools) run one at a time, in call order.
+ * The results always keep the call order.
  */
 async function runTools(
   calls: readonly ToolUseBlock[],
@@ -110,20 +111,40 @@ async function runTools(
   signal: AbortSignal,
   emit: (event: AgentEvent) => void,
 ): Promise<ToolResultBlock[]> {
-  const results: ToolResultBlock[] = [];
-  for (const call of calls) {
-    signal.throwIfAborted();
+  const runOne = async (call: ToolUseBlock): Promise<ToolResultBlock> => {
     emit({ type: "tool_call", call });
     const outcome = await tools.execute(call, { root, signal });
     emit({ type: "tool_result", call, outcome });
-    results.push({
+    return {
       type: "tool_result",
       toolUseId: call.id,
       content: outcome.content,
       isError: outcome.isError,
-    });
+    };
+  };
+
+  const results: ToolResultBlock[] = [];
+  for (const batch of batches(calls, (call) => tools.get(call.name)?.readOnly === true)) {
+    signal.throwIfAborted();
+    if (batch.parallel) results.push(...(await Promise.all(batch.calls.map(runOne))));
+    else for (const call of batch.calls) results.push(await runOne(call));
   }
   return results;
+}
+
+/** Split calls into runs of parallel-safe calls and single serial calls. */
+function batches<T>(
+  items: readonly T[],
+  isParallel: (item: T) => boolean,
+): Array<{ parallel: boolean; calls: T[] }> {
+  const out: Array<{ parallel: boolean; calls: T[] }> = [];
+  for (const item of items) {
+    const parallel = isParallel(item);
+    const last = out.at(-1);
+    if (parallel && last?.parallel) last.calls.push(item);
+    else out.push({ parallel, calls: [item] });
+  }
+  return out;
 }
 
 function finalReason(response: ModelResponse): AgentStopReason {

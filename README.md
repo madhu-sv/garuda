@@ -8,8 +8,8 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | Milestone | State |
 | --- | --- |
 | M1 Skeleton and fake model | Done |
-| M2 Read-only tools | Next |
-| M3 Write tools and permissions | — |
+| M2 Read-only tools | Done |
+| M3 Write tools and permissions | Next |
 | M4 Limits, context, sessions | — |
 | M5 CLI polish and evals | — |
 
@@ -28,7 +28,13 @@ node dist/cli/index.js                                  # prints a greeting
 node dist/cli/index.js -p "Explain what this repo does" # runs one task
 ```
 
-M1 has no tools yet, so the agent can only talk. M2 adds the read-only tools.
+Garuda can read and search code (read_file, glob, grep). It cannot change files yet. M3 adds that.
+
+Try it on this repo:
+
+```sh
+node dist/cli/index.js -p "Where is runAgent defined, and what does it do?"
+```
 
 ## Standalone binary
 
@@ -58,11 +64,12 @@ Notes:
 | --- | --- |
 | `src/model/` | Provider-neutral types, `ModelClient`, the Anthropic adapter, the fake model |
 | `src/loop/` | `runAgent(session, deps)`: the agent loop |
-| `src/tools/` | `Tool<I, O>` and the registry (validation, error results) |
+| `src/tools/` | `Tool<I, O>`, the registry, and the tools: `read_file`, `glob`, `grep` |
+| `src/permissions/` | Path guard: tools accept only paths inside the working root (F15) |
 | `src/session/` | In-memory session state |
 | `src/cli/` | Entry point: greeting, and one-shot mode with `-p` |
 | `scripts/` | Build helpers. `package.mjs` makes the standalone binary |
-| `test/` | Vitest suites. `loop.test.ts` holds the M1 acceptance test |
+| `test/` | Vitest suites. `loop.test.ts` and `m2.acceptance.test.ts` hold the milestone acceptance tests |
 
 ## Rules
 

@@ -1,6 +1,6 @@
 {
   "name": "garuda",
-  "version": "0.1.0-m1",
+  "version": "0.1.0-m2",
   "description": "Garuda: a terminal coding agent.",
   "type": "module",
   "private": true,
@@ -23,6 +23,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
     "commander": "^15.0.0",
+    "globby": "^16.2.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
