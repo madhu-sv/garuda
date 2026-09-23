@@ -5,6 +5,7 @@ import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { addUserMessage, createSession } from "../src/session/session.js";
 import { ToolRegistry } from "../src/tools/registry.js";
 import type { Tool } from "../src/tools/types.js";
+import { allowAll } from "./helpers.js";
 
 /** Tools that record when they start and end, so the test can see overlap. */
 function tracker() {
@@ -49,7 +50,12 @@ describe("tool scheduling (F8)", () => {
     ]);
     const session = createSession("/tmp");
     addUserMessage(session, "go");
-    await runAgent(session, { model, tools: new ToolRegistry([t.read, t.write]), system: "s" });
+    await runAgent(session, {
+      model,
+      tools: new ToolRegistry([t.read, t.write]),
+      system: "s",
+      permissions: allowAll(),
+    });
 
     // r1 and r2 overlap. w1, w2 and r3 each run alone, after the one before.
     expect(t.log.slice(0, 2).sort()).toEqual(["start r1", "start r2"]);

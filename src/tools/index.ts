@@ -1,9 +1,12 @@
+import { bashTool } from "./bash.js";
+import { editFileTool } from "./editFile.js";
 import { globTool } from "./glob.js";
 import { grepTool } from "./grep.js";
 import { readFileTool } from "./readFile.js";
 import type { AnyTool } from "./types.js";
+import { writeFileTool } from "./writeFile.js";
 
-/** The tools that Garuda 0.1 ships. M3 adds write_file, edit_file and bash. */
+/** The tools that Garuda 0.1 ships. */
 export function defaultTools(): AnyTool[] {
-  return [readFileTool, globTool, grepTool];
+  return [readFileTool, globTool, grepTool, writeFileTool, editFileTool, bashTool];
 }

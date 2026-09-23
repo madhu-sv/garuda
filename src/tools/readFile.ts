@@ -32,7 +32,11 @@ export const readFileTool: Tool<z.infer<typeof input>> = {
   inputSchema: input,
   readOnly: true,
 
-  async run({ path, offset = 1, limit = LIMITS.readLines }, { root }) {
+  async describe({ path }, { root }) {
+    return { target: { kind: "path", path: displayPath(root, await resolveInRoot(root, path)) } };
+  },
+
+  async run({ path, offset = 1, limit = LIMITS.readLines }, { root, files }) {
     const absolute = await resolveInRoot(root, path);
     const shown = displayPath(root, absolute);
 
@@ -47,6 +51,8 @@ export const readFileTool: Tool<z.infer<typeof input>> = {
 
     const buffer = await readFile(absolute);
     if (looksBinary(buffer)) throw new Error(`${shown} is a binary file.`);
+    // edit_file needs this record (F11). A partial read still counts: the edit checks the whole file.
+    files.record(absolute, buffer);
 
     const lines = splitLines(buffer.toString("utf8"));
     if (buffer.length === 0) return `${shown} is empty.`;

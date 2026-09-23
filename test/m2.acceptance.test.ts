@@ -2,6 +2,8 @@ import { afterAll, describe, expect, it } from "vitest";
 import { type AgentEvent, runAgent } from "../src/loop/runAgent.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import type { ModelRequest, ToolResultBlock } from "../src/model/types.js";
+import { AutoApprover } from "../src/permissions/autoApprover.js";
+import { PermissionEngine } from "../src/permissions/engine.js";
 import { addUserMessage, createSession } from "../src/session/session.js";
 import { defaultTools } from "../src/tools/index.js";
 import { ToolRegistry } from "../src/tools/registry.js";
@@ -41,12 +43,14 @@ describe("M2 acceptance", () => {
     ]);
 
     const events: AgentEvent[] = [];
+    const approver = new AutoApprover("deny");
     const session = createSession(repo.root);
     addUserMessage(session, "Where is parseConfig defined?");
     const result = await runAgent(session, {
       model,
       tools: new ToolRegistry(defaultTools()),
       system: "test",
+      permissions: new PermissionEngine({ root: repo.root, approver }),
       onEvent: (e) => events.push(e),
     });
 
@@ -56,5 +60,6 @@ describe("M2 acceptance", () => {
     expect(calls.sort()).toEqual(["glob", "grep", "read_file"]);
     const errors = events.filter((e) => e.type === "tool_result" && e.outcome.isError);
     expect(errors).toEqual([]);
+    expect(approver.requests).toEqual([]);
   });
 });

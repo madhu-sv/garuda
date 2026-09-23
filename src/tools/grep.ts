@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { z } from "zod";
 import { displayPath, resolveInRoot } from "../permissions/pathGuard.js";
+import { isSensitive } from "../permissions/sensitive.js";
 import { isDirectory, listFiles } from "./files.js";
 import { cutLine, joinWithinLimit, LIMITS, looksBinary, splitLines } from "./limits.js";
 import type { Tool } from "./types.js";
@@ -61,7 +62,7 @@ export const grepTool: Tool<Input, GrepOutput> = {
   name: "grep",
   description: [
     "Search file contents in the working root with a JavaScript regular expression.",
-    "Respects .gitignore. Skips binary files and files over 1 MB.",
+    "Respects .gitignore. Skips binary files, sensitive files (.env, keys) and files over 1 MB.",
     'Modes: "files" lists matching paths, "content" shows path:line:text, "count" shows matches per file.',
   ].join("\n"),
   inputSchema: input,
@@ -96,6 +97,8 @@ export const grepTool: Tool<Input, GrepOutput> = {
         truncated = true;
         break;
       }
+      // Sensitive files are never searched (F20). read_file with an allow rule can still read them.
+      if (isSensitive(displayPath(root, file))) continue;
       const info = await stat(file).catch(() => undefined);
       if (info === undefined || !info.isFile() || info.size > LIMITS.grepFileBytes) continue;
       const buffer = await readFile(file);

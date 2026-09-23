@@ -8,9 +8,11 @@ import {
   type Usage,
   ZERO_USAGE,
 } from "../model/types.js";
+import type { PermissionGate } from "../permissions/types.js";
+import type { Executor } from "../sandbox/types.js";
 import type { Session } from "../session/session.js";
 import type { ToolRegistry } from "../tools/registry.js";
-import type { ToolOutcome } from "../tools/types.js";
+import type { ToolContext, ToolOutcome } from "../tools/types.js";
 
 /**
  * The agent loop (F5). Rule: the loop gets every dependency as an argument
@@ -27,6 +29,10 @@ export interface AgentDeps {
   model: ModelClient;
   tools: ToolRegistry;
   system: string;
+  /** Every tool call passes this check (F17–F20). Tests use an AutoApprover. */
+  permissions: PermissionGate;
+  /** Runs bash commands (N8). Without it, bash calls fail. */
+  executor?: Executor;
   maxTokens?: number;
   /** Hard stop. M4 adds the token budget and the user message (F6). */
   maxSteps?: number;
@@ -77,7 +83,14 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       return { stopReason: finalReason(response), steps: step, usage };
     }
 
-    const results = await runTools(calls, deps.tools, session.root, signal, emit);
+    const context: ToolContext = {
+      root: session.root,
+      signal,
+      permissions: deps.permissions,
+      files: session.files,
+      ...(deps.executor === undefined ? {} : { executor: deps.executor }),
+    };
+    const results = await runTools(calls, deps.tools, context, emit);
     session.messages.push({ role: "user", content: results });
   }
 
@@ -107,13 +120,13 @@ async function callModel(
 async function runTools(
   calls: readonly ToolUseBlock[],
   tools: ToolRegistry,
-  root: string,
-  signal: AbortSignal,
+  context: ToolContext,
   emit: (event: AgentEvent) => void,
 ): Promise<ToolResultBlock[]> {
+  const { signal } = context;
   const runOne = async (call: ToolUseBlock): Promise<ToolResultBlock> => {
     emit({ type: "tool_call", call });
-    const outcome = await tools.execute(call, { root, signal });
+    const outcome = await tools.execute(call, context);
     emit({ type: "tool_result", call, outcome });
     return {
       type: "tool_result",

@@ -1,5 +1,8 @@
 import { z } from "zod";
-import type { Tool } from "../src/tools/types.js";
+import { AutoApprover } from "../src/permissions/autoApprover.js";
+import { PermissionEngine } from "../src/permissions/engine.js";
+import { FileTracker } from "../src/session/fileTracker.js";
+import type { Tool, ToolContext } from "../src/tools/types.js";
 
 /** A test tool that returns its input text in upper case. */
 export function upperTool(calls: string[] = []): Tool<{ text: string }> {
@@ -25,3 +28,19 @@ export const failTool: Tool<Record<string, never>> = {
     throw new Error("disk on fire");
   },
 };
+
+/** A permission engine that approves every call once. */
+export function allowAll(root = "/tmp"): PermissionEngine {
+  return new PermissionEngine({ root, approver: new AutoApprover("once") });
+}
+
+/** A tool context for direct registry calls. */
+export function toolContext(root: string, overrides: Partial<ToolContext> = {}): ToolContext {
+  return {
+    root,
+    signal: new AbortController().signal,
+    permissions: allowAll(root),
+    files: new FileTracker(),
+    ...overrides,
+  };
+}

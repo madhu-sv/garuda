@@ -1,7 +1,8 @@
 node_modules/
 dist/
 coverage/
-.garuda/
+.garuda/*
+!.garuda/settings.json
 *.log
 .env
 dist-sea/

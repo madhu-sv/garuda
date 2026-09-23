@@ -5,25 +5,35 @@ import type { ToolUseBlock } from "../src/model/types.js";
 import { defaultTools } from "../src/tools/index.js";
 import { LIMITS } from "../src/tools/limits.js";
 import { ToolRegistry } from "../src/tools/registry.js";
+import { toolContext } from "./helpers.js";
 import { makeSampleRepo } from "./sampleRepo.js";
 
 const repo = makeSampleRepo();
 afterAll(repo.cleanup);
 
 const registry = new ToolRegistry(defaultTools());
+const context = toolContext(repo.root);
 let id = 0;
 
 function call(name: string, input: unknown) {
   const block: ToolUseBlock = { type: "tool_use", id: `t${id++}`, name, input };
-  return registry.execute(block, { root: repo.root, signal: new AbortController().signal });
+  return registry.execute(block, context);
 }
 
 describe("tool registry", () => {
-  it("ships three read-only tools with JSON schemas", () => {
+  it("ships six tools with JSON schemas; only glob, grep and read_file are read-only", () => {
     const specs = registry.specs();
-    expect(specs.map((s) => s.name)).toEqual(["glob", "grep", "read_file"]);
+    expect(specs.map((s) => s.name)).toEqual([
+      "bash",
+      "edit_file",
+      "glob",
+      "grep",
+      "read_file",
+      "write_file",
+    ]);
     for (const spec of specs) expect(spec.inputSchema).toMatchObject({ type: "object" });
-    expect(defaultTools().every((t) => t.readOnly)).toBe(true);
+    const readOnly = defaultTools().filter((t) => t.readOnly);
+    expect(readOnly.map((t) => t.name).sort()).toEqual(["glob", "grep", "read_file"]);
   });
 });
 

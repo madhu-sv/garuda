@@ -4,7 +4,7 @@ import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import type { ToolResultBlock } from "../src/model/types.js";
 import { addUserMessage, createSession } from "../src/session/session.js";
 import { ToolRegistry } from "../src/tools/registry.js";
-import { failTool, upperTool } from "./helpers.js";
+import { allowAll, failTool, upperTool } from "./helpers.js";
 
 const SYSTEM = "test system prompt";
 
@@ -35,6 +35,7 @@ describe("runAgent (F5)", () => {
       model,
       tools: new ToolRegistry([upperTool(calls)]),
       system: SYSTEM,
+      permissions: allowAll(),
       onEvent: (e) => events.push(e),
     });
 
@@ -77,6 +78,7 @@ describe("runAgent (F5)", () => {
       model,
       tools: new ToolRegistry(),
       system: SYSTEM,
+      permissions: allowAll(),
     });
     expect(result).toMatchObject({ stopReason: "done", steps: 1 });
   });
@@ -88,7 +90,12 @@ describe("runAgent (F5)", () => {
       reply([text("done")]),
     ]);
     const session = newSession();
-    await runAgent(session, { model, tools: new ToolRegistry([upperTool(calls)]), system: SYSTEM });
+    await runAgent(session, {
+      model,
+      tools: new ToolRegistry([upperTool(calls)]),
+      system: SYSTEM,
+      permissions: allowAll(),
+    });
 
     expect(calls).toEqual(["a", "b"]);
     expect(
@@ -98,7 +105,12 @@ describe("runAgent (F5)", () => {
 
   it("returns an unknown tool to the model as an error result", async () => {
     const model = new FakeModelClient([reply([toolUse("nope", {})]), reply([text("ok")])]);
-    await runAgent(newSession(), { model, tools: new ToolRegistry(), system: SYSTEM });
+    await runAgent(newSession(), {
+      model,
+      tools: new ToolRegistry(),
+      system: SYSTEM,
+      permissions: allowAll(),
+    });
     expect(lastToolResult(model)).toMatchObject({
       isError: true,
       content: 'Error: unknown tool "nope".',
@@ -110,7 +122,12 @@ describe("runAgent (F5)", () => {
       reply([toolUse("upper", { text: 42 })]),
       reply([text("ok")]),
     ]);
-    await runAgent(newSession(), { model, tools: new ToolRegistry([upperTool()]), system: SYSTEM });
+    await runAgent(newSession(), {
+      model,
+      tools: new ToolRegistry([upperTool()]),
+      system: SYSTEM,
+      permissions: allowAll(),
+    });
     const result = lastToolResult(model);
     expect(result.isError).toBe(true);
     expect(result.content).toMatch(/invalid input for upper/);
@@ -119,7 +136,12 @@ describe("runAgent (F5)", () => {
 
   it("returns a tool exception to the model as an error result", async () => {
     const model = new FakeModelClient([reply([toolUse("fail", {})]), reply([text("ok")])]);
-    await runAgent(newSession(), { model, tools: new ToolRegistry([failTool]), system: SYSTEM });
+    await runAgent(newSession(), {
+      model,
+      tools: new ToolRegistry([failTool]),
+      system: SYSTEM,
+      permissions: allowAll(),
+    });
     expect(lastToolResult(model)).toMatchObject({
       isError: true,
       content: "Error: fail failed: disk on fire",
@@ -133,6 +155,7 @@ describe("runAgent (F5)", () => {
       model,
       tools: new ToolRegistry([upperTool()]),
       system: SYSTEM,
+      permissions: allowAll(),
       maxSteps: 3,
     });
     expect(result).toMatchObject({ stopReason: "max_steps", steps: 3 });
@@ -146,6 +169,7 @@ describe("runAgent (F5)", () => {
         model,
         tools: new ToolRegistry(),
         system: SYSTEM,
+        permissions: allowAll(),
       });
       expect(result.stopReason).toBe(reason);
     }
@@ -160,6 +184,7 @@ describe("runAgent (F5)", () => {
         model,
         tools: new ToolRegistry(),
         system: SYSTEM,
+        permissions: allowAll(),
         signal: controller.signal,
       }),
     ).rejects.toThrow();

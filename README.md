@@ -9,8 +9,8 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | --- | --- |
 | M1 Skeleton and fake model | Done |
 | M2 Read-only tools | Done |
-| M3 Write tools and permissions | Next |
-| M4 Limits, context, sessions | — |
+| M3 Write tools and permissions | Done |
+| M4 Limits, context, sessions | Next |
 | M5 CLI polish and evals | — |
 
 ## Use
@@ -28,13 +28,42 @@ node dist/cli/index.js                                  # prints a greeting
 node dist/cli/index.js -p "Explain what this repo does" # runs one task
 ```
 
-Garuda can read and search code (read_file, glob, grep). It cannot change files yet. M3 adds that.
+Tools: read_file, glob and grep run with no question.
+write_file, edit_file and bash show a diff or the command first. You pick: allow once, allow for this session, or deny.
+Commands run on your machine with no sandbox in 0.1, so read each one before you allow it.
 
 Try it on this repo:
 
 ```sh
 node dist/cli/index.js -p "Where is runAgent defined, and what does it do?"
+node dist/cli/index.js -p "Run the tests and tell me the result"
 ```
+
+## Permissions
+
+Put rules in `.garuda/settings.json` in the project. Deny rules always win.
+
+```json
+{
+  "executor": "host",
+  "permissions": {
+    "allow": ["bash(pnpm test*)", "bash(git status)", "edit_file(src/**)"],
+    "deny": ["bash(rm -rf*)", "bash(git push*)"]
+  },
+  "env": { "allow": ["NODE_ENV"] }
+}
+```
+
+- A rule is `tool` (every call) or `tool(pattern)`.
+- File patterns are globs relative to the root. A name without `/` matches at any depth.
+- Command patterns use `*` for any text. Garuda splits a command at `;`, `&&`, `||`, `|` and `$(…)`.
+  A deny rule blocks the command when one part matches. An allow rule must match every part.
+- Sensitive files (`.env*`, keys, `.npmrc`, `.aws/`, …) are blocked, also for reads.
+  An allow rule that names the file, for example `read_file(.env.example)`, unblocks it.
+- Write tools never change files in `.git/`.
+- Commands see only these environment variables: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`,
+  `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, `TZ`, plus the names in `env.allow`. API keys stay out.
+- With no terminal on stdin (a pipe or CI), Garuda cannot ask, so it denies calls that need approval.
 
 ## Standalone binary
 
@@ -64,12 +93,13 @@ Notes:
 | --- | --- |
 | `src/model/` | Provider-neutral types, `ModelClient`, the Anthropic adapter, the fake model |
 | `src/loop/` | `runAgent(session, deps)`: the agent loop |
-| `src/tools/` | `Tool<I, O>`, the registry, and the tools: `read_file`, `glob`, `grep` |
-| `src/permissions/` | Path guard: tools accept only paths inside the working root (F15) |
-| `src/session/` | In-memory session state |
-| `src/cli/` | Entry point: greeting, and one-shot mode with `-p` |
+| `src/tools/` | `Tool<I, O>`, the registry, and the tools: `read_file`, `glob`, `grep`, `write_file`, `edit_file`, `bash` |
+| `src/permissions/` | Path guard (F15), rules, sensitive paths, settings, and the permission engine (F17–F20) |
+| `src/sandbox/` | `Executor` interface, `ExecPolicy`, `HostExecutor`. The only place that starts processes (N8) |
+| `src/session/` | In-memory session state and read tracking for edit_file |
+| `src/cli/` | Entry point: greeting, one-shot mode with `-p`, the terminal approver |
 | `scripts/` | Build helpers. `package.mjs` makes the standalone binary |
-| `test/` | Vitest suites. `loop.test.ts` and `m2.acceptance.test.ts` hold the milestone acceptance tests |
+| `test/` | Vitest suites. `loop.test.ts`, `m2.acceptance.test.ts` and `m3.acceptance.test.ts` hold the milestone acceptance tests. `executorContract.ts` is the suite every executor must pass |
 
 ## Rules
 
