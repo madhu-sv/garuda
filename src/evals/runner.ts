@@ -182,9 +182,7 @@ export function formatReport(results: readonly EvalResult[]): string {
     ? `$${results.reduce((s, r) => s + (r.costUsd ?? 0), 0).toFixed(4)}`
     : "unknown";
   const steps = results.reduce((s, r) => s + r.steps, 0);
-  return [
-    ...rows,
-    "",
-    `${passed}/${results.length} passed · ${steps} steps · cost ${cost} · 0.1 target: 7/10`,
-  ].join("\n");
+  return [...rows, "", `${passed}/${results.length} passed · ${steps} steps · cost ${cost}`].join(
+    "\n",
+  );
 }

@@ -2,7 +2,9 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { HARD_TASKS } from "../src/evals/hardTasks.js";
 import { formatReport, runCheck, runEvalTask, writeFiles } from "../src/evals/runner.js";
+import { ALL_TASKS } from "../src/evals/suites.js";
 import { EVAL_TASKS } from "../src/evals/tasks.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 
@@ -13,7 +15,13 @@ describe("eval tasks (N5)", () => {
   });
 
   // Each task must fail as given, and pass with its solution. Otherwise the eval measures nothing.
-  for (const task of EVAL_TASKS) {
+  it("the hard suite has 6 tasks on a repo of about 110 files", () => {
+    expect(HARD_TASKS).toHaveLength(6);
+    for (const task of HARD_TASKS) expect(Object.keys(task.files).length).toBeGreaterThan(100);
+    expect(new Set(ALL_TASKS.map((t) => t.id)).size).toBe(ALL_TASKS.length);
+  });
+
+  for (const task of ALL_TASKS) {
     it(`${task.id}: the check fails before the fix and passes with the solution`, async () => {
       const root = realpathSync(mkdtempSync(join(tmpdir(), `garuda-task-${task.id}-`)));
       try {
@@ -125,6 +133,6 @@ describe("eval runner (N5)", () => {
     ]);
     expect(report).toContain("PASS  a");
     expect(report).toContain("FAIL  b");
-    expect(report).toContain("1/2 passed · 53 steps · cost $0.2100 · 0.1 target: 7/10");
+    expect(report).toContain("1/2 passed · 53 steps · cost $0.2100");
   });
 });

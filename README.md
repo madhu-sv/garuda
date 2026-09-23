@@ -55,14 +55,15 @@ Model text goes to stdout; tool activity and notes go to stderr. So `garuda -p "
 
 ## Evals
 
-`garuda eval` runs 10 tasks in scratch folders and reports pass or fail, steps, tokens and cost per task (N5).
+`garuda eval` runs eval tasks in scratch folders and reports pass or fail, steps, tokens and cost per task (N5).
 A task passes when its check command exits with 0 and the agent did not change the task's tests.
 The 0.1 target is 7 of 10.
 
 ```sh
-garuda eval --list                         # the tasks
-garuda eval -m claude-sonnet-5             # all tasks
-garuda eval -m claude-sonnet-5 -t fix-add rename --keep
+garuda eval --list                         # the tasks of each suite
+garuda eval -m claude-sonnet-5             # the basic suite (10 small repos)
+garuda eval -s hard                        # the hard suite (6 tasks on a 110-file repo)
+garuda eval -t fix-add hard-rename --keep  # some tasks, keep the scratch folders
 ```
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).

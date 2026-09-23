@@ -47,7 +47,7 @@
       }
     },
     {
-      "includes": ["src/evals/tasks.ts"],
+      "includes": ["src/evals/tasks.ts", "src/evals/shopkit.ts", "src/evals/hardTasks.ts"],
       "linter": {
         "rules": {
           "suspicious": {
