@@ -1,7 +1,8 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
 import { displayPath, resolveInRoot } from "../permissions/pathGuard.js";
+import { writeFileAtomic } from "./atomicWrite.js";
 import { unifiedDiff } from "./diff.js";
 import { splitLines } from "./limits.js";
 import type { Tool } from "./types.js";
@@ -32,8 +33,8 @@ export const writeFileTool: Tool<z.infer<typeof input>> = {
     const shown = displayPath(root, absolute);
     await mkdir(dirname(absolute), { recursive: true });
     try {
-      // "wx" fails if the file exists, with no race between a check and the write.
-      await writeFile(absolute, content, { flag: "wx" });
+      // Create-only and atomic: it fails if the file exists, and never leaves half a file.
+      await writeFileAtomic(absolute, content, { createOnly: true });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "EEXIST") {
         throw new Error(`${shown} already exists. Read it, then use edit_file to change it.`);

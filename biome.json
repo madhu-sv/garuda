@@ -45,6 +45,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/evals/tasks.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
     }
   ],
   "javascript": {

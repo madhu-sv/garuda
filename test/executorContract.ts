@@ -82,6 +82,20 @@ export function executorContract(name: string, make: () => Executor): void {
       expect(Date.now() - started).toBeLessThan(5_000);
     });
 
+    it("shutdown() kills every running command at once", async () => {
+      const pidFile = join(root, "shutdown.pid");
+      const run = executor.run(
+        `sleep 30 & echo $! > "${pidFile}"; wait`,
+        policy({ timeoutMs: 20_000 }),
+      );
+      await waitFor(() => readPid(pidFile) !== undefined);
+      const child = readPid(pidFile) ?? 0;
+      executor.shutdown();
+      const r = await run;
+      expect(r.exitCode).not.toBe(0);
+      await waitFor(() => !isAlive(child));
+    });
+
     it("kills the whole process tree on abort", async () => {
       const pidFile = join(root, "child.pid");
       const controller = new AbortController();

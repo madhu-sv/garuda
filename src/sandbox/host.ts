@@ -13,6 +13,13 @@ const KILL_GRACE_MS = 2_000;
 export class HostExecutor implements Executor {
   readonly name = "host";
   readonly isolation = "none" as const;
+  /** Process group ids of running commands. */
+  private readonly running = new Set<number>();
+
+  shutdown(): void {
+    for (const pid of this.running) signalGroup(pid, "SIGKILL");
+    this.running.clear();
+  }
 
   run(command: string, policy: ExecPolicy, options: ExecOptions = {}): Promise<ExecResult> {
     const started = Date.now();
@@ -32,6 +39,8 @@ export class HostExecutor implements Executor {
         detached: true,
       });
 
+      const pid = child.pid;
+      if (pid !== undefined) this.running.add(pid);
       let timedOut = false;
       let aborted = false;
       let killTimer: NodeJS.Timeout | undefined;
@@ -59,6 +68,7 @@ export class HostExecutor implements Executor {
       child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
 
       child.on("error", (error) => {
+        if (pid !== undefined) this.running.delete(pid);
         clearTimeout(timer);
         options.signal?.removeEventListener("abort", onAbort);
         reject(error);
@@ -66,6 +76,7 @@ export class HostExecutor implements Executor {
 
       // "close" fires after the streams end, so all output is in.
       child.on("close", (code, signal) => {
+        if (pid !== undefined) this.running.delete(pid);
         clearTimeout(timer);
         options.signal?.removeEventListener("abort", onAbort);
         // Background children may still hold the group. Stop them too.

@@ -34,6 +34,26 @@ describe("architecture rules", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("app, evals and loop never import the CLI", () => {
+    for (const folder of ["app", "evals", "loop", "context", "session"]) {
+      for (const file of sourceFiles(join(SRC, folder))) {
+        expect(
+          imports(file).filter((spec) => spec.includes("/cli/")),
+          file,
+        ).toEqual([]);
+      }
+    }
+  });
+
+  it("startup does not load the Anthropic SDK or inquirer (N3)", () => {
+    // Static imports load at startup. These two load with import() on first use.
+    const heavy = /model\/anthropic\.js$|^@anthropic-ai\/|^@inquirer\//;
+    const offenders = [...sourceFiles(join(SRC, "cli")), ...sourceFiles(join(SRC, "app"))].filter(
+      (file) => imports(file).some((spec) => heavy.test(spec)),
+    );
+    expect(offenders).toEqual([]);
+  });
+
   it("only src/sandbox starts processes (N8)", () => {
     const offenders = sourceFiles(SRC).filter(
       (file) =>

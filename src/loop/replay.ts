@@ -66,7 +66,7 @@ export async function replaySession(
 
     const endIndex = records.findIndex((r, j) => j > i && (r.type === "end" || r.type === "user"));
     const end = endIndex === -1 ? undefined : records[endIndex];
-    if (end?.type !== "end" || end.stopReason === "interrupted") {
+    if (end?.type !== "end" || end.stopReason === "interrupted" || end.stopReason === "error") {
       problems.push(
         `Run ${runs + 1} did not finish in the recording (it was interrupted). Replay stops there.`,
       );

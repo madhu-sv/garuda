@@ -1,0 +1,137 @@
+import { styleText } from "node:util";
+import type { AgentEvent } from "../loop/runAgent.js";
+import type { ToolUseBlock } from "../model/types.js";
+import type { ToolOutcome } from "../tools/types.js";
+
+/**
+ * The renderer (F3): it shows model text and tool activity as they happen.
+ * 0.1 prints plain lines. 0.2 can add an Ink renderer with the same interface.
+ */
+export interface Renderer {
+  event(event: AgentEvent): void;
+  info(text: string): void;
+  warn(text: string): void;
+  error(text: string): void;
+}
+
+type Style = Parameters<typeof styleText>[0];
+
+export interface Streams {
+  out: NodeJS.WritableStream;
+  err: NodeJS.WritableStream;
+}
+
+/**
+ * Model text goes to stdout, so `garuda -p … > answer.md` keeps only the answer.
+ * Tool activity, notes and errors go to stderr.
+ */
+export class PlainRenderer implements Renderer {
+  private readonly out: NodeJS.WritableStream;
+  private readonly err: NodeJS.WritableStream;
+  private readonly color: boolean;
+  /** True when the last text did not end with a new line. */
+  private openLine = false;
+
+  constructor(
+    streams: Streams = { out: process.stdout, err: process.stderr },
+    color = process.stderr.isTTY === true && !process.env.NO_COLOR,
+  ) {
+    this.out = streams.out;
+    this.err = streams.err;
+    this.color = color;
+  }
+
+  event(event: AgentEvent): void {
+    switch (event.type) {
+      case "text_delta":
+        this.out.write(event.text);
+        this.openLine = !event.text.endsWith("\n");
+        return;
+      case "tool_call":
+        this.line(
+          `${this.paint("cyan", "●")} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`,
+        );
+        return;
+      case "tool_result": {
+        const text = summariseResult(event.call, event.outcome);
+        this.line(
+          `  ${this.paint("dim", "⎿")} ${event.outcome.isError ? this.paint("red", text) : this.paint("dim", text)}`,
+        );
+        return;
+      }
+      case "compaction": {
+        const { stage, beforeTokens, afterTokens } = event.result;
+        this.info(`Context compacted (${stage}): ${beforeTokens} → about ${afterTokens} tokens.`);
+        return;
+      }
+      case "step_end":
+        return;
+    }
+  }
+
+  info(text: string): void {
+    this.line(this.paint("dim", text));
+  }
+
+  warn(text: string): void {
+    this.line(this.paint("yellow", text));
+  }
+
+  error(text: string): void {
+    this.line(this.paint("red", text));
+  }
+
+  /** A line on stderr. It starts on a new line if model text is still open. */
+  private line(text: string): void {
+    if (this.openLine) {
+      this.out.write("\n");
+      this.openLine = false;
+    }
+    this.err.write(`${text}\n`);
+  }
+
+  private paint(style: Style, text: string): string {
+    return this.color ? styleText(style, text) : text;
+  }
+}
+
+const cut = (text: string, max: number) =>
+  text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+
+/** One short line that says what a call does. */
+export function summariseCall(call: ToolUseBlock): string {
+  const input = (call.input ?? {}) as Record<string, unknown>;
+  const str = (key: string) => (typeof input[key] === "string" ? (input[key] as string) : "");
+  switch (call.name) {
+    case "read_file":
+    case "write_file":
+    case "edit_file":
+      return str("path");
+    case "glob":
+      return str("pattern");
+    case "grep":
+      return `/${str("pattern")}/${str("path") ? ` in ${str("path")}` : ""}`;
+    case "bash":
+      return cut(str("command").split("\n")[0] ?? "", 100);
+    default:
+      return cut(JSON.stringify(call.input), 100);
+  }
+}
+
+/** One short line that says what a call returned. */
+export function summariseResult(call: ToolUseBlock, outcome: ToolOutcome): string {
+  const first = (outcome.content.split("\n")[0] ?? "").trim();
+  if (outcome.isError) return cut(first.replace(/^Error: /, ""), 160);
+  const lines = outcome.content === "" ? 0 : outcome.content.split("\n").length;
+  switch (call.name) {
+    case "read_file":
+      return `${lines} line(s)`;
+    case "glob":
+    case "grep":
+      return first.startsWith("No ") ? first : `${lines} result line(s)`;
+    case "bash":
+      return first;
+    default:
+      return cut(first, 160);
+  }
+}

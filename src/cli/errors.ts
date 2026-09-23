@@ -1,19 +1,3 @@
-import { VERSION } from "../version.js";
-
-/** The text that `garuda` prints when you run it with no task. */
-export function greeting(): string {
-  return [
-    `Garuda ${VERSION} — a terminal coding agent.`,
-    "",
-    "Hello! Give me a task:",
-    '  garuda -p "Explain what this repo does" --model <model-id>',
-    '  garuda --resume -p "Now add a test"      (continue the last session)',
-    "",
-    "Run garuda --help for all options.",
-    "",
-  ].join("\n");
-}
-
 /** Error text with its cause chain, so network errors show the real reason. */
 export function describeError(error: unknown): string {
   const parts: string[] = [];

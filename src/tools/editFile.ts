@@ -1,6 +1,7 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { displayPath, resolveInRoot } from "../permissions/pathGuard.js";
+import { writeFileAtomic } from "./atomicWrite.js";
 import { unifiedDiff } from "./diff.js";
 import type { Tool, ToolContext } from "./types.js";
 
@@ -50,7 +51,7 @@ export const editFileTool: Tool<Input> = {
   async run(args, context) {
     // Plan again: the file can change while the user decides.
     const edit = await plan(args, context);
-    await writeFile(edit.absolute, edit.after);
+    await writeFileAtomic(edit.absolute, edit.after, { createOnly: false });
     context.files.record(edit.absolute, edit.after);
     return `Edited ${edit.shown}.`;
   },

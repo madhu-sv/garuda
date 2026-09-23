@@ -1,12 +1,15 @@
 import { styleText } from "node:util";
-import { select } from "@inquirer/prompts";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../permissions/types.js";
 
 /**
  * Asks the user in the terminal (F18): allow once, allow for this session, or deny.
  * With no terminal on stdin (a pipe, CI), nobody can answer, so it denies.
+ * Ctrl-C during the question stops the turn (F4): `onInterrupt` aborts it.
  */
 export class TerminalApprover implements Approver {
+  /** Set by the CLI: it aborts the current turn. */
+  onInterrupt: () => void = () => {};
+
   async ask(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
     const out = process.stderr;
     out.write(`\n${header(request)}\n${colorPreview(request)}\n`);
@@ -21,17 +24,25 @@ export class TerminalApprover implements Approver {
         ? "Yes, and allow this exact command for this session"
         : `Yes, and allow all ${request.tool} calls for this session`;
 
-    return select<ApprovalChoice>(
-      {
-        message: "Allow?",
-        choices: [
-          { name: "Yes, once", value: "once" },
-          { name: sessionLabel, value: "session" },
-          { name: "No, deny", value: "deny" },
-        ],
-      },
-      { signal, output: out },
-    );
+    // Loaded on first use, so startup stays fast (N3).
+    const { select } = await import("@inquirer/prompts");
+    try {
+      return await select<ApprovalChoice>(
+        {
+          message: "Allow?",
+          choices: [
+            { name: "Yes, once", value: "once" },
+            { name: sessionLabel, value: "session" },
+            { name: "No, deny", value: "deny" },
+          ],
+        },
+        { signal, output: out },
+      );
+    } catch (error) {
+      // Inquirer reads keys in raw mode, so Ctrl-C arrives here, not as SIGINT.
+      if ((error as Error).name === "ExitPromptError") this.onInterrupt();
+      throw error;
+    }
   }
 }
 

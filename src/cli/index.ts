@@ -1,27 +1,27 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { join } from "node:path";
 import { Command } from "commander";
-import { buildSystemPrompt, loadInstructions } from "../context/instructions.js";
+import { Runtime } from "../app/runtime.js";
 import { replaySession } from "../loop/replay.js";
-import { DEFAULT_MAX_STEPS, DEFAULT_TOKEN_BUDGET, runAgent } from "../loop/runAgent.js";
-import { AnthropicClient } from "../model/anthropic.js";
-import { lookupModel } from "../model/pricing.js";
-import { PermissionEngine } from "../permissions/engine.js";
-import { loadSettings } from "../permissions/settings.js";
-import { createExecutor } from "../sandbox/index.js";
-import type { RunLimits } from "../session/records.js";
-import { resumeSession } from "../session/resume.js";
-import { addUserMessage, createSession } from "../session/session.js";
-import { FileSessionStore, newSessionId, parseRecords } from "../session/store.js";
+import type { ModelClient } from "../model/types.js";
+import { FileSessionStore, parseRecords } from "../session/store.js";
 import { defaultTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { VERSION } from "../version.js";
 import { TerminalApprover } from "./approver.js";
-import { describeError, greeting } from "./greeting.js";
-import { formatTokens, stopMessage, usageLine } from "./report.js";
+import { describeError } from "./errors.js";
+import { PlainRenderer } from "./renderer.js";
+import { HELP, runRepl } from "./repl.js";
+import { formatTokens } from "./report.js";
+import { runTurnInTerminal } from "./turn.js";
 
 /**
- * Entry point: a greeting with no task, one-shot mode with -p, --resume and --replay.
- * M5 adds interactive mode, full Ctrl-C handling and the renderer (F1–F4).
+ * Entry point (F1, F2):
+ *   garuda                      chat in the current folder
+ *   garuda -p "task"            run one task and exit (also: echo "task" | garuda)
+ *   garuda --resume [id]        continue a session (chat, or one task with -p)
+ *   garuda --replay <id|file>   replay a session with no API calls
+ *   garuda eval                 run the eval tasks (N5)
  */
 
 interface Options {
@@ -31,142 +31,100 @@ interface Options {
   replay?: string;
 }
 
+/** The Anthropic SDK loads on the first model call, not at startup (N3). */
+const lazyModel = (modelId: string) => async (): Promise<ModelClient> => {
+  const { AnthropicClient } = await import("../model/anthropic.js");
+  return new AnthropicClient({ model: modelId });
+};
+
 async function main(): Promise<void> {
   const program = new Command()
     .name("garuda")
-    .description("A terminal coding agent.")
+    .description("A terminal coding agent. With no task, it starts a chat in the current folder.")
     .version(VERSION)
     .option("-p, --prompt <task>", "run one task and exit")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
-    .option("-r, --resume [session-id]", "continue the last session, or the given one (with -p)")
+    .option("-r, --resume [session-id]", "continue the last session, or the given one")
     .option("--replay <session-id-or-file>", "replay a recorded session with no API calls")
-    .parse();
+    .action(async (options: Options) => {
+      process.exitCode = await start(options, program);
+    });
 
-  const options = program.opts<Options>();
+  program
+    .command("eval")
+    .description("run the eval tasks in scratch folders and report pass/fail, steps and cost")
+    .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
+    .option("-t, --task <ids...>", "run only these tasks")
+    .option("--max-steps <n>", "step limit per task", (v) => Number.parseInt(v, 10))
+    .option("--keep", "keep the scratch folders")
+    .option("--list", "list the tasks and exit")
+    .action(async (options) => {
+      const { runEvalCommand } = await import("./evalCommand.js");
+      process.exitCode = await runEvalCommand({
+        ...options,
+        model: options.model ?? process.env.GARUDA_MODEL,
+      });
+    });
+
+  await program.parseAsync();
+}
+
+async function start(options: Options, program: Command): Promise<number> {
   const root = realpathSync(process.cwd());
   const store = new FileSessionStore(root);
+  if (options.replay !== undefined) return replay(options.replay, store);
 
-  if (options.replay !== undefined) {
-    process.exitCode = await replay(options.replay, store);
-    return;
-  }
-  if (options.prompt === undefined) {
-    if (options.resume !== undefined) {
-      program.error("Give the next task with -p. Interactive mode comes in M5.");
-    }
-    process.stdout.write(greeting());
-    return;
-  }
+  // A task on stdin works like -p: echo "task" | garuda
+  let prompt = options.prompt;
+  if (prompt === undefined && !process.stdin.isTTY) prompt = readFileSync(0, "utf8").trim();
+  if (prompt === "") program.error("The task is empty.");
 
   const modelId = options.model ?? process.env.GARUDA_MODEL;
-  if (!modelId) {
-    program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
-    return;
-  }
+  if (!modelId) program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
 
-  const settings = await loadSettings(root);
-  const info = lookupModel(modelId);
-  const price = settings.price ?? info.price;
-  const limits: RunLimits = {
-    maxSteps: settings.maxSteps ?? DEFAULT_MAX_STEPS,
-    tokenBudget: settings.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
-    contextWindow: settings.contextWindow ?? info.contextWindow,
-  };
-  const executor = createExecutor(settings.executor);
-  const permissions = new PermissionEngine({
+  const renderer = new PlainRenderer();
+  const approver = new TerminalApprover();
+  const runtime = await Runtime.create({
     root,
-    settings,
-    approver: new TerminalApprover(),
-    isolation: executor.isolation,
-  });
-  const system = buildSystemPrompt(root, await loadInstructions(root));
-  const start = {
-    root,
-    version: VERSION,
-    model: modelId,
-    executor: executor.name,
-    isolation: executor.isolation,
-    limits,
-  };
-
-  let session: Awaited<ReturnType<typeof resumeSession>>;
-  if (options.resume !== undefined) {
-    session = await resumeSession({
-      store,
-      root,
-      start,
-      ...(options.resume === true ? {} : { sessionId: options.resume }),
-    });
-    process.stderr.write(
-      `Resumed session ${session.id} (${session.messages.length} messages, ${formatTokens(session.contextTokens)} tokens of context).\n`,
-    );
-  } else {
-    const id = newSessionId();
-    session = createSession(root, id, store.open(id));
-    session.journal?.write({ type: "start", sessionId: id, ...start });
-    process.stderr.write(`Session ${id}\n`);
-  }
-  if (price === undefined) {
-    process.stderr.write(
-      `Garuda has no price for ${modelId}. Set model.price in .garuda/settings.json to see cost.\n`,
-    );
-  }
-  addUserMessage(session, options.prompt);
-
-  // First Ctrl-C stops the run and kills running commands. A second one exits at once.
-  const controller = new AbortController();
-  process.on("SIGINT", () => {
-    if (controller.signal.aborted) process.exit(130);
-    process.stderr.write("\nStopping… (press Ctrl-C again to exit at once)\n");
-    controller.abort();
+    modelId: modelId as string,
+    model: lazyModel(modelId as string),
+    approver,
+    store,
+    ...(options.resume === undefined ? {} : { resume: options.resume }),
+    onEvent: (event) => renderer.event(event),
   });
 
-  const costBefore = session.costUsd;
-  try {
-    const result = await runAgent(session, {
-      model: new AnthropicClient({ model: modelId }),
-      tools: new ToolRegistry(defaultTools()),
-      system,
-      permissions,
-      executor,
-      maxSteps: limits.maxSteps,
-      tokenBudget: limits.tokenBudget,
-      contextWindow: limits.contextWindow,
-      ...(price === undefined ? {} : { price }),
-      signal: controller.signal,
-      onEvent: (event) => {
-        if (event.type === "text_delta") process.stdout.write(event.text);
-        if (event.type === "tool_call") {
-          process.stderr.write(`\n→ ${event.call.name} ${JSON.stringify(event.call.input)}\n`);
-        }
-        if (event.type === "tool_result" && event.outcome.isError) {
-          process.stderr.write(`  ✗ ${event.outcome.content.split("\n")[0]}\n`);
-        }
-        if (event.type === "compaction") {
-          const { stage, beforeTokens, afterTokens } = event.result;
-          process.stderr.write(
-            `\n[context compacted (${stage}): ${formatTokens(beforeTokens)} → about ${formatTokens(afterTokens)} tokens]\n`,
-          );
-        }
-      },
-    });
+  // No orphan process stays (F4): kill running commands on any exit.
+  process.on("exit", () => runtime.executor.shutdown());
+  const exitNow = (): never => {
+    runtime.executor.shutdown();
+    process.exit(130);
+  };
 
-    const runCost =
-      costBefore === undefined || session.costUsd === undefined
-        ? undefined
-        : session.costUsd - costBefore;
-    process.stderr.write(`\n[${usageLine(result, session, runCost, limits.contextWindow)}]\n`);
-    const message = stopMessage(result.stopReason, limits);
-    if (message !== undefined) {
-      process.stderr.write(`${message}\n`);
-      process.exitCode = 2;
-    }
-  } catch (error) {
-    if (!controller.signal.aborted) throw error;
-    session.journal?.write({ type: "end", stopReason: "interrupted", steps: 0 });
-    process.stderr.write(`Stopped by the user. Use --resume to continue session ${session.id}.\n`);
-    process.exitCode = 130;
+  const session = runtime.session;
+  if (session !== undefined) {
+    renderer.info(
+      `Resumed session ${session.id} (${session.messages.length} messages, ${formatTokens(session.contextTokens)} tokens of context).`,
+    );
   }
+  if (runtime.price === undefined) {
+    renderer.warn(
+      `Garuda has no price for ${modelId}. Set model.price in .garuda/settings.json to see cost.`,
+    );
+  }
+
+  if (prompt !== undefined) {
+    const outcome = await runTurnInTerminal(runtime, approver, renderer, prompt, exitNow);
+    if (outcome.kind === "interrupted") return 130;
+    if (outcome.kind === "error") return 1;
+    return outcome.result.stopReason === "done" ? 0 : 2;
+  }
+
+  renderer.info(`Garuda ${VERSION} · ${modelId} · ${root}\n${HELP}\n`);
+  await runRepl(runtime, approver, renderer, (id) => join(store.dir, `${id}.jsonl`), exitNow);
+  const id = runtime.session?.id;
+  if (id !== undefined) renderer.info(`Session ${id}. Continue it with: garuda --resume ${id}`);
+  return 0;
 }
 
 /** --replay: play a session back with a fake model and recorded tool results (F26). */

@@ -56,4 +56,9 @@ export interface Executor {
   readonly isolation: Isolation;
   /** Run `command` with bash. Never throws for a failed command: check exitCode. */
   run(command: string, policy: ExecPolicy, options?: ExecOptions): Promise<ExecResult>;
+  /**
+   * Kill every running command now, with no grace time (F4). Garuda calls it when it exits,
+   * so no orphan process stays. It must be synchronous: it runs in the process "exit" handler.
+   */
+  shutdown(): void;
 }

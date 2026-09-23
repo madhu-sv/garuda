@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. Version 0.1 is in progress.
+Garuda is a terminal coding agent. This is version 0.1.
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
 ## Status
@@ -11,7 +11,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M2 Read-only tools | Done |
 | M3 Write tools and permissions | Done |
 | M4 Limits, context, sessions | Done |
-| M5 CLI polish and evals | Next |
+| M5 CLI polish and evals | Done |
 
 ## Use
 
@@ -24,8 +24,9 @@ pnpm check          # typecheck + lint + tests
 pnpm build
 export ANTHROPIC_API_KEY=...
 export GARUDA_MODEL=<model-id>
-node dist/cli/index.js                                  # prints a greeting
-node dist/cli/index.js -p "Explain what this repo does" # runs one task
+node dist/cli/index.js                                  # chat in the current folder
+node dist/cli/index.js -p "Explain what this repo does" # run one task and exit
+echo "Explain this repo" | node dist/cli/index.js       # the same, from stdin
 ```
 
 Tools: read_file, glob and grep run with no question.
@@ -38,6 +39,38 @@ Try it on this repo:
 node dist/cli/index.js -p "Where is runAgent defined, and what does it do?"
 node dist/cli/index.js -p "Run the tests and tell me the result"
 ```
+
+## Chat mode
+
+`garuda` with no task starts a chat. Each line is one task; the conversation carries over.
+
+- `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/exit`.
+- Ctrl-C during a task stops the task and kills its commands. The chat goes on.
+  A second Ctrl-C during the task exits Garuda at once.
+- At the prompt, Ctrl-C twice (within 2 s) or Ctrl-D exits.
+- Files are written atomically (a temporary file, then a rename), so an exit never leaves half a file.
+- `garuda --resume` continues the latest session in chat mode.
+
+Model text goes to stdout; tool activity and notes go to stderr. So `garuda -p "…" > answer.md` keeps only the answer.
+
+## Evals
+
+`garuda eval` runs 10 tasks in scratch folders and reports pass or fail, steps, tokens and cost per task (N5).
+A task passes when its check command exits with 0 and the agent did not change the task's tests.
+The 0.1 target is 7 of 10.
+
+```sh
+garuda eval --list                         # the tasks
+garuda eval -m claude-sonnet-5             # all tasks
+garuda eval -m claude-sonnet-5 -t fix-add rename --keep
+```
+
+The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).
+Commands run on your machine, in the scratch folders, with no sandbox. Results and session files go to
+`.garuda/evals/<run-id>/`.
+
+`pnpm startup` checks that startup takes less than 1 s (N3). The Anthropic SDK and the prompt library
+load on first use, not at startup.
 
 ## Sessions, limits and context
 
@@ -125,9 +158,11 @@ Notes:
 | `src/permissions/` | Path guard (F15), rules, sensitive paths, settings, and the permission engine (F17–F20) |
 | `src/sandbox/` | `Executor` interface, `ExecPolicy`, `HostExecutor`. The only place that starts processes (N8) |
 | `src/session/` | Session state, records, `SessionStore` (JSONL files), resume, redaction, read tracking |
-| `src/cli/` | Entry point: greeting, one-shot mode with `-p`, the terminal approver |
+| `src/app/` | `Runtime`: settings, executor, permissions and session for one process. The CLI and the evals share it |
+| `src/cli/` | Entry point, chat mode, renderer, terminal approver, `garuda eval` |
+| `src/evals/` | The 10 eval tasks and the runner |
 | `scripts/` | Build helpers. `package.mjs` makes the standalone binary |
-| `test/` | Vitest suites. `loop.test.ts`, `m2.acceptance.test.ts` and `m3.acceptance.test.ts`, `m4.acceptance.test.ts` hold the milestone acceptance tests. `executorContract.ts` is the suite every executor must pass |
+| `test/` | Vitest suites. `loop.test.ts`, `m2.acceptance.test.ts` and `m3.acceptance.test.ts`, `m4.acceptance.test.ts`, `m5.acceptance.test.ts` hold the milestone acceptance tests. `executorContract.ts` is the suite every executor must pass |
 
 ## Rules
 
