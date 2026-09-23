@@ -54,6 +54,13 @@ describe("architecture rules", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("no module loads TypeScript 6 at startup: only import() and type imports (N3)", () => {
+    const offenders = sourceFiles(SRC).filter((file) =>
+      /^import (?!type )[^;]*from ["']ts6["']/m.test(readFileSync(file, "utf8")),
+    );
+    expect(offenders).toEqual([]);
+  });
+
   it("only src/sandbox starts processes (N8)", () => {
     const offenders = sourceFiles(SRC).filter(
       (file) =>

@@ -1,6 +1,15 @@
 import { createInterface } from "node:readline";
 import type { Runtime } from "../app/runtime.js";
 import { totalTokens } from "../model/pricing.js";
+import {
+  findReferencesTool,
+  findSymbolText,
+  findSymbolTool,
+  referencesText,
+  repoMapText,
+  repoMapTool,
+} from "../tools/codeTools.js";
+import type { ToolContext } from "../tools/types.js";
 import type { Renderer } from "./renderer.js";
 import { formatTokens } from "./report.js";
 import type { Interruptible } from "./turn.js";
@@ -16,6 +25,9 @@ export const HELP = [
   "  /help      show this help",
   "  /usage     tokens and cost of this session",
   "  /session   the session id and file",
+  "  /where X   where symbol X is defined (code index, no model call)",
+  "  /refs X    every use of symbol X (code index, no model call)",
+  "  /map [dir] what each JS/TS file exports and imports",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -61,6 +73,8 @@ export async function runRepl(
       else if (command === "/session") {
         const id = runtime.session?.id;
         renderer.info(id === undefined ? "No session yet." : `Session ${id}\n${sessionPath(id)}`);
+      } else if (command === "/where" || command === "/refs" || command === "/map") {
+        await lookup(runtime, renderer, command, text.slice(command.length).trim());
       } else if (command === "/new") {
         runtime.newSession();
         renderer.info("The next task starts a new session.");
@@ -69,6 +83,34 @@ export async function runRepl(
     }
 
     await runTurnInTerminal(runtime, approver, renderer, text, exitNow);
+  }
+}
+
+/** Answer a code question from the local index, with no model call. */
+async function lookup(
+  runtime: Runtime,
+  renderer: Renderer,
+  command: string,
+  arg: string,
+): Promise<void> {
+  if (command !== "/map" && arg === "") {
+    renderer.warn(`Usage: ${command} <symbol name>`);
+    return;
+  }
+  // The code tools need only the index from the context.
+  const context = { knowledge: runtime.knowledge } as ToolContext;
+  try {
+    let text: string;
+    if (command === "/where") {
+      text = findSymbolText(await findSymbolTool.run({ name: arg, exact: true }, context));
+    } else if (command === "/refs") {
+      text = referencesText(await findReferencesTool.run({ name: arg }, context));
+    } else {
+      text = repoMapText(await repoMapTool.run({ path: arg }, context));
+    }
+    renderer.info(text);
+  } catch (error) {
+    renderer.error((error as Error).message);
   }
 }
 

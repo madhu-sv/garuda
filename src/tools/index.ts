@@ -1,4 +1,5 @@
 import { bashTool } from "./bash.js";
+import { findReferencesTool, findSymbolTool, repoMapTool } from "./codeTools.js";
 import { editFileTool } from "./editFile.js";
 import { globTool } from "./glob.js";
 import { grepTool } from "./grep.js";
@@ -9,5 +10,16 @@ import { writeFileTool } from "./writeFile.js";
 
 /** The tools that Garuda 0.1 ships. */
 export function defaultTools(): AnyTool[] {
-  return [readFileTool, globTool, grepTool, writeFileTool, editFileTool, bashTool, rememberTool];
+  return [
+    readFileTool,
+    globTool,
+    grepTool,
+    findSymbolTool,
+    findReferencesTool,
+    repoMapTool,
+    writeFileTool,
+    editFileTool,
+    bashTool,
+    rememberTool,
+  ];
 }

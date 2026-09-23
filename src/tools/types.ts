@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { KnowledgeIndex } from "../knowledge/index.js";
 import type { ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { CallInfo, PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
@@ -14,6 +15,8 @@ export interface ToolContext {
   files: FileTracker;
   /** Runs commands (N8). Absent when the host gives no executor: bash then fails. */
   executor?: Executor;
+  /** The local code index, for find_symbol, find_references and repo_map. */
+  knowledge?: KnowledgeIndex;
 }
 
 /**

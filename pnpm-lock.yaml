@@ -23,6 +23,9 @@ importers:
       globby:
         specifier: ^16.2.4
         version: 16.2.4
+      ts6:
+        specifier: npm:typescript@^6.0.3
+        version: typescript@6.0.3
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -1257,6 +1260,11 @@ packages:
       typescript:
         optional: true
 
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   typescript@7.0.2:
     resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
     engines: {node: '>=16.20.0'}
@@ -2279,6 +2287,8 @@ snapshots:
       - supports-color
       - tsx
       - yaml
+
+  typescript@6.0.3: {}
 
   typescript@7.0.2:
     optionalDependencies:

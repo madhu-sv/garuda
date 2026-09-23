@@ -1,4 +1,5 @@
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
+import { KnowledgeIndex } from "../knowledge/index.js";
 import {
   type AgentEvent,
   type AgentResult,
@@ -47,6 +48,8 @@ export class Runtime {
   readonly price: Price | undefined;
   readonly executor: Executor;
   readonly system: string;
+  /** The local code index. It loads its language experts on first use. */
+  readonly knowledge: KnowledgeIndex;
   private readonly permissions: PermissionEngine;
   private readonly store: SessionStore;
   private readonly tools = new ToolRegistry(defaultTools());
@@ -61,6 +64,7 @@ export class Runtime {
     this.store = options.store;
     this.onEvent = options.onEvent;
     this.system = system;
+    this.knowledge = new KnowledgeIndex(options.root);
     const info = lookupModel(options.modelId);
     this.price = settings.price ?? info.price;
     this.limits = {
@@ -117,6 +121,7 @@ export class Runtime {
       system: this.system,
       permissions: this.permissions,
       executor: this.executor,
+      knowledge: this.knowledge,
       maxSteps: this.limits.maxSteps,
       tokenBudget: this.limits.tokenBudget,
       contextWindow: this.limits.contextWindow,

@@ -21,20 +21,30 @@ function call(name: string, input: unknown) {
 }
 
 describe("tool registry", () => {
-  it("ships seven tools with JSON schemas; only glob, grep and read_file are read-only", () => {
+  it("ships ten tools with JSON schemas; the look-only tools are read-only", () => {
     const specs = registry.specs();
     expect(specs.map((s) => s.name)).toEqual([
       "bash",
       "edit_file",
+      "find_references",
+      "find_symbol",
       "glob",
       "grep",
       "read_file",
       "remember",
+      "repo_map",
       "write_file",
     ]);
     for (const spec of specs) expect(spec.inputSchema).toMatchObject({ type: "object" });
     const readOnly = defaultTools().filter((t) => t.readOnly);
-    expect(readOnly.map((t) => t.name).sort()).toEqual(["glob", "grep", "read_file"]);
+    expect(readOnly.map((t) => t.name).sort()).toEqual([
+      "find_references",
+      "find_symbol",
+      "glob",
+      "grep",
+      "read_file",
+      "repo_map",
+    ]);
   });
 });
 

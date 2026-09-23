@@ -1,4 +1,5 @@
 import { type CompactionResult, compactIfNeeded } from "../context/compact.js";
+import type { KnowledgeIndex } from "../knowledge/index.js";
 import { costOf, type Price, totalTokens } from "../model/pricing.js";
 import {
   addUsage,
@@ -41,6 +42,8 @@ export interface AgentDeps {
   permissions: PermissionGate;
   /** Runs bash commands (N8). Without it, bash calls fail. */
   executor?: Executor;
+  /** The local code index for the code tools. Without it, those tools fail. */
+  knowledge?: KnowledgeIndex;
   maxTokens?: number;
   /** Stop after this many model calls in one run (F6). */
   maxSteps?: number;
@@ -130,6 +133,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       permissions: deps.permissions,
       files: session.files,
       ...(deps.executor === undefined ? {} : { executor: deps.executor }),
+      ...(deps.knowledge === undefined ? {} : { knowledge: deps.knowledge }),
     };
     const { results, meta } = await runTools(calls, deps, context, emit);
     addToolResults(session, results, meta);

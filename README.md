@@ -73,6 +73,18 @@ Commands run on your machine, in the scratch folders, with no sandbox. Results a
 `pnpm startup` checks that startup takes less than 1 s (N3). The Anthropic SDK and the prompt library
 load on first use, not at startup.
 
+## Code index (local knowledge)
+
+For JS/TS, Garuda keeps a local code index. It answers code questions on this machine, with no model call:
+
+- Tools for the agent (read-only, no approval): `find_symbol` (where X is defined), `find_references`
+  (every use of X; it follows imports and aliases) and `repo_map` (what each file exports and imports).
+- Chat commands for you: `/where X`, `/refs X`, `/map [folder]`.
+- The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
+  References come from the TypeScript 6 language service, which loads on first use.
+- Files follow `.gitignore`. Sensitive files are never indexed.
+- Other languages come later, each with its own expert behind the `LanguageExpert` interface (`src/knowledge/`).
+
 ## Sessions, limits and context
 
 Every run writes a session file: `.garuda/sessions/<id>.jsonl` (one JSON record per line, mode 0600).
@@ -165,7 +177,8 @@ Notes:
 | `src/session/` | Session state, records, `SessionStore` (JSONL files), resume, redaction, read tracking |
 | `src/app/` | `Runtime`: settings, executor, permissions and session for one process. The CLI and the evals share it |
 | `src/cli/` | Entry point, chat mode, renderer, terminal approver, `garuda eval` |
-| `src/evals/` | The 10 eval tasks and the runner |
+| `src/evals/` | The eval suites (basic, hard), the shopkit repo generator and the runner |
+| `src/knowledge/` | The code index: `KnowledgeIndex`, `LanguageExpert`, the TypeScript/JavaScript expert |
 | `scripts/` | Build helpers. `package.mjs` makes the standalone binary |
 | `test/` | Vitest suites. `loop.test.ts`, `m2.acceptance.test.ts` and `m3.acceptance.test.ts`, `m4.acceptance.test.ts`, `m5.acceptance.test.ts` hold the milestone acceptance tests. `executorContract.ts` is the suite every executor must pass |
 
