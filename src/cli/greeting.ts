@@ -7,6 +7,7 @@ export function greeting(): string {
     "",
     "Hello! Give me a task:",
     '  garuda -p "Explain what this repo does" --model <model-id>',
+    '  garuda --resume -p "Now add a test"      (continue the last session)',
     "",
     "Run garuda --help for all options.",
     "",

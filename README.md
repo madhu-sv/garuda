@@ -10,8 +10,8 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M1 Skeleton and fake model | Done |
 | M2 Read-only tools | Done |
 | M3 Write tools and permissions | Done |
-| M4 Limits, context, sessions | Next |
-| M5 CLI polish and evals | — |
+| M4 Limits, context, sessions | Done |
+| M5 CLI polish and evals | Next |
 
 ## Use
 
@@ -39,6 +39,28 @@ node dist/cli/index.js -p "Where is runAgent defined, and what does it do?"
 node dist/cli/index.js -p "Run the tests and tell me the result"
 ```
 
+## Sessions, limits and context
+
+Every run writes a session file: `.garuda/sessions/<id>.jsonl` (one JSON record per line, mode 0600).
+It holds every message, tool call, result, token count and cost. Garuda redacts known secret
+formats (API keys, tokens, private keys, `password=…`) and the values of secret-looking environment
+variables before it writes a line. The model can still see a secret; the file never holds it.
+
+```sh
+garuda -p "Find the flaky test"                 # new session
+garuda --resume -p "Now fix it"                 # continue the latest session
+garuda --resume 20260923-201500-a1b2 -p "…"     # continue a given session
+garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no tools run
+```
+
+- After each turn Garuda prints steps, tokens (with cache reads), cost, context use and the session total.
+- A run stops at 50 steps, at the session token budget (20M tokens), or after the same tool call
+  3 times in a row. Garuda says why.
+- At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,
+  the model summarises the older turns. The last 4 turns always stay in full.
+- `GARUDA.md` in the project root goes into the system prompt.
+- Garuda knows the price and context window of current Claude models. For other models, set them in settings.
+
 ## Permissions
 
 Put rules in `.garuda/settings.json` in the project. Deny rules always win.
@@ -50,7 +72,12 @@ Put rules in `.garuda/settings.json` in the project. Deny rules always win.
     "allow": ["bash(pnpm test*)", "bash(git status)", "edit_file(src/**)"],
     "deny": ["bash(rm -rf*)", "bash(git push*)"]
   },
-  "env": { "allow": ["NODE_ENV"] }
+  "env": { "allow": ["NODE_ENV"] },
+  "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
+  "model": {
+    "contextWindow": 200000,
+    "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 }
+  }
 }
 ```
 
@@ -92,14 +119,15 @@ Notes:
 | Folder | Holds |
 | --- | --- |
 | `src/model/` | Provider-neutral types, `ModelClient`, the Anthropic adapter, the fake model |
-| `src/loop/` | `runAgent(session, deps)`: the agent loop |
+| `src/loop/` | `runAgent(session, deps)`: the agent loop, limits, loop guard; `replaySession` |
+| `src/context/` | Compaction and the GARUDA.md loader |
 | `src/tools/` | `Tool<I, O>`, the registry, and the tools: `read_file`, `glob`, `grep`, `write_file`, `edit_file`, `bash` |
 | `src/permissions/` | Path guard (F15), rules, sensitive paths, settings, and the permission engine (F17–F20) |
 | `src/sandbox/` | `Executor` interface, `ExecPolicy`, `HostExecutor`. The only place that starts processes (N8) |
-| `src/session/` | In-memory session state and read tracking for edit_file |
+| `src/session/` | Session state, records, `SessionStore` (JSONL files), resume, redaction, read tracking |
 | `src/cli/` | Entry point: greeting, one-shot mode with `-p`, the terminal approver |
 | `scripts/` | Build helpers. `package.mjs` makes the standalone binary |
-| `test/` | Vitest suites. `loop.test.ts`, `m2.acceptance.test.ts` and `m3.acceptance.test.ts` hold the milestone acceptance tests. `executorContract.ts` is the suite every executor must pass |
+| `test/` | Vitest suites. `loop.test.ts`, `m2.acceptance.test.ts` and `m3.acceptance.test.ts`, `m4.acceptance.test.ts` hold the milestone acceptance tests. `executorContract.ts` is the suite every executor must pass |
 
 ## Rules
 

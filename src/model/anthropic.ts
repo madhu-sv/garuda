@@ -23,7 +23,7 @@ export interface AnthropicClientOptions {
 
 /**
  * The Anthropic adapter (N1). It is the only module that imports the Anthropic SDK.
- * It marks the system prompt and the tool list for prompt caching (N2).
+ * It marks the system prompt, the tool list and the end of the conversation for prompt caching (N2).
  */
 export class AnthropicClient implements ModelClient {
   private readonly client: Anthropic;
@@ -63,6 +63,15 @@ export function toWireParams(
     system: [{ type: "text", text: request.system, cache_control: { type: "ephemeral" } }],
     messages: request.messages.map(toWireMessage),
   };
+  // A breakpoint on the last block caches the conversation so far. The next request reads it.
+  const last = params.messages.at(-1);
+  if (last !== undefined && Array.isArray(last.content) && last.content.length > 0) {
+    const blocks = last.content as Array<{
+      cache_control?: Anthropic.Messages.CacheControlEphemeral;
+    }>;
+    const block = blocks[blocks.length - 1];
+    if (block !== undefined) block.cache_control = { type: "ephemeral" };
+  }
   if (request.tools.length > 0) params.tools = toWireTools(request.tools);
   return params;
 }

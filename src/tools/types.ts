@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { CallInfo, PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
 import type { FileTracker } from "../session/fileTracker.js";
@@ -25,6 +26,8 @@ export interface Tool<I = unknown, O = string> {
   inputSchema: z.ZodType<I>;
   /** Read-only tools run without approval (F17) and can run in parallel (F8). */
   readOnly: boolean;
+  /** True for tools that run commands through the Executor. The session log records the executor (N8). */
+  runsCommands?: boolean;
   /**
    * Describe one call before it runs: the target for rules, and the preview for approval (F18).
    * It may throw to reject the call early, for example when an edit cannot apply.
@@ -32,6 +35,14 @@ export interface Tool<I = unknown, O = string> {
   describe?(input: I, context: ToolContext): Promise<CallInfo>;
   run(input: I, context: ToolContext): Promise<O>;
   toText?(output: O): string;
+}
+
+/** What the loop needs from a tool set. ToolRegistry implements it; replay uses a recorded one. */
+export interface ToolRunner {
+  specs(): ToolSpec[];
+  isReadOnly(name: string): boolean;
+  runsCommands(name: string): boolean;
+  execute(call: ToolUseBlock, context: ToolContext): Promise<ToolOutcome>;
 }
 
 /** What a tool call gives back to the loop. */

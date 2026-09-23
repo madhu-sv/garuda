@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { CallInfo } from "../permissions/types.js";
-import type { AnyTool, ToolContext, ToolOutcome } from "./types.js";
+import type { AnyTool, ToolContext, ToolOutcome, ToolRunner } from "./types.js";
 
-export class ToolRegistry {
+export class ToolRegistry implements ToolRunner {
   private readonly tools = new Map<string, AnyTool>();
 
   constructor(tools: readonly AnyTool[] = []) {
@@ -17,6 +17,14 @@ export class ToolRegistry {
 
   get(name: string): AnyTool | undefined {
     return this.tools.get(name);
+  }
+
+  isReadOnly(name: string): boolean {
+    return this.tools.get(name)?.readOnly === true;
+  }
+
+  runsCommands(name: string): boolean {
+    return this.tools.get(name)?.runsCommands === true;
   }
 
   /**

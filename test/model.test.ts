@@ -63,8 +63,18 @@ describe("Anthropic adapter mapping (N1, N2)", () => {
       { type: "tool_use", id: "t1", name: "a", input: { x: 1 } },
     ]);
     expect(params.messages[2]?.content).toEqual([
-      { type: "tool_result", tool_use_id: "t1", content: "out", is_error: false },
+      {
+        type: "tool_result",
+        tool_use_id: "t1",
+        content: "out",
+        is_error: false,
+        // The last block carries the conversation cache breakpoint.
+        cache_control: { type: "ephemeral" },
+      },
     ]);
+    expect(params.messages[0]?.content).not.toContainEqual(
+      expect.objectContaining({ cache_control: expect.anything() }),
+    );
   });
 
   it("maps a wire message to a model response", () => {

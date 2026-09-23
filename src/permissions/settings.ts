@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import type { Price } from "../model/pricing.js";
 import { EXECUTOR_NAMES } from "../sandbox/index.js";
 import { parseRule, type Rule } from "./rules.js";
 
@@ -13,7 +14,12 @@ import { parseRule, type Rule } from "./rules.js";
  *     "allow": ["bash(pnpm test*)", "edit_file(src/**)"],
  *     "deny":  ["bash(rm -rf*)", "bash(git push*)"]
  *   },
- *   "env": { "allow": ["NODE_ENV"] }
+ *   "env": { "allow": ["NODE_ENV"] },
+ *   "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
+ *   "model": {
+ *     "contextWindow": 200000,
+ *     "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 }
+ *   }
  * }
  */
 
@@ -28,6 +34,26 @@ const schema = z.strictObject({
     })
     .optional(),
   env: z.strictObject({ allow: z.array(z.string()).optional() }).optional(),
+  limits: z
+    .strictObject({
+      maxSteps: z.number().int().min(1).max(1_000).optional(),
+      tokenBudget: z.number().int().min(1_000).optional(),
+    })
+    .optional(),
+  model: z
+    .strictObject({
+      contextWindow: z.number().int().min(10_000).optional(),
+      /** USD per million tokens. */
+      price: z
+        .strictObject({
+          input: z.number().min(0),
+          output: z.number().min(0),
+          cacheRead: z.number().min(0),
+          cacheWrite: z.number().min(0),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export interface Settings {
@@ -36,6 +62,10 @@ export interface Settings {
   deny: Rule[];
   /** Extra environment variables that commands may see. */
   envAllow: string[];
+  maxSteps?: number;
+  tokenBudget?: number;
+  contextWindow?: number;
+  price?: Price;
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "host", allow: [], deny: [], envAllow: [] };
@@ -43,7 +73,7 @@ export const DEFAULT_SETTINGS: Settings = { executor: "host", allow: [], deny: [
 export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
   const parsed = schema.safeParse(json);
   if (!parsed.success) throw new Error(`${source}: ${z.prettifyError(parsed.error)}`);
-  const { executor = "host", permissions = {}, env = {} } = parsed.data;
+  const { executor = "host", permissions = {}, env = {}, limits = {}, model = {} } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
       try {
@@ -57,6 +87,10 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     allow: rules(permissions.allow),
     deny: rules(permissions.deny),
     envAllow: env.allow ?? [],
+    ...(limits.maxSteps === undefined ? {} : { maxSteps: limits.maxSteps }),
+    ...(limits.tokenBudget === undefined ? {} : { tokenBudget: limits.tokenBudget }),
+    ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
+    ...(model.price === undefined ? {} : { price: model.price }),
   };
 }
 

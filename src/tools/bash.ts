@@ -31,6 +31,7 @@ export const bashTool: Tool<Input, ExecResult> = {
   ].join("\n"),
   inputSchema: input,
   readOnly: false,
+  runsCommands: true,
 
   async describe({ command }) {
     return { target: { kind: "command", command }, preview: command };
