@@ -39,6 +39,8 @@ const lazyModel = (modelId: string) => async (): Promise<ModelClient> => {
 
 async function main(): Promise<void> {
   const program = new Command()
+    // Options after a subcommand belong to the subcommand: `garuda eval -m x` sets eval's model.
+    .enablePositionalOptions()
     .name("garuda")
     .description("A terminal coding agent. With no task, it starts a chat in the current folder.")
     .version(VERSION)

@@ -31,8 +31,10 @@ export const rememberTool: Tool<z.infer<typeof input>> = {
   name: "remember",
   description: [
     "Save one lasting fact about this project to the project memory (.garuda/memory.md).",
-    "Good facts save work in later sessions: how to build and test, where things are, conventions.",
-    "Do not save task details, guesses or secrets. The fact loads in the next session, not in this one.",
+    "Save only facts that stay true for the whole project and save work in later tasks:",
+    "how to build and test, where things are, conventions. Example: 'Tests run with: node --test'.",
+    "Never save what you found, fixed or changed in this task: that belongs in your answer, not in memory.",
+    "Do not save guesses or secrets. The fact loads in the next session, not in this one.",
     "The user approves each fact.",
   ].join("\n"),
   inputSchema: input,

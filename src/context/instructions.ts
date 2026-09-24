@@ -61,7 +61,7 @@ export function buildSystemPrompt(
     "Do not pipe a command into tail or head: the pipe hides the exit code, and Garuda already cuts long output.",
     "If the user denies a call, do not retry it. Ask what to do instead.",
     "When you learn a lasting fact about this project that will save work next time (how to build or test,",
-    "where things are, conventions), save it with remember. Do not save task details or secrets.",
+    "where things are, conventions), save it with remember. Never save what you fixed or found in this task.",
     "Paths are relative to the working root.",
     "Be brief. Cite file paths and line numbers when you point to code.",
   ].join("\n");
