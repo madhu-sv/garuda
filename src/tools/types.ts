@@ -17,6 +17,22 @@ export interface ToolContext {
   executor?: Executor;
   /** The local code index, for find_symbol, find_references and repo_map. */
   knowledge?: KnowledgeIndex;
+  /** The user's hooks (0.2). The registry calls them around each tool call. */
+  hooks?: ToolHooks;
+}
+
+/** Hooks around tool calls. They can block a call or add feedback; they never approve one. */
+export interface ToolHooks {
+  /** Before the permission check. A string blocks the call and says why. */
+  before(call: HookCall, signal: AbortSignal): Promise<string | undefined>;
+  /** After the call. It may add feedback to the result. */
+  after(call: HookCall, outcome: ToolOutcome, signal: AbortSignal): Promise<ToolOutcome>;
+}
+
+export interface HookCall {
+  tool: string;
+  input: unknown;
+  info?: CallInfo;
 }
 
 /**

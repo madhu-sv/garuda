@@ -1,5 +1,8 @@
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
+import { HOOKS_FILE, type Hook, hooksHash, loadHooks } from "../hooks/config.js";
+import { HookRunner, hooksConsent } from "../hooks/runner.js";
 import { KnowledgeIndex } from "../knowledge/index.js";
 import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
 import {
@@ -51,6 +54,8 @@ export interface RuntimeOptions {
    * false: no MCP servers (the evals use this, so results do not depend on the user's setup).
    */
   mcp?: false | { home?: string; env?: NodeJS.ProcessEnv };
+  /** Hooks (0.2). Default: read ~/.garuda/hooks.json and <root>/.garuda/hooks.json. false: none. */
+  hooks?: false | { home?: string };
 }
 
 export class Runtime {
@@ -79,6 +84,9 @@ export class Runtime {
   private readonly onNotice: ((text: string) => void) | undefined;
   private mcp: McpManager | undefined;
   private mcpStarted: Promise<void> | undefined;
+  private readonly hookConfig: { user: Hook[]; project: Hook[]; home: string };
+  private hookRunner: HookRunner | undefined;
+  private hooksStarted: Promise<void> | undefined;
 
   private constructor(
     options: RuntimeOptions,
@@ -86,7 +94,9 @@ export class Runtime {
     system: string,
     choice: ExecutorChoice,
     mcpServers: ServerConfig[],
+    hookConfig: { user: Hook[]; project: Hook[]; home: string },
   ) {
+    this.hookConfig = hookConfig;
     this.approver = options.approver;
     this.settings = settings;
     this.mcpServers = mcpServers;
@@ -136,6 +146,13 @@ export class Runtime {
       mcpServers = loaded.servers;
       for (const problem of loaded.problems) options.onNotice?.(problem);
     }
+    let hookConfig = { user: [] as Hook[], project: [] as Hook[], home: homedir() };
+    if (options.hooks !== false) {
+      const home = options.hooks?.home ?? homedir();
+      const loaded = await loadHooks(home, options.root);
+      hookConfig = { user: loaded.user, project: loaded.project, home };
+      for (const problem of loaded.problems) options.onNotice?.(problem);
+    }
     const system = buildSystemPrompt(
       options.root,
       await loadInstructions(options.root),
@@ -145,9 +162,10 @@ export class Runtime {
         sandboxed: choice.executor.isolation !== "none",
         mcp: mcpServers.some((s) => s.def.enabled),
         web: settings.web?.enabled ?? true,
+        hooks: hookConfig.user.length + hookConfig.project.length > 0,
       },
     );
-    const runtime = new Runtime(options, settings, system, choice, mcpServers);
+    const runtime = new Runtime(options, settings, system, choice, mcpServers, hookConfig);
     if (options.resume !== undefined) {
       runtime.current = await resumeSession({
         store: options.store,
@@ -171,6 +189,7 @@ export class Runtime {
 
   /** Run one turn: the user's prompt, then the loop until it stops. */
   async runTurn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
+    await this.startHooks(signal);
     await this.startMcp(signal);
     const session = this.ensureSession();
     addUserMessage(session, prompt, this.mcp?.takeNotes() ?? []);
@@ -182,6 +201,7 @@ export class Runtime {
       permissions: this.permissions,
       executor: this.executor,
       knowledge: this.knowledge,
+      ...(this.hookRunner === undefined ? {} : { hooks: this.hookRunner }),
       maxSteps: this.limits.maxSteps,
       tokenBudget: this.limits.tokenBudget,
       contextWindow: this.limits.contextWindow,
@@ -189,6 +209,51 @@ export class Runtime {
       ...(this.onEvent === undefined ? {} : { onEvent: this.onEvent }),
       signal,
     });
+  }
+
+  /** The active hooks, for /hooks. */
+  hookLines(): string[] {
+    return this.hookRunner?.describe() ?? [];
+  }
+
+  /**
+   * Set up the hooks before the first turn, once. User hooks are trusted. Project hooks run only
+   * after the user saw every command and agreed; the answer can be pinned to a hash of them.
+   */
+  private async startHooks(signal: AbortSignal): Promise<void> {
+    const { user, project, home } = this.hookConfig;
+    if (user.length + project.length === 0) return;
+    this.hooksStarted ??= (async () => {
+      let active = [...user];
+      if (project.length > 0) {
+        const trust = await TrustStore.open(home);
+        const hash = hooksHash(project);
+        const known = trust.hooksHash(this.root);
+        if (known === hash) {
+          active = [...active, ...project];
+        } else {
+          const file = join(this.root, HOOKS_FILE);
+          const request = hooksConsent(project, file, this.executor.isolation, known !== undefined);
+          const choice = await this.approver.ask(request, signal);
+          if (choice !== "deny") active = [...active, ...project];
+          if (choice === "session") await trust.setHooksHash(this.root, hash);
+        }
+      }
+      if (active.length === 0) return;
+      this.hookRunner = new HookRunner({
+        root: this.root,
+        hooks: active,
+        executor: this.executor,
+        permissions: this.permissions,
+        ...(this.onNotice === undefined ? {} : { notify: this.onNotice }),
+      });
+    })();
+    try {
+      await this.hooksStarted;
+    } catch (error) {
+      this.hooksStarted = undefined;
+      throw error;
+    }
   }
 
   /** MCP server states, for /mcp. */

@@ -72,6 +72,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     settings,
     // The user's own MCP servers must not change eval results.
     mcp: false,
+    hooks: false,
     ...(options.onEvent === undefined
       ? {}
       : { onEvent: (event: AgentEvent) => options.onEvent?.(task.id, event) }),

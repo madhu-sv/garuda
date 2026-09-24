@@ -23,6 +23,8 @@ const entry = z.object({
 const schema = z.object({
   version: z.literal(1),
   mcp: z.record(z.string(), z.record(z.string(), entry)).default({}),
+  /** Project root → hash of the approved project hooks. */
+  hooks: z.record(z.string(), z.string()).default({}),
 });
 type TrustData = z.infer<typeof schema>;
 export type TrustEntry = z.infer<typeof entry>;
@@ -30,7 +32,7 @@ export type TrustEntry = z.infer<typeof entry>;
 export const USER_SCOPE = "~";
 
 export class TrustStore {
-  private data: TrustData = { version: 1, mcp: {} };
+  private data: TrustData = { version: 1, mcp: {}, hooks: {} };
 
   private constructor(private readonly file: string) {}
 
@@ -50,10 +52,23 @@ export class TrustStore {
     return this.data.mcp[scope]?.[server] ?? {};
   }
 
+  hooksHash(root: string): string | undefined {
+    return this.data.hooks[root];
+  }
+
+  async setHooksHash(root: string, hash: string): Promise<void> {
+    this.data.hooks[root] = hash;
+    await this.save();
+  }
+
   async set(scope: string, server: string, value: TrustEntry): Promise<void> {
     const servers = this.data.mcp[scope] ?? {};
     this.data.mcp[scope] = servers;
     servers[server] = { ...servers[server], ...value };
+    await this.save();
+  }
+
+  private async save(): Promise<void> {
     await mkdir(dirname(this.file), { recursive: true, mode: 0o700 });
     // Write a private temp file, then rename it: never half a file, never readable by others.
     const temp = `${this.file}.${randomBytes(4).toString("hex")}.tmp`;

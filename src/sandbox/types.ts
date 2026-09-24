@@ -55,6 +55,8 @@ export interface ExecResult {
 
 export interface ExecOptions {
   signal?: AbortSignal;
+  /** Variables added on top of the allowlist (hooks pass their event data this way). */
+  env?: Record<string, string>;
 }
 
 /** A long-running program with pipes, for example an MCP server over stdio. */

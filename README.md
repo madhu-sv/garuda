@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. Version 0.1.0 is released; 0.2 is in progress.
+Garuda is a terminal coding agent. This is version 0.2.0.
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
 ## Status
@@ -12,7 +12,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M3 Write tools and permissions | Done |
 | M4 Limits, context, sessions | Done |
 | M5 CLI polish and evals | Done |
-| 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch | In progress |
+| 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
 
 ## Use
 
@@ -233,6 +233,39 @@ Security:
 - Settings: `"web": { "enabled": false }` removes the tool. `"web": { "allowLocalhost": true }` allows
   loopback addresses (for a local docs server); private network ranges stay blocked.
 - The evals turn web_fetch off.
+
+## Hooks
+
+Hooks are your own commands that run around the agent's tool calls (0.2).
+
+```json
+{
+  "hooks": {
+    "preToolUse": [
+      { "tools": ["bash(git push*)"], "command": "echo 'Pushes need a review first.' >&2; exit 2" }
+    ],
+    "postToolUse": [
+      { "tools": ["edit_file", "write_file"], "command": "npx eslint \"$GARUDA_FILE\" >&2 || exit 2" }
+    ]
+  }
+}
+```
+
+- Your own hooks go in `~/.garuda/hooks.json`. A project can add hooks in `.garuda/hooks.json`; Garuda
+  shows every command and asks first, like for MCP servers. "Remember" pins the answer to a hash of
+  the hooks; any change asks again.
+- `tools` uses the permission rule syntax (`edit_file`, `bash(git push*)`, `mcp__github__*`).
+  An empty list matches every tool. Keys: `command`, `tools`, `timeoutMs` (default 30000), `network`.
+- `preToolUse` runs before the approval question. Exit 0 lets the call go on. Exit 2 blocks it, and
+  stderr tells the model why. Any other failure (another exit code, a timeout) also blocks the call:
+  a broken guard never lets a call through. A hook can block a call, never approve one.
+- `postToolUse` runs after the call. Exit 2 adds stderr to the result as feedback for the model
+  (for example lint errors). Other failures only show a warning.
+- Hooks run in the OS sandbox, with no network unless `"network": true`. They get
+  `$GARUDA_HOOK_EVENT`, `$GARUDA_TOOL`, `$GARUDA_FILE` (for file tools), `$GARUDA_COMMAND` (bash),
+  `$GARUDA_URL` (web_fetch), and `$GARUDA_HOOK_INPUT`: a JSON file with the tool input (and the result
+  for postToolUse).
+- `/hooks` shows the active hooks. The evals run with no hooks.
 
 ## Permissions
 

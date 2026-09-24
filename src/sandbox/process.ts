@@ -90,7 +90,7 @@ export abstract class ProcessExecutor implements Executor {
       const { file, args } = this.launch(["bash", "-c", command], policy);
       const child = spawn(file, args, {
         cwd: policy.root,
-        env: allowedEnv(policy.envAllowlist),
+        env: { ...allowedEnv(policy.envAllowlist), ...options.env },
         stdio: ["ignore", "pipe", "pipe"],
         detached: true,
       });

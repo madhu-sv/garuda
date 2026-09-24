@@ -23,6 +23,7 @@ export const HELP = [
   "  /refs X    every use of symbol X (code index, no model call)",
   "  /map [dir] what each JS/TS file exports and imports",
   "  /mcp       MCP servers: state, sandbox, network and tool count",
+  "  /hooks     the active hooks",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -47,6 +48,13 @@ export async function runCommand(
     renderer.info(id === undefined ? "No session yet." : `Session ${id}\n${sessionPath(id)}`);
   } else if (command === "/where" || command === "/refs" || command === "/map") {
     await lookup(runtime, renderer, command, text.slice(command.length).trim());
+  } else if (command === "/hooks") {
+    const lines = runtime.hookLines();
+    renderer.info(
+      lines.length === 0
+        ? "No active hooks. They load with the first task. Configure them in ~/.garuda/hooks.json or .garuda/hooks.json."
+        : lines.join("\n"),
+    );
   } else if (command === "/mcp") {
     renderer.info(mcpSummary(runtime));
   } else if (command === "/new") {

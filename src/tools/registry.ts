@@ -68,6 +68,13 @@ export class ToolRegistry implements ToolRunner {
         : tool.readOnly
           ? undefined
           : { target: { kind: "input", json: JSON.stringify(parsed.data) } };
+      const hookCall = {
+        tool: tool.name,
+        input: parsed.data,
+        ...(info === undefined ? {} : { info }),
+      };
+      const blocked = await context.hooks?.before(hookCall, context.signal);
+      if (blocked !== undefined) return { content: `Blocked by a hook: ${blocked}`, isError: true };
       const decision = await context.permissions.check(
         info === undefined
           ? { tool: tool.name, readOnly: tool.readOnly }
@@ -79,7 +86,10 @@ export class ToolRegistry implements ToolRunner {
       }
       const output: unknown = await tool.run(parsed.data, context);
       const content = tool.toText ? tool.toText(output) : String(output);
-      return { content, isError: tool.isError?.(output) === true };
+      const outcome = { content, isError: tool.isError?.(output) === true };
+      return context.hooks === undefined
+        ? outcome
+        : await context.hooks.after(hookCall, outcome, context.signal);
     } catch (error) {
       if (context.signal.aborted) throw error;
       const message = error instanceof Error ? error.message : String(error);
