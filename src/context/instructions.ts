@@ -46,7 +46,10 @@ export function buildSystemPrompt(
   root: string,
   instructions: string | undefined,
   memory?: string,
-  { codeIndex = DEFAULT_CODE_INDEX_MODE }: { codeIndex?: CodeIndexMode } = {},
+  {
+    codeIndex = DEFAULT_CODE_INDEX_MODE,
+    sandboxed = false,
+  }: { codeIndex?: CodeIndexMode; sandboxed?: boolean } = {},
 ): string {
   const base = [
     "You are Garuda, a coding agent in a terminal.",
@@ -63,7 +66,14 @@ export function buildSystemPrompt(
     "These tools run at once, with no approval. Do not use bash for ls, cat, head, tail, find or grep.",
     "Use edit_file to change a file and write_file to create one. Read the file with read_file first:",
     "edit_file refuses a file that read_file did not read in this session.",
-    "Use bash only to run programs, for example tests and builds. The user approves each command and each file change.",
+    "Use bash only to run programs, for example tests and builds.",
+    ...(sandboxed
+      ? [
+          "Commands run in a sandbox with no approval: no network, and writes only in the working root and temp folders.",
+          "If the sandbox blocks a command that must have network or other folders, run it again with",
+          "outside_sandbox: true. The user must approve that. The user approves each file change.",
+        ]
+      : ["The user approves each command and each file change."]),
     "Each bash call starts in the working root. Do not cd to it, and do not use absolute paths.",
     "Do not pipe a command into tail or head: the pipe hides the exit code, and Garuda already cuts long output.",
     "If the user denies a call, do not retry it. Ask what to do instead.",

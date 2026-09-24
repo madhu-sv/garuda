@@ -152,7 +152,18 @@ describe("PermissionEngine (F17–F20)", () => {
       settings: parseSettings({ env: { allow: ["NODE_ENV"] } }),
     });
     const policy = permissions.execPolicy(5_000);
-    expect(policy).toMatchObject({ root: "/repo", timeoutMs: 5_000, writePaths: ["/repo"] });
+    expect(policy).toMatchObject({
+      root: "/repo",
+      timeoutMs: 5_000,
+      sandbox: true,
+      network: false,
+    });
+    expect(policy.writePaths[0]).toBe("/repo");
+    expect(policy.denyWritePaths).toContain("/repo/.git/hooks");
+    expect(permissions.execPolicy(5_000, { sandbox: false })).toMatchObject({
+      sandbox: false,
+      network: true,
+    });
     expect(policy.envAllowlist).toContain("PATH");
     expect(policy.envAllowlist).toContain("NODE_ENV");
     expect(policy.envAllowlist).not.toContain("ANTHROPIC_API_KEY");

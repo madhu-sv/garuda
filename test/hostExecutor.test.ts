@@ -7,7 +7,8 @@ executorContract("host", () => new HostExecutor());
 
 describe("createExecutor", () => {
   it('builds the host executor from the config key "host"', () => {
-    const executor = createExecutor("host");
+    const { executor, notice } = createExecutor("host");
+    expect(notice).toBeUndefined();
     expect(executor).toBeInstanceOf(HostExecutor);
     expect(executor.isolation).toBe("none");
   });

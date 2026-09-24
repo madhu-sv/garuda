@@ -1,5 +1,6 @@
 import type { ExecPolicy, Isolation } from "../sandbox/types.js";
 import { formatRule, type Rule, ruleMatches } from "./rules.js";
+import { sandboxPaths } from "./sandboxPaths.js";
 import { isProtectedFromWrites, isSensitive } from "./sensitive.js";
 import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 import type {
@@ -31,7 +32,7 @@ export interface PermissionEngineOptions {
   root: string;
   approver: Approver;
   settings?: Settings;
-  /** Isolation of the executor in use. 0.2 can skip approval for sandboxed commands. */
+  /** Isolation of the executor in use. With an OS sandbox, commands inside it need no approval. */
   isolation?: Isolation;
 }
 
@@ -41,8 +42,9 @@ export interface PermissionEngineOptions {
  *   2. Write to a protected path (.git/)             → deny
  *   3. A deny rule matches                           → deny (deny always wins, F19)
  *   4. Read-only tool                                → allow (F17)
- *   5. An allow rule or a session rule matches       → allow
- *   6. Otherwise ask the user: once, session, deny   (F18)
+ *   5. A command in the OS sandbox                   → allow (0.2)
+ *   6. An allow rule or a session rule matches       → allow
+ *   7. Otherwise ask the user: once, session, deny   (F18)
  */
 export class PermissionEngine implements PermissionGate {
   private readonly root: string;
@@ -91,6 +93,9 @@ export class PermissionEngine implements PermissionGate {
     }
 
     if (request.readOnly) return { allowed: true, by: "read_only" };
+    if (target?.kind === "command" && !target.outsideSandbox && this.isolation !== "none") {
+      return { allowed: true, by: "sandbox" };
+    }
     if (allowRule !== undefined) return { allowed: true, by: "rule" };
     if (this.sessionRules.some((r) => ruleMatches(r, tool, target, "allow"))) {
       return { allowed: true, by: "session" };
@@ -117,12 +122,12 @@ export class PermissionEngine implements PermissionGate {
     return { allowed: true, by: "user" };
   }
 
-  execPolicy(timeoutMs: number): ExecPolicy {
+  execPolicy(timeoutMs: number, { sandbox = true }: { sandbox?: boolean } = {}): ExecPolicy {
     return {
       root: this.root,
-      readPaths: [this.root],
-      writePaths: [this.root],
-      network: true,
+      sandbox,
+      ...sandboxPaths(this.root, this.settings.sandbox),
+      network: !sandbox,
       envAllowlist: [...new Set([...DEFAULT_ENV_ALLOWLIST, ...this.settings.envAllow])],
       timeoutMs,
       maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,

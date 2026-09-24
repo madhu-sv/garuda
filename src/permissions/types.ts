@@ -12,6 +12,8 @@ export interface PathTarget {
 export interface CommandTarget {
   kind: "command";
   command: string;
+  /** The model asks to run it outside the OS sandbox. It always needs approval or a rule. */
+  outsideSandbox?: boolean;
 }
 
 /** A tool with no describe(): its input as JSON. Only bare `tool` rules match it. */
@@ -34,14 +36,14 @@ export interface PermissionRequest {
 }
 
 export type PermissionDecision =
-  | { allowed: true; by: "read_only" | "rule" | "session" | "user" }
+  | { allowed: true; by: "read_only" | "sandbox" | "rule" | "session" | "user" }
   | { allowed: false; by: "rule" | "sensitive" | "user"; reason: string };
 
 /** The permission check as the tools see it. The PermissionEngine implements it. */
 export interface PermissionGate {
   check(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision>;
   /** The policy for one command (N8). The engine builds it. */
-  execPolicy(timeoutMs: number): ExecPolicy;
+  execPolicy(timeoutMs: number, options?: { sandbox?: boolean }): ExecPolicy;
 }
 
 // Approval (F18).

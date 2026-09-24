@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.1.
+Garuda is a terminal coding agent. Version 0.1.0 is released; 0.2 is in progress.
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
 ## Status
@@ -12,6 +12,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M3 Write tools and permissions | Done |
 | M4 Limits, context, sessions | Done |
 | M5 CLI polish and evals | Done |
+| 0.2: OS sandbox | In progress |
 
 ## Use
 
@@ -31,7 +32,8 @@ echo "Explain this repo" | node dist/cli/index.js       # the same, from stdin
 
 Tools: read_file, glob and grep run with no question.
 write_file, edit_file and bash show a diff or the command first. You pick: allow once, allow for this session, or deny.
-Commands run on your machine with no sandbox in 0.1, so read each one before you allow it.
+Commands run in an OS sandbox when your machine has one (see Sandbox below). Without a sandbox,
+each command asks first, so read each one before you allow it.
 Garuda removes a leading `cd <working root> &&` from a command, because each command already starts there.
 When the model reads files with bash, or pipes into head or tail, the result adds a short `[Garuda: …]` note that tells it to use the file tools.
 
@@ -71,7 +73,7 @@ garuda eval -s hard --repeat 3 --index lookup  # the same, with find_symbol and 
 ```
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).
-Commands run on your machine, in the scratch folders, with no sandbox. Results and session files go to
+Commands run in the scratch folders, in the OS sandbox when there is one (`--executor auto|os|host`). Results and session files go to
 `.garuda/evals/<run-id>/`.
 
 `pnpm startup` checks that startup takes less than 1 s (N3). The Anthropic SDK and the prompt library
@@ -117,13 +119,47 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
 - `read_file` does not send the same lines of an unchanged file twice. After compaction it sends them again.
 - Garuda knows the price and context window of current Claude models. For other models, set them in settings.
 
+## Sandbox
+
+Garuda runs commands in an OS sandbox: Seatbelt (`sandbox-exec`) on macOS, bubblewrap (`bwrap`) on Linux.
+In the sandbox, a command:
+
+- can read every file, except secrets in your home folder (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`,
+  `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains and more);
+- can write only in the working root, the temp folders and package caches (`~/.cache`, `~/.npm`, pnpm);
+- cannot write `.git/hooks`, `.git/config` or `.garuda/` in the root, because those run or apply later
+  outside the sandbox;
+- has no network (localhost works on macOS).
+
+Commands in the sandbox run with no approval. Deny rules still apply. When the sandbox blocks a command
+(for example `pnpm install` needs the network), the model can ask to run it outside the sandbox.
+That always asks you first, and the prompt says "OUTSIDE the sandbox".
+
+Settings:
+
+```json
+{
+  "executor": "auto",
+  "sandbox": { "writePaths": ["~/.gradle"], "denyRead": ["~/work-secrets"] }
+}
+```
+
+- `executor`: `auto` (default) uses the sandbox when it works on this machine, else runs on the host
+  with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again.
+- `sandbox.writePaths` and `sandbox.denyRead` add paths. `~/` is the home folder; other relative paths
+  start at the root.
+- On Linux, install bubblewrap (`sudo apt install bubblewrap`). Some systems block the user namespaces
+  that it needs; Garuda then falls back to the host and says why.
+- Limit on Linux: a protected path that does not exist yet (for example `.git/hooks` in a folder with no
+  `.git`) is not protected.
+
 ## Permissions
 
 Put rules in `.garuda/settings.json` in the project. Deny rules always win.
 
 ```json
 {
-  "executor": "host",
+  "executor": "auto",
   "permissions": {
     "allow": ["bash(pnpm test*)", "bash(git status)", "edit_file(src/**)"],
     "deny": ["bash(rm -rf*)", "bash(git push*)"]
@@ -179,7 +215,7 @@ Notes:
 | `src/context/` | Compaction and the GARUDA.md loader |
 | `src/tools/` | `Tool<I, O>`, the registry, and the tools: `read_file`, `glob`, `grep`, `write_file`, `edit_file`, `bash` |
 | `src/permissions/` | Path guard (F15), rules, sensitive paths, settings, and the permission engine (F17–F20) |
-| `src/sandbox/` | `Executor` interface, `ExecPolicy`, `HostExecutor`. The only place that starts processes (N8) |
+| `src/sandbox/` | `Executor` interface, `ExecPolicy`, `HostExecutor`, `SeatbeltExecutor`, `BwrapExecutor`. The only place that starts processes (N8) |
 | `src/session/` | Session state, records, `SessionStore` (JSONL files), resume, redaction, read tracking |
 | `src/app/` | `Runtime`: settings, executor, permissions and session for one process. The CLI and the evals share it |
 | `src/cli/` | Entry point, chat mode, renderer, terminal approver, `garuda eval` |

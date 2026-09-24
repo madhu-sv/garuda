@@ -48,7 +48,12 @@ export class TerminalApprover implements Approver {
 
 function header({ tool, target, isolation }: ApprovalRequest): string {
   if (target.kind === "command") {
-    const where = isolation === "none" ? "on your machine, no sandbox" : `sandbox: ${isolation}`;
+    const where =
+      isolation === "none"
+        ? "on your machine, no sandbox"
+        : target.outsideSandbox
+          ? "OUTSIDE the sandbox: network on, writes anywhere"
+          : `sandbox: ${isolation}`;
     return styleText("bold", `${tool} wants to run a command (${where}):`);
   }
   if (target.kind === "input") return styleText("bold", `${tool} wants to run with this input:`);

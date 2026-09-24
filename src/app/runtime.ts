@@ -13,7 +13,7 @@ import type { ModelClient } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { Approver } from "../permissions/types.js";
-import { createExecutor } from "../sandbox/index.js";
+import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
 import type { RunLimits, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
@@ -48,6 +48,8 @@ export class Runtime {
   readonly limits: RunLimits;
   readonly price: Price | undefined;
   readonly executor: Executor;
+  /** Set when "auto" found no OS sandbox. The CLI shows it once. */
+  readonly executorNotice: string | undefined;
   readonly system: string;
   /** The local code index. It loads its language experts on first use. */
   readonly knowledge: KnowledgeIndex;
@@ -60,7 +62,12 @@ export class Runtime {
   private model: ModelClient | (() => Promise<ModelClient>);
   private current: Session | undefined;
 
-  private constructor(options: RuntimeOptions, settings: Settings, system: string) {
+  private constructor(
+    options: RuntimeOptions,
+    settings: Settings,
+    system: string,
+    choice: ExecutorChoice,
+  ) {
     this.root = options.root;
     this.modelId = options.modelId;
     this.model = options.model;
@@ -77,7 +84,8 @@ export class Runtime {
       tokenBudget: settings.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
       contextWindow: settings.contextWindow ?? info.contextWindow,
     };
-    this.executor = createExecutor(settings.executor);
+    this.executor = choice.executor;
+    this.executorNotice = choice.notice;
     this.permissions = new PermissionEngine({
       root: options.root,
       settings,
@@ -88,13 +96,17 @@ export class Runtime {
 
   static async create(options: RuntimeOptions): Promise<Runtime> {
     const settings = options.settings ?? (await loadSettings(options.root));
+    const choice = createExecutor(settings.executor);
     const system = buildSystemPrompt(
       options.root,
       await loadInstructions(options.root),
       await loadMemory(options.root),
-      { codeIndex: settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE },
+      {
+        codeIndex: settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE,
+        sandboxed: choice.executor.isolation !== "none",
+      },
     );
-    const runtime = new Runtime(options, settings, system);
+    const runtime = new Runtime(options, settings, system, choice);
     if (options.resume !== undefined) {
       runtime.current = await resumeSession({
         store: options.store,

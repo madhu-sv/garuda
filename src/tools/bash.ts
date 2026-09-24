@@ -15,6 +15,12 @@ const input = z.object({
     .max(BASH_MAX_TIMEOUT_MS)
     .optional()
     .describe(`Timeout in milliseconds. Default: ${BASH_DEFAULT_TIMEOUT_MS}.`),
+  outside_sandbox: z
+    .boolean()
+    .optional()
+    .describe(
+      "Run outside the sandbox, with network and writes anywhere. The user must approve. Use it only after the sandbox blocked the command.",
+    ),
 });
 
 type Input = z.infer<typeof input>;
@@ -59,6 +65,17 @@ export function stripRootCd(command: string, root: string): { command: string; s
   return { command: stripped && rest !== "" ? rest : command, stripped: stripped && rest !== "" };
 }
 
+/** Errors that a sandbox block gives: no network, or a write outside the allowed paths. */
+const SANDBOX_BLOCK =
+  /Operation not permitted|Read-only file system|EROFS|EPERM|EAI_AGAIN|ENOTFOUND|ENETUNREACH|Network is unreachable|Could not resolve host|Temporary failure in name resolution|getaddrinfo/;
+
+/** A note when a failed command in the sandbox looks blocked by it. */
+export function sandboxHint(result: ExecResult): string | undefined {
+  if (result.exitCode === 0 || result.timedOut || result.aborted) return undefined;
+  if (!SANDBOX_BLOCK.test(`${result.stdout.text}\n${result.stderr.text}`)) return undefined;
+  return "The sandbox may have blocked this command: it has no network, and it can write only in the working root and temp folders. If the command must have more, run it again with outside_sandbox: true. The user must approve.";
+}
+
 /** Notes for the model about the command it ran (see the system prompt for the same rules). */
 export function commandHints(command: string, strippedCd: boolean): string[] {
   const hints: string[] = [];
@@ -90,24 +107,35 @@ export const bashTool: Tool<Input, BashOutput> = {
     "Long output is cut in the middle. The result shows the exit code, stdout and stderr.",
     "Use read_file, glob and grep to look at files, not cat, ls, find or grep: they need no approval.",
     "Do not pipe into tail or head: the pipe hides the exit code, and long output is cut already.",
-    "The user must approve each command.",
+    "When Garuda has an OS sandbox, commands run in it with no approval: no network, writes only in the working root and temp folders.",
+    "Otherwise the user must approve each command.",
   ].join("\n"),
   inputSchema: input,
   readOnly: false,
   runsCommands: true,
 
   // The user approves, and rules match, the command that will really run.
-  async describe({ command }, { root }) {
+  async describe({ command, outside_sandbox }, { root, executor }) {
     const run = stripRootCd(command, root).command;
-    return { target: { kind: "command", command: run }, preview: run };
+    const outside = outside_sandbox === true && executor?.isolation !== "none";
+    return {
+      target: { kind: "command", command: run, ...(outside ? { outsideSandbox: true } : {}) },
+      preview: run,
+    };
   },
 
-  async run({ command, timeout_ms }, { executor, permissions, signal, root }) {
+  async run({ command, timeout_ms, outside_sandbox }, { executor, permissions, signal, root }) {
     if (executor === undefined) throw new Error("No executor is configured, so bash cannot run.");
-    const policy = permissions.execPolicy(timeout_ms ?? BASH_DEFAULT_TIMEOUT_MS);
+    const sandboxed = executor.isolation !== "none" && outside_sandbox !== true;
+    const policy = permissions.execPolicy(timeout_ms ?? BASH_DEFAULT_TIMEOUT_MS, {
+      sandbox: sandboxed,
+    });
     const { command: run, stripped } = stripRootCd(command, root);
     const result = await executor.run(run, policy, { signal });
-    return { ...result, hints: commandHints(run, stripped) };
+    const hints = commandHints(run, stripped);
+    const blocked = sandboxed ? sandboxHint(result) : undefined;
+    if (blocked !== undefined) hints.push(blocked);
+    return { ...result, hints };
   },
 
   toText(result) {

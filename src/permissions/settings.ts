@@ -5,12 +5,14 @@ import type { CodeIndexMode } from "../knowledge/mode.js";
 import type { Price } from "../model/pricing.js";
 import { EXECUTOR_NAMES } from "../sandbox/index.js";
 import { parseRule, type Rule } from "./rules.js";
+import type { SandboxSettings } from "./sandboxPaths.js";
 
 /**
  * Project settings: `.garuda/settings.json` in the working root (F19).
  *
  * {
- *   "executor": "host",
+ *   "executor": "auto",
+ *   "sandbox": { "writePaths": ["~/.gradle"], "denyRead": ["~/secrets"] },
  *   "permissions": {
  *     "allow": ["bash(pnpm test*)", "edit_file(src/**)"],
  *     "deny":  ["bash(rm -rf*)", "bash(git push*)"]
@@ -28,6 +30,12 @@ export const SETTINGS_FILE = join(".garuda", "settings.json");
 
 const schema = z.strictObject({
   executor: z.enum(EXECUTOR_NAMES).optional(),
+  sandbox: z
+    .strictObject({
+      writePaths: z.array(z.string()).optional(),
+      denyRead: z.array(z.string()).optional(),
+    })
+    .optional(),
   /** Code index tools for the model: "off", "lookup" or "all" (true = "all", false = "off"). */
   codeIndex: z.union([z.boolean(), z.enum(["off", "lookup", "all"])]).optional(),
   permissions: z
@@ -65,6 +73,7 @@ export interface Settings {
   deny: Rule[];
   /** Extra environment variables that commands may see. */
   envAllow: string[];
+  sandbox?: SandboxSettings;
   codeIndex?: CodeIndexMode;
   maxSteps?: number;
   tokenBudget?: number;
@@ -72,13 +81,14 @@ export interface Settings {
   price?: Price;
 }
 
-export const DEFAULT_SETTINGS: Settings = { executor: "host", allow: [], deny: [], envAllow: [] };
+export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
 
 export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
   const parsed = schema.safeParse(json);
   if (!parsed.success) throw new Error(`${source}: ${z.prettifyError(parsed.error)}`);
   const {
-    executor = "host",
+    executor = "auto",
+    sandbox,
     permissions = {},
     env = {},
     limits = {},
@@ -98,6 +108,14 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     allow: rules(permissions.allow),
     deny: rules(permissions.deny),
     envAllow: env.allow ?? [],
+    ...(sandbox === undefined
+      ? {}
+      : {
+          sandbox: {
+            ...(sandbox.writePaths === undefined ? {} : { writePaths: sandbox.writePaths }),
+            ...(sandbox.denyRead === undefined ? {} : { denyRead: sandbox.denyRead }),
+          },
+        }),
     ...(codeIndex === undefined
       ? {}
       : { codeIndex: codeIndex === true ? "all" : codeIndex === false ? "off" : codeIndex }),

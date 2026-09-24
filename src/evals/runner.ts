@@ -11,13 +11,14 @@ import { AutoApprover } from "../permissions/autoApprover.js";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
 import { parseSettings } from "../permissions/settings.js";
 import { HostExecutor } from "../sandbox/host.js";
+import type { ExecutorName } from "../sandbox/index.js";
 import { FileSessionStore } from "../session/store.js";
 import type { EvalResult, EvalTask } from "./types.js";
 
 /**
  * The eval runner (N5). Each task runs in a new scratch folder with its own session.
  * Approvals: the runner approves every call, except the deny rules below.
- * Commands run on this machine, in the scratch folder, with no sandbox (0.1).
+ * Commands run in the scratch folder, in the OS sandbox when this machine has one.
  */
 export const EVAL_DENY_RULES = [
   "bash(rm -rf*)",
@@ -42,6 +43,8 @@ export interface EvalOptions {
   onEvent?: (taskId: string, event: AgentEvent) => void;
   /** Code index tools for the model. Default: the product default ("off"). */
   codeIndex?: CodeIndexMode;
+  /** Default: "auto", the OS sandbox when this machine has one. */
+  executor?: ExecutorName;
 }
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
@@ -53,6 +56,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
 
   const settings = parseSettings({
     permissions: { deny: EVAL_DENY_RULES },
+    ...(options.executor === undefined ? {} : { executor: options.executor }),
     ...(options.codeIndex === undefined ? {} : { codeIndex: options.codeIndex }),
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
   });
@@ -141,8 +145,10 @@ export async function runCheck(
 ): Promise<{ ok: boolean; output: string }> {
   const r = await new HostExecutor().run(command, {
     root,
-    readPaths: [root],
+    sandbox: false,
     writePaths: [root],
+    denyWritePaths: [],
+    denyReadPaths: [],
     network: false,
     envAllowlist: [...DEFAULT_ENV_ALLOWLIST],
     timeoutMs: 120_000,

@@ -7,7 +7,7 @@ import type { ExecPolicy, Executor } from "../src/sandbox/types.js";
 /**
  * The executor contract (N8). Every executor must pass this suite:
  * exit code, output, working folder, environment allowlist, output cap, timeout,
- * and process-tree kill on abort (Ctrl-C). 0.2 runs it against the OS sandbox too.
+ * and process-tree kill on abort (Ctrl-C). It runs against the host and the OS sandbox of this machine.
  */
 export function executorContract(name: string, make: () => Executor): void {
   describe(`executor contract: ${name}`, () => {
@@ -17,8 +17,10 @@ export function executorContract(name: string, make: () => Executor): void {
 
     const policy = (over: Partial<ExecPolicy> = {}): ExecPolicy => ({
       root,
-      readPaths: [root],
+      sandbox: true,
       writePaths: [root],
+      denyWritePaths: [],
+      denyReadPaths: [],
       network: false,
       envAllowlist: ["PATH", "HOME"],
       timeoutMs: 10_000,

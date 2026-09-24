@@ -63,6 +63,7 @@ async function main(): Promise<void> {
       Number.parseInt(v, 10),
     )
     .option("--index <mode>", "code index tools for the model: off (default), lookup or all")
+    .option("--executor <name>", "auto (default), os or host")
     .option("--keep", "keep the scratch folders")
     .option("--list", "list the tasks and exit")
     .action(async (options) => {
@@ -108,6 +109,7 @@ async function start(options: Options, program: Command): Promise<number> {
     process.exit(130);
   };
 
+  if (runtime.executorNotice !== undefined) renderer.warn(runtime.executorNotice);
   const session = runtime.session;
   if (session !== undefined) {
     renderer.info(
@@ -127,7 +129,9 @@ async function start(options: Options, program: Command): Promise<number> {
     return outcome.result.stopReason === "done" ? 0 : 2;
   }
 
-  renderer.info(`Garuda ${VERSION} · ${modelId} · ${root}\n${HELP}\n`);
+  const sandbox =
+    runtime.executor.isolation === "none" ? "no sandbox" : `sandbox ${runtime.executor.name}`;
+  renderer.info(`Garuda ${VERSION} · ${modelId} · ${sandbox} · ${root}\n${HELP}\n`);
   await runRepl(runtime, approver, renderer, (id) => join(store.dir, `${id}.jsonl`), exitNow);
   const id = runtime.session?.id;
   if (id !== undefined) renderer.info(`Session ${id}. Continue it with: garuda --resume ${id}`);

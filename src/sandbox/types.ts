@@ -1,7 +1,7 @@
 /**
  * The Executor contract (N8). Only src/sandbox/ starts processes.
- * 0.1 ships HostExecutor (no isolation). 0.2 adds an OS sandbox with the same contract,
- * so the loop, the tools and the permission engine do not change.
+ * HostExecutor has no isolation. SeatbeltExecutor (macOS) and BwrapExecutor (Linux) are the
+ * OS sandbox (0.2). All pass the same contract tests.
  */
 
 /** How strongly an executor enforces its policy. The permission engine reads this. */
@@ -9,14 +9,21 @@ export type Isolation = "none" | "os" | "container";
 
 /**
  * What one command may do. The permission engine builds it.
- * HostExecutor applies `root`, `envAllowlist`, `timeoutMs` and `maxOutputBytes`.
- * It does not enforce `readPaths`, `writePaths` or `network`. A sandbox does.
+ * All executors apply `root`, `envAllowlist`, `timeoutMs` and `maxOutputBytes`.
+ * An OS sandbox also enforces the file and network rules, when `sandbox` is true.
+ * Reads are allowed everywhere except `denyReadPaths` (0.2 decision: writes-only scope).
  */
 export interface ExecPolicy {
   /** Absolute working root. The command starts here. */
   root: string;
-  readPaths: string[];
+  /** False when the user approved a run outside the sandbox. The executor then isolates nothing. */
+  sandbox: boolean;
+  /** Absolute paths the command may write (the root, temp folders, tool caches). */
   writePaths: string[];
+  /** Absolute paths inside `writePaths` that stay read-only, for example <root>/.git/hooks. */
+  denyWritePaths: string[];
+  /** Absolute paths the command may not read, for example ~/.ssh. */
+  denyReadPaths: string[];
   network: boolean;
   /** Names of environment variables the command may see. All others are removed. */
   envAllowlist: string[];
