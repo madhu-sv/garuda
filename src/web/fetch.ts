@@ -149,13 +149,26 @@ export async function htmlToMarkdown(html: string): Promise<string> {
   return markdown.translate(html.replace(/<!--[\s\S]*?-->/g, "").replace(DROP, "")).trim();
 }
 
-function decodeEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+/** Decode the entities that appear in page titles: named basics and numeric (&#8212; &#x2014;). */
+export function decodeEntities(text: string): string {
+  const named: Record<string, string> = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: " ",
+  };
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, code: string) => {
+    if (code.startsWith("#")) {
+      const n =
+        code[1] === "x" || code[1] === "X"
+          ? Number.parseInt(code.slice(2), 16)
+          : Number(code.slice(1));
+      return Number.isInteger(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : match;
+    }
+    return named[code.toLowerCase()] ?? match;
+  });
 }
 
 /** One GET, with the checked-address lookup. */

@@ -10,7 +10,7 @@ import { FileTracker } from "../src/session/fileTracker.js";
 import { ToolRegistry } from "../src/tools/registry.js";
 import { createWebFetchTool, isUnusualUrl, pageText } from "../src/tools/webFetch.js";
 import { checkAddress } from "../src/web/address.js";
-import { checkUrl, fetchPage, htmlToMarkdown } from "../src/web/fetch.js";
+import { checkUrl, decodeEntities, fetchPage, htmlToMarkdown } from "../src/web/fetch.js";
 import { toolContext } from "./helpers.js";
 
 let server: Server;
@@ -125,6 +125,9 @@ describe("fetching pages", () => {
     expect(page.text).not.toContain("steal");
     expect(page.text).not.toContain("menu");
     expect(await htmlToMarkdown("<p>a</p><!-- hidden -->")).toBe("a");
+    expect(decodeEntities("pathlib &#8212; Python &#x2014; &amp; &bogus;")).toBe(
+      "pathlib — Python — & &bogus;",
+    );
   });
 
   it("decompresses, and stops a compression bomb at the size limit", async () => {
