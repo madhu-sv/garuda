@@ -1,7 +1,7 @@
 import type { ExecPolicy, Isolation } from "../sandbox/types.js";
 
 /** What a tool call acts on. Rules and the sensitive-path check match against it. */
-export type CallTarget = PathTarget | CommandTarget | InputTarget;
+export type CallTarget = PathTarget | CommandTarget | InputTarget | UrlTarget;
 
 /** A file. `path` is relative to the root, with forward slashes. */
 export interface PathTarget {
@@ -14,6 +14,15 @@ export interface CommandTarget {
   command: string;
   /** The model asks to run it outside the OS sandbox. It always needs approval or a rule. */
   outsideSandbox?: boolean;
+}
+
+/** A web address. Rules match the host: web_fetch(docs.python.org), web_fetch(*.github.com). */
+export interface UrlTarget {
+  kind: "url";
+  url: string;
+  host: string;
+  /** Ask even when a rule or a session answer allows the host (an unusual URL). */
+  alwaysAsk?: boolean;
 }
 
 /** A tool with no describe(): its input as JSON. Only bare `tool` rules match it. */

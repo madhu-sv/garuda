@@ -18,6 +18,7 @@ import type { SandboxSettings } from "./sandboxPaths.js";
  *     "deny":  ["bash(rm -rf*)", "bash(git push*)"]
  *   },
  *   "env": { "allow": ["NODE_ENV"] },
+ *   "web": { "enabled": true, "allowLocalhost": false },
  *   "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
  *   "model": {
  *     "contextWindow": 200000,
@@ -45,6 +46,10 @@ const schema = z.strictObject({
     })
     .optional(),
   env: z.strictObject({ allow: z.array(z.string()).optional() }).optional(),
+  /** web_fetch. enabled: default true. allowLocalhost: default false (loopback only, never private ranges). */
+  web: z
+    .strictObject({ enabled: z.boolean().optional(), allowLocalhost: z.boolean().optional() })
+    .optional(),
   limits: z
     .strictObject({
       maxSteps: z.number().int().min(1).max(1_000).optional(),
@@ -74,6 +79,7 @@ export interface Settings {
   /** Extra environment variables that commands may see. */
   envAllow: string[];
   sandbox?: SandboxSettings;
+  web?: { enabled: boolean; allowLocalhost: boolean };
   codeIndex?: CodeIndexMode;
   maxSteps?: number;
   tokenBudget?: number;
@@ -89,6 +95,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
   const {
     executor = "auto",
     sandbox,
+    web,
     permissions = {},
     env = {},
     limits = {},
@@ -108,6 +115,9 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     allow: rules(permissions.allow),
     deny: rules(permissions.deny),
     envAllow: env.allow ?? [],
+    ...(web === undefined
+      ? {}
+      : { web: { enabled: web.enabled ?? true, allowLocalhost: web.allowLocalhost ?? false } }),
     ...(sandbox === undefined
       ? {}
       : {

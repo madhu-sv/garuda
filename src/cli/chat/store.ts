@@ -311,9 +311,14 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         });
         resolve(choice);
       };
+      const host = request.target.kind === "url" ? request.target.host : undefined;
       const choices = APPROVAL_CHOICES.map((c) => ({
         choice: c.choice,
-        label: request.labels?.[c.choice] ?? c.label,
+        label:
+          request.labels?.[c.choice] ??
+          (c.choice === "session" && host !== undefined
+            ? `Yes, allow ${host} for this session`
+            : c.label),
       }));
       this.update({ approval: { request, choices, selected: 0 } });
     });

@@ -23,7 +23,9 @@ export class TerminalApprover implements Approver {
       request.labels?.session ??
       (request.target.kind === "command"
         ? "Yes, and allow this exact command for this session"
-        : `Yes, and allow all ${request.tool} calls for this session`);
+        : request.target.kind === "url"
+          ? `Yes, and allow ${request.target.host} for this session`
+          : `Yes, and allow all ${request.tool} calls for this session`);
 
     // Loaded on first use, so startup stays fast (N3).
     const { select } = await import("@inquirer/prompts");
@@ -68,11 +70,14 @@ export function header({ tool, target, isolation, title }: ApprovalRequest): str
     return styleText("bold", `${tool} wants to run a command (${where}):`);
   }
   if (target.kind === "input") return styleText("bold", `${tool} wants to run with this input:`);
+  if (target.kind === "url")
+    return styleText("bold", `${tool} wants to fetch from ${target.host}:`);
   return styleText("bold", `${tool} wants to change ${target.path}:`);
 }
 
 export function colorPreview({ target, preview }: ApprovalRequest): string {
   if (target.kind === "command") return styleText("cyan", `  $ ${preview}`);
+  if (target.kind === "url") return preview;
   return preview
     .split("\n")
     .map((line) => {

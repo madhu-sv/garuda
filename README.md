@@ -12,7 +12,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M3 Write tools and permissions | Done |
 | M4 Limits, context, sessions | Done |
 | M5 CLI polish and evals | Done |
-| 0.2: OS sandbox, Ink chat, MCP client (stdio) | In progress |
+| 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch | In progress |
 
 ## Use
 
@@ -209,6 +209,30 @@ Security:
 - Garuda offers no sampling, roots or elicitation, so a server cannot make model calls or ask
   you questions through Garuda.
 - The evals never start MCP servers.
+
+## Web fetch
+
+`web_fetch` reads a web page (http or https) and gives it to the model as Markdown (0.2).
+
+- The first fetch from a host asks you and shows the full URL. "Yes, allow <host> for this session"
+  skips later questions for that host. Rules skip the question for good:
+  `web_fetch(docs.python.org)`, or `web_fetch(*.github.com)` for its subdomains.
+- An unusual URL (very long, or with a long token that could carry data from the session) always asks,
+  also for an allowed host.
+- A redirect to another host asks like a new fetch.
+- Protection against server-side request forgery: Garuda resolves each host itself, checks every
+  address (only public addresses; no private, loopback, link-local such as 169.254.169.254, or other
+  special ranges, also as IPv4-mapped IPv6), and connects to exactly the checked address. Redirects
+  are followed by hand (at most 5) and checked the same way.
+- http is upgraded to https. URLs with a user name or password are refused. Garuda sends no cookies
+  and no credentials, and it does not use a proxy.
+- Limits: 5 MB per page (also after decompression), 30 s, text types only. HTML becomes Markdown
+  without scripts, styles and navigation. Long pages come in parts (`start`, `max_chars`); a page is
+  cached for 10 minutes.
+- Page text is cleaned like MCP text and marked as untrusted (`<web_result>`).
+- Settings: `"web": { "enabled": false }` removes the tool. `"web": { "allowLocalhost": true }` allows
+  loopback addresses (for a local docs server); private network ranges stay blocked.
+- The evals turn web_fetch off.
 
 ## Permissions
 

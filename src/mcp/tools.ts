@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { CallToolResult, Tool as McpTool } from "@modelcontextprotocol/client";
 import { z } from "zod";
 import type { Tool } from "../tools/types.js";
-import { capText, cleanJson, cleanText } from "./sanitize.js";
+import { capText, cleanJson, cleanText, neutralizeTags } from "./sanitize.js";
 
 /** Limits for what one server can put into the model's context. */
 export const MAX_TOOLS_PER_SERVER = 100;
@@ -165,14 +165,6 @@ function hintText(tool: McpTool): string {
     a.openWorldHint ? "reaches outside systems" : undefined,
   ].filter((h) => h !== undefined);
   return hints.length === 0 ? "" : ` (the server says: ${hints.join(", ")}; not verified)`;
-}
-
-/**
- * Server text must not open or close Garuda's own markers: a fake </mcp_result> could end the
- * wrapper early, and a fake <garuda_note> could pose as a message from Garuda.
- */
-export function neutralizeTags(text: string): string {
-  return text.replace(/<(\/?)(mcp_result|garuda_note)/gi, "<\\$1$2");
 }
 
 /** The result as text for the model: cleaned, capped and marked as MCP output. */

@@ -96,8 +96,9 @@ export class PermissionEngine implements PermissionGate {
     if (target?.kind === "command" && !target.outsideSandbox && this.isolation !== "none") {
       return { allowed: true, by: "sandbox" };
     }
-    if (allowRule !== undefined) return { allowed: true, by: "rule" };
-    if (this.sessionRules.some((r) => ruleMatches(r, tool, target, "allow"))) {
+    const mustAsk = target?.kind === "url" && target.alwaysAsk === true;
+    if (allowRule !== undefined && !mustAsk) return { allowed: true, by: "rule" };
+    if (!mustAsk && this.sessionRules.some((r) => ruleMatches(r, tool, target, "allow"))) {
       return { allowed: true, by: "session" };
     }
 
@@ -140,11 +141,15 @@ export class PermissionEngine implements PermissionGate {
  * A command pattern would be too wide: allowing `ls` must not allow `ls; rm -rf .`.
  */
 function sessionRule(tool: string, target: CallTarget): Rule {
-  return target.kind === "command" ? { tool, pattern: target.command, exact: true } : { tool };
+  if (target.kind === "command") return { tool, pattern: target.command, exact: true };
+  // For a URL: this host, not its subdomains and not other hosts.
+  if (target.kind === "url") return { tool, pattern: target.host };
+  return { tool };
 }
 
 function describeTarget(target: CallTarget): string {
   if (target.kind === "path") return target.path;
   if (target.kind === "command") return target.command;
+  if (target.kind === "url") return target.url;
   return target.json;
 }

@@ -100,7 +100,13 @@ export class Runtime {
     this.system = system;
     this.knowledge = new KnowledgeIndex(options.root);
     this.codeIndex = settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE;
-    this.tools = new ToolRegistry(defaultTools({ codeIndex: this.codeIndex }));
+    const web = settings.web ?? { enabled: true, allowLocalhost: false };
+    this.tools = new ToolRegistry(
+      defaultTools({
+        codeIndex: this.codeIndex,
+        ...(web.enabled ? { web: { allowLocalhost: web.allowLocalhost } } : {}),
+      }),
+    );
     const info = lookupModel(options.modelId);
     this.price = settings.price ?? info.price;
     this.limits = {
@@ -138,6 +144,7 @@ export class Runtime {
         codeIndex: settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE,
         sandboxed: choice.executor.isolation !== "none",
         mcp: mcpServers.some((s) => s.def.enabled),
+        web: settings.web?.enabled ?? true,
       },
     );
     const runtime = new Runtime(options, settings, system, choice, mcpServers);

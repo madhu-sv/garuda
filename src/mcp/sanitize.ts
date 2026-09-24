@@ -46,3 +46,11 @@ export function cleanJson(value: unknown): unknown {
   }
   return value;
 }
+
+/**
+ * Outside text must not open or close Garuda's own markers: a fake </mcp_result> or
+ * </web_result> could end a wrapper early, and a fake <garuda_note> could pose as Garuda.
+ */
+export function neutralizeTags(text: string): string {
+  return text.replace(/<(\/?)(mcp_result|web_result|garuda_note)/gi, "<\\$1$2");
+}

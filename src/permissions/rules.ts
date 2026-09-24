@@ -7,6 +7,7 @@ import type { CallTarget } from "./types.js";
  *   read_file(.env.example)  a file name without "/" matches at any depth
  *   bash(pnpm test*)         a command; "*" matches any characters
  *   mcp__github__*           every tool of an MCP server (a "*" at the end of a tool name)
+ *   web_fetch(docs.python.org)  a host; web_fetch(*.github.com) matches its subdomains
  */
 export interface Rule {
   tool: string;
@@ -47,6 +48,7 @@ export function ruleMatches(
 
   if (target.kind === "path") return pathMatches(rule.pattern, target.path);
   if (target.kind === "input") return false;
+  if (target.kind === "url") return hostMatches(rule.pattern, target.host);
 
   if (rule.exact) return normalize(target.command) === normalize(rule.pattern);
   const parts = commandParts(target.command);
@@ -57,6 +59,13 @@ export function ruleMatches(
 
 function toolMatches(ruleTool: string, tool: string): boolean {
   return ruleTool.endsWith("*") ? tool.startsWith(ruleTool.slice(0, -1)) : ruleTool === tool;
+}
+
+/** "example.com" matches only that host; "*.example.com" matches its subdomains. */
+export function hostMatches(pattern: string, host: string): boolean {
+  const p = pattern.toLowerCase();
+  const h = host.toLowerCase();
+  return p.startsWith("*.") ? h.endsWith(p.slice(1)) && h.length > p.length - 1 : p === h;
 }
 
 // Paths.

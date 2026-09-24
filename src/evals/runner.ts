@@ -56,6 +56,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
 
   const settings = parseSettings({
     permissions: { deny: EVAL_DENY_RULES },
+    // Evals must not depend on the internet.
+    web: { enabled: false },
     ...(options.executor === undefined ? {} : { executor: options.executor }),
     ...(options.codeIndex === undefined ? {} : { codeIndex: options.codeIndex }),
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
