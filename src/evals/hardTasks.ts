@@ -95,10 +95,11 @@ export const HARD_TASKS: readonly EvalTask[] = [
     id: "hard-unused",
     title: "Find unused exports",
     prompt:
-      "Which functions exported from files in src/core/ are not used by any other file in src/? (Uses in test/ do not count.) Write their names to unused.txt, one per line, in alphabetical order. Do not change any other file.",
+      "Which exported functions in src/core/ are not used by any other file in src/? Count only functions declared with the `function` keyword: classes and constants do not count. Uses in test/ do not count. Write the names to unused.txt, one per line, in alphabetical order. Do not change any other file.",
     change: {},
+    // diff prints the expected and the actual lines, so a failure shows what the agent wrote.
     check:
-      '[ "$(tr -d " \\r" < unused.txt | grep -v "^$")" = "$(printf "isWeekend\\npadLeft\\ntruncate")" ]',
+      'diff <(printf "isWeekend\\npadLeft\\ntruncate\\n") <(tr -d " \\r" < unused.txt | grep -v "^$")',
     protect: Object.keys(BASE).filter((p) => p.startsWith("src/")),
     solution: { "unused.txt": "isWeekend\npadLeft\ntruncate\n" },
   }),
