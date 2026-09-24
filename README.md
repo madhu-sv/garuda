@@ -32,6 +32,8 @@ echo "Explain this repo" | node dist/cli/index.js       # the same, from stdin
 Tools: read_file, glob and grep run with no question.
 write_file, edit_file and bash show a diff or the command first. You pick: allow once, allow for this session, or deny.
 Commands run on your machine with no sandbox in 0.1, so read each one before you allow it.
+Garuda removes a leading `cd <working root> &&` from a command, because each command already starts there.
+When the model reads files with bash, or pipes into head or tail, the result adds a short `[Garuda: …]` note that tells it to use the file tools.
 
 Try it on this repo:
 

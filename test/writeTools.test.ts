@@ -6,6 +6,7 @@ import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
 import { HostExecutor } from "../src/sandbox/host.js";
 import { FileTracker } from "../src/session/fileTracker.js";
+import { commandHints, stripRootCd } from "../src/tools/bash.js";
 import { defaultTools } from "../src/tools/index.js";
 import { ToolRegistry } from "../src/tools/registry.js";
 import { toolContext } from "./helpers.js";
@@ -171,5 +172,53 @@ describe("bash (F14)", () => {
     const r = await call("bash", { command: "touch ran.txt" });
     expect(r.isError).toBe(true);
     expect(() => read("ran.txt")).toThrow();
+  });
+});
+
+describe("bash hints and the root cd", () => {
+  const root = "/work/app";
+
+  it("removes a leading cd to the root, in its usual forms", () => {
+    expect(stripRootCd("cd /work/app && node --test", root)).toEqual({
+      command: "node --test",
+      stripped: true,
+    });
+    expect(stripRootCd(`cd "/work/app/" ; pnpm test`, root).command).toBe("pnpm test");
+    expect(stripRootCd("cd . && cd $(pwd) && ls", root).command).toBe("ls");
+  });
+
+  it("keeps a cd to another folder, and a cd with nothing after it", () => {
+    expect(stripRootCd("cd /work/app/src && ls", root)).toEqual({
+      command: "cd /work/app/src && ls",
+      stripped: false,
+    });
+    expect(stripRootCd("cd /work/app", root).stripped).toBe(false);
+    expect(stripRootCd("cd /work/app && ", root).stripped).toBe(false);
+  });
+
+  it("tells the model when a command only reads files", () => {
+    expect(commandHints("cat a.js | grep x", false)).toEqual([
+      expect.stringMatching(/^This command only reads files/),
+    ]);
+    expect(commandHints("node --test", false)).toEqual([]);
+    expect(commandHints("ls; echo x", false)).toEqual([]);
+  });
+
+  it("tells the model when a pipe into head or tail hides the exit code", () => {
+    expect(commandHints("node --test 2>&1 | tail -20", false)).toEqual([
+      expect.stringMatching(/^The exit code above comes from head or tail/),
+    ]);
+    expect(commandHints("node --test", true)).toEqual([
+      expect.stringMatching(/removed the leading `cd`/),
+    ]);
+  });
+
+  it("runs and shows the stripped command, and adds the hints to the result", async () => {
+    const { approver, call } = session();
+    const r = await call("bash", { command: `cd ${repo.root} && cat README.md` });
+    expect(approver.requests[0]?.preview).toBe("cat README.md");
+    expect(r.content).toContain("# Sample");
+    expect(r.content).toContain("[Garuda: Garuda removed the leading `cd`");
+    expect(r.content).toContain("[Garuda: This command only reads files.");
   });
 });

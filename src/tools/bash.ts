@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { commandParts } from "../permissions/rules.js";
 import type { ExecResult } from "../sandbox/types.js";
 import type { Tool } from "./types.js";
 
@@ -18,8 +19,69 @@ const input = z.object({
 
 type Input = z.infer<typeof input>;
 
+/** The command result plus short notes for the model about how it used bash. */
+export type BashOutput = ExecResult & { hints: string[] };
+
+/** Programs that only read files. A command made only of these should use the file tools. */
+const READERS = new Set([
+  "cat",
+  "head",
+  "tail",
+  "less",
+  "more",
+  "ls",
+  "tree",
+  "find",
+  "grep",
+  "egrep",
+  "fgrep",
+  "rg",
+  "wc",
+  "file",
+  "stat",
+]);
+
+/**
+ * Remove a leading `cd <working root> &&` (or `;`): every call already starts in the root.
+ * Models often add it with the absolute path, which only makes the command longer.
+ */
+export function stripRootCd(command: string, root: string): { command: string; stripped: boolean } {
+  const roots = new Set([root, `${root}/`, ".", "./", "$(pwd)", "$PWD", "`pwd`"]);
+  let rest = command.trimStart();
+  let stripped = false;
+  for (;;) {
+    const match = /^cd\s+("([^"]*)"|'([^']*)'|(\S+))\s*(&&|;)\s*/.exec(rest);
+    const target = match?.[2] ?? match?.[3] ?? match?.[4];
+    if (match === null || target === undefined || !roots.has(target)) break;
+    rest = rest.slice(match[0].length);
+    stripped = true;
+  }
+  return { command: stripped && rest !== "" ? rest : command, stripped: stripped && rest !== "" };
+}
+
+/** Notes for the model about the command it ran (see the system prompt for the same rules). */
+export function commandHints(command: string, strippedCd: boolean): string[] {
+  const hints: string[] = [];
+  const programs = commandParts(command).map((part) => part.split(" ")[0] ?? "");
+  if (strippedCd) {
+    hints.push(
+      "Garuda removed the leading `cd` to the working root: every bash call already starts there.",
+    );
+  }
+  if (programs.length > 0 && programs.every((p) => READERS.has(p))) {
+    hints.push(
+      "This command only reads files. Use read_file, glob and grep for that: they need no approval, and edit_file accepts only files that read_file has read.",
+    );
+  } else if (programs.slice(1).some((p) => p === "head" || p === "tail")) {
+    hints.push(
+      "The exit code above comes from head or tail, not from your command. Do not pipe into them: Garuda already cuts long output.",
+    );
+  }
+  return hints;
+}
+
 /** bash (F14): run a command through the Executor (N8). */
-export const bashTool: Tool<Input, ExecResult> = {
+export const bashTool: Tool<Input, BashOutput> = {
   name: "bash",
   description: [
     "Run a bash command. Each call starts in the working root; cd does not carry over to the next call.",
@@ -34,14 +96,18 @@ export const bashTool: Tool<Input, ExecResult> = {
   readOnly: false,
   runsCommands: true,
 
-  async describe({ command }) {
-    return { target: { kind: "command", command }, preview: command };
+  // The user approves, and rules match, the command that will really run.
+  async describe({ command }, { root }) {
+    const run = stripRootCd(command, root).command;
+    return { target: { kind: "command", command: run }, preview: run };
   },
 
-  async run({ command, timeout_ms }, { executor, permissions, signal }) {
+  async run({ command, timeout_ms }, { executor, permissions, signal, root }) {
     if (executor === undefined) throw new Error("No executor is configured, so bash cannot run.");
     const policy = permissions.execPolicy(timeout_ms ?? BASH_DEFAULT_TIMEOUT_MS);
-    return executor.run(command, policy, { signal });
+    const { command: run, stripped } = stripRootCd(command, root);
+    const result = await executor.run(run, policy, { signal });
+    return { ...result, hints: commandHints(run, stripped) };
   },
 
   toText(result) {
@@ -62,6 +128,7 @@ export const bashTool: Tool<Input, ExecResult> = {
       lines.push(`<${name}${note}>\n${output.text.replace(/\n$/, "")}\n</${name}>`);
     }
     if (result.stdout.totalBytes === 0 && result.stderr.totalBytes === 0) lines.push("(no output)");
+    for (const hint of result.hints) lines.push(`[Garuda: ${hint}]`);
     return lines.join("\n");
   },
 };
