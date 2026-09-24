@@ -1,5 +1,5 @@
 import { existsSync, statSync } from "node:fs";
-import { type Launch, ProcessExecutor, plainBash } from "./process.js";
+import { type Launch, ProcessExecutor, plain } from "./process.js";
 import type { ExecPolicy } from "./types.js";
 
 /**
@@ -15,9 +15,9 @@ export class BwrapExecutor extends ProcessExecutor {
     super();
   }
 
-  protected launch(command: string, policy: ExecPolicy): Launch {
-    if (!policy.sandbox) return plainBash(command);
-    return { file: this.bwrap, args: bwrapArgs(command, policy) };
+  protected launch(argv: string[], policy: ExecPolicy): Launch {
+    if (!policy.sandbox) return plain(argv);
+    return { file: this.bwrap, args: bwrapArgv(argv, policy) };
   }
 }
 
@@ -28,6 +28,14 @@ export class BwrapExecutor extends ProcessExecutor {
  */
 export function bwrapArgs(
   command: string,
+  policy: ExecPolicy,
+  kind: (path: string) => "dir" | "file" | undefined = pathKind,
+): string[] {
+  return bwrapArgv(["bash", "-c", command], policy, kind);
+}
+
+export function bwrapArgv(
+  argv: string[],
   policy: ExecPolicy,
   kind: (path: string) => "dir" | "file" | undefined = pathKind,
 ): string[] {
@@ -46,7 +54,7 @@ export function bwrapArgs(
   if (!policy.network) args.push("--unshare-net");
   // No --new-session and no --unshare-pid: the command stays in Garuda's process group,
   // so a timeout or Ctrl-C kills the whole tree, and pids stay the same as on the host.
-  args.push("--die-with-parent", "--chdir", policy.root, "--", "bash", "-c", command);
+  args.push("--die-with-parent", "--chdir", policy.root, "--", ...argv);
   return args;
 }
 

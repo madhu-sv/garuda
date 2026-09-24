@@ -120,7 +120,9 @@ export function summariseCall(call: ToolUseBlock): string {
 
 /** One short line that says what a call returned. */
 export function summariseResult(call: ToolUseBlock, outcome: ToolOutcome): string {
-  const first = (outcome.content.split("\n")[0] ?? "").trim();
+  // MCP results start with their <mcp_result …> marker: show the first line inside it.
+  const all = outcome.content.split("\n");
+  const first = ((all[0]?.startsWith("<mcp_result ") ? all[1] : all[0]) ?? "").trim();
   if (outcome.isError) return cut(first.replace(/^Error: /, ""), 160);
   const lines = outcome.content === "" ? 0 : outcome.content.split("\n").length;
   switch (call.name) {

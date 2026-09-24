@@ -1,0 +1,333 @@
+import { type CallToolResult, Client, type Tool as McpTool } from "@modelcontextprotocol/client";
+import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
+import { type SandboxSettings, sandboxPaths } from "../permissions/sandboxPaths.js";
+import type { ApprovalRequest, Approver } from "../permissions/types.js";
+import type { ExecPolicy, Executor } from "../sandbox/types.js";
+import type { AnyTool } from "../tools/types.js";
+import { VERSION } from "../version.js";
+import { commandLine, defHash, expandEnv, type ServerConfig } from "./config.js";
+import { cleanText } from "./sanitize.js";
+import { toGarudaTools, toolsHash } from "./tools.js";
+import { ProcessTransport } from "./transport.js";
+import { type TrustStore, USER_SCOPE } from "./trust.js";
+
+/** Time to start a server and list its tools. */
+export const CONNECT_TIMEOUT_MS = 30_000;
+
+export type McpState = "connected" | "failed" | "denied" | "disabled" | "stopped";
+
+export interface McpServerStatus {
+  name: string;
+  source: ServerConfig["source"];
+  state: McpState;
+  tools: number;
+  sandboxed: boolean;
+  network: boolean;
+  message?: string;
+}
+
+export interface McpManagerOptions {
+  root: string;
+  executor: Executor;
+  approver: Approver;
+  trust: TrustStore;
+  sandbox?: SandboxSettings;
+  env?: NodeJS.ProcessEnv;
+  /** Warnings for the user (missing env vars, changed tools, failed servers). */
+  notify?: (text: string) => void;
+}
+
+interface Connection {
+  config: ServerConfig;
+  client: Client;
+  transport: ProcessTransport;
+}
+
+/**
+ * Starts the configured MCP servers (stdio, in the OS sandbox), asks for consent where needed,
+ * and calls their tools. Security rules (0.2):
+ * - A project server runs only after the user saw the full command, its sandbox, network and
+ *   env, and agreed. The consent is pinned to a hash of the definition.
+ * - A change in a server's tool list after approval is reported; a project server needs consent again.
+ * - Garuda offers no client capabilities: servers cannot ask for sampling, roots or elicitation.
+ * - The tool list is read once per session. Later list_changed notifications are ignored.
+ */
+export class McpManager {
+  private readonly connections = new Map<string, Connection>();
+  private readonly statuses = new Map<string, McpServerStatus>();
+
+  constructor(private readonly options: McpManagerOptions) {}
+
+  /** Start every enabled server. Returns the tools of the servers that connected. */
+  async start(configs: readonly ServerConfig[], signal: AbortSignal): Promise<AnyTool[]> {
+    const tools: AnyTool[] = [];
+    for (const config of configs) {
+      if (signal.aborted) break;
+      try {
+        tools.push(...(await this.startOne(config, signal)));
+      } catch (error) {
+        if (signal.aborted) throw error;
+        const message = cleanText((error as Error).message).slice(0, 300);
+        this.setStatus(config, "failed", 0, message);
+        this.notify(`MCP server "${config.name}" did not start: ${message}`);
+      }
+    }
+    return tools;
+  }
+
+  status(): McpServerStatus[] {
+    return [...this.statuses.values()];
+  }
+
+  async call(
+    server: string,
+    tool: string,
+    args: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<CallToolResult> {
+    const connection = this.connections.get(server);
+    if (connection === undefined) throw new Error(`MCP server "${server}" is not running.`);
+    const result = await connection.client.callTool(
+      { name: tool, arguments: args },
+      { signal, timeout: connection.config.def.timeoutMs },
+    );
+    return result as CallToolResult;
+  }
+
+  async close(): Promise<void> {
+    for (const { client, config } of this.connections.values()) {
+      await client.close().catch(() => {});
+      this.setStatus(config, "stopped", 0);
+    }
+    this.connections.clear();
+  }
+
+  private async startOne(config: ServerConfig, signal: AbortSignal): Promise<AnyTool[]> {
+    const { def, name, source } = config;
+    if (!def.enabled) {
+      this.setStatus(config, "disabled", 0);
+      return [];
+    }
+    const scope = source === "user" ? USER_SCOPE : this.options.root;
+    const trusted = this.options.trust.get(scope, name);
+    const hash = defHash(def);
+
+    let remember = source === "user";
+    if (source === "project" && trusted.def !== hash) {
+      const choice = await this.options.approver.ask(
+        this.consentRequest(config, trusted.def),
+        signal,
+      );
+      if (choice === "deny") {
+        this.setStatus(config, "denied", 0, "you did not allow it");
+        return [];
+      }
+      remember = choice === "session";
+      if (remember) await this.options.trust.set(scope, name, { def: hash });
+    }
+
+    const { env, missing } = expandEnv(def.env, this.options.env);
+    if (missing.length > 0) {
+      this.notify(
+        `MCP server "${name}": ${missing.map((m) => `$${m}`).join(", ")} is not set, so it gets an empty value.`,
+      );
+    }
+    const process = this.options.executor.start(
+      [def.command, ...def.args],
+      this.policy(config),
+      env,
+    );
+    const transport = new ProcessTransport(process);
+    const client = new Client(
+      { name: "garuda", version: VERSION },
+      // No capabilities: no sampling, no roots, no elicitation.
+      { capabilities: {}, versionNegotiation: { mode: "auto" } },
+    );
+    const timeout = AbortSignal.any([signal, AbortSignal.timeout(CONNECT_TIMEOUT_MS)]);
+    let serverTools: McpTool[];
+    try {
+      await withSignal(client.connect(transport), timeout);
+      serverTools = await withSignal(listAllTools(client), timeout);
+    } catch (error) {
+      await client.close().catch(() => {});
+      const stderr = transport.lastStderr().slice(-3).join(" | ");
+      const why =
+        timeout.aborted && !signal.aborted ? "no answer in 30 s" : (error as Error).message;
+      throw new Error(stderr === "" ? why : `${why} (server said: ${stderr})`);
+    }
+
+    const toolHash = toolsHash(serverTools);
+    if (trusted.tools !== undefined && trusted.tools !== toolHash) {
+      if (source === "project") {
+        const choice = await this.options.approver.ask(
+          this.changedToolsRequest(config, serverTools),
+          signal,
+        );
+        if (choice === "deny") {
+          await client.close().catch(() => {});
+          this.setStatus(config, "denied", 0, "its tools changed and you did not allow them");
+          return [];
+        }
+        remember = choice === "session";
+      } else {
+        this.notify(
+          `MCP server "${name}": its tools changed since the last session. Check them with /mcp.`,
+        );
+      }
+    }
+    if (remember) await this.options.trust.set(scope, name, { tools: toolHash });
+
+    const { tools, problems } = toGarudaTools(name, serverTools, this);
+    for (const problem of problems) this.notify(`MCP server "${name}": ${problem}.`);
+    this.connections.set(name, { config, client, transport });
+    transport.onclose = () => {
+      if (this.connections.delete(name)) {
+        this.setStatus(config, "failed", 0, "the server stopped");
+        this.notify(`MCP server "${name}" stopped. Its tools now fail.`);
+      }
+    };
+    this.setStatus(config, "connected", tools.length);
+    return tools;
+  }
+
+  private policy(config: ServerConfig): ExecPolicy {
+    const { root, sandbox = {} } = this.options;
+    const paths = sandboxPaths(root, {
+      ...sandbox,
+      writePaths: [...(sandbox.writePaths ?? []), ...config.def.writePaths],
+    });
+    return {
+      root,
+      sandbox: true,
+      ...paths,
+      network: config.def.network,
+      envAllowlist: [...DEFAULT_ENV_ALLOWLIST],
+      timeoutMs: 0,
+      maxOutputBytes: 0,
+    };
+  }
+
+  private consentRequest(config: ServerConfig, previous: string | undefined): ApprovalRequest {
+    const { def, name, file } = config;
+    const isolation = this.options.executor.isolation;
+    const envNames = Object.entries(def.env).map(([k, v]) => {
+      const refs = [...v.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)].map((m) => `$${m[1]}`);
+      return refs.length > 0 ? `${k} (from ${refs.join(", ")})` : `${k} (a fixed value)`;
+    });
+    const lines = [
+      previous === undefined
+        ? `This project wants to start MCP server "${name}" (from ${file}).`
+        : `MCP server "${name}" in ${file} changed since you allowed it.`,
+      "It runs this program:",
+      `  $ ${commandLine(def)}`,
+      isolation === "none"
+        ? "  Sandbox: NONE. It runs as you, with full access to your files."
+        : `  Sandbox: ${this.options.executor.name}. It can read your files (not ~/.ssh and other secrets) and write only in this project and temp folders.`,
+      `  Network: ${def.network ? "YES" : "no"}`,
+      ...(def.writePaths.length > 0 ? [`  Extra write paths: ${def.writePaths.join(", ")}`] : []),
+      `  Environment: ${envNames.length > 0 ? envNames.join(", ") : "only the normal variables"}`,
+      ...warnings(config, isolation === "none").map((w) => `  ! ${w}`),
+      "Allow it only if you trust this project.",
+    ];
+    return {
+      tool: "mcp",
+      target: { kind: "input", json: JSON.stringify({ server: name }) },
+      preview: lines.join("\n"),
+      isolation,
+      title: `Start MCP server "${name}"?`,
+      labels: {
+        once: "Yes, for this session only",
+        session: "Yes, and remember (asks again if the config changes)",
+        deny: "No, do not start it",
+      },
+    };
+  }
+
+  private changedToolsRequest(config: ServerConfig, tools: readonly McpTool[]): ApprovalRequest {
+    const names = tools.map((t) => cleanText(t.name)).slice(0, 30);
+    return {
+      tool: "mcp",
+      target: { kind: "input", json: JSON.stringify({ server: config.name }) },
+      preview: [
+        `The tools of MCP server "${config.name}" changed since you allowed it.`,
+        "A server that changes its tool descriptions can try to change what the model does.",
+        `Tools now: ${names.join(", ")}${tools.length > names.length ? ", …" : ""}`,
+      ].join("\n"),
+      isolation: this.options.executor.isolation,
+      title: `Use the changed tools of "${config.name}"?`,
+      labels: {
+        once: "Yes, for this session only",
+        session: "Yes, and remember",
+        deny: "No, stop this server",
+      },
+    };
+  }
+
+  private setStatus(config: ServerConfig, state: McpState, tools: number, message?: string): void {
+    this.statuses.set(config.name, {
+      name: config.name,
+      source: config.source,
+      state,
+      tools,
+      sandboxed: this.options.executor.isolation !== "none",
+      network: config.def.network,
+      ...(message === undefined ? {} : { message }),
+    });
+  }
+
+  private notify(text: string): void {
+    this.options.notify?.(text);
+  }
+}
+
+/** Patterns in a server command that deserve a warning in the consent prompt. */
+export function warnings(config: ServerConfig, noSandbox: boolean): string[] {
+  const { def } = config;
+  const line = commandLine(def);
+  const out: string[] = [];
+  if (noSandbox)
+    out.push("There is no OS sandbox on this machine: the server can do anything you can.");
+  if (/(^|\s)(npx|bunx|uvx|pipx|dlx)(\s|$)|pnpm\s+dlx/.test(line)) {
+    out.push(
+      "It downloads and runs a package when it starts. Pin a version (for example pkg@1.2.3).",
+    );
+  }
+  if (/(^|\s)(bash|sh|zsh)\s+-c|curl|wget|\|\s*(sh|bash)/.test(line)) {
+    out.push("It runs a shell command or downloads something. Read it carefully.");
+  }
+  if (/(^|\s)sudo(\s|$)|rm\s+-rf/.test(line)) out.push("It uses sudo or rm -rf.");
+  if (def.network) out.push("It may send data over the network.");
+  const secret = Object.keys(def.env).filter((k) => /KEY|TOKEN|SECRET|PASS|CRED/i.test(k));
+  if (secret.length > 0) out.push(`It gets secrets: ${secret.join(", ")}.`);
+  return out;
+}
+
+async function listAllTools(client: Client): Promise<McpTool[]> {
+  const tools: McpTool[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const result = await client.listTools(cursor === undefined ? {} : { cursor });
+    tools.push(...result.tools);
+    cursor = result.nextCursor;
+    if (cursor === undefined || tools.length > 1_000) break;
+  }
+  return tools;
+}
+
+function withSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}

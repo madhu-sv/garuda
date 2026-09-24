@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
 import { KnowledgeIndex } from "../knowledge/index.js";
 import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
@@ -8,6 +9,9 @@ import {
   DEFAULT_TOKEN_BUDGET,
   runAgent,
 } from "../loop/runAgent.js";
+import { loadMcpConfig, type ServerConfig } from "../mcp/config.js";
+import type { McpManager, McpServerStatus } from "../mcp/manager.js";
+import { TrustStore } from "../mcp/trust.js";
 import { lookupModel, type Price } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
@@ -40,6 +44,13 @@ export interface RuntimeOptions {
   /** Default: read .garuda/settings.json in the root. */
   settings?: Settings;
   onEvent?: (event: AgentEvent) => void;
+  /** Warnings for the user outside a tool call, for example from MCP servers. */
+  onNotice?: (text: string) => void;
+  /**
+   * MCP servers (0.2). Default: read ~/.garuda/mcp.json and <root>/.garuda/mcp.json.
+   * false: no MCP servers (the evals use this, so results do not depend on the user's setup).
+   */
+  mcp?: false | { home?: string; env?: NodeJS.ProcessEnv };
 }
 
 export class Runtime {
@@ -61,13 +72,26 @@ export class Runtime {
   private readonly onEvent: ((event: AgentEvent) => void) | undefined;
   private model: ModelClient | (() => Promise<ModelClient>);
   private current: Session | undefined;
+  private readonly approver: Approver;
+  private readonly settings: Settings;
+  private readonly mcpServers: ServerConfig[];
+  private readonly mcpOptions: { home?: string; env?: NodeJS.ProcessEnv };
+  private readonly onNotice: ((text: string) => void) | undefined;
+  private mcp: McpManager | undefined;
+  private mcpStarted: Promise<void> | undefined;
 
   private constructor(
     options: RuntimeOptions,
     settings: Settings,
     system: string,
     choice: ExecutorChoice,
+    mcpServers: ServerConfig[],
   ) {
+    this.approver = options.approver;
+    this.settings = settings;
+    this.mcpServers = mcpServers;
+    this.mcpOptions = options.mcp === false || options.mcp === undefined ? {} : options.mcp;
+    this.onNotice = options.onNotice;
     this.root = options.root;
     this.modelId = options.modelId;
     this.model = options.model;
@@ -97,6 +121,15 @@ export class Runtime {
   static async create(options: RuntimeOptions): Promise<Runtime> {
     const settings = options.settings ?? (await loadSettings(options.root));
     const choice = createExecutor(settings.executor);
+    let mcpServers: ServerConfig[] = [];
+    if (options.mcp !== false) {
+      const loaded = await loadMcpConfig({
+        home: options.mcp?.home ?? homedir(),
+        root: options.root,
+      });
+      mcpServers = loaded.servers;
+      for (const problem of loaded.problems) options.onNotice?.(problem);
+    }
     const system = buildSystemPrompt(
       options.root,
       await loadInstructions(options.root),
@@ -104,9 +137,10 @@ export class Runtime {
       {
         codeIndex: settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE,
         sandboxed: choice.executor.isolation !== "none",
+        mcp: mcpServers.some((s) => s.def.enabled),
       },
     );
-    const runtime = new Runtime(options, settings, system, choice);
+    const runtime = new Runtime(options, settings, system, choice, mcpServers);
     if (options.resume !== undefined) {
       runtime.current = await resumeSession({
         store: options.store,
@@ -130,6 +164,7 @@ export class Runtime {
 
   /** Run one turn: the user's prompt, then the loop until it stops. */
   async runTurn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
+    await this.startMcp(signal);
     const session = this.ensureSession();
     addUserMessage(session, prompt);
     if (typeof this.model === "function") this.model = await this.model();
@@ -147,6 +182,47 @@ export class Runtime {
       ...(this.onEvent === undefined ? {} : { onEvent: this.onEvent }),
       signal,
     });
+  }
+
+  /** MCP server states, for /mcp. */
+  mcpStatus(): McpServerStatus[] {
+    return this.mcp?.status() ?? [];
+  }
+
+  /** Stop the MCP servers. The CLI calls it before it exits. */
+  async close(): Promise<void> {
+    await this.mcp?.close();
+  }
+
+  /**
+   * Start the MCP servers before the first turn, once. Consent questions go through the
+   * approver, so they appear in the chat. Their tools join the registry for the session.
+   */
+  private async startMcp(signal: AbortSignal): Promise<void> {
+    if (this.mcpServers.length === 0) return;
+    this.mcpStarted ??= (async () => {
+      // The MCP SDK loads only when a server is configured (N3).
+      const { McpManager } = await import("../mcp/manager.js");
+      const manager = new McpManager({
+        root: this.root,
+        executor: this.executor,
+        approver: this.approver,
+        trust: await TrustStore.open(this.mcpOptions.home ?? homedir()),
+        ...(this.settings.sandbox === undefined ? {} : { sandbox: this.settings.sandbox }),
+        ...(this.mcpOptions.env === undefined ? {} : { env: this.mcpOptions.env }),
+        ...(this.onNotice === undefined ? {} : { notify: this.onNotice }),
+      });
+      this.mcp = manager;
+      for (const tool of await manager.start(this.mcpServers, signal)) this.tools.register(tool);
+    })();
+    try {
+      await this.mcpStarted;
+    } catch (error) {
+      // Ctrl-C during the start: try again at the next turn.
+      this.mcpStarted = undefined;
+      await this.mcp?.close();
+      throw error;
+    }
   }
 
   /** Record a turn that ended with no result: Ctrl-C ("interrupted") or an error. */

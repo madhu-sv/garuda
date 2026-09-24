@@ -15,6 +15,14 @@ function imports(file: string): string[] {
   return [...code.matchAll(/from\s+["']([^"']+)["']/g)].map((m) => m[1] ?? "");
 }
 
+/** Imports that load code at run time: `import type` is erased and does not count. */
+function valueImports(file: string): string[] {
+  const code = readFileSync(file, "utf8");
+  return [...code.matchAll(/^(?:import|export) (?!type )[^;]*?from\s+["']([^"']+)["']/gms)].map(
+    (m) => m[1] ?? "",
+  );
+}
+
 describe("architecture rules", () => {
   it("the loop never imports the CLI", () => {
     for (const file of sourceFiles(join(SRC, "loop"))) {
@@ -47,9 +55,10 @@ describe("architecture rules", () => {
 
   it("startup does not load the Anthropic SDK or inquirer (N3)", () => {
     // Static imports load at startup. These two load with import() on first use.
-    const heavy = /model\/anthropic\.js$|^@anthropic-ai\/|^@inquirer\//;
+    const heavy =
+      /model\/anthropic\.js$|^@anthropic-ai\/|^@inquirer\/|mcp\/manager\.js$|^@modelcontextprotocol\//;
     const offenders = [...sourceFiles(join(SRC, "cli")), ...sourceFiles(join(SRC, "app"))].filter(
-      (file) => imports(file).some((spec) => heavy.test(spec)),
+      (file) => valueImports(file).some((spec) => heavy.test(spec)),
     );
     expect(offenders).toEqual([]);
   });
@@ -61,6 +70,15 @@ describe("architecture rules", () => {
         !inkFiles.includes(file) &&
         imports(file).some((spec) => /^(ink|react)(\/|$)|\/inkChat\.js$|\/ui\.js$/.test(spec)),
     );
+    expect(offenders).toEqual([]);
+  });
+
+  it("only src/mcp uses the MCP SDK, and never its own stdio transport (N8: the Executor starts servers)", () => {
+    const offenders = sourceFiles(SRC).filter((file) => {
+      const specs = imports(file).filter((spec) => spec.startsWith("@modelcontextprotocol/"));
+      if (specs.length === 0) return false;
+      return !file.includes(join(SRC, "mcp")) || specs.some((spec) => spec.endsWith("/stdio"));
+    });
     expect(offenders).toEqual([]);
   });
 

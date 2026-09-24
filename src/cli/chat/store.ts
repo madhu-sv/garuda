@@ -33,6 +33,8 @@ export interface RunningTool {
 
 export interface PendingApproval {
   request: ApprovalRequest;
+  /** The three choices, with the request's own labels. */
+  choices: { choice: ApprovalChoice; label: string }[];
   /** The highlighted choice. */
   selected: number;
 }
@@ -297,9 +299,10 @@ export class ChatStore implements Renderer, Approver, Interruptible {
       signal.addEventListener("abort", onAbort, { once: true });
       this.answer = (choice) => {
         signal.removeEventListener("abort", onAbort);
+        const label =
+          this.state.approval?.choices.find((c) => c.choice === choice)?.label ?? choice;
         this.answer = undefined;
         this.update({ approval: undefined });
-        const label = APPROVAL_CHOICES.find((c) => c.choice === choice)?.label ?? choice;
         this.add({
           kind: "note",
           level: "info",
@@ -308,7 +311,11 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         });
         resolve(choice);
       };
-      this.update({ approval: { request, selected: 0 } });
+      const choices = APPROVAL_CHOICES.map((c) => ({
+        choice: c.choice,
+        label: request.labels?.[c.choice] ?? c.label,
+      }));
+      this.update({ approval: { request, choices, selected: 0 } });
     });
   }
 
@@ -323,6 +330,6 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   choose(choice?: ApprovalChoice): void {
     const approval = this.state.approval;
     if (approval === undefined || this.answer === undefined) return;
-    this.answer(choice ?? APPROVAL_CHOICES[approval.selected]?.choice ?? "deny");
+    this.answer(choice ?? approval.choices[approval.selected]?.choice ?? "deny");
   }
 }

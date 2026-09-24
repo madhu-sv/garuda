@@ -12,7 +12,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M3 Write tools and permissions | Done |
 | M4 Limits, context, sessions | Done |
 | M5 CLI polish and evals | Done |
-| 0.2: OS sandbox | In progress |
+| 0.2: OS sandbox, Ink chat, MCP client (stdio) | In progress |
 
 ## Use
 
@@ -161,6 +161,50 @@ Settings:
   that it needs; Garuda then falls back to the host and says why.
 - Limit on Linux: a protected path that does not exist yet (for example `.git/hooks` in a folder with no
   `.git`) is not protected.
+
+## MCP servers
+
+Garuda connects to local MCP servers over stdio (0.2). Remote HTTP servers come later.
+
+```json
+{
+  "servers": {
+    "github": {
+      "command": "github-mcp-server",
+      "args": ["stdio"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" },
+      "network": true
+    }
+  }
+}
+```
+
+- Your own servers go in `~/.garuda/mcp.json`. A project can add servers in `.garuda/mcp.json`.
+- Keys per server: `command`, `args`, `env`, `network` (default false), `writePaths`,
+  `timeoutMs` (default 60000), `enabled`. `${NAME}` in an env value comes from your environment,
+  so secrets stay out of the file.
+- Servers start with the first task. `/mcp` shows their state.
+
+Security:
+
+- A project server can come from a cloned repo, so Garuda asks before it starts one. The question
+  shows the full command, the sandbox, the network setting, the env variables and warnings
+  (npx, shell commands, secrets). "Remember" pins your answer to a hash of the definition in
+  `~/.garuda/trust.json`; any change asks again. A project cannot replace one of your own servers.
+- Each server runs in the OS sandbox, like bash: it can write only in the project and temp folders,
+  cannot read `~/.ssh` and other secrets, and has no network unless `"network": true`.
+  It gets only the normal environment variables and the ones in its `env`.
+- Garuda remembers each server's tool list. When the tools change later (a "rug pull"), Garuda
+  warns you, and a project server needs your consent again.
+- Every MCP tool call asks for approval and shows its arguments. Server hints such as
+  `readOnlyHint` are shown, never trusted. Allow rules skip the question:
+  `mcp__github__get_issue` or `mcp__github__*`.
+- Tool names get the prefix `mcp__<server>__`, so a server cannot replace a Garuda tool.
+- Descriptions and results are cleaned (terminal escape codes, control, invisible and Unicode tag
+  characters), limited in size, and marked as untrusted for the model (`<mcp_result>`).
+- Garuda offers no sampling, roots or elicitation, so a server cannot make model calls or ask
+  you questions through Garuda.
+- The evals never start MCP servers.
 
 ## Permissions
 

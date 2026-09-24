@@ -1,6 +1,6 @@
 import { Box, Static, Text, useInput, usePaste } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { APPROVAL_CHOICES, type ChatState, type ChatStore, type Item } from "./store.js";
+import type { ChatState, ChatStore, Item } from "./store.js";
 
 /**
  * The Ink view of the chat (0.2). It draws the store and maps keys to store actions.
@@ -31,7 +31,9 @@ export function App({ store }: { store: ChatStore }) {
             <Text color="cyan">{frame}</Text> Working… (Ctrl-C stops)
           </Text>
         )}
-        {state.approval !== undefined && <ApprovalView selected={state.approval.selected} />}
+        {state.approval !== undefined && (
+          <ApprovalView choices={state.approval.choices} selected={state.approval.selected} />
+        )}
         {state.queue.map((line, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: queued lines can repeat.
           <Text key={i} dimColor>
@@ -64,17 +66,23 @@ function ItemView({ item }: { item: Item }) {
   }
 }
 
-function ApprovalView({ selected }: { selected: number }) {
+function ApprovalView({
+  choices,
+  selected,
+}: {
+  choices: { choice: string; label: string }[];
+  selected: number;
+}) {
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text bold>Allow?</Text>
-      {APPROVAL_CHOICES.map((c, i) => (
+      {choices.map((c, i) => (
         <Text key={c.choice} {...(i === selected ? { color: "cyan" } : {})}>
           {i === selected ? "❯ " : "  "}
           {i + 1}. {c.label}
         </Text>
       ))}
-      <Text dimColor>↑↓ Enter · y once · a session · n or Esc deny</Text>
+      <Text dimColor>↑↓ and Enter, or 1 2 3 · y = 1 · a = 2 · n or Esc = 3</Text>
     </Box>
   );
 }

@@ -68,6 +68,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     approver: new AutoApprover("once"),
     store,
     settings,
+    // The user's own MCP servers must not change eval results.
+    mcp: false,
     ...(options.onEvent === undefined
       ? {}
       : { onEvent: (event: AgentEvent) => options.onEvent?.(task.id, event) }),

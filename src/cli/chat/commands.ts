@@ -22,6 +22,7 @@ export const HELP = [
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /refs X    every use of symbol X (code index, no model call)",
   "  /map [dir] what each JS/TS file exports and imports",
+  "  /mcp       MCP servers: state, sandbox, network and tool count",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -46,6 +47,8 @@ export async function runCommand(
     renderer.info(id === undefined ? "No session yet." : `Session ${id}\n${sessionPath(id)}`);
   } else if (command === "/where" || command === "/refs" || command === "/map") {
     await lookup(runtime, renderer, command, text.slice(command.length).trim());
+  } else if (command === "/mcp") {
+    renderer.info(mcpSummary(runtime));
   } else if (command === "/new") {
     runtime.newSession();
     renderer.info("The next task starts a new session.");
@@ -91,4 +94,19 @@ export function usageSummary(runtime: Runtime): string {
     `  input ${formatTokens(u.inputTokens)}, cache read ${formatTokens(u.cacheReadTokens)}, cache write ${formatTokens(u.cacheWriteTokens)}, output ${formatTokens(u.outputTokens)}`,
     `  context ${formatTokens(session.contextTokens)} of ${formatTokens(runtime.limits.contextWindow)}`,
   ].join("\n");
+}
+
+function mcpSummary(runtime: Runtime): string {
+  const servers = runtime.mcpStatus();
+  if (servers.length === 0) {
+    return "No MCP servers are running. They start with the first task. Configure them in ~/.garuda/mcp.json or .garuda/mcp.json.";
+  }
+  return servers
+    .map((s) => {
+      const box = s.sandboxed ? "sandbox" : "NO sandbox";
+      const net = s.network ? "network" : "no network";
+      const note = s.message === undefined ? "" : ` (${s.message})`;
+      return `${s.name} [${s.source}] ${s.state}${note} · ${s.tools} tool(s) · ${box} · ${net}`;
+    })
+    .join("\n");
 }

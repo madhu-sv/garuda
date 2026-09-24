@@ -6,6 +6,7 @@ import type { CallTarget } from "./types.js";
  *   edit_file(src/**)        edits under src/
  *   read_file(.env.example)  a file name without "/" matches at any depth
  *   bash(pnpm test*)         a command; "*" matches any characters
+ *   mcp__github__*           every tool of an MCP server (a "*" at the end of a tool name)
  */
 export interface Rule {
   tool: string;
@@ -14,7 +15,7 @@ export interface Rule {
   exact?: boolean;
 }
 
-const RULE = /^([a-z_][a-z0-9_]*)(?:\((.*)\))?$/i;
+const RULE = /^([a-z_][a-z0-9_-]*\*?)(?:\((.*)\))?$/i;
 
 export function parseRule(text: string): Rule {
   const match = RULE.exec(text.trim());
@@ -40,7 +41,7 @@ export function ruleMatches(
   target: CallTarget | undefined,
   mode: "allow" | "deny",
 ): boolean {
-  if (rule.tool !== tool) return false;
+  if (!toolMatches(rule.tool, tool)) return false;
   if (rule.pattern === undefined) return true;
   if (target === undefined) return false;
 
@@ -52,6 +53,10 @@ export function ruleMatches(
   if (parts.length === 0) return false;
   const hit = (part: string) => commandMatches(rule.pattern ?? "", part);
   return mode === "allow" ? parts.every(hit) : parts.some(hit) || hit(target.command);
+}
+
+function toolMatches(ruleTool: string, tool: string): boolean {
+  return ruleTool.endsWith("*") ? tool.startsWith(ruleTool.slice(0, -1)) : ruleTool === tool;
 }
 
 // Paths.

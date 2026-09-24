@@ -1,4 +1,4 @@
-import { type Launch, ProcessExecutor, plainBash } from "./process.js";
+import { type Launch, ProcessExecutor, plain } from "./process.js";
 import type { ExecPolicy } from "./types.js";
 
 export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
@@ -12,9 +12,9 @@ export class SeatbeltExecutor extends ProcessExecutor {
   readonly name = "seatbelt";
   readonly isolation = "os" as const;
 
-  protected launch(command: string, policy: ExecPolicy): Launch {
-    if (!policy.sandbox) return plainBash(command);
-    return { file: SANDBOX_EXEC, args: ["-p", seatbeltProfile(policy), "bash", "-c", command] };
+  protected launch(argv: string[], policy: ExecPolicy): Launch {
+    if (!policy.sandbox) return plain(argv);
+    return { file: SANDBOX_EXEC, args: ["-p", seatbeltProfile(policy), ...argv] };
   }
 }
 

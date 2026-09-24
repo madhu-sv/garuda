@@ -20,9 +20,10 @@ export class TerminalApprover implements Approver {
     }
 
     const sessionLabel =
-      request.target.kind === "command"
+      request.labels?.session ??
+      (request.target.kind === "command"
         ? "Yes, and allow this exact command for this session"
-        : `Yes, and allow all ${request.tool} calls for this session`;
+        : `Yes, and allow all ${request.tool} calls for this session`);
 
     // Loaded on first use, so startup stays fast (N3).
     const { select } = await import("@inquirer/prompts");
@@ -31,9 +32,9 @@ export class TerminalApprover implements Approver {
         {
           message: "Allow?",
           choices: [
-            { name: "Yes, once", value: "once" },
+            { name: request.labels?.once ?? "Yes, once", value: "once" },
             { name: sessionLabel, value: "session" },
-            { name: "No, deny", value: "deny" },
+            { name: request.labels?.deny ?? "No, deny", value: "deny" },
           ],
         },
         { signal, output: out },
@@ -55,7 +56,8 @@ export class SwitchApprover implements Approver {
   }
 }
 
-export function header({ tool, target, isolation }: ApprovalRequest): string {
+export function header({ tool, target, isolation, title }: ApprovalRequest): string {
+  if (title !== undefined) return styleText("bold", title);
   if (target.kind === "command") {
     const where =
       isolation === "none"

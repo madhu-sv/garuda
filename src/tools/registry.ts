@@ -37,7 +37,9 @@ export class ToolRegistry implements ToolRunner {
       .map((tool) => ({
         name: tool.name,
         description: tool.description,
-        inputSchema: z.toJSONSchema(tool.inputSchema, { io: "input" }) as Record<string, unknown>,
+        inputSchema:
+          tool.jsonSchema ??
+          (z.toJSONSchema(tool.inputSchema, { io: "input" }) as Record<string, unknown>),
       }));
   }
 
@@ -77,7 +79,7 @@ export class ToolRegistry implements ToolRunner {
       }
       const output: unknown = await tool.run(parsed.data, context);
       const content = tool.toText ? tool.toText(output) : String(output);
-      return { content, isError: false };
+      return { content, isError: tool.isError?.(output) === true };
     } catch (error) {
       if (context.signal.aborted) throw error;
       const message = error instanceof Error ? error.message : String(error);

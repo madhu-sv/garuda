@@ -1,6 +1,13 @@
 import { spawn } from "node:child_process";
 import { OutputCapture } from "./capture.js";
-import type { ExecOptions, ExecPolicy, ExecResult, Executor, Isolation } from "./types.js";
+import type {
+  ExecOptions,
+  ExecPolicy,
+  ExecResult,
+  Executor,
+  Isolation,
+  RunningProcess,
+} from "./types.js";
 
 /** Time between SIGTERM and SIGKILL when the tree must stop. */
 const KILL_GRACE_MS = 2_000;
@@ -22,12 +29,51 @@ export abstract class ProcessExecutor implements Executor {
   /** Process group ids of running commands. */
   private readonly running = new Set<number>();
 
-  /** How to start `command` under `policy`. */
-  protected abstract launch(command: string, policy: ExecPolicy): Launch;
+  /** How to start the program `argv` under `policy`. */
+  protected abstract launch(argv: string[], policy: ExecPolicy): Launch;
 
   shutdown(): void {
     for (const pid of this.running) signalGroup(pid, "SIGKILL");
     this.running.clear();
+  }
+
+  start(argv: string[], policy: ExecPolicy, env: Record<string, string> = {}): RunningProcess {
+    const { file, args } = this.launch(argv, policy);
+    const child = spawn(file, args, {
+      cwd: policy.root,
+      env: { ...allowedEnv(policy.envAllowlist), ...env },
+      stdio: ["pipe", "pipe", "pipe"],
+      detached: true,
+    });
+    const pid = child.pid;
+    if (pid !== undefined) this.running.add(pid);
+    let killTimer: NodeJS.Timeout | undefined;
+    child.on("exit", () => {
+      if (pid !== undefined) {
+        this.running.delete(pid);
+        // Children that the program started may still hold the group.
+        signalGroup(pid, "SIGKILL");
+      }
+      if (killTimer !== undefined) clearTimeout(killTimer);
+    });
+    return {
+      pid,
+      stdin: child.stdin,
+      stdout: child.stdout,
+      stderr: child.stderr,
+      stop: () => {
+        if (pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
+        signalGroup(pid, "SIGTERM");
+        killTimer ??= setTimeout(() => signalGroup(pid, "SIGKILL"), KILL_GRACE_MS);
+        killTimer.unref();
+      },
+      onExit: (listener) => {
+        child.on("exit", (code, signal) => listener(code, signal));
+      },
+      onError: (listener) => {
+        child.on("error", listener);
+      },
+    };
   }
 
   run(command: string, policy: ExecPolicy, options: ExecOptions = {}): Promise<ExecResult> {
@@ -41,7 +87,7 @@ export abstract class ProcessExecutor implements Executor {
         return;
       }
 
-      const { file, args } = this.launch(command, policy);
+      const { file, args } = this.launch(["bash", "-c", command], policy);
       const child = spawn(file, args, {
         cwd: policy.root,
         env: allowedEnv(policy.envAllowlist),
@@ -125,7 +171,8 @@ export function allowedEnv(allowlist: readonly string[]): Record<string, string>
   return env;
 }
 
-/** Plain bash, with no isolation. */
-export function plainBash(command: string): Launch {
-  return { file: "bash", args: ["-c", command] };
+/** The program itself, with no isolation. */
+export function plain(argv: string[]): Launch {
+  const [file = "", ...args] = argv;
+  return { file, args };
 }

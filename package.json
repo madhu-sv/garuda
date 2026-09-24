@@ -25,6 +25,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
     "@inquirer/prompts": "^8.7.2",
+    "@modelcontextprotocol/client": "^2.1.0",
     "commander": "^15.0.0",
     "diff": "^9.0.0",
     "globby": "^16.2.4",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
+    "@modelcontextprotocol/server": "^2.1.0",
     "@types/node": "^22.20.4",
     "@types/react": "^19.3.0",
     "ink-testing-library": "^4.0.0",

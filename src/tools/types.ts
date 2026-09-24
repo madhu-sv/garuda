@@ -27,6 +27,8 @@ export interface Tool<I = unknown, O = string> {
   name: string;
   description: string;
   inputSchema: z.ZodType<I>;
+  /** The JSON Schema the model sees, when it does not come from `inputSchema` (MCP tools). */
+  jsonSchema?: Record<string, unknown>;
   /** Read-only tools run without approval (F17) and can run in parallel (F8). */
   readOnly: boolean;
   /** True for tools that run commands through the Executor. The session log records the executor (N8). */
@@ -38,6 +40,8 @@ export interface Tool<I = unknown, O = string> {
   describe?(input: I, context: ToolContext): Promise<CallInfo>;
   run(input: I, context: ToolContext): Promise<O>;
   toText?(output: O): string;
+  /** True when the output is an error result (MCP tools report errors this way). */
+  isError?(output: O): boolean;
 }
 
 /** What the loop needs from a tool set. ToolRegistry implements it; replay uses a recorded one. */

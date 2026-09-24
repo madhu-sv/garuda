@@ -57,12 +57,30 @@ export interface ExecOptions {
   signal?: AbortSignal;
 }
 
+/** A long-running program with pipes, for example an MCP server over stdio. */
+export interface RunningProcess {
+  readonly pid: number | undefined;
+  readonly stdin: NodeJS.WritableStream;
+  readonly stdout: NodeJS.ReadableStream;
+  readonly stderr: NodeJS.ReadableStream;
+  /** Stop the process group: SIGTERM, then SIGKILL after a grace time. */
+  stop(): void;
+  onExit(listener: (code: number | null, signal: string | null) => void): void;
+  onError(listener: (error: Error) => void): void;
+}
+
 export interface Executor {
   /** Config value that selects this executor, for example "host". */
   readonly name: string;
   readonly isolation: Isolation;
   /** Run `command` with bash. Never throws for a failed command: check exitCode. */
   run(command: string, policy: ExecPolicy, options?: ExecOptions): Promise<ExecResult>;
+  /**
+   * Start `argv` (no shell) under `policy`, with pipes on stdin, stdout and stderr.
+   * `env` adds variables on top of the allowlist. `timeoutMs` and `maxOutputBytes` do not apply.
+   * shutdown() stops it too.
+   */
+  start(argv: string[], policy: ExecPolicy, env?: Record<string, string>): RunningProcess;
   /**
    * Kill every running command now, with no grace time (F4). Garuda calls it when it exits,
    * so no orphan process stays. It must be synchronous: it runs in the process "exit" handler.

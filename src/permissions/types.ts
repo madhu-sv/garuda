@@ -56,6 +56,10 @@ export interface ApprovalRequest {
   preview: string;
   /** Isolation of the executor. Shown with commands, so the user knows they run on the host. */
   isolation: Isolation;
+  /** A header that replaces the default one (for example, the MCP server consent). */
+  title?: string;
+  /** Labels that replace the default choice labels. */
+  labels?: Partial<Record<ApprovalChoice, string>>;
 }
 
 /** Asks the user. The CLI implements it with a prompt. Tests use AutoApprover. */

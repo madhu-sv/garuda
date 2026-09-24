@@ -103,6 +103,7 @@ async function start(options: Options, program: Command): Promise<number> {
     store,
     ...(options.resume === undefined ? {} : { resume: options.resume }),
     onEvent: (event) => events.event(event),
+    onNotice: (text) => events.warn(text),
   });
 
   // No orphan process stays (F4): kill running commands on any exit.
@@ -127,6 +128,7 @@ async function start(options: Options, program: Command): Promise<number> {
 
   if (prompt !== undefined) {
     const outcome = await runTurnInTerminal(runtime, terminalApprover, renderer, prompt, exitNow);
+    await runtime.close();
     if (outcome.kind === "interrupted") return 130;
     if (outcome.kind === "error") return 1;
     return outcome.result.stopReason === "done" ? 0 : 2;
@@ -146,6 +148,7 @@ async function start(options: Options, program: Command): Promise<number> {
     renderer.info(`${banner}\n`);
     await runRepl(runtime, terminalApprover, renderer, sessionPath, exitNow);
   }
+  await runtime.close();
   const id = runtime.session?.id;
   if (id !== undefined) renderer.info(`Session ${id}. Continue it with: garuda --resume ${id}`);
   return 0;
