@@ -46,7 +46,16 @@ export class TerminalApprover implements Approver {
   }
 }
 
-function header({ tool, target, isolation }: ApprovalRequest): string {
+/** Passes each question to `current`. The Ink chat swaps in its own approver. */
+export class SwitchApprover implements Approver {
+  constructor(public current: Approver) {}
+
+  ask(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
+    return this.current.ask(request, signal);
+  }
+}
+
+export function header({ tool, target, isolation }: ApprovalRequest): string {
   if (target.kind === "command") {
     const where =
       isolation === "none"
@@ -60,7 +69,7 @@ function header({ tool, target, isolation }: ApprovalRequest): string {
   return styleText("bold", `${tool} wants to change ${target.path}:`);
 }
 
-function colorPreview({ target, preview }: ApprovalRequest): string {
+export function colorPreview({ target, preview }: ApprovalRequest): string {
   if (target.kind === "command") return styleText("cyan", `  $ ${preview}`);
   return preview
     .split("\n")

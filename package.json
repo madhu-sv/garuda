@@ -28,12 +28,16 @@
     "commander": "^15.0.0",
     "diff": "^9.0.0",
     "globby": "^16.2.4",
+    "ink": "^7.1.1",
+    "react": "^19.3.0",
     "ts6": "npm:typescript@^6.0.3",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
     "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "ink-testing-library": "^4.0.0",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"

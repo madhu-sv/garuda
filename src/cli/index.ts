@@ -8,9 +8,9 @@ import { FileSessionStore, parseRecords } from "../session/store.js";
 import { defaultTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { VERSION } from "../version.js";
-import { TerminalApprover } from "./approver.js";
+import { SwitchApprover, TerminalApprover } from "./approver.js";
 import { describeError } from "./errors.js";
-import { PlainRenderer } from "./renderer.js";
+import { PlainRenderer, type Renderer } from "./renderer.js";
 import { HELP, runRepl } from "./repl.js";
 import { formatTokens } from "./report.js";
 import { runTurnInTerminal } from "./turn.js";
@@ -91,7 +91,10 @@ async function start(options: Options, program: Command): Promise<number> {
   if (!modelId) program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
 
   const renderer = new PlainRenderer();
-  const approver = new TerminalApprover();
+  const terminalApprover = new TerminalApprover();
+  const approver = new SwitchApprover(terminalApprover);
+  // Agent events go to the plain renderer, or to the Ink chat once it starts.
+  let events: Renderer = renderer;
   const runtime = await Runtime.create({
     root,
     modelId: modelId as string,
@@ -99,7 +102,7 @@ async function start(options: Options, program: Command): Promise<number> {
     approver,
     store,
     ...(options.resume === undefined ? {} : { resume: options.resume }),
-    onEvent: (event) => renderer.event(event),
+    onEvent: (event) => events.event(event),
   });
 
   // No orphan process stays (F4): kill running commands on any exit.
@@ -123,7 +126,7 @@ async function start(options: Options, program: Command): Promise<number> {
   }
 
   if (prompt !== undefined) {
-    const outcome = await runTurnInTerminal(runtime, approver, renderer, prompt, exitNow);
+    const outcome = await runTurnInTerminal(runtime, terminalApprover, renderer, prompt, exitNow);
     if (outcome.kind === "interrupted") return 130;
     if (outcome.kind === "error") return 1;
     return outcome.result.stopReason === "done" ? 0 : 2;
@@ -131,11 +134,43 @@ async function start(options: Options, program: Command): Promise<number> {
 
   const sandbox =
     runtime.executor.isolation === "none" ? "no sandbox" : `sandbox ${runtime.executor.name}`;
-  renderer.info(`Garuda ${VERSION} · ${modelId} · ${sandbox} · ${root}\n${HELP}\n`);
-  await runRepl(runtime, approver, renderer, (id) => join(store.dir, `${id}.jsonl`), exitNow);
+  const banner = `Garuda ${VERSION} · ${modelId} · ${sandbox} · ${root}\n${HELP}`;
+  const sessionPath = (id: string) => join(store.dir, `${id}.jsonl`);
+  const ink = wantsInk() ? await loadInk(renderer) : undefined;
+  if (ink !== undefined) {
+    const setEventTarget = (target: Renderer) => {
+      events = target;
+    };
+    await ink.runInkChat(runtime, approver, setEventTarget, banner, sessionPath, exitNow);
+  } else {
+    renderer.info(`${banner}\n`);
+    await runRepl(runtime, terminalApprover, renderer, sessionPath, exitNow);
+  }
   const id = runtime.session?.id;
   if (id !== undefined) renderer.info(`Session ${id}. Continue it with: garuda --resume ${id}`);
   return 0;
+}
+
+/** The Ink chat needs a terminal on both sides. GARUDA_PLAIN=1 turns it off. */
+function wantsInk(): boolean {
+  return (
+    process.stdin.isTTY === true &&
+    process.stdout.isTTY === true &&
+    process.env.GARUDA_PLAIN !== "1" &&
+    process.env.TERM !== "dumb"
+  );
+}
+
+/** Ink loads on demand (N3). The standalone binary has no Ink: it uses the plain chat. */
+async function loadInk(
+  renderer: PlainRenderer,
+): Promise<typeof import("./chat/inkChat.js") | undefined> {
+  try {
+    return await import("./chat/inkChat.js");
+  } catch (error) {
+    renderer.info(`Plain chat (Ink is not available: ${(error as Error).message.split("\n")[0]}).`);
+    return undefined;
+  }
 }
 
 /** --replay: play a session back with a fake model and recorded tool results (F26). */

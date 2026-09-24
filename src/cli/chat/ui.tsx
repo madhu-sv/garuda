@@ -1,0 +1,199 @@
+import { Box, Static, Text, useInput, usePaste } from "ink";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { APPROVAL_CHOICES, type ChatState, type ChatStore, type Item } from "./store.js";
+
+/**
+ * The Ink view of the chat (0.2). It draws the store and maps keys to store actions.
+ * Finished items print once into the scrollback (<Static>); the live part stays small.
+ */
+export function App({ store }: { store: ChatStore }) {
+  const state = useSyncExternalStore(store.subscribe, store.getState);
+  useInput((input, key) => onKey(store, state, input, key));
+  // Bracketed paste: pasted text (new lines too) goes into the line and is never sent.
+  usePaste((text) => {
+    if (store.getState().approval === undefined) store.editLine({ type: "insert", text });
+  });
+  const spinning = state.busy && state.approval === undefined;
+  const frame = useSpinner(spinning);
+
+  return (
+    <>
+      <Static items={state.items}>{(item) => <ItemView key={item.id} item={item} />}</Static>
+      <Box flexDirection="column">
+        {state.streaming !== "" && <Text>{state.streaming}</Text>}
+        {state.running.map((tool) => (
+          <Text key={tool.id}>
+            <Text color="cyan">{frame}</Text> {tool.line}
+          </Text>
+        ))}
+        {spinning && state.running.length === 0 && state.streaming === "" && (
+          <Text dimColor>
+            <Text color="cyan">{frame}</Text> Working… (Ctrl-C stops)
+          </Text>
+        )}
+        {state.approval !== undefined && <ApprovalView selected={state.approval.selected} />}
+        {state.queue.map((line, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: queued lines can repeat.
+          <Text key={i} dimColor>
+            {"  "}queued: {firstLine(line)}
+          </Text>
+        ))}
+        {state.approval === undefined && !state.exiting && <InputLine state={state} />}
+        <Footer state={state} />
+      </Box>
+    </>
+  );
+}
+
+function ItemView({ item }: { item: Item }) {
+  switch (item.kind) {
+    case "user":
+      return (
+        <Box marginTop={1}>
+          <Text bold>› {item.text}</Text>
+        </Box>
+      );
+    case "text":
+      return (
+        <Box marginTop={1}>
+          <Text>{item.text}</Text>
+        </Box>
+      );
+    default:
+      return <Text>{item.text}</Text>;
+  }
+}
+
+function ApprovalView({ selected }: { selected: number }) {
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Allow?</Text>
+      {APPROVAL_CHOICES.map((c, i) => (
+        <Text key={c.choice} {...(i === selected ? { color: "cyan" } : {})}>
+          {i === selected ? "❯ " : "  "}
+          {i + 1}. {c.label}
+        </Text>
+      ))}
+      <Text dimColor>↑↓ Enter · y once · a session · n or Esc deny</Text>
+    </Box>
+  );
+}
+
+function InputLine({ state }: { state: ChatState }) {
+  const { text, cursor } = state.editor;
+  const at = text[cursor];
+  return (
+    <Box marginTop={1}>
+      <Text>
+        <Text color="cyan">› </Text>
+        {text.slice(0, cursor)}
+        <Text inverse>{at === undefined || at === "\n" ? " " : at}</Text>
+        {at === "\n" ? "\n" : ""}
+        {text.slice(cursor + 1)}
+      </Text>
+    </Box>
+  );
+}
+
+function Footer({ state }: { state: ChatState }) {
+  const { model, sandbox, contextPercent, costUsd } = state.status;
+  const parts = [model, sandbox];
+  if (contextPercent !== undefined) parts.push(`context ${contextPercent}%`);
+  if (costUsd !== undefined) parts.push(`$${costUsd.toFixed(costUsd < 0.01 ? 4 : 2)}`);
+  const keys = state.busy
+    ? "Ctrl-C stop · Esc clear queue · Ctrl-O output"
+    : "Ctrl-O output · /help";
+  return (
+    <Text dimColor>
+      {parts.join(" · ")} {"  "}
+      {keys}
+    </Text>
+  );
+}
+
+const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function useSpinner(active: boolean): string {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => setI((n) => (n + 1) % FRAMES.length), 80);
+    return () => clearInterval(timer);
+  }, [active]);
+  return FRAMES[i] ?? "⠋";
+}
+
+const firstLine = (text: string) => {
+  const [first = "", ...rest] = text.split("\n");
+  return rest.length > 0 ? `${first} …` : first;
+};
+
+/** The keys that Ink reports. */
+export interface Key {
+  upArrow: boolean;
+  downArrow: boolean;
+  leftArrow: boolean;
+  rightArrow: boolean;
+  return: boolean;
+  escape: boolean;
+  ctrl: boolean;
+  meta: boolean;
+  tab: boolean;
+  backspace: boolean;
+  delete: boolean;
+}
+
+/** Keys to store actions. Exported for tests. */
+export function onKey(store: ChatStore, state: ChatState, input: string, key: Key): void {
+  if (key.ctrl && input === "c") {
+    store.interrupt();
+    return;
+  }
+  if (state.approval !== undefined) {
+    if (key.upArrow) store.moveApproval(-1);
+    else if (key.downArrow) store.moveApproval(1);
+    else if (key.return) store.choose();
+    else if (input === "y" || input === "1") store.choose("once");
+    else if (input === "a" || input === "2") store.choose("session");
+    else if (input === "n" || input === "3" || key.escape) store.choose("deny");
+    return;
+  }
+  if (key.ctrl) {
+    const actions: Record<string, () => void> = {
+      o: () => store.showLastOutput(),
+      a: () => store.editLine({ type: "home" }),
+      e: () => store.editLine({ type: "end" }),
+      u: () => store.editLine({ type: "killToStart" }),
+      k: () => store.editLine({ type: "killToEnd" }),
+      w: () => store.editLine({ type: "deleteWord" }),
+      d: () =>
+        state.editor.text === "" && !state.busy ? store.exit() : store.editLine({ type: "delete" }),
+    };
+    actions[input]?.();
+    return;
+  }
+  if (key.return) store.submitLine();
+  else if (key.escape) store.clearQueue();
+  // Many terminals send Backspace as DEL, which Ink reports as `delete`.
+  else if (key.backspace || key.delete) store.editLine({ type: "backspace" });
+  else if (key.leftArrow) store.editLine({ type: key.meta ? "wordLeft" : "left" });
+  else if (key.rightArrow) store.editLine({ type: key.meta ? "wordRight" : "right" });
+  else if (key.upArrow) store.editLine({ type: "up" });
+  else if (key.downArrow) store.editLine({ type: "down" });
+  else if (key.tab) return;
+  else if (/[\r\n]/.test(input)) typeAhead(store, input);
+  else if (input !== "" && !key.meta) store.editLine({ type: "insert", text: input });
+}
+
+/**
+ * Keys typed before Ink was ready, or faster than it reads, arrive as one chunk,
+ * for example "run the tests\n" (the terminal turns Enter into \n before raw mode).
+ * Each line end is an Enter. Pastes do not come here: they come through usePaste.
+ */
+export function typeAhead(store: ChatStore, chunk: string): void {
+  const parts = chunk.split(/\r\n|\r|\n/);
+  parts.forEach((part, i) => {
+    if (part !== "") store.editLine({ type: "insert", text: part });
+    if (i < parts.length - 1) store.submitLine();
+  });
+}

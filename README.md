@@ -51,7 +51,16 @@ node dist/cli/index.js -p "Run the tests and tell me the result"
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/exit`.
 - Ctrl-C during a task stops the task and kills its commands. The chat goes on.
   A second Ctrl-C during the task exits Garuda at once.
-- At the prompt, Ctrl-C twice (within 2 s) or Ctrl-D exits.
+- At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
+- On a terminal, the chat uses Ink (0.2): model text streams, and each finished paragraph gets
+  basic markdown styles. A spinner shows running tools. The footer shows the model, the sandbox,
+  the context use and the cost.
+- Type-ahead: type during a task and press Enter to queue the next task. Esc clears the queue.
+  Keys typed before the chat is ready are kept too.
+- Ctrl-O prints the full output of the last tool call. ↑ and ↓ browse earlier inputs.
+- Approvals show the full diff or command in the scrollback. Answer with ↑↓ and Enter, or
+  y (once), a (session), n or Esc (deny).
+- `GARUDA_PLAIN=1` turns Ink off. Pipes, `-p`, the evals and the standalone binary always use plain output.
 - Files are written atomically (a temporary file, then a rename), so an exit never leaves half a file.
 - `garuda --resume` continues the latest session in chat mode.
 

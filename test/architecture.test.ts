@@ -6,7 +6,7 @@ const SRC = join(import.meta.dirname, "..", "src");
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true, recursive: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+    .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
     .map((entry) => join(entry.parentPath, entry.name));
 }
 
@@ -50,6 +50,16 @@ describe("architecture rules", () => {
     const heavy = /model\/anthropic\.js$|^@anthropic-ai\/|^@inquirer\//;
     const offenders = [...sourceFiles(join(SRC, "cli")), ...sourceFiles(join(SRC, "app"))].filter(
       (file) => imports(file).some((spec) => heavy.test(spec)),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("only the Ink chat imports Ink and React, and the CLI loads it with import() (N3)", () => {
+    const inkFiles = [join(SRC, "cli", "chat", "inkChat.ts"), join(SRC, "cli", "chat", "ui.tsx")];
+    const offenders = sourceFiles(SRC).filter(
+      (file) =>
+        !inkFiles.includes(file) &&
+        imports(file).some((spec) => /^(ink|react)(\/|$)|\/inkChat\.js$|\/ui\.js$/.test(spec)),
     );
     expect(offenders).toEqual([]);
   });

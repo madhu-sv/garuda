@@ -23,5 +23,10 @@ export default defineConfig([
     clean: true,
     noExternal: [/.*/],
     minify: true,
+    // Ink's layout engine uses top-level await, which CommonJS cannot bundle.
+    // The binary keeps the plain chat: the CLI catches the failed import().
+    esbuildOptions(options) {
+      options.external = [...(options.external ?? []), "./chat/inkChat.js"];
+    },
   },
 ]);
