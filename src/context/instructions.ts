@@ -45,14 +45,19 @@ export function buildSystemPrompt(
   root: string,
   instructions: string | undefined,
   memory?: string,
+  { codeIndex = true }: { codeIndex?: boolean } = {},
 ): string {
   const base = [
     "You are Garuda, a coding agent in a terminal.",
     `You work inside one project folder, the working root: ${root}`,
     "Use the tools to look at the code before you answer. Do not guess file contents.",
     "To look at files, use glob (find files by name), grep (search contents) and read_file (read a file).",
-    "For JS/TS code, also use the code index: find_symbol (where is X defined), find_references (who uses X,",
-    "follows imports) and repo_map (what each file exports and imports). They are more exact than grep.",
+    ...(codeIndex
+      ? [
+          "For JS/TS code, also use the code index: find_symbol (where is X defined), find_references (who uses X,",
+          "follows imports) and repo_map (what each file exports and imports). They are more exact than grep.",
+        ]
+      : []),
     "These tools run at once, with no approval. Do not use bash for ls, cat, head, tail, find or grep.",
     "Use edit_file to change a file and write_file to create one. Read the file with read_file first:",
     "edit_file refuses a file that read_file did not read in this session.",

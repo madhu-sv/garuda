@@ -52,7 +52,7 @@ export class Runtime {
   readonly knowledge: KnowledgeIndex;
   private readonly permissions: PermissionEngine;
   private readonly store: SessionStore;
-  private readonly tools = new ToolRegistry(defaultTools());
+  private readonly tools: ToolRegistry;
   private readonly onEvent: ((event: AgentEvent) => void) | undefined;
   private model: ModelClient | (() => Promise<ModelClient>);
   private current: Session | undefined;
@@ -65,6 +65,7 @@ export class Runtime {
     this.onEvent = options.onEvent;
     this.system = system;
     this.knowledge = new KnowledgeIndex(options.root);
+    this.tools = new ToolRegistry(defaultTools({ codeIndex: settings.codeIndex !== false }));
     const info = lookupModel(options.modelId);
     this.price = settings.price ?? info.price;
     this.limits = {
@@ -87,6 +88,7 @@ export class Runtime {
       options.root,
       await loadInstructions(options.root),
       await loadMemory(options.root),
+      { codeIndex: settings.codeIndex !== false },
     );
     const runtime = new Runtime(options, settings, system);
     if (options.resume !== undefined) {

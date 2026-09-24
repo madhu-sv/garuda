@@ -137,3 +137,23 @@ describe("code tools", () => {
     expect(r.content).toMatch(/no code index/);
   });
 });
+
+describe("code index switch (A/B)", () => {
+  it("defaultTools and the system prompt can leave the index out", async () => {
+    const { buildSystemPrompt } = await import("../src/context/instructions.js");
+    const names = (codeIndex: boolean) => defaultTools({ codeIndex }).map((t) => t.name);
+    expect(names(true)).toContain("find_references");
+    expect(names(false)).not.toContain("find_references");
+    expect(names(false)).not.toContain("repo_map");
+    expect(buildSystemPrompt("/r", undefined)).toContain("find_symbol");
+    expect(buildSystemPrompt("/r", undefined, undefined, { codeIndex: false })).not.toContain(
+      "find_symbol",
+    );
+  });
+
+  it("settings accept codeIndex: false", async () => {
+    const { parseSettings } = await import("../src/permissions/settings.js");
+    expect(parseSettings({ codeIndex: false }).codeIndex).toBe(false);
+    expect(parseSettings({}).codeIndex).toBeUndefined();
+  });
+});

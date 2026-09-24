@@ -12,6 +12,8 @@ export interface EvalCommandOptions {
   list?: boolean;
   suite?: string;
   repeat?: number;
+  /** Commander sets this to false for --no-index. */
+  index?: boolean;
 }
 
 /** `garuda eval` (N5). Results go to .garuda/evals/<run-id>/ in the current folder. */
@@ -49,7 +51,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}) with ${modelId}. Garuda approves every call except its deny rules;\ncommands run on this machine in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${options.index === false ? "off" : "on"}) with ${modelId}. Garuda approves every call except its deny rules;\ncommands run on this machine in scratch folders.\n\n`,
   );
 
   const { AnthropicClient } = await import("../model/anthropic.js");
@@ -60,6 +62,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       model: () => new AnthropicClient({ model: modelId }),
       outDir,
       ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
+      ...(options.index === false ? { codeIndex: false } : {}),
       ...(options.keep ? { keep: true } : {}),
       onEvent: (taskId, event) => {
         if (event.type === "tool_call") process.stderr.write(`  [${taskId}] ${event.call.name}\n`);
@@ -74,7 +77,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = formatReport(results);
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, results }, null, 2)}\n`,
+    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: options.index !== false, results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

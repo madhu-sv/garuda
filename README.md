@@ -64,6 +64,8 @@ garuda eval --list                         # the tasks of each suite
 garuda eval -m claude-sonnet-5             # the basic suite (10 small repos)
 garuda eval -s hard                        # the hard suite (6 tasks on a 110-file repo)
 garuda eval -t fix-add hard-rename --keep  # some tasks, keep the scratch folders
+garuda eval -s hard --repeat 3             # each task 3 times, with a mean row per task
+garuda eval -s hard --repeat 3 --no-index  # the same, without the code index tools (A/B)
 ```
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).
@@ -83,6 +85,7 @@ For JS/TS, Garuda keeps a local code index. It answers code questions on this ma
 - The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
   References come from the TypeScript 6 language service, which loads on first use.
 - Files follow `.gitignore`. Sensitive files are never indexed.
+- Set `"codeIndex": false` in `.garuda/settings.json` to hide the index tools from the model.
 - Other languages come later, each with its own expert behind the `LanguageExpert` interface (`src/knowledge/`).
 
 ## Sessions, limits and context

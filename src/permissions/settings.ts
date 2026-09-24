@@ -27,6 +27,8 @@ export const SETTINGS_FILE = join(".garuda", "settings.json");
 
 const schema = z.strictObject({
   executor: z.enum(EXECUTOR_NAMES).optional(),
+  /** false: no code index tools for the model (the chat commands /where, /refs, /map stay). */
+  codeIndex: z.boolean().optional(),
   permissions: z
     .strictObject({
       allow: z.array(z.string()).optional(),
@@ -62,6 +64,7 @@ export interface Settings {
   deny: Rule[];
   /** Extra environment variables that commands may see. */
   envAllow: string[];
+  codeIndex?: boolean;
   maxSteps?: number;
   tokenBudget?: number;
   contextWindow?: number;
@@ -73,7 +76,14 @@ export const DEFAULT_SETTINGS: Settings = { executor: "host", allow: [], deny: [
 export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
   const parsed = schema.safeParse(json);
   if (!parsed.success) throw new Error(`${source}: ${z.prettifyError(parsed.error)}`);
-  const { executor = "host", permissions = {}, env = {}, limits = {}, model = {} } = parsed.data;
+  const {
+    executor = "host",
+    permissions = {},
+    env = {},
+    limits = {},
+    model = {},
+    codeIndex,
+  } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
       try {
@@ -87,6 +97,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     allow: rules(permissions.allow),
     deny: rules(permissions.deny),
     envAllow: env.allow ?? [],
+    ...(codeIndex === undefined ? {} : { codeIndex }),
     ...(limits.maxSteps === undefined ? {} : { maxSteps: limits.maxSteps }),
     ...(limits.tokenBudget === undefined ? {} : { tokenBudget: limits.tokenBudget }),
     ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),

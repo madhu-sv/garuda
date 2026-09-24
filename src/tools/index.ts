@@ -8,15 +8,16 @@ import { rememberTool } from "./remember.js";
 import type { AnyTool } from "./types.js";
 import { writeFileTool } from "./writeFile.js";
 
-/** The tools that Garuda 0.1 ships. */
-export function defaultTools(): AnyTool[] {
+/**
+ * The tools that Garuda ships. `codeIndex: false` leaves out the code index tools
+ * (find_symbol, find_references, repo_map), for A/B evals and for users who do not want them.
+ */
+export function defaultTools({ codeIndex = true }: { codeIndex?: boolean } = {}): AnyTool[] {
   return [
     readFileTool,
     globTool,
     grepTool,
-    findSymbolTool,
-    findReferencesTool,
-    repoMapTool,
+    ...(codeIndex ? [findSymbolTool, findReferencesTool, repoMapTool] : []),
     writeFileTool,
     editFileTool,
     bashTool,

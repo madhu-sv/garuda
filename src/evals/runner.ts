@@ -39,6 +39,8 @@ export interface EvalOptions {
   /** Keep the scratch folders, to look at them after the run. */
   keep?: boolean;
   onEvent?: (taskId: string, event: AgentEvent) => void;
+  /** false: run without the code index tools (the A/B baseline). Default: true. */
+  codeIndex?: boolean;
 }
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
@@ -50,6 +52,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
 
   const settings = parseSettings({
     permissions: { deny: EVAL_DENY_RULES },
+    ...(options.codeIndex === false ? { codeIndex: false } : {}),
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
   });
   const store = new FileSessionStore(root);
