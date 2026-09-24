@@ -117,6 +117,13 @@ describe("code tools", () => {
     expect((await call("repo_map", { path: "src/core" })).content).toContain(
       "src/core/money.js: toCents (function), formatPrice (function)",
     );
+    // The whole repo (over 30 files): one line per folder, small enough to keep in context.
+    const whole = (await call("repo_map", {})).content;
+    expect(whole).toMatch(/^\d+ files in \d+ folders\. Call repo_map with a folder/);
+    expect(whole).toContain(
+      "src/domains/order/ (3 files): createOrder, OrderRepository, OrderService",
+    );
+    expect(whole.length).toBeLessThan(4_000);
   });
 
   it("fails clearly with no index", async () => {

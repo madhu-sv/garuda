@@ -1,4 +1,4 @@
-import { mkdirSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -93,7 +93,10 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     result.costUsd = session.costUsd;
     if (options.outDir !== undefined) {
       mkdirSync(options.outDir, { recursive: true });
-      const target = join(options.outDir, `${task.id}.jsonl`);
+      // With --repeat, later runs of a task get -2, -3, … in the file name.
+      let target = join(options.outDir, `${task.id}.jsonl`);
+      for (let n = 2; existsSync(target); n++)
+        target = join(options.outDir, `${task.id}-${n}.jsonl`);
       await copyFile(store.path(session.id), target);
       result.sessionFile = target;
     }
@@ -182,7 +185,30 @@ export function formatReport(results: readonly EvalResult[]): string {
     ? `$${results.reduce((s, r) => s + (r.costUsd ?? 0), 0).toFixed(4)}`
     : "unknown";
   const steps = results.reduce((s, r) => s + r.steps, 0);
-  return [...rows, "", `${passed}/${results.length} passed · ${steps} steps · cost ${cost}`].join(
-    "\n",
-  );
+  const lines = [...rows, "", `${passed}/${results.length} passed · ${steps} steps · cost ${cost}`];
+  const ids = [...new Set(results.map((r) => r.id))];
+  // With --repeat, one run says little: show the mean per task.
+  if (ids.length < results.length) lines.push("", "Mean per task:", ...meanRows(results, ids));
+  return lines.join("\n");
+}
+
+function meanRows(results: readonly EvalResult[], ids: readonly string[]): string[] {
+  return ids.map((id) => {
+    const runs = results.filter((r) => r.id === id);
+    const mean = (f: (r: EvalResult) => number) => runs.reduce((s, r) => s + f(r), 0) / runs.length;
+    const passes = runs.filter((r) => r.passed).length;
+    return [
+      `${passes}/${runs.length}`.padEnd(4),
+      id.padEnd(18),
+      `${mean((r) => r.steps)
+        .toFixed(1)
+        .padStart(5)} steps`,
+      `${(mean((r) => r.tokens) / 1000).toFixed(1).padStart(7)}k tok`,
+      runs.every((r) => r.costUsd !== undefined)
+        ? `$${mean((r) => r.costUsd ?? 0)
+            .toFixed(4)
+            .padStart(7)}`
+        : "   cost ?",
+    ].join("  ");
+  });
 }

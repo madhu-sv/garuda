@@ -11,6 +11,7 @@ export interface EvalCommandOptions {
   keep?: boolean;
   list?: boolean;
   suite?: string;
+  repeat?: number;
 }
 
 /** `garuda eval` (N5). Results go to .garuda/evals/<run-id>/ in the current folder. */
@@ -35,9 +36,12 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     );
     return 1;
   }
-  const tasks =
+  const chosen =
     options.task === undefined ? suiteTasks : ALL_TASKS.filter((t) => options.task?.includes(t.id));
-  if (tasks.length === 0) {
+  const repeat = Math.max(1, options.repeat ?? 1);
+  // Each task runs `repeat` times in a row, in a new scratch folder each time.
+  const tasks = chosen.flatMap((t) => Array.from({ length: repeat }, () => t));
+  if (chosen.length === 0) {
     process.stderr.write("No task matches. Use --list to see the task ids.\n");
     return 1;
   }
@@ -45,7 +49,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${tasks.length} task(s) (suite ${options.task === undefined ? suite : "custom"}) with ${modelId}. Garuda approves every call except its deny rules;\ncommands run on this machine in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}) with ${modelId}. Garuda approves every call except its deny rules;\ncommands run on this machine in scratch folders.\n\n`,
   );
 
   const { AnthropicClient } = await import("../model/anthropic.js");
@@ -70,7 +74,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = formatReport(results);
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, results }, null, 2)}\n`,
+    `${JSON.stringify({ model: modelId, suite, repeat, results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

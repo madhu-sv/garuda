@@ -59,6 +59,9 @@ async function main(): Promise<void> {
     .option("-s, --suite <name>", "basic (default), hard or all")
     .option("-t, --task <ids...>", "run only these tasks (from any suite)")
     .option("--max-steps <n>", "step limit per task", (v) => Number.parseInt(v, 10))
+    .option("--repeat <n>", "run each task n times and show the mean", (v) =>
+      Number.parseInt(v, 10),
+    )
     .option("--keep", "keep the scratch folders")
     .option("--list", "list the tasks and exit")
     .action(async (options) => {

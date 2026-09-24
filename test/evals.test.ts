@@ -134,5 +134,30 @@ describe("eval runner (N5)", () => {
     expect(report).toContain("PASS  a");
     expect(report).toContain("FAIL  b");
     expect(report).toContain("1/2 passed · 53 steps · cost $0.2100");
+    expect(report).not.toContain("Mean per task");
+    const repeated = formatReport([
+      {
+        id: "a",
+        title: "",
+        passed: true,
+        stopReason: "done",
+        steps: 4,
+        tokens: 2000,
+        costUsd: 0.02,
+        durationMs: 1,
+      },
+      {
+        id: "a",
+        title: "",
+        passed: false,
+        stopReason: "done",
+        steps: 6,
+        tokens: 4000,
+        costUsd: 0.04,
+        durationMs: 1,
+      },
+    ]);
+    expect(repeated).toContain("Mean per task:");
+    expect(repeated).toContain("1/2   a                     5.0 steps      3.0k tok  $ 0.0300");
   });
 });

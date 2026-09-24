@@ -98,24 +98,48 @@ const repoMapInput = z.object({
     .describe("A folder, relative to the working root. Default: the whole project."),
 });
 
+/** Above this many files, repo_map shows one line per folder, not one per file. */
+export const REPO_MAP_FILE_LIMIT = 30;
+
+/**
+ * The repo map as text. A small scope shows each file with its exports and imports.
+ * A large scope shows one line per folder (file count and exported names), because every
+ * later step sends this output to the model again: a full map of 100 files costs more
+ * tokens than it saves. The model can then call repo_map again for one folder.
+ */
 export function repoMapText(nodes: FileNode[]): string {
   if (nodes.length === 0) return "No JS/TS files here.";
+  if (nodes.length > REPO_MAP_FILE_LIMIT) return folderSummary(nodes);
   const lines = nodes.map((n) => {
     const exports = n.exports.map((e) => `${e.name} (${e.kind})`).join(", ") || "-";
     const imports = n.imports.length === 0 ? "" : `  ← ${n.imports.join(", ")}`;
     return `${n.path}: ${exports}${imports}`;
   });
-  const { text, omitted } = joinWithinLimit(lines);
-  return omitted === 0
-    ? text
-    : `${text}\n[${omitted} more files. Pass a folder in path to see them.]`;
+  return joinWithinLimit(lines).text;
+}
+
+function folderSummary(nodes: FileNode[]): string {
+  const folders = new Map<string, FileNode[]>();
+  for (const node of nodes) {
+    const dir = node.path.includes("/") ? node.path.slice(0, node.path.lastIndexOf("/")) : ".";
+    folders.set(dir, [...(folders.get(dir) ?? []), node]);
+  }
+  const lines = [...folders.entries()].map(([dir, files]) => {
+    const names = files.flatMap((f) => f.exports.map((e) => e.name));
+    const shown = names.slice(0, 8).join(", ");
+    const more = names.length > 8 ? `, … (${names.length - 8} more)` : "";
+    return `${dir}/ (${files.length} files): ${shown || "-"}${more}`;
+  });
+  const head = `${nodes.length} files in ${folders.size} folders. Call repo_map with a folder in path for each file's exports and imports.`;
+  return `${head}\n${joinWithinLimit(lines).text}`;
 }
 
 export const repoMapTool: Tool<z.infer<typeof repoMapInput>, FileNode[]> = {
   name: "repo_map",
   description: [
-    "Show the structure of the code: each JS/TS file with the names it exports and the files it imports.",
-    "Use it first in an unknown project or folder, to see where things are without reading every file.",
+    "Show the structure of the code. For a folder of up to 30 JS/TS files: each file with its exports and imports.",
+    "For a larger scope: one line per folder with its exported names. Then call it again for one folder.",
+    "Use it in an unknown project to see where things are without reading every file.",
   ].join("\n"),
   inputSchema: repoMapInput,
   readOnly: true,
