@@ -62,7 +62,7 @@ async function main(): Promise<void> {
     .option("--repeat <n>", "run each task n times and show the mean", (v) =>
       Number.parseInt(v, 10),
     )
-    .option("--no-index", "run without the code index tools (A/B baseline)")
+    .option("--index <mode>", "code index tools for the model: off (default), lookup or all")
     .option("--keep", "keep the scratch folders")
     .option("--list", "list the tasks and exit")
     .action(async (options) => {

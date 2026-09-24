@@ -97,7 +97,7 @@ describe("code index: TypeScript/JavaScript expert", () => {
 });
 
 describe("code tools", () => {
-  const registry = new ToolRegistry(defaultTools());
+  const registry = new ToolRegistry(defaultTools({ codeIndex: "all" }));
   const call = (name: string, input: unknown) => {
     const block: ToolUseBlock = { type: "tool_use", id: "c", name, input };
     return registry.execute(block, toolContext(root, { knowledge: index }));
@@ -138,22 +138,31 @@ describe("code tools", () => {
   });
 });
 
-describe("code index switch (A/B)", () => {
-  it("defaultTools and the system prompt can leave the index out", async () => {
+describe("code index modes", () => {
+  it("off (default) has no index tools; lookup adds two; all adds repo_map", async () => {
     const { buildSystemPrompt } = await import("../src/context/instructions.js");
-    const names = (codeIndex: boolean) => defaultTools({ codeIndex }).map((t) => t.name);
-    expect(names(true)).toContain("find_references");
-    expect(names(false)).not.toContain("find_references");
-    expect(names(false)).not.toContain("repo_map");
-    expect(buildSystemPrompt("/r", undefined)).toContain("find_symbol");
-    expect(buildSystemPrompt("/r", undefined, undefined, { codeIndex: false })).not.toContain(
-      "find_symbol",
+    const names = (codeIndex?: "off" | "lookup" | "all") =>
+      defaultTools(codeIndex === undefined ? {} : { codeIndex }).map((t) => t.name);
+    expect(names()).not.toContain("find_references");
+    expect(names("off")).not.toContain("find_symbol");
+    expect(names("lookup")).toEqual(expect.arrayContaining(["find_symbol", "find_references"]));
+    expect(names("lookup")).not.toContain("repo_map");
+    expect(names("all")).toContain("repo_map");
+    expect(buildSystemPrompt("/r", undefined)).not.toContain("find_symbol");
+    const lookup = buildSystemPrompt("/r", undefined, undefined, { codeIndex: "lookup" });
+    expect(lookup).toContain("find_references");
+    expect(lookup).not.toContain("repo_map");
+    expect(buildSystemPrompt("/r", undefined, undefined, { codeIndex: "all" })).toContain(
+      "repo_map",
     );
   });
 
-  it("settings accept codeIndex: false", async () => {
+  it("settings accept a mode or a boolean", async () => {
     const { parseSettings } = await import("../src/permissions/settings.js");
-    expect(parseSettings({ codeIndex: false }).codeIndex).toBe(false);
+    expect(parseSettings({ codeIndex: "lookup" }).codeIndex).toBe("lookup");
+    expect(parseSettings({ codeIndex: true }).codeIndex).toBe("all");
+    expect(parseSettings({ codeIndex: false }).codeIndex).toBe("off");
     expect(parseSettings({}).codeIndex).toBeUndefined();
+    expect(() => parseSettings({ codeIndex: "some" })).toThrow();
   });
 });

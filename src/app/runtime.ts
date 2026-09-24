@@ -1,5 +1,6 @@
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
 import { KnowledgeIndex } from "../knowledge/index.js";
+import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
 import {
   type AgentEvent,
   type AgentResult,
@@ -50,6 +51,8 @@ export class Runtime {
   readonly system: string;
   /** The local code index. It loads its language experts on first use. */
   readonly knowledge: KnowledgeIndex;
+  /** Which code index tools the model gets. */
+  readonly codeIndex: CodeIndexMode;
   private readonly permissions: PermissionEngine;
   private readonly store: SessionStore;
   private readonly tools: ToolRegistry;
@@ -65,7 +68,8 @@ export class Runtime {
     this.onEvent = options.onEvent;
     this.system = system;
     this.knowledge = new KnowledgeIndex(options.root);
-    this.tools = new ToolRegistry(defaultTools({ codeIndex: settings.codeIndex !== false }));
+    this.codeIndex = settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE;
+    this.tools = new ToolRegistry(defaultTools({ codeIndex: this.codeIndex }));
     const info = lookupModel(options.modelId);
     this.price = settings.price ?? info.price;
     this.limits = {
@@ -88,7 +92,7 @@ export class Runtime {
       options.root,
       await loadInstructions(options.root),
       await loadMemory(options.root),
-      { codeIndex: settings.codeIndex !== false },
+      { codeIndex: settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE },
     );
     const runtime = new Runtime(options, settings, system);
     if (options.resume !== undefined) {

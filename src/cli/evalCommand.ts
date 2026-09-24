@@ -2,6 +2,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { formatReport, runEvals } from "../evals/runner.js";
 import { ALL_TASKS, EVAL_SUITES } from "../evals/suites.js";
+import {
+  CODE_INDEX_MODES,
+  type CodeIndexMode,
+  DEFAULT_CODE_INDEX_MODE,
+} from "../knowledge/mode.js";
 import { newSessionId } from "../session/store.js";
 
 export interface EvalCommandOptions {
@@ -12,8 +17,8 @@ export interface EvalCommandOptions {
   list?: boolean;
   suite?: string;
   repeat?: number;
-  /** Commander sets this to false for --no-index. */
-  index?: boolean;
+  /** --index off|lookup|all. */
+  index?: string;
 }
 
 /** `garuda eval` (N5). Results go to .garuda/evals/<run-id>/ in the current folder. */
@@ -28,6 +33,13 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const modelId = options.model;
   if (!modelId) {
     process.stderr.write("Set a model with --model <id> or the GARUDA_MODEL variable.\n");
+    return 1;
+  }
+  const index = (options.index ?? DEFAULT_CODE_INDEX_MODE) as CodeIndexMode;
+  if (!CODE_INDEX_MODES.includes(index)) {
+    process.stderr.write(
+      `Unknown index mode ${options.index}. Use: ${CODE_INDEX_MODES.join(", ")}.\n`,
+    );
     return 1;
   }
   const suite = options.suite ?? "basic";
@@ -51,7 +63,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${options.index === false ? "off" : "on"}) with ${modelId}. Garuda approves every call except its deny rules;\ncommands run on this machine in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}) with ${modelId}. Garuda approves every call except its deny rules;\ncommands run on this machine in scratch folders.\n\n`,
   );
 
   const { AnthropicClient } = await import("../model/anthropic.js");
@@ -62,7 +74,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       model: () => new AnthropicClient({ model: modelId }),
       outDir,
       ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
-      ...(options.index === false ? { codeIndex: false } : {}),
+      codeIndex: index,
       ...(options.keep ? { keep: true } : {}),
       onEvent: (taskId, event) => {
         if (event.type === "tool_call") process.stderr.write(`  [${taskId}] ${event.call.name}\n`);
@@ -77,7 +89,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = formatReport(results);
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: options.index !== false, results }, null, 2)}\n`,
+    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

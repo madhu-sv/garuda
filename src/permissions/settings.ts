@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import type { CodeIndexMode } from "../knowledge/mode.js";
 import type { Price } from "../model/pricing.js";
 import { EXECUTOR_NAMES } from "../sandbox/index.js";
 import { parseRule, type Rule } from "./rules.js";
@@ -27,8 +28,8 @@ export const SETTINGS_FILE = join(".garuda", "settings.json");
 
 const schema = z.strictObject({
   executor: z.enum(EXECUTOR_NAMES).optional(),
-  /** false: no code index tools for the model (the chat commands /where, /refs, /map stay). */
-  codeIndex: z.boolean().optional(),
+  /** Code index tools for the model: "off", "lookup" or "all" (true = "all", false = "off"). */
+  codeIndex: z.union([z.boolean(), z.enum(["off", "lookup", "all"])]).optional(),
   permissions: z
     .strictObject({
       allow: z.array(z.string()).optional(),
@@ -64,7 +65,7 @@ export interface Settings {
   deny: Rule[];
   /** Extra environment variables that commands may see. */
   envAllow: string[];
-  codeIndex?: boolean;
+  codeIndex?: CodeIndexMode;
   maxSteps?: number;
   tokenBudget?: number;
   contextWindow?: number;
@@ -97,7 +98,9 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     allow: rules(permissions.allow),
     deny: rules(permissions.deny),
     envAllow: env.allow ?? [],
-    ...(codeIndex === undefined ? {} : { codeIndex }),
+    ...(codeIndex === undefined
+      ? {}
+      : { codeIndex: codeIndex === true ? "all" : codeIndex === false ? "off" : codeIndex }),
     ...(limits.maxSteps === undefined ? {} : { maxSteps: limits.maxSteps }),
     ...(limits.tokenBudget === undefined ? {} : { tokenBudget: limits.tokenBudget }),
     ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),

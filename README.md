@@ -65,7 +65,7 @@ garuda eval -m claude-sonnet-5             # the basic suite (10 small repos)
 garuda eval -s hard                        # the hard suite (6 tasks on a 110-file repo)
 garuda eval -t fix-add hard-rename --keep  # some tasks, keep the scratch folders
 garuda eval -s hard --repeat 3             # each task 3 times, with a mean row per task
-garuda eval -s hard --repeat 3 --no-index  # the same, without the code index tools (A/B)
+garuda eval -s hard --repeat 3 --index lookup  # the same, with find_symbol and find_references (A/B)
 ```
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).
@@ -79,13 +79,14 @@ load on first use, not at startup.
 
 For JS/TS, Garuda keeps a local code index. It answers code questions on this machine, with no model call:
 
-- Tools for the agent (read-only, no approval): `find_symbol` (where X is defined), `find_references`
-  (every use of X; it follows imports and aliases) and `repo_map` (what each file exports and imports).
+- Tools for the agent (read-only, no approval), chosen with `"codeIndex"` in `.garuda/settings.json`:
+  `"off"` (default), `"lookup"` (`find_symbol`, `find_references`) or `"all"` (also `repo_map`).
+  The default is off because an A/B eval (hard suite, 3 runs per arm) showed the full set cost about
+  20% more with no fewer steps. `find_references` did help on "who uses X" tasks.
 - Chat commands for you: `/where X`, `/refs X`, `/map [folder]`.
 - The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
   References come from the TypeScript 6 language service, which loads on first use.
 - Files follow `.gitignore`. Sensitive files are never indexed.
-- Set `"codeIndex": false` in `.garuda/settings.json` to hide the index tools from the model.
 - Other languages come later, each with its own expert behind the `LanguageExpert` interface (`src/knowledge/`).
 
 ## Sessions, limits and context

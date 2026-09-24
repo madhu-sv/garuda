@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
 
 export const INSTRUCTIONS_FILE = "GARUDA.md";
 /** Longer files are cut, so one file cannot fill the context. */
@@ -45,19 +46,20 @@ export function buildSystemPrompt(
   root: string,
   instructions: string | undefined,
   memory?: string,
-  { codeIndex = true }: { codeIndex?: boolean } = {},
+  { codeIndex = DEFAULT_CODE_INDEX_MODE }: { codeIndex?: CodeIndexMode } = {},
 ): string {
   const base = [
     "You are Garuda, a coding agent in a terminal.",
     `You work inside one project folder, the working root: ${root}`,
     "Use the tools to look at the code before you answer. Do not guess file contents.",
     "To look at files, use glob (find files by name), grep (search contents) and read_file (read a file).",
-    ...(codeIndex
-      ? [
-          "For JS/TS code, also use the code index: find_symbol (where is X defined), find_references (who uses X,",
-          "follows imports) and repo_map (what each file exports and imports). They are more exact than grep.",
-        ]
-      : []),
+    ...(codeIndex === "off"
+      ? []
+      : [
+          "For JS/TS code, also use the code index: find_symbol (where is X defined) and find_references",
+          `(who uses X; it follows imports)${codeIndex === "all" ? ", and repo_map (what each file exports and imports)" : ""}.`,
+          "They are more exact than grep for definitions and uses.",
+        ]),
     "These tools run at once, with no approval. Do not use bash for ls, cat, head, tail, find or grep.",
     "Use edit_file to change a file and write_file to create one. Read the file with read_file first:",
     "edit_file refuses a file that read_file did not read in this session.",
