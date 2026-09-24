@@ -7,7 +7,7 @@ import type { AnyTool } from "../tools/types.js";
 import { VERSION } from "../version.js";
 import { commandLine, defHash, expandEnv, type ServerConfig } from "./config.js";
 import { cleanText } from "./sanitize.js";
-import { toGarudaTools, toolsHash } from "./tools.js";
+import { perToolHashes, type ToolChanges, toGarudaTools, toolChanges, toolsHash } from "./tools.js";
 import { ProcessTransport } from "./transport.js";
 import { type TrustStore, USER_SCOPE } from "./trust.js";
 
@@ -55,6 +55,8 @@ interface Connection {
 export class McpManager {
   private readonly connections = new Map<string, Connection>();
   private readonly statuses = new Map<string, McpServerStatus>();
+  /** The state the model was last told about, per server. */
+  private readonly announced = new Map<string, McpState>();
 
   constructor(private readonly options: McpManagerOptions) {}
 
@@ -158,9 +160,11 @@ export class McpManager {
 
     const toolHash = toolsHash(serverTools);
     if (trusted.tools !== undefined && trusted.tools !== toolHash) {
+      const changes =
+        trusted.toolHashes === undefined ? undefined : toolChanges(trusted.toolHashes, serverTools);
       if (source === "project") {
         const choice = await this.options.approver.ask(
-          this.changedToolsRequest(config, serverTools),
+          this.changedToolsRequest(config, serverTools, changes),
           signal,
         );
         if (choice === "deny") {
@@ -170,12 +174,18 @@ export class McpManager {
         }
         remember = choice === "session";
       } else {
-        this.notify(
-          `MCP server "${name}": its tools changed since the last session. Check them with /mcp.`,
-        );
+        const what = changes === undefined ? "" : ` (${changeSummary(changes)})`;
+        this.notify(`MCP server "${name}": its tools changed since the last session${what}.`);
       }
     }
-    if (remember) await this.options.trust.set(scope, name, { tools: toolHash });
+    // An entry from before per-tool hashes, for the same approved list: add them now.
+    const backfill = trusted.tools === toolHash && trusted.toolHashes === undefined;
+    if (remember || backfill) {
+      await this.options.trust.set(scope, name, {
+        tools: toolHash,
+        toolHashes: perToolHashes(serverTools),
+      });
+    }
 
     const { tools, problems } = toGarudaTools(name, serverTools, this);
     for (const problem of problems) this.notify(`MCP server "${name}": ${problem}.`);
@@ -243,16 +253,25 @@ export class McpManager {
     };
   }
 
-  private changedToolsRequest(config: ServerConfig, tools: readonly McpTool[]): ApprovalRequest {
-    const names = tools.map((t) => cleanText(t.name)).slice(0, 30);
+  private changedToolsRequest(
+    config: ServerConfig,
+    tools: readonly McpTool[],
+    changes: ToolChanges | undefined,
+  ): ApprovalRequest {
+    const lines = [
+      `The tools of MCP server "${config.name}" changed since you allowed it.`,
+      "A server that changes its tool descriptions can try to change what the model does.",
+    ];
+    if (changes === undefined) {
+      const names = tools.map((t) => cleanText(t.name)).slice(0, 30);
+      lines.push(`Tools now: ${names.join(", ")}${tools.length > names.length ? ", …" : ""}`);
+    } else {
+      lines.push(...changeLines(changes));
+    }
     return {
       tool: "mcp",
       target: { kind: "input", json: JSON.stringify({ server: config.name }) },
-      preview: [
-        `The tools of MCP server "${config.name}" changed since you allowed it.`,
-        "A server that changes its tool descriptions can try to change what the model does.",
-        `Tools now: ${names.join(", ")}${tools.length > names.length ? ", …" : ""}`,
-      ].join("\n"),
+      preview: lines.join("\n"),
       isolation: this.options.executor.isolation,
       title: `Use the changed tools of "${config.name}"?`,
       labels: {
@@ -261,6 +280,28 @@ export class McpManager {
         deny: "No, stop this server",
       },
     };
+  }
+
+  /**
+   * Notes for the model about servers that are not available, each told once per state.
+   * Without them the model cannot know that a configured server is off, and it may guess.
+   */
+  takeNotes(): string[] {
+    const notes: string[] = [];
+    for (const status of this.statuses.values()) {
+      if (this.announced.get(status.name) === status.state) continue;
+      const wasTold = this.announced.has(status.name);
+      this.announced.set(status.name, status.state);
+      if (status.state === "connected") {
+        if (wasTold) notes.push(`MCP server "${status.name}" is available again.`);
+        continue;
+      }
+      const why = status.message ?? status.state;
+      notes.push(
+        `MCP server "${status.name}" is not available (${why}). Its tools are not in your tool list. Do not pretend to use it, and do not present other results as its results. If the task needs it, tell the user.`,
+      );
+    }
+    return notes;
   }
 
   private setStatus(config: ServerConfig, state: McpState, tools: number, message?: string): void {
@@ -278,6 +319,45 @@ export class McpManager {
   private notify(text: string): void {
     this.options.notify?.(text);
   }
+}
+
+const MAX_LISTED = 10;
+const quoteDescription = (tool: McpTool) =>
+  `"${cleanText(tool.description ?? "")
+    .replace(/\s+/g, " ")
+    .slice(0, 300)}"`;
+
+/** The lines that say what changed, with the new descriptions (cleaned). */
+export function changeLines(changes: ToolChanges): string[] {
+  const lines: string[] = [];
+  for (const { tool, description, schema } of changes.changed.slice(0, MAX_LISTED)) {
+    const parts = [description ? "description" : "", schema ? "input schema" : ""].filter(Boolean);
+    lines.push(`Changed: ${cleanText(tool.name)} (${parts.join(" and ")})`);
+    if (description) lines.push(`  new description: ${quoteDescription(tool)}`);
+  }
+  for (const tool of changes.added.slice(0, MAX_LISTED)) {
+    lines.push(`Added: ${cleanText(tool.name)}`);
+    lines.push(`  description: ${quoteDescription(tool)}`);
+  }
+  if (changes.removed.length > 0) {
+    lines.push(`Removed: ${changes.removed.map(cleanText).join(", ")}`);
+  }
+  const more =
+    Math.max(0, changes.changed.length - MAX_LISTED) +
+    Math.max(0, changes.added.length - MAX_LISTED);
+  if (more > 0) lines.push(`… and ${more} more`);
+  return lines;
+}
+
+function changeSummary(changes: ToolChanges): string {
+  const parts = [
+    changes.changed.length > 0
+      ? `changed: ${changes.changed.map((c) => c.tool.name).join(", ")}`
+      : "",
+    changes.added.length > 0 ? `added: ${changes.added.map((t) => t.name).join(", ")}` : "",
+    changes.removed.length > 0 ? `removed: ${changes.removed.join(", ")}` : "",
+  ].filter(Boolean);
+  return cleanText(parts.join("; ")).slice(0, 300);
 }
 
 /** Patterns in a server command that deserve a warning in the consent prompt. */

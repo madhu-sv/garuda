@@ -194,8 +194,12 @@ Security:
 - Each server runs in the OS sandbox, like bash: it can write only in the project and temp folders,
   cannot read `~/.ssh` and other secrets, and has no network unless `"network": true`.
   It gets only the normal environment variables and the ones in its `env`.
-- Garuda remembers each server's tool list. When the tools change later (a "rug pull"), Garuda
-  warns you, and a project server needs your consent again.
+- Garuda remembers each server's tools (a hash per tool). When they change later (a "rug pull"),
+  Garuda warns you and says which tools were added, removed or changed, with the new descriptions.
+  A project server needs your consent again.
+- When a configured server is not available (you said no, it failed or it stopped), Garuda tells
+  the model once in a `<garuda_note>`, so the model says so instead of guessing. Server text cannot
+  pose as such a note or close its `<mcp_result>` wrapper.
 - Every MCP tool call asks for approval and shows its arguments. Server hints such as
   `readOnlyHint` are shown, never trusted. Allow rules skip the question:
   `mcp__github__get_issue` or `mcp__github__*`.

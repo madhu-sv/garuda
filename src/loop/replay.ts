@@ -4,7 +4,7 @@ import type { ModelResponse, ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { PermissionGate } from "../permissions/types.js";
 import type { SessionRecord, StartRecord } from "../session/records.js";
 import { rebuildState } from "../session/resume.js";
-import { addUserMessage, closeOpenToolCalls, createSession } from "../session/session.js";
+import { closeOpenToolCalls, createSession } from "../session/session.js";
 import type { ToolContext, ToolOutcome, ToolRunner } from "../tools/types.js";
 import { runAgent, signature } from "./runAgent.js";
 
@@ -75,8 +75,9 @@ export async function replaySession(
 
     runs++;
     closeOpenToolCalls(session);
-    const text = record.message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-    addUserMessage(session, text);
+    // The prompt is the first text block; later ones are Garuda's notes, replayed as they were.
+    const texts = record.message.content.flatMap((b) => (b.type === "text" ? [b.text] : []));
+    session.messages.push({ role: "user", content: texts.map((t) => ({ type: "text", text: t })) });
     const result = await runAgent(session, {
       model,
       tools: recorded,

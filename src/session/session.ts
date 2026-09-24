@@ -50,8 +50,21 @@ export function createSession(
   return session;
 }
 
-export function addUserMessage(session: Session, text: string): void {
-  const message: Message = { role: "user", content: [{ type: "text", text }] };
+/**
+ * Add the user's prompt. `notes` become extra text blocks after it: notes from Garuda
+ * (in <garuda_note>), for example about MCP servers that are not available.
+ */
+export function addUserMessage(session: Session, text: string, notes: string[] = []): void {
+  const message: Message = {
+    role: "user",
+    content: [
+      { type: "text", text },
+      ...notes.map((note) => ({
+        type: "text" as const,
+        text: `<garuda_note>${note}</garuda_note>`,
+      })),
+    ],
+  };
   session.messages.push(message);
   session.journal?.write({ type: "user", message });
 }

@@ -9,11 +9,17 @@ import { z } from "zod";
  * repository cannot approve its own servers. For each project root and server it keeps:
  *   def    the hash of the approved definition (command, args, env, network, writePaths)
  *   tools  the hash of the tool list seen at approval, to detect changed tools later
+ *   toolHashes  one hash per tool, to say which tools were added, removed or changed
  * User servers are recorded under the key "~" (tools only; they need no consent).
  */
 export const TRUST_FILE = join(".garuda", "trust.json");
 
-const entry = z.object({ def: z.string().optional(), tools: z.string().optional() });
+const entry = z.object({
+  def: z.string().optional(),
+  tools: z.string().optional(),
+  /** A hash per tool name, to say which tools changed. */
+  toolHashes: z.record(z.string(), z.string()).optional(),
+});
 const schema = z.object({
   version: z.literal(1),
   mcp: z.record(z.string(), z.record(z.string(), entry)).default({}),

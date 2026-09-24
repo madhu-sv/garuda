@@ -166,7 +166,7 @@ export class Runtime {
   async runTurn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
     await this.startMcp(signal);
     const session = this.ensureSession();
-    addUserMessage(session, prompt);
+    addUserMessage(session, prompt, this.mcp?.takeNotes() ?? []);
     if (typeof this.model === "function") this.model = await this.model();
     return runAgent(session, {
       model: this.model,

@@ -24,6 +24,45 @@ export function toolsHash(tools: readonly McpTool[]): string {
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
+const shortHash = (value: unknown) =>
+  createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16);
+
+/** One entry per tool name: "<description hash>:<schema hash>". */
+export function perToolHashes(tools: readonly McpTool[]): Record<string, string> {
+  return Object.fromEntries(
+    tools.map((t) => [t.name, `${shortHash(t.description ?? "")}:${shortHash(t.inputSchema)}`]),
+  );
+}
+
+export interface ToolChanges {
+  added: McpTool[];
+  removed: string[];
+  changed: { tool: McpTool; description: boolean; schema: boolean }[];
+}
+
+/** Which tools differ from the approved ones. */
+export function toolChanges(
+  before: Record<string, string>,
+  tools: readonly McpTool[],
+): ToolChanges {
+  const now = perToolHashes(tools);
+  const names = new Set(tools.map((t) => t.name));
+  const changed: ToolChanges["changed"] = [];
+  for (const tool of tools) {
+    const old = before[tool.name];
+    const cur = now[tool.name];
+    if (old === undefined || cur === undefined || old === cur) continue;
+    const [oldDesc, oldSchema] = old.split(":");
+    const [curDesc, curSchema] = cur.split(":");
+    changed.push({ tool, description: oldDesc !== curDesc, schema: oldSchema !== curSchema });
+  }
+  return {
+    added: tools.filter((t) => before[t.name] === undefined),
+    removed: Object.keys(before).filter((name) => !names.has(name)),
+    changed,
+  };
+}
+
 export interface McpCaller {
   call(
     server: string,
@@ -87,7 +126,9 @@ function mcpTool(
   schema: Record<string, unknown>,
   caller: McpCaller,
 ): Tool<Record<string, unknown>, McpCallOutput> {
-  const description = capText(cleanText(tool.description ?? ""), MAX_DESCRIPTION_CHARS);
+  const description = neutralizeTags(
+    capText(cleanText(tool.description ?? ""), MAX_DESCRIPTION_CHARS),
+  );
   const hints = hintText(tool);
   return {
     name,
@@ -126,6 +167,14 @@ function hintText(tool: McpTool): string {
   return hints.length === 0 ? "" : ` (the server says: ${hints.join(", ")}; not verified)`;
 }
 
+/**
+ * Server text must not open or close Garuda's own markers: a fake </mcp_result> could end the
+ * wrapper early, and a fake <garuda_note> could pose as a message from Garuda.
+ */
+export function neutralizeTags(text: string): string {
+  return text.replace(/<(\/?)(mcp_result|garuda_note)/gi, "<\\$1$2");
+}
+
 /** The result as text for the model: cleaned, capped and marked as MCP output. */
 export function resultText(server: string, tool: string, result: CallToolResult): string {
   const parts: string[] = [];
@@ -157,10 +206,7 @@ export function resultText(server: string, tool: string, result: CallToolResult)
   if (parts.length === 0 && result.structuredContent !== undefined) {
     parts.push(JSON.stringify(result.structuredContent, null, 2));
   }
-  const body = capText(cleanText(parts.join("\n")), MAX_RESULT_CHARS).replaceAll(
-    "</mcp_result",
-    "<\\/mcp_result",
-  );
+  const body = neutralizeTags(capText(cleanText(parts.join("\n")), MAX_RESULT_CHARS));
   const label = cleanText(tool).replaceAll('"', "'");
   return `<mcp_result server="${server}" tool="${label}">\n${body}\n</mcp_result>`;
 }
