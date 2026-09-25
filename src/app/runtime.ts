@@ -15,7 +15,7 @@ import {
 import { loadMcpConfig, type ServerConfig } from "../mcp/config.js";
 import type { McpManager, McpServerStatus } from "../mcp/manager.js";
 import { TrustStore } from "../mcp/trust.js";
-import { lookupModel, type Price } from "../model/pricing.js";
+import { lookupModel, type ModelInfo, type Price } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -38,6 +38,10 @@ import { VERSION } from "../version.js";
 export interface RuntimeOptions {
   root: string;
   modelId: string;
+  /** Context window and price of the model. Default: Garuda's table of Claude models. */
+  modelInfo?: ModelInfo;
+  /** Output token limit per response. Default: the loop's default. */
+  maxTokens?: number;
   /** The model client, or a function that loads it on first use (keeps startup fast, N3). */
   model: ModelClient | (() => Promise<ModelClient>);
   approver: Approver;
@@ -63,6 +67,7 @@ export class Runtime {
   readonly modelId: string;
   readonly limits: RunLimits;
   readonly price: Price | undefined;
+  private readonly maxTokens: number | undefined;
   readonly executor: Executor;
   /** Set when "auto" found no OS sandbox. The CLI shows it once. */
   readonly executorNotice: string | undefined;
@@ -117,7 +122,8 @@ export class Runtime {
         ...(web.enabled ? { web: { allowLocalhost: web.allowLocalhost } } : {}),
       }),
     );
-    const info = lookupModel(options.modelId);
+    const info = options.modelInfo ?? lookupModel(options.modelId);
+    this.maxTokens = options.maxTokens;
     this.price = settings.price ?? info.price;
     this.limits = {
       maxSteps: settings.maxSteps ?? DEFAULT_MAX_STEPS,
@@ -204,6 +210,7 @@ export class Runtime {
       ...(this.hookRunner === undefined ? {} : { hooks: this.hookRunner }),
       maxSteps: this.limits.maxSteps,
       tokenBudget: this.limits.tokenBudget,
+      ...(this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens }),
       contextWindow: this.limits.contextWindow,
       ...(this.price === undefined ? {} : { price: this.price }),
       ...(this.onEvent === undefined ? {} : { onEvent: this.onEvent }),

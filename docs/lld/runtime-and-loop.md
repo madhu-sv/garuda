@@ -11,6 +11,7 @@ imports the CLI.
 | --- | --- |
 | `root`, `modelId` | Working root (real path) and model id. |
 | `model` | A `ModelClient` or a function that loads one on first use (N3). |
+| `modelInfo`, `maxTokens` | Context window and price of the model (default: the Claude table), and the output limit. The CLI gets them from `resolveModel`. |
 | `approver`, `store` | Approval UI and session store. |
 | `resume` | `true` (latest) or a session id. |
 | `settings` | Default: read `.garuda/settings.json`. |

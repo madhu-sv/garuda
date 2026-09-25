@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.2.1. This document describes the parts of Garuda, their dependencies, the trust
+Version 0.3.0 (in progress). This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -13,6 +13,7 @@ action that can change something, unless a sandbox or a rule makes the action sa
 flowchart LR
   user([User in a terminal]) <--> garuda[Garuda process]
   garuda <-->|HTTPS, streaming| api[(Anthropic API)]
+  garuda <-->|Chat Completions, streaming| oss[(Local or hosted open models)]
   garuda -->|read, write, run| repo[(Working root)]
   garuda -->|stdio, in the sandbox| mcp[Local MCP servers]
   garuda -->|HTTPS GET, approved hosts| web[(Web pages)]
@@ -24,7 +25,7 @@ flowchart LR
 
 | ID | Goal | How the architecture meets it |
 | --- | --- | --- |
-| N1 | One model adapter | Only `src/model/anthropic.ts` imports the Anthropic SDK. The loop sees the `ModelClient` interface. |
+| N1 | Provider-neutral model access | The loop sees only the `ModelClient` interface. `anthropic.ts` (the only module with the Anthropic SDK) and `openaiCompatible.ts` (plain fetch) are the adapters. |
 | N2 | Prompt caching | The system prompt and the tool list stay the same bytes for a whole session. Cache breakpoints on the system prompt, the last tool and the last message. |
 | N3 | Start in less than 1 s | Heavy modules load with `import()` on first use: the SDK, inquirer, Ink and React, TypeScript 6, the MCP SDK, the HTML converter. `--version` takes about 240 ms. |
 | N4 | Testable without the network | `FakeModelClient` plays a script. 245 tests run with no API calls. |
@@ -62,6 +63,7 @@ flowchart TB
   subgraph Platform[Platform layer]
     model[model: ModelClient, Anthropic adapter, fake, prices]
     sandbox[sandbox: Executor, host, Seatbelt, bubblewrap]
+    net[net: address checks]
   end
   cli --> runtime
   evals --> runtime
@@ -78,6 +80,8 @@ flowchart TB
   tools --> web
   mcp --> sandbox
   hooks --> sandbox
+  web --> net
+  model --> net
 ```
 
 | Component | Folder | Responsibility |
@@ -85,7 +89,7 @@ flowchart TB
 | CLI | `src/cli/` | Parse the command line; run one task (`-p`), a chat (plain or Ink), `--resume`, `--replay` or `eval`. Ask the user for approvals. Show events. |
 | Runtime | `src/app/` | Build everything one Garuda process needs from settings: executor, permission engine, tools, system prompt, session, MCP servers, hooks. Run one turn. |
 | Agent loop | `src/loop/` | Call the model, run the tool calls, repeat until the model stops or a limit hits. Replay a recorded session. |
-| Model | `src/model/` | The `ModelClient` interface, the Anthropic adapter, the fake model, prices and context windows. |
+| Model | `src/model/` | The `ModelClient` interface, providers and model specs, the Anthropic and OpenAI-compatible adapters, the fake model, prices and context windows. |
 | Tools | `src/tools/` | The tool interface, the registry (validation, hooks, permission check, run), and the built-in tools. |
 | Permissions | `src/permissions/` | Decide per call: allow, deny or ask. Rules, settings, path guard, sensitive files, sandbox paths. |
 | Sandbox | `src/sandbox/` | The `Executor`: run a command or start a long-running process, on the host or in an OS sandbox. |
@@ -94,6 +98,7 @@ flowchart TB
 | Knowledge | `src/knowledge/` | Local code index: symbols, references, a code graph. No model call. |
 | MCP | `src/mcp/` | Start MCP servers in the sandbox, consent and pinning, tool adapters, text cleaning. |
 | Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown. |
+| Net | `src/net/` | Address checks (public, loopback) shared by web fetch and model providers. |
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
 | Evals | `src/evals/` | Eval tasks, the generated "shopkit" repository, the runner and the report. |
 
@@ -108,8 +113,8 @@ The rules keep the core independent of the interface, and keep risky code in one
 4. Only `src/mcp/` imports `@modelcontextprotocol/*`, and never its stdio transport: MCP servers start
    through the Executor.
 5. Only `src/cli/chat/ui.tsx` and `src/cli/chat/inkChat.ts` import Ink or React.
-6. The CLI and the app load no heavy module at startup: the SDK, inquirer, the MCP manager and TypeScript 6
-   load with `import()` (N3).
+6. The CLI and the app load no heavy module at startup: the model adapters, inquirer, the MCP manager and
+   TypeScript 6 load with `import()` (N3).
 
 ## 5. Trust boundaries
 
@@ -156,6 +161,7 @@ flowchart LR
 | MCP server / web page → model | Hidden instructions, terminal escape codes, fake markers. | Clean text, cap its size, wrap it in `<mcp_result>` / `<web_result>`, neutralize Garuda's own markers, mark it as untrusted in the prompt. |
 | web_fetch → network | Server-side request forgery; data leaks through URLs. | Only public addresses, checked on the resolved IP and pinned; each redirect hop checked; new hosts ask; unusual URLs always ask. |
 | Garuda → disk | Secrets in session logs. | Redactor on every journal line; files 0600. |
+| Project config → model provider | A cloned repo sends the code and an API key to its own server. | Providers only in `~/.garuda/models.json`; keys only from environment variables; plain http only to this machine unless allowed. |
 
 ## 6. Data stores
 
@@ -171,6 +177,7 @@ All state is in files. There is no server and no database.
 | `<root>/GARUDA.md` | Project | Instructions for the agent. |
 | `~/.garuda/mcp.json`, `hooks.json` | User | Trusted MCP servers and hooks. |
 | `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers and hooks; tool-list hashes. 0600. |
+| `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. |
 
 `SessionStore` is an interface, so a shared store (for example Redis) can replace the files later.
 
@@ -179,6 +186,7 @@ All state is in files. There is no server and no database.
 | Decision | Choice | Reason |
 | --- | --- | --- |
 | Language | TypeScript on Node | The MCP and Anthropic SDKs are first-class; one binary with Node SEA. |
+| Model providers | Own adapters behind `ModelClient` (Anthropic SDK; OpenAI-compatible over fetch), no LangChain or LlamaIndex | Full control of caching, streaming and tool calls; small and fast; one file per provider. |
 | Isolation | Approvals in 0.1; OS sandbox (Seatbelt, bubblewrap) in 0.2 behind the `Executor` | Real isolation without containers; the loop and tools did not change. |
 | Sandbox scope | Writes only; reads everywhere except secrets; no network | Toolchains keep working; data cannot leave. |
 | Approvals in the sandbox | Commands in the sandbox need no approval | The sandbox is the control; approvals stay for escapes and writes. |

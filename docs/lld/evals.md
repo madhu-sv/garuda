@@ -36,6 +36,9 @@ garuda eval [-m model] [-s basic|hard|all] [-t ids…] [--repeat n] [--index off
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
 ```
 
+`-m` takes any model spec, for example `garuda eval -m ollama/qwen3-coder:30b -s hard`, so open models
+can be measured on the same tasks.
+
 Output: a live line per tool call, a table (PASS/FAIL, steps, tokens, cost, time, stop reason), totals,
 a mean per task for `--repeat`, and `report.json`. Exit code 0 when all pass, 2 otherwise.
 

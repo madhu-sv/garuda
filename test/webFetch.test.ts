@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { checkAddress } from "../src/net/address.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
 import { hostMatches, parseRule, ruleMatches } from "../src/permissions/rules.js";
 import { parseSettings } from "../src/permissions/settings.js";
@@ -9,7 +10,6 @@ import type { ApprovalChoice, ApprovalRequest, Approver } from "../src/permissio
 import { FileTracker } from "../src/session/fileTracker.js";
 import { ToolRegistry } from "../src/tools/registry.js";
 import { createWebFetchTool, isUnusualUrl, pageText } from "../src/tools/webFetch.js";
-import { checkAddress } from "../src/web/address.js";
 import { checkUrl, decodeEntities, fetchPage, htmlToMarkdown } from "../src/web/fetch.js";
 import { toolContext } from "./helpers.js";
 

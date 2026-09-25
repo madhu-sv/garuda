@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.2.1. This document shows how the parts work together. The component documents in
+Version 0.3.0 (in progress). This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -8,6 +8,7 @@ Version 0.2.1. This document shows how the parts work together. The component do
 | Command | Mode | Output |
 | --- | --- | --- |
 | `garuda` | Chat. Ink view on a terminal, plain lines otherwise. | Interactive. |
+| `garuda -m ollama/qwen3-coder:30b` | Any mode with another provider (`<provider>/<model>`). | Same. |
 | `garuda -p "task"`, `echo task \| garuda` | One task, then exit. | Model text on stdout, activity on stderr. Exit code 0 (done), 1 (error), 2 (a limit stopped the run) or 130 (Ctrl-C). |
 | `garuda --resume [id]` | Continue the latest or a given session. | Chat or one task. |
 | `garuda --replay <id\|file>` | Play a session back with recorded results. No API calls. | "matches" or a list of differences. |
@@ -20,7 +21,9 @@ sequenceDiagram
   participant CLI as cli/index.ts
   participant RT as Runtime.create
   participant FS as Files
-  CLI->>RT: root, model id, approver, store, event target
+  CLI->>FS: ~/.garuda/models.json
+  CLI->>CLI: resolveModel(spec): provider, model, window, price
+  CLI->>RT: root, model spec and info, approver, store, event target
   RT->>FS: .garuda/settings.json
   RT->>RT: createExecutor(auto|os|host)
   RT->>FS: GARUDA.md, .garuda/memory.md

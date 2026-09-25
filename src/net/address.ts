@@ -1,8 +1,9 @@
 import ipaddr from "ipaddr.js";
 
 /**
- * Which IP addresses web_fetch may connect to (SSRF protection, 0.2).
- * Only public unicast addresses. Loopback only when the user allows localhost.
+ * Network address checks, shared by web_fetch (SSRF protection) and the model providers
+ * (plain http only to this machine). Only public unicast addresses pass `checkAddress`;
+ * loopback passes only when the caller allows it.
  * ipaddr.js does the parsing: it handles IPv4-mapped IPv6 and odd forms (octal, hex).
  */
 export type AddressVerdict = { ok: true } | { ok: false; range: string };

@@ -56,7 +56,7 @@ describe("architecture rules", () => {
   it("startup does not load the Anthropic SDK or inquirer (N3)", () => {
     // Static imports load at startup. These two load with import() on first use.
     const heavy =
-      /model\/anthropic\.js$|^@anthropic-ai\/|^@inquirer\/|mcp\/manager\.js$|^@modelcontextprotocol\//;
+      /model\/anthropic\.js$|^@anthropic-ai\/|^@inquirer\/|mcp\/manager\.js$|^@modelcontextprotocol\/|model\/openaiCompatible\.js$/;
     const offenders = [...sourceFiles(join(SRC, "cli")), ...sourceFiles(join(SRC, "app"))].filter(
       (file) => valueImports(file).some((spec) => heavy.test(spec)),
     );

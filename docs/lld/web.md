@@ -1,4 +1,4 @@
-# Web fetch (`src/web/`, `src/tools/webFetch.ts`)
+# Web fetch (`src/web/`, `src/net/`, `src/tools/webFetch.ts`)
 
 ## Purpose
 
@@ -9,7 +9,7 @@ server-side request forgery (SSRF) and data leaks through URLs.
 
 | File | Role |
 | --- | --- |
-| `web/address.ts` | `checkAddress(ip, allowLocalhost)`, `isIpLiteral`, `isLoopbackHost` (ipaddr.js). |
+| `net/address.ts` | `checkAddress(ip, allowLocalhost)`, `isIpLiteral`, `isLoopbackHost` (ipaddr.js). Shared with the model providers. |
 | `web/fetch.ts` | `checkUrl`, `fetchPage`, `htmlToMarkdown`, `decodeEntities`, `FetchError`. |
 | `tools/webFetch.ts` | The `web_fetch` tool: approval target, paging, cache, output. |
 

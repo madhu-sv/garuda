@@ -7,6 +7,7 @@ import {
   type CodeIndexMode,
   DEFAULT_CODE_INDEX_MODE,
 } from "../knowledge/mode.js";
+import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
 import { createExecutor, EXECUTOR_NAMES, type ExecutorName } from "../sandbox/index.js";
 import { newSessionId } from "../session/store.js";
 
@@ -38,6 +39,19 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     process.stderr.write("Set a model with --model <id> or the GARUDA_MODEL variable.\n");
     return 1;
   }
+  const models = await loadModelsConfig();
+  if (models.problem !== undefined) {
+    process.stderr.write(`${models.problem}\n`);
+    return 1;
+  }
+  let resolved: ResolvedModel;
+  try {
+    resolved = resolveModel(modelId, models.config);
+  } catch (error) {
+    process.stderr.write(`${(error as Error).message}\n`);
+    return 1;
+  }
+  for (const note of resolved.notes) process.stderr.write(`${note}\n`);
   const index = (options.index ?? DEFAULT_CODE_INDEX_MODE) as CodeIndexMode;
   if (!CODE_INDEX_MODES.includes(index)) {
     process.stderr.write(
@@ -81,12 +95,13 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
-  const { AnthropicClient } = await import("../model/anthropic.js");
   const results = await runEvals(
     tasks,
     {
-      modelId,
-      model: () => new AnthropicClient({ model: modelId }),
+      modelId: resolved.spec,
+      model: () => resolved.create(),
+      modelInfo: resolved.info,
+      ...(resolved.maxTokens === undefined ? {} : { maxTokens: resolved.maxTokens }),
       outDir,
       ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
       codeIndex: index,

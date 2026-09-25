@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.2.1.
+Garuda is a terminal coding agent. Version 0.2.1 is released; 0.3 is in progress.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -44,6 +44,34 @@ Try it on this repo:
 node dist/cli/index.js -p "Where is runAgent defined, and what does it do?"
 node dist/cli/index.js -p "Run the tests and tell me the result"
 ```
+
+## Models
+
+`-m` (or `GARUDA_MODEL`) takes a Claude model id, or `<provider>/<model>` for other providers:
+
+```sh
+g -m claude-sonnet-5                 # Anthropic (ANTHROPIC_API_KEY)
+g -m ollama/qwen3-coder:30b          # Ollama on this machine
+g -m lmstudio/<model>                # LM Studio (also: llamacpp/…, vllm/…)
+g -m openrouter/qwen/qwen3-coder     # OpenRouter (OPENROUTER_API_KEY)
+g eval -m ollama/qwen3-coder:30b -s hard   # measure an open model on the eval tasks
+```
+
+Set the context window, price and output limit per model, and add providers, in `~/.garuda/models.json`:
+
+```json
+{
+  "providers": { "lab": { "type": "openai-compatible", "baseUrl": "https://llm.example.com/v1", "apiKeyEnv": "LAB_KEY" } },
+  "models": { "ollama/qwen3-coder:30b": { "contextWindow": 65536, "maxTokens": 8192 } }
+}
+```
+
+- Only this file in your home folder can define providers; a project cannot send your code elsewhere.
+  Keys come from environment variables. Plain http works only to this machine (or with
+  `"allowInsecureHttp": true`).
+- Without a `contextWindow`, Garuda assumes 32 768 tokens for open models and says so. The server must
+  allow the window too: for Ollama, start it with `OLLAMA_CONTEXT_LENGTH=65536 ollama serve`.
+- Local models cost $0. Tool calling quality varies by model: measure a model with `g eval` first.
 
 ## Chat mode
 

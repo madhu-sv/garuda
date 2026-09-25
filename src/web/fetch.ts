@@ -4,7 +4,7 @@ import { request as httpsRequest } from "node:https";
 import type { LookupFunction } from "node:net";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import type { NodeHtmlMarkdown } from "node-html-markdown";
-import { checkAddress, isIpLiteral, isLoopbackHost } from "./address.js";
+import { checkAddress, isIpLiteral, isLoopbackHost } from "../net/address.js";
 
 /**
  * Fetch one web page as text for the model (0.2). Security:

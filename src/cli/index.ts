@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { Command } from "commander";
 import { Runtime } from "../app/runtime.js";
 import { replaySession } from "../loop/replay.js";
-import type { ModelClient } from "../model/types.js";
+import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
 import { FileSessionStore, parseRecords } from "../session/store.js";
 import { defaultTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
@@ -31,12 +31,6 @@ interface Options {
   resume?: string | true;
   replay?: string;
 }
-
-/** The Anthropic SDK loads on the first model call, not at startup (N3). */
-const lazyModel = (modelId: string) => async (): Promise<ModelClient> => {
-  const { AnthropicClient } = await import("../model/anthropic.js");
-  return new AnthropicClient({ model: modelId });
-};
 
 async function main(): Promise<void> {
   const program = new Command()
@@ -88,8 +82,18 @@ async function start(options: Options, program: Command): Promise<number> {
   if (prompt === undefined && !process.stdin.isTTY) prompt = readFileSync(0, "utf8").trim();
   if (prompt === "") program.error("The task is empty.");
 
-  const modelId = options.model ?? process.env.GARUDA_MODEL;
-  if (!modelId) program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
+  const spec = options.model ?? process.env.GARUDA_MODEL;
+  if (!spec) program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
+  // Providers come only from the user's own ~/.garuda/models.json (never from the project).
+  const models = await loadModelsConfig();
+  if (models.problem !== undefined) program.error(models.problem);
+  let resolved: ResolvedModel;
+  try {
+    resolved = resolveModel(spec as string, models.config);
+  } catch (error) {
+    program.error((error as Error).message);
+  }
+  const modelId = resolved.spec;
 
   const renderer = new PlainRenderer();
   const terminalApprover = new TerminalApprover();
@@ -98,8 +102,10 @@ async function start(options: Options, program: Command): Promise<number> {
   let events: Renderer = renderer;
   const runtime = await Runtime.create({
     root,
-    modelId: modelId as string,
-    model: lazyModel(modelId as string),
+    modelId,
+    model: () => resolved.create(),
+    modelInfo: resolved.info,
+    ...(resolved.maxTokens === undefined ? {} : { maxTokens: resolved.maxTokens }),
     approver,
     store,
     ...(options.resume === undefined ? {} : { resume: options.resume }),
@@ -121,9 +127,10 @@ async function start(options: Options, program: Command): Promise<number> {
       `Resumed session ${session.id} (${session.messages.length} messages, ${formatTokens(session.contextTokens)} tokens of context).`,
     );
   }
+  for (const note of resolved.notes) renderer.info(note);
   if (runtime.price === undefined) {
     renderer.warn(
-      `Garuda has no price for ${modelId}. Set model.price in .garuda/settings.json to see cost.`,
+      `Garuda has no price for ${modelId}. Set "price" for it in ~/.garuda/models.json to see cost.`,
     );
   }
 
@@ -138,7 +145,7 @@ async function start(options: Options, program: Command): Promise<number> {
   const ink = wantsInk() ? await loadInk(renderer) : undefined;
   const bannerInfo = {
     version: VERSION,
-    model: modelId as string,
+    model: modelId,
     sandbox:
       runtime.executor.isolation === "none"
         ? "none: each command asks first"

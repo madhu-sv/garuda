@@ -14,7 +14,7 @@ Low-level design documents:
 | --- | --- | --- |
 | CLI and chat | `src/cli/` | [cli.md](lld/cli.md) |
 | Runtime and agent loop | `src/app/`, `src/loop/` | [runtime-and-loop.md](lld/runtime-and-loop.md) |
-| Model adapter | `src/model/` | [model.md](lld/model.md) |
+| Models and providers | `src/model/` | [model.md](lld/model.md) |
 | Tools | `src/tools/` | [tools.md](lld/tools.md) |
 | Permissions | `src/permissions/` | [permissions.md](lld/permissions.md) |
 | Sandbox (Executor) | `src/sandbox/` | [sandbox.md](lld/sandbox.md) |
@@ -22,9 +22,9 @@ Low-level design documents:
 | Context (prompt, memory, compaction) | `src/context/` | [context.md](lld/context.md) |
 | Code index | `src/knowledge/` | [knowledge.md](lld/knowledge.md) |
 | MCP client | `src/mcp/` | [mcp.md](lld/mcp.md) |
-| Web fetch | `src/web/`, `src/tools/webFetch.ts` | [web.md](lld/web.md) |
+| Web fetch | `src/web/`, `src/net/`, `src/tools/webFetch.ts` | [web.md](lld/web.md) |
 | Hooks | `src/hooks/` | [hooks.md](lld/hooks.md) |
 | Evals | `src/evals/` | [evals.md](lld/evals.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
-The code, the tests and the commits use the same IDs. The documents describe version 0.2.1.
+The code, the tests and the commits use the same IDs. The documents describe version 0.3.0 (in progress).

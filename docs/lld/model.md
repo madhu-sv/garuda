@@ -3,7 +3,16 @@
 ## Purpose
 
 Give the loop one provider-neutral interface for model calls (N1), with prompt caching (N2),
-costs, and a fake model for tests (N4).
+costs, and a fake model for tests (N4). Since 0.3, Garuda talks to Anthropic and to any server with
+an OpenAI-compatible Chat Completions API: local servers (Ollama, LM Studio, llama.cpp, vLLM) and
+hosted open models (OpenRouter).
+
+## Why no orchestration framework
+
+Frameworks such as LangChain or LlamaIndex were considered and rejected. The `ModelClient` interface
+already gives the decoupling; a new provider is one adapter file. A framework would hide the details an
+agent must control (cache breakpoints, streaming, tool-call formats, stop reasons), add a large dependency
+tree against N3 and the single binary, and LlamaIndex targets retrieval, not tool-calling loops.
 
 ## Types (`types.ts`)
 
@@ -25,8 +34,8 @@ The loop, the session and the tools use only these types.
 
 ## Anthropic adapter (`anthropic.ts`)
 
-- The only module that imports `@anthropic-ai/sdk`. The CLI loads it with `import()` on the first model
-  call, so startup does not pay for it.
+- The only module that imports `@anthropic-ai/sdk`. `ResolvedModel.create()` loads it with `import()` on
+  the first model call, so startup does not pay for it.
 - `stream()` calls `messages.stream`, yields each `text_delta`, then yields the final message as a
   `ModelResponse`. The abort signal goes to the SDK.
 - Mapping functions are pure and exported for tests: `toWireParams`, `toWireTools`, `toWireMessage`,
@@ -44,6 +53,73 @@ This works because the system prompt and the tool list stay the same bytes for a
 the registry sorts tools by name, the loop computes specs once per run, and new facts from `remember`
 load only in the next session. Note: a model caches a prompt only above its minimum size (for example
 4096 tokens for Haiku 4.5), so short sessions show "0 cached".
+
+## Providers (`providers.ts`)
+
+A model spec is `<provider>/<model>`, or a plain Claude model id for the default provider `anthropic`.
+The model part may hold `/` (OpenRouter ids): the spec splits at the first `/`.
+
+| Provider | Type | Base URL | Key | Price |
+| --- | --- | --- | --- | --- |
+| `anthropic` | anthropic | SDK default | `ANTHROPIC_API_KEY` (SDK) | Garuda's table |
+| `ollama` | openai-compatible | `http://localhost:11434/v1` | none | 0 (local) |
+| `lmstudio` | openai-compatible | `http://localhost:1234/v1` | none | 0 (local) |
+| `llamacpp` | openai-compatible | `http://localhost:8080/v1` | none | 0 (local) |
+| `vllm` | openai-compatible | `http://localhost:8000/v1` | none | 0 (local) |
+| `openrouter` | openai-compatible | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | unknown unless set |
+
+`~/.garuda/models.json` adds or replaces providers and describes models:
+
+```json
+{
+  "providers": {
+    "lab": { "type": "openai-compatible", "baseUrl": "https://llm.example.com/v1", "apiKeyEnv": "LAB_KEY" }
+  },
+  "models": {
+    "ollama/qwen3-coder:30b": { "contextWindow": 65536, "maxTokens": 8192 },
+    "openrouter/qwen/qwen3-coder": { "price": { "input": 0.2, "output": 0.8, "cacheRead": 0, "cacheWrite": 0 } }
+  }
+}
+```
+
+`resolveModel(spec, config)` returns the provider, the model name, the provider definition, the model
+info (context window, price), `maxTokens`, notes for the user, and `create()`, which loads the adapter
+with `import()` on first use (N3).
+
+Security rules:
+
+- Only the user's own `~/.garuda/models.json` can define a provider. A project's settings cannot set a
+  base URL: a cloned repository could otherwise send the code and an API key to its own server. (Project
+  settings may still set `model.price` and `model.contextWindow`, which are harmless.)
+- API keys come only from environment variables (`apiKeyEnv`), never from files.
+- A base URL must be http(s) and hold no user name or password. Plain http is allowed only to this
+  machine, unless the provider sets `"allowInsecureHttp": true` (for a trusted network).
+- A missing key fails with "Set <VAR> to use the <provider> provider."
+
+Context windows: an open model with no `contextWindow` entry gets 32 768 tokens, and Garuda says so.
+The small default makes compaction start early. The server must allow the window too: Ollama picks a
+default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
+
+## OpenAI-compatible adapter (`openaiCompatible.ts`)
+
+- `fetch` and server-sent events; no SDK. Request: `POST <baseUrl>/chat/completions` with `model`,
+  `messages`, `tools` (omitted when empty), `max_tokens`, `stream: true`,
+  `stream_options: { include_usage: true }`, and `Authorization: Bearer <key>` when there is a key.
+- Messages: the system prompt first; a user message with tool results becomes one `tool` message per
+  result (linked by `tool_call_id`), then a user message with the text blocks (Garuda's notes stay);
+  assistant tool calls become `tool_calls` with JSON arguments.
+- Stream: text deltas go to the live view; tool-call deltas are joined by index (name and argument parts
+  can arrive in pieces); a missing call id gets a generated one. Broken argument JSON stays a string, so
+  the tool's input check rejects it and the model can try again.
+- Stop reasons: refusal or `content_filter` → refusal; tool calls → tool_use; `length` → max_tokens;
+  `stop` → end_turn.
+- Usage: `prompt_tokens` minus `cached_tokens` is input, `cached_tokens` is cache read. A server that
+  sends no usage gets an estimate (4 characters per token), so context tracking and compaction still work.
+- Errors: two retries for 408, 409, 429 and 5xx (with `Retry-After` up to 30 s) and for network errors;
+  "Cannot reach <provider> at <url>. Is the server running?" for a refused connection; a context-length
+  error adds a hint to set `contextWindow`. Ctrl-C aborts the request.
+- No cache breakpoints: the API has none. The system prompt and tool list keep the same bytes, so servers
+  with automatic prefix caching (vLLM, llama.cpp) reuse them.
 
 ## Prices and windows (`pricing.ts`)
 
@@ -63,4 +139,6 @@ when the script ends. Builders: `text()`, `toolUse()`, `reply()`.
 ## Tests
 
 `test/model.test.ts` (mapping, cache breakpoints, prices), `test/anthropic-stream.test.ts` (streaming
-with a fake SDK response).
+with a fake SDK response), `test/providers.test.ts` (specs, presets, `models.json`, URL rules, message
+mapping, a local fake Chat Completions server: split chunks, tool calls, usage, retries, errors, and a
+whole Garuda turn).

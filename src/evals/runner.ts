@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { Runtime } from "../app/runtime.js";
 import type { CodeIndexMode } from "../knowledge/mode.js";
 import type { AgentEvent } from "../loop/runAgent.js";
-import { totalTokens } from "../model/pricing.js";
+import { type ModelInfo, totalTokens } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
 import { AutoApprover } from "../permissions/autoApprover.js";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
@@ -35,6 +35,9 @@ export interface EvalOptions {
   modelId: string;
   /** Makes a model client for each task. */
   model: () => ModelClient | Promise<ModelClient>;
+  /** Context window and price. Default: Garuda's table of Claude models. */
+  modelInfo?: ModelInfo;
+  maxTokens?: number;
   /** Session files are copied here, as <task-id>.jsonl. */
   outDir?: string;
   maxSteps?: number;
@@ -67,6 +70,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     root,
     modelId: options.modelId,
     model: async () => options.model(),
+    ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo }),
+    ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
     approver: new AutoApprover("once"),
     store,
     settings,
