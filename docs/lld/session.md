@@ -1,0 +1,86 @@
+# Sessions (`src/session/`)
+
+## Purpose
+
+Keep the conversation in memory, write every change to a journal on disk (F24), continue a session
+(F25), feed replay (F26), and never write a secret to disk (N6).
+
+## Session (`session.ts`)
+
+```ts
+interface Session {
+  id; root;
+  messages: Message[];
+  usage: Usage; costUsd?: number; contextTokens: number;
+  files: FileTracker;
+  journal?: Journal;
+}
+```
+
+Every change goes through these functions, so the journal always matches memory:
+
+| Function | Change | Record |
+| --- | --- | --- |
+| `addUserMessage(session, text, notes)` | user message: the prompt, then one `<garuda_note>` text block per note | `user` |
+| `addAssistantResponse(session, response, step, cost)` | assistant content, usage, cost, context size | `assistant` |
+| `addToolResults(session, results, meta)` | one user message with the tool results | `tool_results` |
+| `closeOpenToolCalls(session)` | an error result for each `tool_use` with no result (after Ctrl-C or a crash) | `tool_results` |
+
+## Records (`records.ts`)
+
+One JSON object per line, each with `t` (ISO time) and `type`:
+
+| Type | Fields |
+| --- | --- |
+| `start`, `resume` | sessionId, root, version, model, executor, isolation, limits (maxSteps, tokenBudget, contextWindow) |
+| `user` | message |
+| `assistant` | step, response, costUsd? |
+| `tool_results` | message, `calls` (per call: toolUseId, name, durationMs, executor and isolation for commands), `synthetic` for closed open calls |
+| `compaction` | stage, before and after tokens, the new messages, the summary response and its cost (stage 2) |
+| `end` | stopReason, steps |
+
+## Store (`store.ts`)
+
+```ts
+interface SessionStore {
+  open(sessionId): Journal;          // Journal.write(record)
+  read(sessionId): Promise<SessionRecord[]>;
+  latest(): Promise<string | undefined>;
+}
+```
+
+`FileSessionStore`: `.garuda/sessions/<id>.jsonl`. The folder is 0700 and files are 0600. Each record is
+one `appendFileSync`, so a crash loses at most the line in progress. Every string passes the
+`Redactor` first. Ids: `YYYYMMDD-HHMMSS-xxxx`. `MemoryJournal` serves tests. A shared store (for example
+Redis) can implement the same interface later.
+
+## Redaction (`redact.ts`)
+
+The model may see a secret, but Garuda never writes it to disk. The `Redactor` replaces with
+`[REDACTED]`:
+
+1. Values of environment variables whose names contain KEY, TOKEN, SECRET, PASSWORD, PASSWD or
+   CREDENTIAL (8 characters or longer), wherever they appear.
+2. Known formats: private key blocks, Anthropic and OpenAI keys, AWS access key ids, GitHub tokens, Slack
+   tokens, Google API keys, JWTs.
+3. Assignments such as `password = "…"`, `api_key: …`: the name stays, the value goes.
+
+## Resume (`resume.ts`)
+
+`rebuildState(records)` replays the records into messages, usage, cost and context size (compaction
+records replace the messages). `resumeSession` loads the latest or a given session, writes a `resume`
+record, and continues in the same file. The read tracking starts empty: the agent must read a file again
+before it edits it.
+
+## Read tracking (`fileTracker.ts`)
+
+| Method | Use |
+| --- | --- |
+| `record(path, content)` | `read_file` and `write_file` note the content the agent knows. |
+| `status(path, content)` | `edit_file`: `unread`, `changed` or `current`. Only `current` may be edited (F11). |
+| `noteRead(path, content, offset, limit)` | Read deduplication: true when the same range of the same content was read before. |
+| `forgetReads()` | Compaction clears the dedup memory, because the earlier output may be gone. |
+
+## Tests
+
+`test/sessions.test.ts` (journal, redaction, resume, replay), `test/m4.acceptance.test.ts`.
