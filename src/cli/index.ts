@@ -66,7 +66,7 @@ async function main(): Promise<void> {
     .option("--executor <name>", "auto (default), os or host")
     .option("--keep", "keep the scratch folders")
     .option("--list", "list the tasks and exit")
-    .option("--subagents <mode>", "the explore subagent: on (default) or off, for A/B runs")
+    .option("--subagents <mode>", "the explore subagent: off (default) or on, for A/B runs")
     .option("--subagent-model <id>", "model of the explore subagent; default: the main model")
     .option(
       "--prepare <toolchain>",

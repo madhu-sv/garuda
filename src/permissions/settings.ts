@@ -57,7 +57,7 @@ const schema = z.strictObject({
       tokenBudget: z.number().int().min(1_000).optional(),
     })
     .optional(),
-  /** The explore subagent (0.3). enabled: default true. Limits per explore run. */
+  /** The explore subagent (0.3). enabled: default false. Limits per explore run. */
   subagents: z
     .strictObject({
       enabled: z.boolean().optional(),

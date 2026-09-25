@@ -64,6 +64,9 @@ sequenceDiagram
   RT-->>U: usage line, stop message
 ```
 
+A stream that breaks in the middle (a closed connection, an overload) is sent again up to 2 times, with a
+notice; the session keeps only the complete response.
+
 Stop reasons: `done`, `max_steps` (default 50), `token_budget` (default 20 M), `repeated_calls` (3
 identical calls in a row), `max_tokens`, `refusal`. Ctrl-C aborts the turn and kills its commands; a
 second Ctrl-C exits Garuda.

@@ -160,6 +160,16 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
 test can assert what the model received). It records every request and throws `ScriptExhaustedError`
 when the script ends. Builders: `text()`, `toolUse()`, `reply()`.
 
+## Transient errors (`errors.ts`)
+
+`isTransientModelError(error)` says whether the same request can succeed on a new attempt. It reads plain
+properties (name, code, status, message, `error.type`, `cause`, `AggregateError.errors`), so it needs no
+SDK (N1). Transient: `APIConnectionError`, reset and timeout codes (`ECONNRESET`, `ETIMEDOUT`,
+`UND_ERR_SOCKET` …), status 500/502/503/504/529, `overloaded_error` or `api_error` in the stream, and
+messages such as `terminated` or "socket hang up". Never transient: a 4xx status, an abort, and Garuda's
+own errors such as "Cannot reach … Is the server running?". `errorReason(error)` gives a short reason
+for the notice. The agent loop uses both (see [runtime-and-loop.md](runtime-and-loop.md)).
+
 ## Tests
 
 `test/model.test.ts` (mapping, cache breakpoints, prices), `test/anthropic-stream.test.ts` (streaming

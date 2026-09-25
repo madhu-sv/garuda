@@ -74,7 +74,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     );
     return 1;
   }
-  const subagentsMode = options.subagents ?? "on";
+  const subagentsMode = options.subagents ?? "off";
   if (subagentsMode !== "on" && subagentsMode !== "off") {
     process.stderr.write(`Unknown subagents mode ${options.subagents}. Use: on, off.\n`);
     return 1;
@@ -152,6 +152,10 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       ...(options.keep ? { keep: true } : {}),
       onEvent: (taskId, event) => {
         if (event.type === "tool_call") process.stderr.write(`  [${taskId}] ${event.call.name}\n`);
+        if (event.type === "model_retry")
+          process.stderr.write(
+            `  [${taskId}] retry ${event.attempt}/${event.maxRetries}: ${event.reason}\n`,
+          );
       },
     },
     (r) =>

@@ -205,5 +205,6 @@ All state is in files. There is no server and no database.
 | Chat UI | Ink, loaded only for a chat on a terminal | Rich UI without slowing `-p`, pipes and evals. |
 | Sessions | JSONL files behind `SessionStore` | Simple, readable, append-only; replaceable later. |
 | Java and Python support | Language profiles (marker files, offline commands, cache allowlist) and eval suites; no per-language subagents | Each language needs a toolchain and the right commands, not a different agent. The evals measure it. |
-| Subagents | Task-based (explore first), a tool of the main agent, same model by default | A child context keeps the main context small; one tool fits the loop, permissions and records with no new paths. Evals decide if it helps. |
+| Subagents | Task-based (explore first), a tool of the main agent, same model by default, off by default | A child context keeps the main context small; one tool fits the loop, permissions and records with no new paths. The A/B eval showed no gain in steps or cost, so it is opt-in. |
+| Broken model streams | The loop retries a transient failure twice (1 s, 4 s) | The SDKs retry only before a stream starts; 4 of 54 eval runs lost the connection in the middle. |
 | Build caches in the sandbox | Only cache subfolders (`~/.m2/repository`, `~/.gradle/caches` …) are writable | Settings files and init scripts run later outside the sandbox; they stay read-only. |

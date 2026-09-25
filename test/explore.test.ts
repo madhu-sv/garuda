@@ -41,7 +41,7 @@ async function runtimeFor(
   root: string,
   parent: FakeModelClient,
   child: FakeModelClient | undefined,
-  settings: unknown = {},
+  settings: Record<string, unknown> = {},
   onEvent?: (e: AgentEvent) => void,
 ) {
   return Runtime.create({
@@ -54,7 +54,8 @@ async function runtimeFor(
       : { subagentModel: { spec: "fake-small", model: async () => child, info: INFO } }),
     approver: new AutoApprover("once"),
     store: new FileSessionStore(root),
-    settings: parseSettings(settings),
+    // Explore is off by default; these tests turn it on unless they set subagents themselves.
+    settings: parseSettings({ subagents: { enabled: true }, ...settings }),
     mcp: false,
     hooks: false,
     profiles: [],
@@ -177,7 +178,9 @@ describe("explore subagent (0.3)", () => {
       },
       reply([text("Done.")]),
     ]);
-    const runtime = await runtimeFor(root, model, undefined, { subagents: { maxSteps: 2 } });
+    const runtime = await runtimeFor(root, model, undefined, {
+      subagents: { enabled: true, maxSteps: 2 },
+    });
     await runtime.runTurn("Find applyCoupon.", new AbortController().signal);
     const answer = model.requests[4]?.messages.at(-1)?.content[0] as ToolResultBlock;
     expect(answer.content).toMatch(/^Partial: src\/coupon\.ts defines it\./);
@@ -186,15 +189,15 @@ describe("explore subagent (0.3)", () => {
     runtime.executor.shutdown();
   });
 
-  it("can be turned off, and a deny rule blocks it", async () => {
+  it("is off by default and when turned off, and a deny rule blocks it", async () => {
     const root = repo();
-    const off = await runtimeFor(root, new FakeModelClient([]), undefined, {
-      subagents: { enabled: false },
-    });
-    expect(off.system).not.toContain("call explore");
-    expect(off.extras()).not.toContain("explore");
-    expect(off.exploreModel).toBeUndefined();
-    off.executor.shutdown();
+    for (const settings of [{ subagents: {} }, { subagents: { enabled: false } }]) {
+      const off = await runtimeFor(root, new FakeModelClient([]), undefined, settings);
+      expect(off.system).not.toContain("call explore");
+      expect(off.extras()).not.toContain("explore");
+      expect(off.exploreModel).toBeUndefined();
+      off.executor.shutdown();
+    }
 
     const parent = new FakeModelClient([
       reply([toolUse("explore", { question: QUESTION }, "x1")]),

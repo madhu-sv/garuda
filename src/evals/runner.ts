@@ -53,7 +53,7 @@ export interface EvalOptions {
   codeIndex?: CodeIndexMode;
   /** Default: "auto", the OS sandbox when this machine has one. */
   executor?: ExecutorName;
-  /** The explore subagent (0.3). Default: on, as in the product. */
+  /** The explore subagent (0.3). Default: off, as in the product. */
   subagents?: boolean;
   /** The explore subagent's model. Default: the main model. */
   subagentModel?: RuntimeOptions["subagentModel"];
@@ -105,13 +105,20 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     durationMs: 0,
   };
 
+  const timeout = AbortSignal.timeout(EVAL_TASK_TIMEOUT_MS);
   try {
-    const run = await runtime.runTurn(task.prompt, AbortSignal.timeout(EVAL_TASK_TIMEOUT_MS));
+    const run = await runtime.runTurn(task.prompt, timeout);
     result.stopReason = run.stopReason;
     result.steps = run.steps;
   } catch (error) {
     runtime.recordStop("error");
-    result.reason = `The run failed: ${(error as Error).message}`;
+    if (timeout.aborted) {
+      // Too slow is the agent's failure, not an error of the run.
+      result.stopReason = "timeout";
+      result.reason = `The task took longer than ${EVAL_TASK_TIMEOUT_MS / 60_000} minutes.`;
+    } else {
+      result.reason = `The run failed: ${(error as Error).message}`;
+    }
   } finally {
     runtime.executor.shutdown();
   }
@@ -191,10 +198,19 @@ async function changedFiles(root: string, before: Map<string, string>): Promise<
 }
 
 /** A table for the terminal, and the totals line. */
+/**
+ * A run that failed with an error (for example a broken connection to the API, after the retries)
+ * says nothing about the agent: the pass count and the means leave it out, and the totals say how
+ * many there were. Its tokens and cost still count in the totals: they were spent.
+ */
+export function isErrorRun(result: EvalResult): boolean {
+  return result.stopReason === "error";
+}
+
 export function formatReport(results: readonly EvalResult[]): string {
   const rows = results.map((r) =>
     [
-      r.passed ? "PASS" : "FAIL",
+      r.passed ? "PASS" : isErrorRun(r) ? "ERR " : "FAIL",
       r.id.padEnd(18),
       `${String(r.steps).padStart(3)} steps`,
       `${(r.tokens / 1000).toFixed(1).padStart(7)}k tok`,
@@ -204,11 +220,13 @@ export function formatReport(results: readonly EvalResult[]): string {
     ].join("  "),
   );
   const passed = results.filter((r) => r.passed).length;
+  const errors = results.filter(isErrorRun).length;
   const cost = results.every((r) => r.costUsd !== undefined)
     ? `$${results.reduce((s, r) => s + (r.costUsd ?? 0), 0).toFixed(4)}`
     : "unknown";
   const steps = results.reduce((s, r) => s + r.steps, 0);
-  const lines = [...rows, "", `${passed}/${results.length} passed · ${steps} steps · cost ${cost}`];
+  const counted = `${passed}/${results.length - errors} passed${errors > 0 ? ` · ${errors} error run(s) not counted` : ""}`;
+  const lines = [...rows, "", `${counted} · ${steps} steps · cost ${cost}`];
   const ids = [...new Set(results.map((r) => r.id))];
   // With --repeat, one run says little: show the mean per task.
   if (ids.length < results.length) lines.push("", "Mean per task:", ...meanRows(results, ids));
@@ -217,21 +235,27 @@ export function formatReport(results: readonly EvalResult[]): string {
 
 function meanRows(results: readonly EvalResult[], ids: readonly string[]): string[] {
   return ids.map((id) => {
-    const runs = results.filter((r) => r.id === id);
+    const all = results.filter((r) => r.id === id);
+    const runs = all.filter((r) => !isErrorRun(r));
+    const errors = all.length - runs.length;
+    const note = errors > 0 ? `  (${errors} error run(s) left out)` : "";
+    if (runs.length === 0) return `${"0/0".padEnd(4)}  ${id.padEnd(18)}${note}`;
     const mean = (f: (r: EvalResult) => number) => runs.reduce((s, r) => s + f(r), 0) / runs.length;
     const passes = runs.filter((r) => r.passed).length;
-    return [
-      `${passes}/${runs.length}`.padEnd(4),
-      id.padEnd(18),
-      `${mean((r) => r.steps)
-        .toFixed(1)
-        .padStart(5)} steps`,
-      `${(mean((r) => r.tokens) / 1000).toFixed(1).padStart(7)}k tok`,
-      runs.every((r) => r.costUsd !== undefined)
-        ? `$${mean((r) => r.costUsd ?? 0)
-            .toFixed(4)
-            .padStart(7)}`
-        : "   cost ?",
-    ].join("  ");
+    return (
+      [
+        `${passes}/${runs.length}`.padEnd(4),
+        id.padEnd(18),
+        `${mean((r) => r.steps)
+          .toFixed(1)
+          .padStart(5)} steps`,
+        `${(mean((r) => r.tokens) / 1000).toFixed(1).padStart(7)}k tok`,
+        runs.every((r) => r.costUsd !== undefined)
+          ? `$${mean((r) => r.costUsd ?? 0)
+              .toFixed(4)
+              .padStart(7)}`
+          : "   cost ?",
+      ].join("  ") + note
+    );
   });
 }

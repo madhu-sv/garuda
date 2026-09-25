@@ -5,7 +5,8 @@
 Keep the main agent's context small on open questions. The main agent calls the `explore` tool with a
 question; a child agent searches the code with read-only tools in its own context and returns a short
 answer with `path:line` references. The main context gets the answer, not every file that the child
-read. Added in 0.3.
+read. Added in 0.3. **Off by default**: an A/B eval showed no gain in steps or cost (see "Evals" below).
+Turn it on with `"subagents": { "enabled": true }` in the settings.
 
 Subagents are split by task, not by language: the language profiles ([languages.md](languages.md)) give
 language knowledge to every agent.
@@ -52,8 +53,8 @@ The trailer tells the main agent how the answer was found, and whether it is com
 
 - The child has only read-only tools. It calls them through the same permission engine and the user's
   hooks, so sensitive files, deny rules and hook blocks apply as in the main agent.
-- A deny rule `explore` in the settings turns the tool off for one project; `subagents.enabled: false`
-  removes it (and its prompt lines).
+- The tool (and its prompt lines) exists only with `subagents.enabled: true`. A deny rule `explore` in
+  the settings blocks it for one project.
 - The child's reads do not count as reads for `edit_file`: the main agent must read a file itself
   before it edits it. The tool description and the system prompt say so.
 - The answer is a tool result, so the main agent treats it as data. File text that the child repeats
@@ -83,13 +84,27 @@ The trailer tells the main agent how the answer was found, and whether it is com
 
 ## Evals
 
-`garuda eval --subagents on|off` (default on) and `--subagent-model <spec>` make A/B runs possible;
-`report.json` records both.
+`garuda eval --subagents on|off` (default off, as in the product) and `--subagent-model <spec>` make
+A/B runs possible; `report.json` records both.
+
+| Arm (claude-sonnet-5, hard suite, 3 runs per task) | Passed | Steps | Tokens | Cost |
+| --- | --- | --- | --- | --- |
+| explore off | 17/17 | 49.8 | 308k | $0.232 |
+| explore on, same model | 18/18 | 49.7 | 335k | $0.233 |
+| explore on, Haiku 4.5 child | 15/15 | 47.5 | 301k | $0.203 (too few valid runs) |
+
+Sums of the per-task means, without the 4 runs that failed with a broken API connection. The model called
+explore in 4 of 33 runs, all in `hard-event`: there it saved steps (5 against 7.5) but cost more ($0.044
+against $0.027), because the child read many files at the full model price. The benefit that explore aims
+at — a small context in long chats on large repositories — does not show in tasks of 5 to 12 steps.
+
+Decision: off by default, as for the code index. Measure again with a larger repository or a suite of
+long, open tasks.
 
 ## Tests
 
 `test/explore.test.ts`: a full turn with a separate child model (only read-only tools; unknown and
 sensitive calls fail; the answer and trailer reach the main agent; progress events; usage and cost in
 the session, the run and after resume; the child file and the report in the parent record); the main
-model as default with a wrap-up after the step limit; `subagents.enabled: false` and a deny rule; input
+model as default with a wrap-up after the step limit; off by default, `subagents.enabled: false` and a deny rule; input
 validation; the chat's live line and summaries; settings.

@@ -48,6 +48,10 @@ commander uses `enablePositionalOptions()`, so options after `eval` belong to `e
   results the summary skips the `<mcp_result …>` line.
 - Colors only when stderr is a TTY and `NO_COLOR` is not set.
 
+Retry notices: a `model_retry` event prints "The connection to the model broke (terminated). Retrying
+(1/2)…" as a warning. The Ink chat also drops the text that streamed but did not finish a block, because
+the request goes again.
+
 ## Terminal approver
 
 - Header by target kind: command (with sandbox state), path (`wants to change`), URL (`wants to fetch

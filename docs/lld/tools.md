@@ -57,7 +57,7 @@ implements it; replay uses a recorded one.
 | `find_references` | yes | – | Code index: every use, following imports. `lookup` or `all`. |
 | `repo_map` | yes | – | Code index: exports and imports per file; a folder summary above 30 files. `all` only. |
 | `web_fetch` | no | URL | See [web.md](web.md). Present unless `web.enabled` is false. |
-| `explore` | yes | – | A read-only subagent answers one question about the code. See [agents.md](agents.md). Present unless `subagents.enabled` is false. |
+| `explore` | yes | – | A read-only subagent answers one question about the code. See [agents.md](agents.md). Only with `subagents.enabled: true` (off by default). |
 | `mcp__<server>__<tool>` | no | input | See [mcp.md](mcp.md). |
 
 `readOnlyTools(codeIndex)` gives the tool set of a subagent.

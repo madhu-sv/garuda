@@ -85,8 +85,15 @@ garuda eval --prepare java|python
 `-m` takes any model spec, for example `garuda eval -m ollama/qwen3-coder:30b -s hard`, so open models
 can be measured on the same tasks.
 
-Output: a live line per tool call, a table (PASS/FAIL, steps, tokens, cost, time, stop reason), totals,
-a mean per task for `--repeat`, and `report.json`. Exit code 0 when all pass, 2 otherwise.
+Output: a live line per tool call (and per model retry), a table (PASS/FAIL/ERR, steps, tokens, cost,
+time, stop reason), totals, a mean per task for `--repeat`, and `report.json`. Exit code 0 when all pass,
+2 otherwise.
+
+Error runs: a run that throws (stop reason `error`, for example an API connection that broke even after
+the loop's retries) says nothing about the agent. The report marks it `ERR`, leaves it out of the pass
+count and the per-task means, and names the number in the totals line (`17/17 passed · 1 error run(s)
+not counted`). Its tokens and cost still count in the totals. A task that runs longer than 10 minutes is
+a failure with the stop reason `timeout`, not an error.
 
 ## Method
 
@@ -96,8 +103,8 @@ a mean per task for `--repeat`, and `report.json`. Exit code 0 when all pass, 2 
   default); lookup 53.2 / $0.242; all 51.2 / $0.232; bash hints 49.1 / $0.208 (no measured gain).
 - Java and Python suites, first run (claude-haiku-4-5, one run each, before explore): java 5/5, 40 steps,
   $0.139; python 5/5, 31 steps, $0.120. Maven ran in the Seatbelt sandbox with no approval.
-- Explore subagent: compare `--subagents off` and `on` on the hard suite with `--repeat 3`; the result
-  decides the default, as it did for the code index.
+- Explore subagent (A/B, 0.3): no gain in steps or cost, so it is off by default. Details and the table:
+  [agents.md](agents.md#evals).
 - The requirements doc keeps the per-task tables ("0.1 results", "0.2 results").
 
 ## Tests

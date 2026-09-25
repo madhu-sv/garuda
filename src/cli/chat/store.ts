@@ -2,7 +2,7 @@ import type { AgentEvent } from "../../loop/runAgent.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../../permissions/types.js";
 import { colorPreview, header } from "../approver.js";
 import type { Renderer } from "../renderer.js";
-import { summariseCall, summariseResult } from "../renderer.js";
+import { retryText, summariseCall, summariseResult } from "../renderer.js";
 import type { Interruptible } from "../turn.js";
 import { type EditAction, type EditorState, edit, emptyEditor, submit } from "./lineEditor.js";
 import { ansi, type Paint, renderMarkdown, takeBlocks } from "./markdown.js";
@@ -235,6 +235,11 @@ export class ChatStore implements Renderer, Approver, Interruptible {
             { id: event.call.id, line: `${event.call.name} ${summariseCall(event.call)}` },
           ],
         });
+        return;
+      case "model_retry":
+        // The request goes again: text that streamed but did not finish a block is void.
+        this.update({ streaming: "" });
+        this.warn(retryText(event));
         return;
       case "tool_progress": {
         // A subagent's current step: replace the live line of that call.

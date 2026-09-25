@@ -160,5 +160,28 @@ describe("eval runner (N5)", () => {
     ]);
     expect(repeated).toContain("Mean per task:");
     expect(repeated).toContain("1/2   a                     5.0 steps      3.0k tok  $ 0.0300");
+
+    // A run that failed with an error is left out of the pass count and the means.
+    const run = {
+      id: "a",
+      title: "",
+      passed: true,
+      stopReason: "done",
+      steps: 4,
+      tokens: 2000,
+      costUsd: 0.02,
+      durationMs: 1,
+    };
+    const withError = formatReport([
+      run,
+      { ...run, passed: false, stopReason: "error", steps: 0, tokens: 500, costUsd: 0.005 },
+      { ...run, id: "b", passed: false, stopReason: "error", steps: 0, tokens: 0, costUsd: 0 },
+    ]);
+    expect(withError).toContain("ERR   a");
+    expect(withError).toContain("1/1 passed · 2 error run(s) not counted · 4 steps · cost $0.0250");
+    expect(withError).toContain(
+      "1/1   a                     4.0 steps      2.0k tok  $ 0.0200  (1 error run(s) left out)",
+    );
+    expect(withError).toContain("0/0   b                   (1 error run(s) left out)");
   });
 });

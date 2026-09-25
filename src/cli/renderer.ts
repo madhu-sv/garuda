@@ -64,6 +64,9 @@ export class PlainRenderer implements Renderer {
         this.info(`Context compacted (${stage}): ${beforeTokens} → about ${afterTokens} tokens.`);
         return;
       }
+      case "model_retry":
+        this.warn(retryText(event));
+        return;
       case "step_end":
       // Live status lines need a live view; plain output stays one line per call.
       case "tool_progress":
@@ -95,6 +98,11 @@ export class PlainRenderer implements Renderer {
   private paint(style: Style, text: string): string {
     return this.color ? styleText(style, text) : text;
   }
+}
+
+/** The notice for a retry of a broken model stream. */
+export function retryText(event: { attempt: number; maxRetries: number; reason: string }): string {
+  return `The connection to the model broke (${event.reason}). Retrying (${event.attempt}/${event.maxRetries})…`;
 }
 
 const cut = (text: string, max: number) =>

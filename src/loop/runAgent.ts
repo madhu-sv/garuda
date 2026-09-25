@@ -1,5 +1,6 @@
 import { type CompactionResult, compactIfNeeded } from "../context/compact.js";
 import type { KnowledgeIndex } from "../knowledge/index.js";
+import { errorReason, isTransientModelError } from "../model/errors.js";
 import { costOf, type Price, totalTokens } from "../model/pricing.js";
 import {
   addUsage,
@@ -34,6 +35,8 @@ export type AgentEvent =
   | { type: "tool_result"; call: ToolUseBlock; outcome: ToolOutcome }
   /** A one-line status of a long call, for example a subagent's current step. */
   | { type: "tool_progress"; call: ToolUseBlock; text: string }
+  /** The model stream broke; the loop sends the same request again. Text shown so far is void. */
+  | { type: "model_retry"; attempt: number; maxRetries: number; reason: string }
   | { type: "step_end"; step: number; usage: Usage }
   | { type: "compaction"; result: CompactionResult };
 
@@ -60,6 +63,8 @@ export interface AgentDeps {
   price?: Price;
   signal?: AbortSignal;
   onEvent?: (event: AgentEvent) => void;
+  /** Waits before each retry of a broken model stream. Default: 1 s, then 4 s. */
+  retryDelaysMs?: readonly number[];
 }
 
 export type AgentStopReason =
@@ -82,6 +87,8 @@ export const DEFAULT_MAX_TOKENS = 8192;
 export const DEFAULT_TOKEN_BUDGET = 20_000_000;
 /** F7: this many identical tool calls in a row stop the run. */
 export const REPEAT_LIMIT = 3;
+/** Waits before the retries of a broken model stream (2 retries). */
+export const MODEL_RETRY_DELAYS_MS: readonly number[] = [1_000, 4_000];
 
 export async function runAgent(session: Session, deps: AgentDeps): Promise<AgentResult> {
   const maxSteps = deps.maxSteps ?? DEFAULT_MAX_STEPS;
@@ -124,7 +131,13 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       tools,
       maxTokens: deps.maxTokens ?? DEFAULT_MAX_TOKENS,
     };
-    const response = await callModel(deps.model, request, signal, emit);
+    const response = await callModelWithRetry(
+      deps.model,
+      request,
+      signal,
+      emit,
+      deps.retryDelaysMs ?? MODEL_RETRY_DELAYS_MS,
+    );
     usage = addUsage(usage, response.usage);
     addAssistantResponse(session, response, steps, cost(response));
     emit({ type: "step_end", step: steps, usage: response.usage });
@@ -155,6 +168,52 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   }
 
   return finish("max_steps");
+}
+
+/**
+ * One model call. A stream that breaks with a transient error (a closed connection, an overload
+ * in the stream) is sent again, up to `delays.length` times. The session gets only a complete
+ * response, so a retry never leaves half a message in the record.
+ */
+async function callModelWithRetry(
+  model: ModelClient,
+  request: ModelRequest,
+  signal: AbortSignal,
+  emit: (event: AgentEvent) => void,
+  delays: readonly number[],
+): Promise<ModelResponse> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await callModel(model, request, signal, emit);
+    } catch (error) {
+      if (signal.aborted || attempt >= delays.length || !isTransientModelError(error)) throw error;
+      emit({
+        type: "model_retry",
+        attempt: attempt + 1,
+        maxRetries: delays.length,
+        reason: errorReason(error),
+      });
+      await sleep(delays[attempt] ?? 1_000, signal);
+    }
+  }
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (ms <= 0) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 async function callModel(

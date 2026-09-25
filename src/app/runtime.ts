@@ -160,7 +160,8 @@ export class Runtime {
       access: profileAccess(profiles),
     });
     this.exploreModel = undefined;
-    if (settings.subagents?.enabled !== false) {
+    // Off by default: an A/B eval (hard suite, 3 runs per arm) showed no gain in steps or cost.
+    if (settings.subagents?.enabled === true) {
       const sub = options.subagentModel;
       let subClient: ModelClient | undefined;
       const subPrice = sub === undefined ? this.price : sub.info.price;
@@ -232,7 +233,7 @@ export class Runtime {
         web: settings.web?.enabled ?? true,
         hooks: hookConfig.user.length + hookConfig.project.length > 0,
         languages: profileNotes(profiles),
-        explore: settings.subagents?.enabled !== false,
+        explore: settings.subagents?.enabled === true,
       },
     );
     const runtime = new Runtime(

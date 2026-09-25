@@ -114,7 +114,7 @@ garuda eval -s hard --repeat 3             # each task 3 times, with a mean row 
 garuda eval -s hard --repeat 3 --index lookup  # the same, with find_symbol and find_references (A/B)
 garuda eval -s java                        # 5 Maven projects with JUnit 5
 garuda eval -s python                      # 5 pytest projects
-garuda eval -s hard --repeat 3 --subagents off  # A/B: the same, without the explore subagent
+garuda eval -s hard --repeat 3 --subagents on   # A/B: the same, with the explore subagent
 ```
 
 The Java and Python suites need a toolchain. `garuda eval` checks it before the first model call and
@@ -168,6 +168,8 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
 - After each turn Garuda prints steps, tokens (with cache reads), cost, context use and the session total.
 - A run stops at 50 steps, at the session token budget (20M tokens), or after the same tool call
   3 times in a row. Garuda says why.
+- When the connection to the model breaks while a response streams, Garuda sends the request again (up
+  to 2 times) and says so. The session keeps only the complete response.
 - At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,
   the model summarises the older turns. The last 4 turns always stay in full.
 - `GARUDA.md` in the project root goes into the system prompt.
@@ -214,6 +216,10 @@ Settings:
 
 ## Explore subagent
 
+Off by default. Turn it on with `"subagents": { "enabled": true }` in `.garuda/settings.json`.
+An A/B eval on the hard suite showed no gain in steps or cost (details in `docs/lld/agents.md`); it may
+help in long chats on large repositories.
+
 For an open question about the code ("where is the coupon applied, and who calls it?"), the model can
 call `explore`. A subagent searches with `glob`, `grep` and `read_file` in its own context and returns a
 short answer with `path:line` references. The main context stays small, and several explore calls can
@@ -226,8 +232,7 @@ run at once.
   example `claude-haiku-4-5` under Sonnet. Its tokens and cost count in the session totals.
 - The chat shows one live line per call (`explore … · step 3 · grep /coupon/`); Ctrl-O shows the answer
   and what it searched. Each run has its own file in `.garuda/sessions/<session id>/`.
-- Settings: `"subagents": { "enabled": false }` turns it off; `maxSteps` and `tokenBudget` change the
-  limits.
+- Settings: `"subagents": { "enabled": true, "maxSteps": 20, "tokenBudget": 150000 }`.
 
 ## Java and Python projects
 

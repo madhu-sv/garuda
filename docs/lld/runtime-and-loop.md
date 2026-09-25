@@ -29,7 +29,7 @@ imports the CLI.
    mcp, web, hooks, languages, explore })`.
 4. Build the tool registry (`defaultTools` with the code index mode and web options), limits (max steps,
    token budget, context window from settings or the model table), the price, the permission engine
-   (with the profiles' cache access), and — unless `subagents.enabled` is false — the explore tool with
+   (with the profiles' cache access), and — only with `subagents.enabled: true` — the explore tool with
    its own read-only registry.
 5. With `resume`, rebuild the session from its records.
 
@@ -63,7 +63,7 @@ while steps < maxSteps:
   if session tokens >= budget: stop token_budget
   compactIfNeeded(session)          # see context.md
   steps += 1
-  response = stream(system, messages, tools, maxTokens)   # emits text_delta
+  response = stream(system, messages, tools, maxTokens)   # emits text_delta; retried, see below
   addAssistantResponse(session, response, cost)
   calls = tool_use blocks
   if none: stop done | max_tokens | refusal (from the model stop reason)
@@ -79,8 +79,17 @@ time, in order. Results keep the call order. Each result meta records the execut
 for calls that run commands (N8), and the subagent report for explore calls. Each call gets its own
 `callId` and `progress` callback in the tool context.
 
+Model retries (0.3): when a response stream breaks with a transient error (`isTransientModelError` in
+`model/errors.ts`: a closed connection such as undici's `terminated`, a reset or timeout, a 5xx or 529
+status, an `overloaded_error` in the stream), the loop sends the same request again after 1 s, then 4 s
+(`retryDelaysMs`), and emits `model_retry`. It never retries a 4xx error, a refused connection to a local
+server, or a user abort; Ctrl-C during the wait stops at once. The session gets only the complete
+response, so a retry never leaves half a message in the record. The SDKs retry only before a stream
+starts; this covers the break in the middle.
+
 Events: `text_delta`, `tool_call`, `tool_progress` (a one-line status of a long call, for example a
-subagent's current step), `tool_result`, `compaction`, `step_end`.
+subagent's current step), `tool_result`, `model_retry` (attempt, max retries, reason), `compaction`,
+`step_end`.
 
 Defaults: `DEFAULT_MAX_STEPS = 50`, `DEFAULT_MAX_TOKENS = 8192`, `DEFAULT_TOKEN_BUDGET = 20 000 000`,
 `REPEAT_LIMIT = 3`.
@@ -98,5 +107,6 @@ Defaults: `DEFAULT_MAX_STEPS = 50`, `DEFAULT_MAX_TOKENS = 8192`, `DEFAULT_TOKEN_
 
 ## Tests
 
-`test/loop.test.ts`, `test/limits.test.ts`, `test/parallel.test.ts`, `test/sessions.test.ts` (replay),
+`test/loop.test.ts`, `test/limits.test.ts`, `test/parallel.test.ts`, `test/retry.test.ts` (transient
+errors, retries, give-up, no retry for 4xx, Ctrl-C during the wait, notices), `test/sessions.test.ts` (replay),
 the milestone acceptance tests, and `test/mcp.test.ts` / `test/hooks.test.ts` for runtime integration.
