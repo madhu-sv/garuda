@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.3.0 (in progress). This document describes the parts of Garuda, their dependencies, the trust
+Version 0.3.0. This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context

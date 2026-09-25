@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.3.0 (in progress). This document shows how the parts work together. The component documents in
+Version 0.3.0. This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use

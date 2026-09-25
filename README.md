@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. Version 0.2.1 is released; 0.3 is in progress.
+Garuda is a terminal coding agent. This is version 0.3.0.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -14,6 +14,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M4 Limits, context, sessions | Done |
 | M5 CLI polish and evals | Done |
 | 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
+| 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
 
 ## Use
 
