@@ -9,9 +9,10 @@ import { defaultTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { VERSION } from "../version.js";
 import { SwitchApprover, TerminalApprover } from "./approver.js";
+import { banner, colorLevel } from "./banner.js";
 import { describeError } from "./errors.js";
 import { PlainRenderer, type Renderer } from "./renderer.js";
-import { HELP, runRepl } from "./repl.js";
+import { runRepl } from "./repl.js";
 import { formatTokens } from "./report.js";
 import { runTurnInTerminal } from "./turn.js";
 
@@ -134,18 +135,30 @@ async function start(options: Options, program: Command): Promise<number> {
     return outcome.result.stopReason === "done" ? 0 : 2;
   }
 
-  const sandbox =
-    runtime.executor.isolation === "none" ? "no sandbox" : `sandbox ${runtime.executor.name}`;
-  const banner = `Garuda ${VERSION} · ${modelId} · ${sandbox} · ${root}\n${HELP}`;
-  const sessionPath = (id: string) => join(store.dir, `${id}.jsonl`);
   const ink = wantsInk() ? await loadInk(renderer) : undefined;
+  const bannerInfo = {
+    version: VERSION,
+    model: modelId as string,
+    sandbox:
+      runtime.executor.isolation === "none"
+        ? "none: each command asks first"
+        : `${runtime.executor.name} · no network`,
+    root,
+    extras: runtime.extras(),
+    ink: ink !== undefined,
+  };
+  const startBanner = banner(bannerInfo, {
+    columns: process.stdout.columns || 80,
+    color: colorLevel(process.stdout),
+  });
+  const sessionPath = (id: string) => join(store.dir, `${id}.jsonl`);
   if (ink !== undefined) {
     const setEventTarget = (target: Renderer) => {
       events = target;
     };
-    await ink.runInkChat(runtime, approver, setEventTarget, banner, sessionPath, exitNow);
+    await ink.runInkChat(runtime, approver, setEventTarget, startBanner, sessionPath, exitNow);
   } else {
-    renderer.info(`${banner}\n`);
+    process.stderr.write(`${startBanner}\n`);
     await runRepl(runtime, terminalApprover, renderer, sessionPath, exitNow);
   }
   await runtime.close();

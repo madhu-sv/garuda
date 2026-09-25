@@ -196,6 +196,11 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     this.update({ busy: false, running: [], status: { ...this.state.status, ...status } });
   }
 
+  /** Print text as it is (it may hold its own colors), for example the start banner. */
+  print(text: string): void {
+    this.add({ kind: "output", text });
+  }
+
   /** Echo a command line, for commands that do not start a turn. */
   echo(prompt: string): void {
     this.add({ kind: "user", text: prompt });

@@ -211,6 +211,18 @@ export class Runtime {
     });
   }
 
+  /** What this session adds to the base tools, for the start banner. Counts configured items. */
+  extras(): string[] {
+    const out: string[] = [];
+    const servers = this.mcpServers.filter((s) => s.def.enabled).length;
+    if (servers > 0) out.push(`${servers} MCP server${servers === 1 ? "" : "s"}`);
+    const hooks = this.hookConfig.user.length + this.hookConfig.project.length;
+    if (hooks > 0) out.push(`${hooks} hook${hooks === 1 ? "" : "s"}`);
+    if (this.tools.get("web_fetch") !== undefined) out.push("web_fetch");
+    if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
+    return out;
+  }
+
   /** The active hooks, for /hooks. */
   hookLines(): string[] {
     return this.hookRunner?.describe() ?? [];

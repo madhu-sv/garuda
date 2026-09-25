@@ -21,7 +21,7 @@ export async function runInkChat(
   exitNow: () => never,
 ): Promise<void> {
   const store = new ChatStore(statusOf(runtime));
-  store.info(banner);
+  store.print(banner);
   approver.current = store;
   setEventTarget(store);
   const ink = render(createElement(App, { store }), { exitOnCtrlC: false });

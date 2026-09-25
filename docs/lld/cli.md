@@ -15,6 +15,7 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 | `renderer.ts` | `Renderer` interface and `PlainRenderer`: model text to stdout, activity to stderr. |
 | `approver.ts` | `TerminalApprover` (inquirer select), `SwitchApprover`, shared `header` and `colorPreview`. |
 | `report.ts` | Usage line and stop messages. |
+| `banner.ts` | The chat start banner: GARUDA wordmark (saffron-to-gold gradient on true-color terminals), a card with version, model, sandbox, folder and extras, and a tips line. The card only below 60 columns; no colors with `NO_COLOR` or a pipe. Not shown for `-p`. |
 | `errors.ts` | `describeError`: the error chain as one message. |
 | `evalCommand.ts` | `garuda eval`: options, executor choice, run, report files. |
 | `chat/*` | The Ink chat (below). |
