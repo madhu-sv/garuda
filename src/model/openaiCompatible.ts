@@ -1,3 +1,4 @@
+import { mayBeToolCall, textToolCalls } from "./textToolCalls.js";
 import type {
   ContentBlock,
   Message,
@@ -23,6 +24,9 @@ import type {
  *   same bytes (N2), so servers with automatic prefix caching reuse them.
  * - Tool results become "tool" messages; the tool call id links them.
  * - A server that sends no usage gets an estimate (4 characters per token), so compaction still works.
+ * - Some small models write a tool call as JSON text. When the whole message is such a call to a
+ *   known tool, it becomes a real call (see textToolCalls.ts). While a streamed text can still be
+ *   one, the adapter holds it back from the screen.
  */
 
 export interface OpenAICompatibleOptions {
@@ -50,12 +54,12 @@ export class OpenAICompatibleClient implements ModelClient {
   }
 
   async *stream(request: ModelRequest, options?: StreamOptions): AsyncIterable<ModelEvent> {
-    const response = await this.post(toWireBody(this.options.model, request), options?.signal);
+    const http = await this.post(toWireBody(this.options.model, request), options?.signal);
     const state = newStreamState();
-    for await (const data of sseData(
-      response.body as ReadableStream<Uint8Array>,
-      options?.signal,
-    )) {
+    // Text held back while it can still be a tool call written as text.
+    let held = "";
+    let holding = request.tools.length > 0;
+    for await (const data of sseData(http.body as ReadableStream<Uint8Array>, options?.signal)) {
       if (data === "[DONE]") break;
       let chunk: WireChunk;
       try {
@@ -66,9 +70,23 @@ export class OpenAICompatibleClient implements ModelClient {
       if (chunk.error !== undefined)
         throw new Error(`${this.options.provider}: ${errorText(chunk.error)}`);
       const text = applyChunk(state, chunk);
-      if (text !== "") yield { type: "text_delta", text };
+      if (text === "") continue;
+      if (!holding) {
+        yield { type: "text_delta", text };
+        continue;
+      }
+      held += text;
+      if (!mayBeToolCall(held)) {
+        yield { type: "text_delta", text: held };
+        held = "";
+        holding = false;
+      }
     }
-    yield { type: "response", response: finishResponse(state, request) };
+    const response = finishResponse(state, request);
+    // Show held text unless it became tool calls.
+    if (held !== "" && response.content.some((b) => b.type === "text"))
+      yield { type: "text_delta", text: held };
+    yield { type: "response", response };
   }
 
   private async post(body: unknown, signal: AbortSignal | undefined): Promise<Response> {
@@ -255,15 +273,25 @@ export function applyChunk(state: StreamState, chunk: WireChunk): string {
 export function finishResponse(state: StreamState, request: ModelRequest): ModelResponse {
   const content: (TextBlock | ToolUseBlock)[] = [];
   const text = state.text + (state.refusal === "" ? "" : state.refusal);
-  if (text !== "") content.push({ type: "text", text });
+  // Some local servers send no id: make one, so results can refer to it.
+  const newId = (n: number) => `call_${Date.now().toString(36)}_${n}`;
+  const fromText =
+    state.calls.size === 0 && state.refusal === "" && state.finish !== "length"
+      ? textToolCalls(text, new Set(request.tools.map((t) => t.name)))
+      : undefined;
+  if (fromText !== undefined) {
+    for (const [i, call] of fromText.entries())
+      content.push({ type: "tool_use", id: newId(i + 1), name: call.name, input: call.input });
+  } else if (text !== "") {
+    content.push({ type: "text", text });
+  }
   let n = 0;
   for (const [, call] of [...state.calls.entries()].sort(([a], [b]) => a - b)) {
     if (call.name === "") continue;
     n++;
     content.push({
       type: "tool_use",
-      // Some local servers send no id: make one, so results can refer to it.
-      id: call.id ?? `call_${Date.now().toString(36)}_${n}`,
+      id: call.id ?? newId(n),
       name: call.name,
       input: parseArguments(call.args),
     });

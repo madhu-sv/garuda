@@ -111,6 +111,18 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
 - Stream: text deltas go to the live view; tool-call deltas are joined by index (name and argument parts
   can arrive in pieces); a missing call id gets a generated one. Broken argument JSON stays a string, so
   the tool's input check rejects it and the model can try again.
+- Tool calls written as text (`textToolCalls.ts`): some small models (for example `qwen2.5-coder`
+  through Ollama) write a call as JSON in the message text, not in `tool_calls`. When the server sent
+  no real calls, the output was not cut at `length`, and the whole text is one or more calls, the
+  adapter turns them into real calls. Accepted forms: `{"name", "arguments" | "parameters"}` objects,
+  alone, one per line, in a JSON array, in ```` ```json ```` fences or in `<tool_call>` tags. Strict
+  rules: every name is a tool of this request, arguments are a JSON object, and nothing else is in the
+  text. A call inside prose never runs (it can be an example, or text quoted from a file). If one part
+  fails, all the text stays text. These calls get no extra power: the input check, hooks and the
+  permission engine apply as usual. While streamed text can still be a call (`mayBeToolCall`: it
+  starts with `{`, `[`, a fence or the tag), the adapter holds it back; it shows the text at the end if
+  the text is not a call, and at once when the start rules a call out. The session stores real
+  `tool_use` blocks, so the model sees proper `tool_calls` in the history.
 - Stop reasons: refusal or `content_filter` → refusal; tool calls → tool_use; `length` → max_tokens;
   `stop` → end_turn.
 - Usage: `prompt_tokens` minus `cached_tokens` is input, `cached_tokens` is cache read. A server that
@@ -140,5 +152,6 @@ when the script ends. Builders: `text()`, `toolUse()`, `reply()`.
 
 `test/model.test.ts` (mapping, cache breakpoints, prices), `test/anthropic-stream.test.ts` (streaming
 with a fake SDK response), `test/providers.test.ts` (specs, presets, `models.json`, URL rules, message
-mapping, a local fake Chat Completions server: split chunks, tool calls, usage, retries, errors, and a
-whole Garuda turn).
+mapping, a local fake Chat Completions server: split chunks, tool calls, tool calls written as text,
+held text, usage, retries, errors, and a whole Garuda turn), `test/textToolCalls.test.ts` (the accepted
+forms and every rule that keeps text as text).

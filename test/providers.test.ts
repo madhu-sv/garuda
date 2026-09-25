@@ -322,6 +322,55 @@ describe("OpenAI-compatible client", () => {
     );
   });
 
+  it("turns a tool call written as text into a real call, and does not show the JSON", async () => {
+    script = [
+      () => ({
+        sse: sse(
+          { choices: [{ delta: { content: '{"name": "read_file", ' } }] },
+          { choices: [{ delta: { content: '"arguments": {"path": "a.js"}}' } }] },
+          { choices: [{ delta: {}, finish_reason: "stop" }] },
+        ),
+      }),
+    ];
+    const events = await collect(client());
+    expect(events.filter((e) => e.type === "text_delta")).toEqual([]);
+    expect(events.at(-1)).toMatchObject({
+      response: {
+        content: [{ type: "tool_use", name: "read_file", input: { path: "a.js" } }],
+        stopReason: "tool_use",
+      },
+    });
+  });
+
+  it("shows held text that is not a call, and streams other text at once", async () => {
+    script = [
+      () => ({
+        sse: sse(
+          { choices: [{ delta: { content: '{"name": "rm", ' } }] },
+          { choices: [{ delta: { content: '"arguments": {}}' }, finish_reason: "stop" }] },
+        ),
+      }),
+      () => ({
+        sse: sse(
+          { choices: [{ delta: { content: "```" } }] },
+          { choices: [{ delta: { content: "python\n" } }] },
+          { choices: [{ delta: { content: "print(1)\n```" }, finish_reason: "stop" }] },
+        ),
+      }),
+    ];
+    const unknown = await collect(client());
+    expect(unknown.filter((e) => e.type === "text_delta")).toEqual([
+      { type: "text_delta", text: '{"name": "rm", "arguments": {}}' },
+    ]);
+    expect(unknown.at(-1)).toMatchObject({ response: { stopReason: "end_turn" } });
+
+    const code = await collect(client());
+    expect(code.filter((e) => e.type === "text_delta")).toEqual([
+      { type: "text_delta", text: "```python\n" },
+      { type: "text_delta", text: "print(1)\n```" },
+    ]);
+  });
+
   it("runs a whole Garuda turn against a local server", async () => {
     const root = join(base, "root");
     mkdirSync(root, { recursive: true });

@@ -161,6 +161,7 @@ flowchart LR
 | MCP server / web page → model | Hidden instructions, terminal escape codes, fake markers. | Clean text, cap its size, wrap it in `<mcp_result>` / `<web_result>`, neutralize Garuda's own markers, mark it as untrusted in the prompt. |
 | web_fetch → network | Server-side request forgery; data leaks through URLs. | Only public addresses, checked on the resolved IP and pinned; each redirect hop checked; new hosts ask; unusual URLs always ask. |
 | Garuda → disk | Secrets in session logs. | Redactor on every journal line; files 0600. |
+| Model text → tool call | A small model's text (or file text it repeats) is read as a tool call. | Only when the whole reply is calls to tools of this request; a call inside prose never runs; the call then passes the same input check, hooks and permissions. |
 | Project config → model provider | A cloned repo sends the code and an API key to its own server. | Providers only in `~/.garuda/models.json`; keys only from environment variables; plain http only to this machine unless allowed. |
 
 ## 6. Data stores
