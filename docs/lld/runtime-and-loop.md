@@ -22,18 +22,20 @@ imports the CLI.
 | `mode` | `build` (default) or `plan` for the first turn (0.4; `--plan`). |
 | `commands` | `false`, or `{ home }` for custom slash commands (0.4). |
 | `subagentModel` | `{ spec, model, info }` for the explore subagent; default: the main model (see [agents.md](agents.md)). |
+| `lsp` | `{ enabled?, home?, path?, firstTimeoutMs?, timeoutMs? }` (0.4). `enabled` overrides `lsp.enabled` from settings (`--lsp`, evals); `home` holds `~/.garuda/lsp.json` and the managed servers; `path` is the PATH to search. See [lsp.md](lsp.md). |
 
 ### `Runtime.create`
 
 1. Load settings. `createExecutor(settings.executor)` → executor and an optional notice.
 2. Load MCP configs and hooks configs (problems go to `onNotice`).
 3. Detect the language profiles. `buildSystemPrompt(root, GARUDA.md, memory.md, { codeIndex, sandboxed,
-   mcp, web, hooks, languages, explore })`.
+   mcp, web, hooks, languages, explore, todo, lsp })`.
 4. Build the tool registry (`defaultTools` with the code index mode and web options), limits (max steps,
    token budget, context window from settings or the model table), the price, the permission engine
    (with the profiles' cache access), and — only with `subagents.enabled: true` — the explore tool with
    its own read-only registry.
-5. With `resume`, rebuild the session from its records.
+5. With LSP on, read `~/.garuda/lsp.json` (`autoInstall`; a broken file is a notice).
+6. With `resume`, rebuild the session from its records.
 
 ### `runTurn(prompt, signal)`
 
@@ -47,16 +49,18 @@ imports the CLI.
    allows, and to end with a numbered plan), then the MCP notes. The system prompt is the same in both
    modes, so the prompt cache stays valid (N2).
 5. Load the model if it is still a factory (`client()`; the explore tool shares it), then
-   `runAgent(session, deps)`.
+   `runAgent(session, deps)`. With LSP on, `deps.diagnostics` calls the `LspManager`, which the runtime
+   creates with `import()` on the first edit (N3).
 
 Other methods: `newSession()`, `recordStop(reason)`, `mcpStatus()`, `hookLines()`, `close()` (closes MCP
-clients), `mode` and `setMode()` (0.4), `commands` and `resolveCommand()` (0.4).
+clients and language servers), `mode` and `setMode()` (0.4), `commands` and `resolveCommand()` (0.4),
+`lspEnabled`, `lspStatus()` and `installLsp()` (0.4).
 
 ## Agent loop (`loop/runAgent.ts`)
 
 ```ts
 runAgent(session, deps): Promise<AgentResult>
-deps: { model, tools, system, permissions, executor?, knowledge?, hooks?,
+deps: { model, tools, system, permissions, executor?, knowledge?, hooks?, diagnostics?,
         maxTokens?, maxSteps?, tokenBudget?, contextWindow?, price?, signal?, onEvent? }
 ```
 

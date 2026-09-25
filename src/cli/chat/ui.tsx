@@ -32,7 +32,11 @@ export function App({ store }: { store: ChatStore }) {
           </Text>
         )}
         {state.approval !== undefined && (
-          <ApprovalView choices={state.approval.choices} selected={state.approval.selected} />
+          <ApprovalView
+            question={state.approval.request.question ?? "Allow?"}
+            choices={state.approval.choices}
+            selected={state.approval.selected}
+          />
         )}
         {state.queue.map((line, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: queued lines can repeat.
@@ -67,24 +71,34 @@ function ItemView({ item }: { item: Item }) {
 }
 
 function ApprovalView({
+  question,
   choices,
   selected,
 }: {
+  question: string;
   choices: { choice: string; label: string }[];
   selected: number;
 }) {
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Text bold>Allow?</Text>
+      <Text bold>{question}</Text>
       {choices.map((c, i) => (
         <Text key={c.choice} {...(i === selected ? { color: "cyan" } : {})}>
           {i === selected ? "❯ " : "  "}
           {i + 1}. {c.label}
         </Text>
       ))}
-      <Text dimColor>↑↓ and Enter, or 1 2 3 · y = 1 · a = 2 · n or Esc = 3</Text>
+      <Text dimColor>{approvalKeys(choices.map((c) => c.choice))}</Text>
     </Box>
   );
+}
+
+/** The key hint under the choices: numbers, and the letter for each choice shown. */
+export function approvalKeys(choices: readonly string[]): string {
+  const letters: Record<string, string> = { once: "y", session: "a", deny: "n or Esc" };
+  const numbers = choices.map((_, i) => i + 1).join(" ");
+  const keys = choices.map((c, i) => `${letters[c] ?? "?"} = ${i + 1}`).join(" · ");
+  return `↑↓ and Enter, or ${numbers} · ${keys}`;
 }
 
 function InputLine({ state }: { state: ChatState }) {
@@ -169,9 +183,12 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     if (key.upArrow) store.moveApproval(-1);
     else if (key.downArrow) store.moveApproval(1);
     else if (key.return) store.choose();
-    else if (input === "y" || input === "1") store.choose("once");
-    else if (input === "a" || input === "2") store.choose("session");
-    else if (input === "n" || input === "3" || key.escape) store.choose("deny");
+    else if (/^[1-9]$/.test(input)) {
+      const picked = state.approval.choices[Number(input) - 1];
+      if (picked !== undefined) store.choose(picked.choice);
+    } else if (input === "y") store.choose("once");
+    else if (input === "a") store.choose("session");
+    else if (input === "n" || key.escape) store.choose("deny");
     return;
   }
   if (key.ctrl) {

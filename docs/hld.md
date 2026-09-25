@@ -122,6 +122,30 @@ sequenceDiagram
   Reg-->>Main: tool result, usage added to the session
 ```
 
+### Diagnostics after an edit (0.4)
+
+With LSP on, `edit_file` and `write_file` write the file, then ask the `LspManager` for the errors of that
+file. The manager starts the language server on first use, in the OS sandbox. Details:
+[lld/lsp.md](lld/lsp.md).
+
+```mermaid
+sequenceDiagram
+  participant Tool as edit_file
+  participant LM as LspManager
+  participant Ex as Executor (sandbox)
+  participant LS as Language server
+  Tool->>Tool: write the file (atomic)
+  Tool->>LM: diagnostics(path, text)
+  opt first file of this language
+    LM->>Ex: start(server, read-only project, no network)
+    LM->>LS: initialize, initialized
+  end
+  LM->>LS: didOpen or didChange (full text)
+  LS-->>LM: diagnostics (pull or publish)
+  LM-->>Tool: "N errors in path …" or nothing
+  Tool-->>Tool: result = "Edited path." + errors
+```
+
 ## 5. Permission decision
 
 ```mermaid
@@ -194,6 +218,7 @@ flowchart LR
 | Hooks | `~/.garuda/hooks.json`, `.garuda/hooks.json` | Checks before calls, feedback after calls. |
 | Web fetch | `.garuda/settings.json` (`web`) | The `web_fetch` tool. |
 | Code index | `.garuda/settings.json` (`codeIndex`) | `find_symbol`, `find_references`, `repo_map`. |
+| LSP diagnostics | `.garuda/settings.json` (`lsp`), `--lsp`, `~/.garuda/lsp.json` | Language server errors in edit results. |
 | Language experts | `src/knowledge/` (`LanguageExpert`) | Code index support for a language. |
 | Executors | `src/sandbox/` (`Executor`) | Another isolation technology. |
 | Session stores | `src/session/` (`SessionStore`) | Another place for sessions. |

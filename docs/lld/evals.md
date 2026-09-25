@@ -76,7 +76,7 @@ environment list.
 ```text
 garuda eval [-m model] [-s basic|hard|java|python|all] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
-            [--subagents on|off] [--subagent-model spec] [--todo on|off]
+            [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
 garuda eval --prepare java|python
 ```
 
@@ -108,6 +108,9 @@ a failure with the stop reason `timeout`, not an error.
 - Todo tool (A/B, 0.4, claude-sonnet-5, hard suite, 3 runs per task, sums of means): off 18/18, 52.7
   steps, 330k tokens, $0.213; on 18/18, 54.7 steps, 359k, $0.230. The model never called `todo_write`,
   so the difference is noise plus the tool definition. It stays off by default.
+- LSP diagnostics (0.4): `--lsp on` needs the OS sandbox and at least one server (`garuda lsp`); the
+  run prints the server per language before the first model call, and the report JSON records the mode.
+  Not measured yet, so it is off by default.
 - The requirements doc keeps the per-task tables ("0.1 results", "0.2 results").
 
 ## Tests

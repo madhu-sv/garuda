@@ -73,6 +73,10 @@ export interface ApprovalRequest {
   isolation: Isolation;
   /** A header that replaces the default one (for example, the MCP server consent). */
   title?: string;
+  /** The question above the choices. Default: "Allow?". */
+  question?: string;
+  /** The choices to show, in this order. Default: once, session, deny. */
+  choices?: readonly ApprovalChoice[];
   /** Labels that replace the default choice labels. */
   labels?: Partial<Record<ApprovalChoice, string>>;
 }

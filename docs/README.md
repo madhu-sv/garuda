@@ -27,6 +27,7 @@ Low-level design documents:
 | Language profiles | `src/lang/` | [languages.md](lld/languages.md) |
 | Subagents (explore) | `src/agents/` | [agents.md](lld/agents.md) |
 | Custom slash commands | `src/commands/` | [commands.md](lld/commands.md) |
+| LSP diagnostics | `src/lsp/` | [lsp.md](lld/lsp.md) |
 | Evals | `src/evals/` | [evals.md](lld/evals.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).

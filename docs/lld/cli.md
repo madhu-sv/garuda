@@ -17,7 +17,8 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 | `report.ts` | Usage line and stop messages. |
 | `banner.ts` | The chat start banner: GARUDA wordmark (saffron-to-gold gradient on true-color terminals), a card with version, model, sandbox, folder and extras (the detected build tools first, for example `Java (Maven)`), and a tips line. The card only below 60 columns; no colors with `NO_COLOR` or a pipe. Not shown for `-p`. |
 | `errors.ts` | `describeError`: the error chain as one message. |
-| `evalCommand.ts` | `garuda eval`: options, toolchain check before the run, `--prepare java\|python`, `--subagents on\|off`, `--subagent-model`, executor choice, run, report files. |
+| `evalCommand.ts` | `garuda eval`: options, toolchain check before the run, `--prepare java\|python`, `--subagents on\|off`, `--subagent-model`, `--todo on\|off`, `--lsp on\|off` (checks for a server and the sandbox first), executor choice, run, report files. |
+| `lspCommand.ts` | `garuda lsp` (the state; starts no server) and `garuda lsp install typescript\|python`. See [lsp.md](lsp.md). |
 | `chat/*` | The Ink chat (below). |
 
 ## Start sequence (`index.ts`)
@@ -56,7 +57,8 @@ the request goes again.
 
 - Header by target kind: command (with sandbox state), path (`wants to change`), URL (`wants to fetch
   from <host>`), input, or the request's own `title`.
-- Choices: once, session, deny; labels can come from the request (`labels`).
+- Choices: once, session, deny; the request can show fewer (`choices`), give its own labels (`labels`)
+  and its own question (`question`, default "Allow?"; for example "Build this plan?", "Install it?").
 - No TTY on stdin: deny, with a message.
 - inquirer loads on first use (N3). Ctrl-C inside the prompt calls `onInterrupt`.
 
@@ -68,7 +70,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /new /exit]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /new /exit]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
@@ -115,8 +117,12 @@ interface ChatState {
 - **Custom commands (0.4):** a line that starts with `/` goes to `runCommand`; a custom command gives
   back its prompt, the chat shows the typed line once and runs the turn with the prompt. See
   [commands.md](commands.md).
-- **Approvals:** `ask()` prints the full header and preview into the scrollback, then shows only the
-  choice. Keys: ↑↓ Enter, 1 2 3, y / a / n, Esc. Abort of the turn rejects the promise.
+- **Approvals:** `ask()` prints the full header and preview into the scrollback, then shows the request's
+  question and choices. Keys: ↑↓ Enter, the numbers of the choices shown, y / a / n, Esc (`approvalKeys`
+  writes the hint line). A key for a choice that is not shown does nothing. Abort of the turn rejects the
+  promise.
+- **LSP (0.4):** `--lsp` turns diagnostics on for the run; `/lsp` shows the state, and
+  `/lsp install <language>` runs the managed install. See [lsp.md](lsp.md).
 - **Queue:** Enter while busy appends to `queue`; `nextInput()` takes from the queue first. Esc clears it.
 - **Type-ahead at start:** keys typed before raw mode arrive as one chunk with `\n` (cooked mode);
   `typeAhead` treats each line end as Enter. Bracketed paste (`usePaste`) inserts text and never submits.

@@ -23,11 +23,13 @@ import { runTurnInTerminal } from "./turn.js";
  *   garuda --resume [id]        continue a session (chat, or one task with -p)
  *   garuda --replay <id|file>   replay a session with no API calls
  *   garuda eval                 run the eval tasks (N5)
+ *   garuda lsp [install <lang>] language servers for diagnostics (0.4)
  */
 
 interface Options {
   prompt?: string;
   plan?: boolean;
+  lsp?: boolean;
   model?: string;
   subagentModel?: string;
   resume?: string | true;
@@ -48,6 +50,7 @@ async function main(): Promise<void> {
       "model of the explore subagent (or set GARUDA_SUBAGENT_MODEL); default: the main model",
     )
     .option("--plan", "start in plan mode: read and plan, change nothing")
+    .option("--lsp", "add language server errors to edit results (TS/JS, Python)")
     .option("-r, --resume [session-id]", "continue the last session, or the given one")
     .option("--replay <session-id-or-file>", "replay a recorded session with no API calls")
     .action(async (options: Options) => {
@@ -71,6 +74,7 @@ async function main(): Promise<void> {
     .option("--subagents <mode>", "the explore subagent: off (default) or on, for A/B runs")
     .option("--subagent-model <id>", "model of the explore subagent; default: the main model")
     .option("--todo <mode>", "the todo_write tool: off (default) or on, for A/B runs")
+    .option("--lsp <mode>", "language server errors in edit results: off (default) or on")
     .option(
       "--prepare <toolchain>",
       "java: download Maven plugins and JUnit once; python: check pytest",
@@ -82,6 +86,22 @@ async function main(): Promise<void> {
         model: options.model ?? process.env.GARUDA_MODEL,
         subagentModel: options.subagentModel ?? process.env.GARUDA_SUBAGENT_MODEL,
       });
+    });
+
+  const lsp = program
+    .command("lsp")
+    .description("show the language servers for diagnostics (TS/JS, Python)")
+    .action(async () => {
+      const { lspStatusCommand } = await import("./lspCommand.js");
+      process.exitCode = await lspStatusCommand();
+    });
+  lsp
+    .command("install")
+    .description("install a pinned language server into ~/.garuda/lsp (npm, needs the network)")
+    .argument("<language>", "typescript or python")
+    .action(async (language: string) => {
+      const { lspInstallCommand } = await import("./lspCommand.js");
+      process.exitCode = await lspInstallCommand(language);
     });
 
   await program.parseAsync();
@@ -136,6 +156,7 @@ async function start(options: Options, program: Command): Promise<number> {
     approver,
     store,
     ...(options.plan === true ? { mode: "plan" as const } : {}),
+    ...(options.lsp === true ? { lsp: { enabled: true } } : {}),
     ...(options.resume === undefined ? {} : { resume: options.resume }),
     onEvent: (event) => events.event(event),
     onNotice: (text) => events.warn(text),

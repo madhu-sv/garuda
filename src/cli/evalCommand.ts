@@ -32,6 +32,8 @@ export interface EvalCommandOptions {
   subagentModel?: string;
   /** --todo on|off: the todo_write tool (0.4). */
   todo?: string;
+  /** --lsp on|off: language server errors in edit results (0.4). */
+  lsp?: string;
 }
 
 /** `garuda eval` (N5). Results go to .garuda/evals/<run-id>/ in the current folder. */
@@ -86,6 +88,11 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     process.stderr.write(`Unknown todo mode ${options.todo}. Use: on, off.\n`);
     return 1;
   }
+  const lspMode = options.lsp ?? "off";
+  if (lspMode !== "on" && lspMode !== "off") {
+    process.stderr.write(`Unknown lsp mode ${options.lsp}. Use: on, off.\n`);
+    return 1;
+  }
   let sub: ResolvedModel | undefined;
   if (options.subagentModel) {
     try {
@@ -131,6 +138,26 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
 
   const { executor, notice } = createExecutor(options.executor ?? "auto");
   if (notice !== undefined) process.stderr.write(`${notice}\n`);
+  if (lspMode === "on") {
+    // An A/B run with no server would compare nothing: check before any model call.
+    if (executor.isolation === "none") {
+      process.stderr.write("--lsp on needs the OS sandbox: language servers run only there.\n");
+      return 1;
+    }
+    const { discoverServer, LSP_LANGUAGES } = await import("../lsp/servers.js");
+    const found = LSP_LANGUAGES.map((l) => ({ l, s: discoverServer(l, { root: process.cwd() }) }));
+    if (found.every((f) => f.s === undefined)) {
+      process.stderr.write(
+        "--lsp on: no language server found. Run: garuda lsp install typescript\n",
+      );
+      return 1;
+    }
+    for (const { l, s } of found) {
+      process.stderr.write(
+        `LSP ${l}: ${s === undefined ? "none" : `${s.spec.name} (${s.path})`}\n`,
+      );
+    }
+  }
   const where =
     executor.isolation === "none"
       ? "commands run on this machine with no sandbox"
@@ -138,7 +165,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   const results = await runEvals(
@@ -153,6 +180,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       codeIndex: index,
       subagents: subagentsMode === "on",
       todo: todoMode === "on",
+      lsp: lspMode === "on",
       ...(sub === undefined
         ? {}
         : { subagentModel: { spec: sub.spec, model: () => sub.create(), info: sub.info } }),
@@ -175,7 +203,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = formatReport(results);
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, executor: executor.name, results }, null, 2)}\n`,
+    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, executor: executor.name, results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

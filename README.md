@@ -15,6 +15,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M5 CLI polish and evals | Done |
 | 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
 | 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
+| 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in) | In progress |
 
 ## Use
 
@@ -83,7 +84,7 @@ Set the context window, price and output limit per model, and add providers, in 
 `garuda` with no task starts a chat. Each line is one task; the conversation carries over.
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
-  (your custom commands), `/plan` and `/build` (plan mode), `/exit`.
+  (your custom commands), `/plan` and `/build` (plan mode), `/lsp` (language servers), `/exit`.
 - Ctrl-C during a task stops the task and kills its commands. The chat goes on.
   A second Ctrl-C during the task exits Garuda at once.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
@@ -134,6 +135,28 @@ In plan mode the agent reads the code and writes a plan; it cannot change anythi
   rule. With no OS sandbox, bash is off in plan mode.
 - When the plan is ready, Garuda asks "Build this plan?": build it now, switch to build mode and type the
   task yourself, or keep planning.
+
+## LSP diagnostics (opt-in)
+
+With `garuda --lsp`, or `"lsp": { "enabled": true }` in `.garuda/settings.json`, a language server checks
+each file that `edit_file` or `write_file` changes, and the result lists its errors:
+
+```
+Edited src/cart.ts.
+
+1 error in src/cart.ts after this change (tsc):
+  14:7 Type 'string' is not assignable to type 'number'. [2322]
+```
+
+- TS/JS: TypeScript 7 (`tsc --lsp`), `tsgo` or `typescript-language-server`. Python: basedpyright or
+  pyright.
+- Garuda uses a server on your PATH, or its own copy: `garuda lsp install typescript` (or `python`)
+  installs a pinned version into `~/.garuda/lsp/`. With `{ "autoInstall": true }` in
+  `~/.garuda/lsp.json`, Garuda asks to install a missing server at the first edit.
+- `garuda lsp` (or `/lsp` in the chat) shows the servers and their state.
+- Servers run only in the OS sandbox: the project is read-only for them, and they have no network. A
+  missing, slow or broken server never blocks an edit.
+- Off by default until an A/B eval shows a gain: `garuda eval -s hard --repeat 3 --lsp on`.
 
 ## Todo list (opt-in)
 

@@ -27,6 +27,10 @@ import {
   DEFAULT_TOKEN_BUDGET,
   runAgent,
 } from "../loop/runAgent.js";
+import { loadLspConfig } from "../lsp/config.js";
+import type { InstallResult } from "../lsp/install.js";
+import type { LspManager } from "../lsp/manager.js";
+import type { LspLanguage } from "../lsp/servers.js";
 import { loadMcpConfig, type ServerConfig } from "../mcp/config.js";
 import type { McpManager, McpServerStatus } from "../mcp/manager.js";
 import { TrustStore } from "../mcp/trust.js";
@@ -99,6 +103,17 @@ export interface RuntimeOptions {
    * (command line or environment), never the project settings.
    */
   subagentModel?: { spec: string; model: () => Promise<ModelClient>; info: ModelInfo };
+  /**
+   * Language server diagnostics (0.4). `enabled` overrides the setting (the --lsp flag, evals).
+   * `home` holds ~/.garuda/lsp.json and the managed servers; `path` is the PATH to search.
+   */
+  lsp?: {
+    enabled?: boolean;
+    home?: string;
+    path?: string;
+    firstTimeoutMs?: number;
+    timeoutMs?: number;
+  };
 }
 
 export class Runtime {
@@ -143,6 +158,12 @@ export class Runtime {
   private readonly allowedCommands = new Set<string>();
   private hookRunner: HookRunner | undefined;
   private hooksStarted: Promise<void> | undefined;
+  /** LSP diagnostics after edits are on (0.4). */
+  readonly lspEnabled: boolean;
+  private readonly lspOptions: NonNullable<RuntimeOptions["lsp"]>;
+  private lspAutoInstall = false;
+  private lspManager: LspManager | undefined;
+  private lspLoading: Promise<LspManager> | undefined;
 
   private constructor(
     options: RuntimeOptions,
@@ -155,6 +176,8 @@ export class Runtime {
   ) {
     this.hookConfig = hookConfig;
     this.profiles = profiles;
+    this.lspOptions = options.lsp ?? {};
+    this.lspEnabled = options.lsp?.enabled ?? settings.lsp?.enabled === true;
     this.selectedMode = options.mode ?? "build";
     this.approver = options.approver;
     this.settings = settings;
@@ -271,6 +294,7 @@ export class Runtime {
         languages: profileNotes(profiles),
         explore: settings.subagents?.enabled === true,
         todo: settings.todo?.enabled === true,
+        lsp: options.lsp?.enabled ?? settings.lsp?.enabled === true,
       },
     );
     const runtime = new Runtime(
@@ -282,6 +306,13 @@ export class Runtime {
       hookConfig,
       profiles,
     );
+    if (runtime.lspEnabled) {
+      try {
+        runtime.lspAutoInstall = (await loadLspConfig(runtime.lspHome)).autoInstall;
+      } catch (error) {
+        options.onNotice?.((error as Error).message);
+      }
+    }
     if (options.commands !== false) {
       runtime.commandsHome = options.commands?.home ?? homedir();
       const loaded = await loadCommands({
@@ -370,6 +401,12 @@ export class Runtime {
       executor: this.executor,
       knowledge: this.knowledge,
       ...(this.hookRunner === undefined ? {} : { hooks: this.hookRunner }),
+      ...(this.lspEnabled
+        ? {
+            diagnostics: async (absolute: string, shown: string, text: string, s: AbortSignal) =>
+              (await this.lsp()).diagnostics(absolute, shown, text, s),
+          }
+        : {}),
       maxSteps: this.limits.maxSteps,
       tokenBudget: this.limits.tokenBudget,
       ...(this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens }),
@@ -391,6 +428,7 @@ export class Runtime {
     if (this.tools.get("web_fetch") !== undefined) out.push("web_fetch");
     if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
     if (this.selectedMode === "plan") out.push("plan mode");
+    if (this.lspEnabled) out.push("LSP");
     if (this.exploreModel !== undefined)
       out.push(this.exploreModel === this.modelId ? "explore" : `explore: ${this.exploreModel}`);
     return out;
@@ -446,9 +484,84 @@ export class Runtime {
     return this.mcp?.status() ?? [];
   }
 
-  /** Stop the MCP servers. The CLI calls it before it exits. */
+  /** Stop the MCP and language servers. The CLI calls it before it exits. */
   async close(): Promise<void> {
-    await this.mcp?.close();
+    await Promise.all([this.mcp?.close(), this.lspManager?.close()]);
+  }
+
+  private get lspHome(): string {
+    return this.lspOptions.home ?? homedir();
+  }
+
+  /** The language servers, created on the first edit (N3: the module loads only then). */
+  private lsp(): Promise<LspManager> {
+    this.lspLoading ??= (async () => {
+      const { LspManager } = await import("../lsp/manager.js");
+      const o = this.lspOptions;
+      this.lspManager = new LspManager({
+        root: this.root,
+        executor: this.executor,
+        policy: () => this.permissions.serverPolicy(),
+        home: this.lspHome,
+        ...(o.path === undefined ? {} : { path: o.path }),
+        ...(o.firstTimeoutMs === undefined ? {} : { firstTimeoutMs: o.firstTimeoutMs }),
+        ...(o.timeoutMs === undefined ? {} : { timeoutMs: o.timeoutMs }),
+        ...(this.onNotice === undefined ? {} : { notify: this.onNotice }),
+        ...(this.lspAutoInstall
+          ? { install: (language, signal) => this.askInstall(language, signal) }
+          : {}),
+      });
+      return this.lspManager;
+    })();
+    return this.lspLoading;
+  }
+
+  /** The /lsp text: on or off, and the server for each language. Starts nothing. */
+  async lspStatus(): Promise<string> {
+    const { lspStatusText } = await import("../lsp/manager.js");
+    const how = 'Turn them on with --lsp, or "lsp": { "enabled": true } in .garuda/settings.json.';
+    return lspStatusText((await this.lsp()).status(), { on: this.lspEnabled, how });
+  }
+
+  /** Install a language server into ~/.garuda/lsp (the user asked for it). */
+  async installLsp(language: LspLanguage, signal: AbortSignal): Promise<InstallResult> {
+    const { installServer } = await import("../lsp/install.js");
+    const result = await installServer(language, {
+      executor: this.executor,
+      home: this.lspHome,
+      signal,
+    });
+    if (result.ok) (await this.lsp()).reset(language);
+    return result;
+  }
+
+  /** autoInstall (~/.garuda/lsp.json): ask before a managed install. */
+  private async askInstall(language: LspLanguage, signal: AbortSignal): Promise<boolean> {
+    const { installCommand } = await import("../lsp/install.js");
+    const { LANGUAGE_LABELS } = await import("../lsp/manager.js");
+    const { MANAGED_PACKAGES, managedDir } = await import("../lsp/servers.js");
+    const dir = managedDir(language, this.lspHome);
+    const choice = await this.approver.ask(
+      {
+        tool: "lsp",
+        target: { kind: "input", json: "{}" },
+        preview: [
+          `Garuda can install ${MANAGED_PACKAGES[language].join(", ")} into ${dir}.`,
+          "npm downloads it outside the sandbox. The server then runs in the sandbox.",
+          `  $ ${installCommand(language, dir)}`,
+        ].join("\n"),
+        isolation: this.executor.isolation,
+        title: `No ${LANGUAGE_LABELS[language]} language server was found.`,
+        question: "Install it?",
+        choices: ["once", "deny"],
+        labels: { once: "Yes, install it", deny: "No, go on without diagnostics" },
+      },
+      signal,
+    );
+    if (choice === "deny") return false;
+    const result = await this.installLsp(language, signal);
+    if (!result.ok) this.onNotice?.(`The install failed: ${result.output ?? ""}`);
+    return result.ok;
   }
 
   /**

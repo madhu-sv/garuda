@@ -163,12 +163,21 @@ export class PermissionEngine implements PermissionGate {
     return allowed && !mustAsk ? { allowed: true, by: "rule" } : deny;
   }
 
-  execPolicy(timeoutMs: number, { sandbox = true }: { sandbox?: boolean } = {}): ExecPolicy {
+  /**
+   * The policy for one command. `readOnlyRoot` (plan mode, language servers): the project is
+   * read-only; temp folders and package caches stay writable.
+   */
+  execPolicy(
+    timeoutMs: number,
+    {
+      sandbox = true,
+      readOnlyRoot = this.mode() === "plan",
+    }: { sandbox?: boolean; readOnlyRoot?: boolean } = {},
+  ): ExecPolicy {
     const paths = sandboxPaths(this.root, this.settings.sandbox);
     let writePaths = [...new Set([...paths.writePaths, ...this.access.writePaths])];
     let denyWritePaths = paths.denyWritePaths;
-    if (this.mode() === "plan") {
-      // Plan mode: the project is read-only; temp folders and package caches stay writable.
+    if (readOnlyRoot) {
       // The root is also a read-only hole, for a project inside a writable folder (a temp dir).
       const inRoot = (p: string) => p === this.root || p.startsWith(`${this.root}${sep}`);
       writePaths = writePaths.filter((p) => !inRoot(p));
@@ -187,6 +196,14 @@ export class PermissionEngine implements PermissionGate {
       timeoutMs,
       maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
     };
+  }
+
+  /**
+   * The policy for a language server (0.4): in the sandbox, project read-only, no network, no
+   * time limit (it runs for the session).
+   */
+  serverPolicy(): ExecPolicy {
+    return { ...this.execPolicy(0, { readOnlyRoot: true }), maxOutputBytes: 0 };
   }
 }
 

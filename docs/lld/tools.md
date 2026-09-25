@@ -21,8 +21,12 @@ interface ToolContext {
   root; signal; permissions: PermissionGate; files: FileTracker;
   executor?: Executor; knowledge?: KnowledgeIndex; hooks?: ToolHooks;
   callId?: string; progress?: (text: string) => void;   // set by the loop for each call
+  diagnostics?: DiagnosticsSource;                        // LSP errors after a write (0.4)
 }
 ```
+
+`withDiagnostics(result, context, file)` adds the diagnostics text after a tool's own result. It never
+fails the call: the file is already written.
 
 `ToolRunner` is what the loop needs (`specs`, `isReadOnly`, `runsCommands`, `execute`). `ToolRegistry`
 implements it; replay uses a recorded one.
@@ -49,8 +53,8 @@ implements it; replay uses a recorded one.
 | `read_file` (F9) | yes | path | Numbered lines (`cat -n`), `offset` and `limit` (max 2000 lines), lines cut at 2000 chars, output ≤ 50 000 chars, files ≤ 10 MB, no binaries, no folders. Records the file for `edit_file`. Read deduplication: the same offset/limit on an unchanged file returns a short note instead of the lines. |
 | `glob` (F12) | yes | – | globby, respects `.gitignore`, skips `.git/`, does not follow symlinks, newest first, at most 200 paths. Absolute patterns and `..` are refused. |
 | `grep` (F13) | yes | – | JavaScript regex, written in TypeScript (no ripgrep binary). Modes `files`, `content`, `count`; `glob`, `ignoreCase`, `context` (0–5). Skips binary files, files > 1 MB and sensitive files. Default 100 results, max 500. |
-| `write_file` (F10) | no | path | Create only (fails if the file exists), folders created, atomic (temp file + hard link). Approval shows the diff. |
-| `edit_file` (F11) | no | path | Replace one exact `old_string`. Fails on 0 or several matches, and when the file is unread or changed since the last read. The edit is planned before approval (real diff) and planned again after it. Atomic write that keeps the file mode and follows symlinks. |
+| `write_file` (F10) | no | path | Create only (fails if the file exists), folders created, atomic (temp file + hard link). Approval shows the diff. With LSP on, the result adds the errors of the new file (see [lsp.md](lsp.md)). |
+| `edit_file` (F11) | no | path | Replace one exact `old_string`. Fails on 0 or several matches, and when the file is unread or changed since the last read. The edit is planned before approval (real diff) and planned again after it. Atomic write that keeps the file mode and follows symlinks. With LSP on, the result adds the errors of the changed file. |
 | `bash` (F14) | no | command | Runs through the Executor; timeout default 120 s, max 600 s; stdout and stderr capped at 30 000 bytes each (middle cut). Strips a leading `cd <root> &&`. Hints: read-only commands (use file tools), pipes into head/tail, sandbox blocks. `outside_sandbox: true` runs with no isolation and always asks. |
 | `todo_write` | yes | – | The model's plan for a task with several steps: the whole list each call (≤ 30 steps of ≤ 300 characters; status `pending`, `in_progress`, `completed`; at most one in progress). The result shows the list back with `[x]`, `[>]`, `[ ]`; the chat draws a checklist. No state outside the conversation. Only with `todo.enabled: true` (off by default: in the A/B eval the model never called it, 0.4). |
 | `remember` | no | input | Appends one fact to `.garuda/memory.md` (max 8000 chars). The user approves each fact. Loads in the next session only (N2). |

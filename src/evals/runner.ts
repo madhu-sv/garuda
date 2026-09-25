@@ -57,6 +57,8 @@ export interface EvalOptions {
   subagents?: boolean;
   /** The todo_write tool (0.4). Default: off, as in the product. */
   todo?: boolean;
+  /** Language server errors in edit results (0.4). Default: off, as in the product. */
+  lsp?: boolean;
   /** The explore subagent's model. Default: the main model. */
   subagentModel?: RuntimeOptions["subagentModel"];
 }
@@ -93,6 +95,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     mcp: false,
     hooks: false,
     commands: false,
+    ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
     ...(options.onEvent === undefined
       ? {}
       : { onEvent: (event: AgentEvent) => options.onEvent?.(task.id, event) }),
@@ -124,6 +127,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       result.reason = `The run failed: ${(error as Error).message}`;
     }
   } finally {
+    await runtime.close();
     runtime.executor.shutdown();
   }
 

@@ -248,6 +248,23 @@ describe("plan mode: the chat (0.4)", () => {
     runtime.executor.shutdown();
   });
 
+  it("the hand-off question replaces 'Allow?' in the Ink chat", async () => {
+    const root = join(base, "question");
+    mkdirSync(root, { recursive: true });
+    const runtime = await runtimeFor(root, new FakeModelClient([]), "plan");
+    const store = new ChatStore(statusOf(runtime), { paint: noColor });
+    const ui = render(<App store={store} />);
+    const answer = planHandoff(runtime, store);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(ui.lastFrame()).toContain("The plan is ready.");
+    expect(ui.lastFrame()).toContain("Build this plan?");
+    expect(ui.lastFrame()).not.toContain("Allow?");
+    store.choose("deny");
+    expect(await answer).toBe("stay");
+    ui.unmount();
+    runtime.executor.shutdown();
+  });
+
   it("Shift+Tab toggles the mode through the chat's handler", () => {
     const store = new ChatStore({ model: "m", sandbox: "s" }, { paint: noColor });
     let mode: AgentMode = "build";
@@ -284,7 +301,7 @@ describe("plan mode: the chat (0.4)", () => {
     const ask = new Recorder("deny");
     expect(await planHandoff(runtime, ask)).toBe("stay");
     expect(runtime.mode).toBe("plan");
-    expect(ask.requests[0]?.title).toBe("Build this plan?");
+    expect(ask.requests[0]?.question).toBe("Build this plan?");
     expect(await planHandoff(runtime, new Recorder("session"))).toBe("later");
     expect(runtime.mode).toBe("build");
     runtime.setMode("plan");
@@ -331,7 +348,7 @@ describe("plan mode: the chat (0.4)", () => {
       if (Date.now() > end) throw new Error("no hand-off question");
       await new Promise((r) => setTimeout(r, 10));
     }
-    expect(store.getState().approval?.request.title).toBe("Build this plan?");
+    expect(store.getState().approval?.request.question).toBe("Build this plan?");
     store.choose("once");
     while (model.remaining > 0 || store.getState().busy) {
       if (Date.now() > end) throw new Error("the build turn did not run");

@@ -22,6 +22,7 @@ import type { SandboxSettings } from "./sandboxPaths.js";
  *   "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
  *   "subagents": { "enabled": true, "maxSteps": 20, "tokenBudget": 150000 },
  *   "todo": { "enabled": true },
+ *   "lsp": { "enabled": true },
  *   "model": {
  *     "contextWindow": 200000,
  *     "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 }
@@ -60,6 +61,8 @@ const schema = z.strictObject({
     .optional(),
   /** The todo_write tool (0.4). enabled: default false. */
   todo: z.strictObject({ enabled: z.boolean().optional() }).optional(),
+  /** Language server diagnostics after edits (0.4). enabled: default false. */
+  lsp: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** The explore subagent (0.3). enabled: default false. Limits per explore run. */
   subagents: z
     .strictObject({
@@ -99,6 +102,7 @@ export interface Settings {
   price?: Price;
   subagents?: { enabled?: boolean; maxSteps?: number; tokenBudget?: number };
   todo?: { enabled: boolean };
+  lsp?: { enabled: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
@@ -117,6 +121,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     codeIndex,
     subagents,
     todo,
+    lsp,
   } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
@@ -150,6 +155,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
     ...(model.price === undefined ? {} : { price: model.price }),
     ...(todo?.enabled === undefined ? {} : { todo: { enabled: todo.enabled } }),
+    ...(lsp?.enabled === undefined ? {} : { lsp: { enabled: lsp.enabled } }),
     ...(subagents === undefined
       ? {}
       : {

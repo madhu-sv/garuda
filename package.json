@@ -34,6 +34,7 @@
     "node-html-markdown": "^2.0.0",
     "react": "^19.3.0",
     "ts6": "npm:typescript@^6.0.3",
+    "vscode-jsonrpc": "^9.0.3",
     "zod": "^4.6.5"
   },
   "devDependencies": {

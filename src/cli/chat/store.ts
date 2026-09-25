@@ -33,7 +33,7 @@ export interface RunningTool {
 
 export interface PendingApproval {
   request: ApprovalRequest;
-  /** The three choices, with the request's own labels. */
+  /** The choices (default three), with the request's own labels. */
   choices: { choice: ApprovalChoice; label: string }[];
   /** The highlighted choice. */
   selected: number;
@@ -349,7 +349,8 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         resolve(choice);
       };
       const host = request.target.kind === "url" ? request.target.host : undefined;
-      const choices = APPROVAL_CHOICES.map((c) => ({
+      const shown = APPROVAL_CHOICES.filter((c) => request.choices?.includes(c.choice) ?? true);
+      const choices = shown.map((c) => ({
         choice: c.choice,
         label:
           request.labels?.[c.choice] ??
@@ -364,7 +365,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   moveApproval(delta: number): void {
     const approval = this.state.approval;
     if (approval === undefined) return;
-    const n = APPROVAL_CHOICES.length;
+    const n = approval.choices.length;
     this.update({ approval: { ...approval, selected: (approval.selected + delta + n) % n } });
   }
 
@@ -372,6 +373,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   choose(choice?: ApprovalChoice): void {
     const approval = this.state.approval;
     if (approval === undefined || this.answer === undefined) return;
+    if (choice !== undefined && !approval.choices.some((c) => c.choice === choice)) return;
     this.answer(choice ?? approval.choices[approval.selected]?.choice ?? "deny");
   }
 }

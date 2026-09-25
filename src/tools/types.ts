@@ -24,6 +24,35 @@ export interface ToolContext {
   callId?: string;
   /** A one-line status while a long call runs, for the live view (the loop sets it per call). */
   progress?: (text: string) => void;
+  /** Language server errors for a file that a tool just wrote (0.4). Absent when LSP is off. */
+  diagnostics?: DiagnosticsSource;
+}
+
+/**
+ * Gives the text to add after an edit result, or undefined (no server, a timeout). It never
+ * throws: a broken server must not fail an edit that was already written.
+ */
+export type DiagnosticsSource = (
+  absolute: string,
+  shown: string,
+  text: string,
+  signal: AbortSignal,
+) => Promise<string | undefined>;
+
+/** Add the diagnostics text, if any, after a tool's own result. */
+export async function withDiagnostics(
+  result: string,
+  context: ToolContext,
+  file: { absolute: string; shown: string; text: string },
+): Promise<string> {
+  if (context.diagnostics === undefined) return result;
+  let note: string | undefined;
+  try {
+    note = await context.diagnostics(file.absolute, file.shown, file.text, context.signal);
+  } catch {
+    note = undefined;
+  }
+  return note === undefined ? result : `${result}\n\n${note}`;
 }
 
 /** Hooks around tool calls. They can block a call or add feedback; they never approve one. */

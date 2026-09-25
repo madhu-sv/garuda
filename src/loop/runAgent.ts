@@ -22,7 +22,13 @@ import {
   closeOpenToolCalls,
   type Session,
 } from "../session/session.js";
-import type { ToolContext, ToolHooks, ToolOutcome, ToolRunner } from "../tools/types.js";
+import type {
+  DiagnosticsSource,
+  ToolContext,
+  ToolHooks,
+  ToolOutcome,
+  ToolRunner,
+} from "../tools/types.js";
 
 /**
  * The agent loop (F5). Rule: the loop gets every dependency as an argument
@@ -52,6 +58,8 @@ export interface AgentDeps {
   knowledge?: KnowledgeIndex;
   /** The user's hooks around tool calls (0.2). */
   hooks?: ToolHooks;
+  /** Language server diagnostics after edits (0.4). */
+  diagnostics?: DiagnosticsSource;
   maxTokens?: number;
   /** Stop after this many model calls in one run (F6). */
   maxSteps?: number;
@@ -153,6 +161,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       ...(deps.executor === undefined ? {} : { executor: deps.executor }),
       ...(deps.knowledge === undefined ? {} : { knowledge: deps.knowledge }),
       ...(deps.hooks === undefined ? {} : { hooks: deps.hooks }),
+      ...(deps.diagnostics === undefined ? {} : { diagnostics: deps.diagnostics }),
     };
     const { results, meta } = await runTools(calls, deps, context, emit);
     addToolResults(session, results, meta);

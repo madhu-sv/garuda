@@ -16,15 +16,18 @@ type CallTarget =
 
 interface PermissionGate {
   check(request: { tool; readOnly; info?: { target; preview? } }, signal): Promise<PermissionDecision>;
-  execPolicy(timeoutMs, { sandbox? }): ExecPolicy;
+  execPolicy(timeoutMs, { sandbox?, readOnlyRoot? }): ExecPolicy;
 }
 type PermissionDecision =
   | { allowed: true; by: "read_only" | "sandbox" | "rule" | "session" | "user" }
   | { allowed: false; by: "rule" | "sensitive" | "user"; reason };
 
 interface Approver { ask(request: ApprovalRequest, signal): Promise<"once" | "session" | "deny"> }
-interface ApprovalRequest { tool; target; preview; isolation; title?; labels? }
+interface ApprovalRequest { tool; target; preview; isolation; title?; question?; choices?; labels? }
 ```
+
+`question` replaces "Allow?" above the choices; `choices` shows a subset (for example yes or no, with no
+"session" choice).
 
 Approvers: `TerminalApprover` (inquirer), `ChatStore` (Ink), `AutoApprover` (tests, evals),
 `SwitchApprover` (swaps to the Ink chat when it starts).
@@ -60,7 +63,7 @@ The denial text is `PLAN_MODE_DENIAL`: it tells the model to put the change in i
 (read_file, glob, grep, explore, todo_write, the code index) run as in build mode; sensitive files and
 deny rules still apply first.
 
-`execPolicy` in plan mode removes the root and every path inside it from the write paths, and adds the
+`execPolicy` in plan mode (`readOnlyRoot`, default: true in plan mode) removes the root and every path inside it from the write paths, and adds the
 root as the first read-only path (for a project inside a writable folder such as a temp dir). Commands
 can still write temp folders and package caches, so tests that write nothing in the project run.
 Hooks use the same policy.
@@ -77,6 +80,10 @@ Hooks use the same policy.
 protected paths and denied read paths from `sandboxPaths()`, `network: !sandbox`, the environment
 allowlist (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`,
 `TZ` plus `env.allow` from settings), the timeout and a 30 000-byte output cap per stream.
+
+`serverPolicy()` (0.4) is the policy for language servers: `execPolicy(0, { readOnlyRoot: true })` with
+no output cap. So a server runs in the sandbox, cannot write the project, and has no network. See
+[lsp.md](lsp.md).
 
 The engine option `access` (0.3) adds the language profiles' package caches to the write paths and their
 variables (for example `JAVA_HOME`) to the environment list. See [languages.md](languages.md).
@@ -107,6 +114,7 @@ contain `-`.
   "web": { "enabled": true, "allowLocalhost": false },
   "subagents": { "enabled": true, "maxSteps": 20, "tokenBudget": 150000 },
   "todo": { "enabled": true },
+  "lsp": { "enabled": true },
   "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
   "model": { "contextWindow": 200000, "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 } }
 }

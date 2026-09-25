@@ -18,12 +18,10 @@ export async function planHandoff(
   const request: ApprovalRequest = {
     tool: "plan",
     target: { kind: "input", json: "{}" },
-    preview: [
-      "The plan is ready.",
-      "Build mode can change files and run commands, with the usual approvals and sandbox.",
-    ].join("\n"),
+    preview: "Build mode can change files and run commands, with the usual approvals and sandbox.",
     isolation: runtime.executor.isolation,
-    title: "Build this plan?",
+    title: "The plan is ready.",
+    question: "Build this plan?",
     labels: {
       once: "Yes, build it now",
       session: "Switch to build mode; I will type the task",

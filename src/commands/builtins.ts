@@ -11,6 +11,7 @@ export const BUILTIN_COMMANDS: readonly string[] = [
   "map",
   "mcp",
   "hooks",
+  "lsp",
   "commands",
   "plan",
   "build",

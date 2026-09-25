@@ -25,6 +25,7 @@ export const HELP = [
   "  /map [dir] what each JS/TS file exports and imports",
   "  /mcp       MCP servers: state, sandbox, network and tool count",
   "  /hooks     the active hooks",
+  "  /lsp       language servers for diagnostics; /lsp install <typescript|python>",
   "  /commands  your custom commands (~/.garuda/commands, .garuda/commands)",
   "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles)",
   "  /build     build mode: change files and run commands (the default)",
@@ -68,6 +69,8 @@ export async function runCommand(
     );
   } else if (command === "/mcp") {
     renderer.info(mcpSummary(runtime));
+  } else if (command === "/lsp") {
+    await lspCommand(runtime, renderer, text.slice(command.length).trim());
   } else if (command === "/new") {
     runtime.newSession();
     renderer.info("The next task starts a new session.");
@@ -78,6 +81,30 @@ export async function runCommand(
     else renderer.warn(`Unknown command ${command}. Type /help.`);
   }
   return "done";
+}
+
+/** /lsp: the status; /lsp install <language>: the managed install (npm, network). */
+async function lspCommand(runtime: Runtime, renderer: Renderer, arg: string): Promise<void> {
+  if (arg === "") {
+    renderer.info(await runtime.lspStatus());
+    return;
+  }
+  const [verb, language] = arg.split(/\s+/);
+  if (verb !== "install" || (language !== "typescript" && language !== "python")) {
+    renderer.warn("Use: /lsp, or /lsp install typescript, or /lsp install python.");
+    return;
+  }
+  renderer.info(`Installing the ${language} language server (npm, outside the sandbox) …`);
+  const result = await runtime.installLsp(language, new AbortController().signal);
+  if (!result.ok) {
+    renderer.warn(`The install failed.\n$ ${result.command}\n${result.output ?? ""}`);
+    return;
+  }
+  renderer.info(
+    runtime.lspEnabled
+      ? `Installed into ${result.dir}. The next edit of a ${language} file uses it.`
+      : `Installed into ${result.dir}. Diagnostics are off: start with --lsp, or set "lsp": { "enabled": true } in .garuda/settings.json.`,
+  );
 }
 
 /** /help: the built-in commands, then the custom ones. */

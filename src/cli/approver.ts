@@ -32,12 +32,14 @@ export class TerminalApprover implements Approver {
     try {
       return await select<ApprovalChoice>(
         {
-          message: "Allow?",
-          choices: [
-            { name: request.labels?.once ?? "Yes, once", value: "once" },
-            { name: sessionLabel, value: "session" },
-            { name: request.labels?.deny ?? "No, deny", value: "deny" },
-          ],
+          message: request.question ?? "Allow?",
+          choices: (
+            [
+              { name: request.labels?.once ?? "Yes, once", value: "once" },
+              { name: sessionLabel, value: "session" },
+              { name: request.labels?.deny ?? "No, deny", value: "deny" },
+            ] as const
+          ).filter((c) => request.choices?.includes(c.value) ?? true),
         },
         { signal, output: out },
       );

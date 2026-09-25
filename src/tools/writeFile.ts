@@ -5,7 +5,7 @@ import { displayPath, resolveInRoot } from "../permissions/pathGuard.js";
 import { writeFileAtomic } from "./atomicWrite.js";
 import { unifiedDiff } from "./diff.js";
 import { splitLines } from "./limits.js";
-import type { Tool } from "./types.js";
+import { type Tool, withDiagnostics } from "./types.js";
 
 const input = z.object({
   path: z.string().min(1).describe("Path of the new file, relative to the working root."),
@@ -28,7 +28,8 @@ export const writeFileTool: Tool<z.infer<typeof input>> = {
     return { target: { kind: "path", path: shown }, preview: unifiedDiff(shown, "", content) };
   },
 
-  async run({ path, content }, { root, files }) {
+  async run({ path, content }, context) {
+    const { root, files } = context;
     const absolute = await resolveInRoot(root, path);
     const shown = displayPath(root, absolute);
     await mkdir(dirname(absolute), { recursive: true });
@@ -43,6 +44,10 @@ export const writeFileTool: Tool<z.infer<typeof input>> = {
     }
     // The agent knows this content, so it can edit the file next without a read.
     files.record(absolute, content);
-    return `Created ${shown} (${splitLines(content).length} lines).`;
+    return withDiagnostics(`Created ${shown} (${splitLines(content).length} lines).`, context, {
+      absolute,
+      shown,
+      text: content,
+    });
   },
 };
