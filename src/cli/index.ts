@@ -50,7 +50,7 @@ async function main(): Promise<void> {
       "model of the explore subagent (or set GARUDA_SUBAGENT_MODEL); default: the main model",
     )
     .option("--plan", "start in plan mode: read and plan, change nothing")
-    .option("--lsp", "add language server errors to edit results (TS/JS, Python)")
+    .option("--lsp", "add language server errors to edit results (TS/JS, Python, Java)")
     .option("-r, --resume [session-id]", "continue the last session, or the given one")
     .option("--replay <session-id-or-file>", "replay a recorded session with no API calls")
     .action(async (options: Options) => {
@@ -90,15 +90,15 @@ async function main(): Promise<void> {
 
   const lsp = program
     .command("lsp")
-    .description("show the language servers for diagnostics (TS/JS, Python)")
+    .description("show the language servers for diagnostics (TS/JS, Python, Java)")
     .action(async () => {
       const { lspStatusCommand } = await import("./lspCommand.js");
       process.exitCode = await lspStatusCommand();
     });
   lsp
     .command("install")
-    .description("install a pinned language server into ~/.garuda/lsp (npm, needs the network)")
-    .argument("<language>", "typescript or python")
+    .description("install a pinned language server into ~/.garuda/lsp (needs the network)")
+    .argument("<language>", "typescript, python or java")
     .action(async (language: string) => {
       const { lspInstallCommand } = await import("./lspCommand.js");
       process.exitCode = await lspInstallCommand(language);

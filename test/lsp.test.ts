@@ -85,7 +85,7 @@ describe("languages and server discovery (0.4)", () => {
     expect(languageOf("/r/A.TSX")).toEqual({ language: "typescript", id: "typescriptreact" });
     expect(languageOf("/r/a.mjs")).toEqual({ language: "typescript", id: "javascript" });
     expect(languageOf("/r/a.pyi")).toEqual({ language: "python", id: "python" });
-    expect(languageOf("/r/A.java")).toBeUndefined();
+    expect(languageOf("/r/main.go")).toBeUndefined();
     expect(languageOf("/r/Makefile")).toBeUndefined();
   });
 
@@ -389,7 +389,7 @@ describe("the manager without an OS sandbox (0.4)", () => {
         return false;
       },
     });
-    expect(await manager.diagnostics(join(root, "A.java"), "A.java", "x", signal())).toBe(
+    expect(await manager.diagnostics(join(root, "main.go"), "main.go", "x", signal())).toBe(
       undefined,
     );
     expect(await manager.diagnostics(join(root, "a.ts"), "a.ts", "x", signal())).toBe(undefined);
@@ -576,7 +576,7 @@ describe("/lsp and the install question (0.4)", () => {
       'TypeScript/JavaScript: not found. Run "garuda lsp install typescript".',
     );
     expect(out[0]).toMatch(/Python: pyright \(PATH, .*pyright-langserver\), found/);
-    expect(out[1]).toBe("Use: /lsp, or /lsp install typescript, or /lsp install python.");
+    expect(out[1]).toBe("Use: /lsp, or /lsp install <typescript|python|java>.");
   });
 
   it("a request can show fewer choices and its own question", async () => {

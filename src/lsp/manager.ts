@@ -4,6 +4,7 @@ import { formatDiagnostics } from "./format.js";
 import {
   discoverServer,
   type FoundServer,
+  findServer,
   LSP_LANGUAGES,
   type LspLanguage,
   languageOf,
@@ -24,6 +25,8 @@ export interface LspServerStatus {
   server?: FoundServer;
   /** Why it is missing or failed. */
   reason?: string;
+  /** Programs that were found but cannot start (for example: no Java 21). */
+  problems?: string[];
 }
 
 export interface LspManagerOptions {
@@ -34,6 +37,10 @@ export interface LspManagerOptions {
   home?: string;
   /** PATH to search. Default: process.env.PATH. */
   path?: string;
+  /** Environment for discovery (JAVA_HOME, PATH for java); default: process.env. */
+  env?: NodeJS.ProcessEnv;
+  /** JDK folders to search for jdtls's Java; default: the usual places. */
+  jdkFolders?: string[];
   notify?: (text: string) => void;
   /**
    * Called once per language when no server is found (autoInstall). True when a server was
@@ -58,11 +65,14 @@ interface Slot {
 export const LANGUAGE_LABELS: Readonly<Record<LspLanguage, string>> = {
   typescript: "TypeScript/JavaScript",
   python: "Python",
+  java: "Java",
 };
 
 export class LspManager {
   private readonly slots = new Map<LspLanguage, Slot>();
   private closed = false;
+  /** Aborted by close(): it stops warm starts. */
+  private readonly lifetime = new AbortController();
 
   constructor(private readonly options: LspManagerOptions) {}
 
@@ -102,15 +112,32 @@ export class LspManager {
   status(): LspServerStatus[] {
     return LSP_LANGUAGES.map((language) => {
       const slot = this.slots.get(language);
-      const server = slot?.server ?? discoverServer(language, this.discoverOptions());
+      const found =
+        slot?.server === undefined ? findServer(language, this.discoverOptions()) : undefined;
+      const server = slot?.server ?? found?.server;
       const state: LspState = slot?.state ?? (server === undefined ? "missing" : "idle");
       return {
         language,
         state,
         ...(server === undefined ? {} : { server }),
         ...(slot?.reason === undefined ? {} : { reason: slot.reason }),
+        ...(found !== undefined && found.problems.length > 0 ? { problems: found.problems } : {}),
       };
     });
+  }
+
+  /**
+   * Start a language's server now, in the background, so the first edit does not wait for the
+   * project import (jdtls). It never asks to install, and failures only give the usual notice.
+   */
+  warm(language: LspLanguage): void {
+    if (this.closed) return;
+    const slot = this.slot(language);
+    if (slot.state !== "idle") return;
+    if (discoverServer(language, this.discoverOptions()) === undefined) return;
+    void this.client(language, slot, this.lifetime.signal)
+      .then((client) => client?.ready)
+      .catch(() => undefined);
   }
 
   /** Forget a missing or failed server, so the next edit looks again (after an install). */
@@ -122,6 +149,7 @@ export class LspManager {
 
   async close(): Promise<void> {
     this.closed = true;
+    this.lifetime.abort(new Error("Garuda is closing."));
     const slots = [...this.slots.values()];
     await Promise.all(
       slots.map(async (slot) => {
@@ -182,10 +210,7 @@ export class LspManager {
       return undefined;
     }
     try {
-      const process = this.options.executor.start(
-        [server.path, ...server.spec.args],
-        this.options.policy(),
-      );
+      const process = this.options.executor.start(server.argv, this.options.policy());
       slot.process = process;
       process.stderr.on("data", (chunk: Buffer) => {
         for (const line of chunk.toString("utf8").split("\n")) {
@@ -195,13 +220,17 @@ export class LspManager {
         }
       });
       process.onError(() => {});
+      const { spec } = server;
+      const firstTimeoutMs = this.options.firstTimeoutMs ?? spec.firstTimeoutMs;
       const client = await LspClient.start(
         process,
         {
           root: this.options.root,
-          ...(this.options.firstTimeoutMs === undefined
+          ...(firstTimeoutMs === undefined ? {} : { firstTimeoutMs }),
+          ...(spec.initializationOptions === undefined
             ? {}
-            : { firstTimeoutMs: this.options.firstTimeoutMs }),
+            : { initializationOptions: spec.initializationOptions }),
+          ...(spec.ready === undefined ? {} : { ready: spec.ready }),
           ...(this.options.timeoutMs === undefined ? {} : { timeoutMs: this.options.timeoutMs }),
         },
         signal,
@@ -248,10 +277,13 @@ export class LspManager {
   }
 
   private discoverOptions() {
+    const o = this.options;
     return {
-      root: this.options.root,
-      ...(this.options.home === undefined ? {} : { home: this.options.home }),
-      ...(this.options.path === undefined ? {} : { path: this.options.path }),
+      root: o.root,
+      ...(o.home === undefined ? {} : { home: o.home }),
+      ...(o.path === undefined ? {} : { path: o.path }),
+      ...(o.env === undefined ? {} : { env: o.env }),
+      ...(o.jdkFolders === undefined ? {} : { jdkFolders: o.jdkFolders }),
     };
   }
 }
@@ -269,7 +301,8 @@ export function lspStatusText(
   for (const s of statuses) {
     const label = LANGUAGE_LABELS[s.language];
     if (s.server === undefined) {
-      lines.push(`  ${label}: not found. Run "garuda lsp install ${s.language}".`);
+      const why = s.problems === undefined ? "" : ` (${s.problems.join("; ")})`;
+      lines.push(`  ${label}: not found${why}. Run "garuda lsp install ${s.language}".`);
       continue;
     }
     const where = s.server.source === "managed" ? "managed" : "PATH";

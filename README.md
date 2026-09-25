@@ -149,9 +149,10 @@ Edited src/cart.ts.
 ```
 
 - TS/JS: TypeScript 7 (`tsc --lsp`), `tsgo` or `typescript-language-server`. Python: basedpyright or
-  pyright.
-- Garuda uses a server on your PATH, or its own copy: `garuda lsp install typescript` (or `python`)
-  installs a pinned version into `~/.garuda/lsp/`. With `{ "autoInstall": true }` in
+  pyright. Java: jdtls (it needs Java 21 or later; `JAVA_HOME` or a usual JDK folder). For a Maven or
+  Gradle project, jdtls starts with the first task, because its project import takes a while.
+- Garuda uses a server on your PATH (for Java also `brew install jdtls`), or its own copy:
+  `garuda lsp install typescript` (or `python`, `java`) installs a pinned version into `~/.garuda/lsp/`. With `{ "autoInstall": true }` in
   `~/.garuda/lsp.json`, Garuda asks to install a missing server at the first edit.
 - `garuda lsp` (or `/lsp` in the chat) shows the servers and their state.
 - Servers run only in the OS sandbox: the project is read-only for them, and they have no network. A

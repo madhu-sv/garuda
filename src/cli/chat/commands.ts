@@ -1,4 +1,5 @@
 import type { Runtime } from "../../app/runtime.js";
+import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { totalTokens } from "../../model/pricing.js";
 import {
   findReferencesTool,
@@ -25,7 +26,7 @@ export const HELP = [
   "  /map [dir] what each JS/TS file exports and imports",
   "  /mcp       MCP servers: state, sandbox, network and tool count",
   "  /hooks     the active hooks",
-  "  /lsp       language servers for diagnostics; /lsp install <typescript|python>",
+  "  /lsp       language servers for diagnostics; /lsp install <typescript|python|java>",
   "  /commands  your custom commands (~/.garuda/commands, .garuda/commands)",
   "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles)",
   "  /build     build mode: change files and run commands (the default)",
@@ -90,19 +91,20 @@ async function lspCommand(runtime: Runtime, renderer: Renderer, arg: string): Pr
     return;
   }
   const [verb, language] = arg.split(/\s+/);
-  if (verb !== "install" || (language !== "typescript" && language !== "python")) {
-    renderer.warn("Use: /lsp, or /lsp install typescript, or /lsp install python.");
+  const lang = LSP_LANGUAGES.find((l) => l === language);
+  if (verb !== "install" || lang === undefined) {
+    renderer.warn(`Use: /lsp, or /lsp install <${LSP_LANGUAGES.join("|")}>.`);
     return;
   }
-  renderer.info(`Installing the ${language} language server (npm, outside the sandbox) …`);
-  const result = await runtime.installLsp(language, new AbortController().signal);
+  renderer.info(`Installing the ${lang} language server (download outside the sandbox) …`);
+  const result = await runtime.installLsp(lang, new AbortController().signal);
   if (!result.ok) {
     renderer.warn(`The install failed.\n$ ${result.command}\n${result.output ?? ""}`);
     return;
   }
   renderer.info(
     runtime.lspEnabled
-      ? `Installed into ${result.dir}. The next edit of a ${language} file uses it.`
+      ? `Installed into ${result.dir}. The next edit of a ${lang} file uses it.`
       : `Installed into ${result.dir}. Diagnostics are off: start with --lsp, or set "lsp": { "enabled": true } in .garuda/settings.json.`,
   );
 }

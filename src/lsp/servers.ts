@@ -1,6 +1,13 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, extname, isAbsolute, join, sep } from "node:path";
+import {
+  JDTLS_INIT_OPTIONS,
+  JDTLS_READY,
+  JDTLS_VERSION,
+  type JdtlsLaunchContext,
+  jdtlsLaunch,
+} from "./jdtls.js";
 
 /**
  * Language servers for diagnostics (0.4): which languages, which servers, and where Garuda finds
@@ -8,7 +15,7 @@ import { delimiter, dirname, extname, isAbsolute, join, sep } from "node:path";
  * does that).
  */
 
-export const LSP_LANGUAGES = ["typescript", "python"] as const;
+export const LSP_LANGUAGES = ["typescript", "python", "java"] as const;
 export type LspLanguage = (typeof LSP_LANGUAGES)[number];
 
 /** File extension → language and the LSP languageId. */
@@ -23,6 +30,7 @@ const EXTENSIONS: Readonly<Record<string, { language: LspLanguage; id: string }>
   ".jsx": { language: "typescript", id: "javascriptreact" },
   ".py": { language: "python", id: "python" },
   ".pyi": { language: "python", id: "python" },
+  ".java": { language: "java", id: "java" },
 };
 
 export function languageOf(path: string): { language: LspLanguage; id: string } | undefined {
@@ -37,7 +45,19 @@ export interface ServerSpec {
   args: string[];
   /** Extra check on the found program, for example the TypeScript version. */
   accept?: (path: string) => boolean;
+  /** Where the managed install puts the program, relative to its folder. Default: node_modules/.bin/<bin>. */
+  managed?: string;
+  /** Build the command (default: the program and `args`), or say why it cannot start. */
+  launch?: (path: string, context: LaunchContext) => { argv: string[] } | { problem: string };
+  /** initializationOptions for the server. */
+  initializationOptions?: unknown;
+  /** A notification that says the server is ready; the first check waits for it. */
+  ready?: { method: string; test: (params: unknown) => boolean };
+  /** Wait for the first result (the server imports the project). Default: the manager's. */
+  firstTimeoutMs?: number;
 }
+
+export type LaunchContext = JdtlsLaunchContext;
 
 /** Candidates per language, in order of preference. */
 export const SERVERS: Readonly<Record<LspLanguage, readonly ServerSpec[]>> = {
@@ -51,13 +71,37 @@ export const SERVERS: Readonly<Record<LspLanguage, readonly ServerSpec[]>> = {
     { name: "basedpyright", bin: "basedpyright-langserver", args: ["--stdio"] },
     { name: "pyright", bin: "pyright-langserver", args: ["--stdio"] },
   ],
+  java: [
+    {
+      name: "jdtls",
+      bin: "jdtls",
+      args: [],
+      managed: join("jdtls", "bin", "jdtls"),
+      launch: jdtlsLaunch,
+      initializationOptions: JDTLS_INIT_OPTIONS,
+      ready: JDTLS_READY,
+      // The first import of a Maven or Gradle project takes a while.
+      firstTimeoutMs: 120_000,
+    },
+  ],
 };
 
 /** What `garuda lsp install <language>` puts in ~/.garuda/lsp/<language>. Pinned versions. */
-export const MANAGED_PACKAGES: Readonly<Record<LspLanguage, readonly string[]>> = {
-  typescript: ["typescript@7.0.2"],
-  python: ["pyright@1.1.414"],
+export const MANAGED: Readonly<
+  Record<LspLanguage, { kind: "npm"; packages: readonly string[] } | { kind: "eclipse" }>
+> = {
+  typescript: { kind: "npm", packages: ["typescript@7.0.2"] },
+  python: { kind: "npm", packages: ["pyright@1.1.414"] },
+  java: { kind: "eclipse" },
 };
+
+/** The managed install in words, for the install question. */
+export function managedLabel(language: LspLanguage): string {
+  const m = MANAGED[language];
+  return m.kind === "npm"
+    ? m.packages.join(", ")
+    : `jdtls ${JDTLS_VERSION} (from download.eclipse.org)`;
+}
 
 export function managedDir(language: LspLanguage, home: string = homedir()): string {
   return join(home, ".garuda", "lsp", language);
@@ -68,6 +112,8 @@ export interface FoundServer {
   /** Absolute path of the program. */
   path: string;
   source: "managed" | "path";
+  /** The command that starts it. */
+  argv: string[];
 }
 
 export interface DiscoverOptions {
@@ -75,6 +121,9 @@ export interface DiscoverOptions {
   home?: string;
   /** Default: process.env.PATH. */
   path?: string;
+  /** For `launch`: Garuda's environment (JAVA_HOME) and the JDK folders to search. */
+  env?: NodeJS.ProcessEnv;
+  jdkFolders?: string[];
 }
 
 /**
@@ -86,24 +135,45 @@ export function discoverServer(
   language: LspLanguage,
   options: DiscoverOptions,
 ): FoundServer | undefined {
-  const managed = join(managedDir(language, options.home), "node_modules", ".bin");
+  return findServer(language, options).server;
+}
+
+/** Like discoverServer, and also the reasons why found programs cannot start (for /lsp). */
+export function findServer(
+  language: LspLanguage,
+  options: DiscoverOptions,
+): { server?: FoundServer; problems: string[] } {
+  const home = options.home ?? homedir();
+  const managed = managedDir(language, home);
   const dirs = (options.path ?? process.env.PATH ?? "")
     .split(delimiter)
     .filter((dir) => isAbsolute(dir) && !inside(options.root, dir));
-  for (const [source, list] of [
-    ["managed", [managed]],
-    ["path", dirs],
-  ] as const) {
+  const problems: string[] = [];
+  const context: LaunchContext = {
+    root: options.root,
+    home,
+    ...(options.env === undefined ? {} : { env: options.env }),
+    ...(options.jdkFolders === undefined ? {} : { jdkFolders: options.jdkFolders }),
+  };
+  for (const source of ["managed", "path"] as const) {
     for (const spec of SERVERS[language]) {
-      for (const dir of list) {
-        const path = join(dir, spec.bin);
+      const paths =
+        source === "managed"
+          ? [join(managed, spec.managed ?? join("node_modules", ".bin", spec.bin))]
+          : dirs.map((dir) => join(dir, spec.bin));
+      for (const path of paths) {
         if (!isProgram(path)) continue;
         if (spec.accept !== undefined && !spec.accept(path)) continue;
-        return { spec, path, source };
+        const launch = spec.launch?.(path, context) ?? { argv: [path, ...spec.args] };
+        if ("problem" in launch) {
+          problems.push(launch.problem);
+          continue;
+        }
+        return { server: { spec, path, source, argv: launch.argv }, problems };
       }
     }
   }
-  return undefined;
+  return { problems };
 }
 
 function inside(root: string, dir: string): boolean {

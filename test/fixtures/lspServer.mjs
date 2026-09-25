@@ -5,6 +5,8 @@
 //   silent     never gives diagnostics (the client times out)
 //   crash      exits when a file opens
 //   slow-init  answers initialize after 400 ms, then works as pull
+//   jdtls      like jdtls: needs its settings; says language/status "Started" after 300 ms, and
+//              before that gives a wrong "not ready" error
 // A line with ERROR gives an error there; WARN gives a warning; NOSEV gives no severity.
 import {
   createMessageConnection,
@@ -19,6 +21,7 @@ const connection = createMessageConnection(
   new StreamMessageWriter(process.stdout),
 );
 const docs = new Map();
+let started = mode !== "jdtls";
 
 function diagnose(text) {
   const out = [];
@@ -52,15 +55,21 @@ function publish(uri) {
     });
   }
   setTimeout(() => {
+    const wrong = [
+      { range: { start: { line: 0, character: 0 } }, severity: 1, message: "not ready" },
+    ];
     connection.sendNotification("textDocument/publishDiagnostics", {
       uri,
       version: doc.version,
-      diagnostics: diagnose(doc.text),
+      diagnostics: started ? diagnose(doc.text) : wrong,
     });
   }, 20);
 }
 
-connection.onRequest("initialize", async () => {
+connection.onRequest("initialize", async (params) => {
+  const java = params.initializationOptions?.settings?.java;
+  if (mode === "jdtls" && java?.import?.generatesMetadataFilesAtProjectRoot !== false)
+    process.exit(4);
   if (mode === "slow-init") await new Promise((r) => setTimeout(r, 400));
   // Real servers ask for settings; the client must answer.
   const settings = await connection.sendRequest("workspace/configuration", {
@@ -71,7 +80,14 @@ connection.onRequest("initialize", async () => {
     capabilities: { textDocumentSync: 1, ...(pull ? { diagnosticProvider: {} } : {}) },
   };
 });
-connection.onNotification("initialized", () => {});
+connection.onNotification("initialized", () => {
+  if (mode !== "jdtls") return;
+  connection.sendNotification("language/status", { type: "Starting", message: "Init..." });
+  setTimeout(() => {
+    started = true;
+    connection.sendNotification("language/status", { type: "Started", message: "Ready" });
+  }, 300);
+});
 connection.onNotification("textDocument/didOpen", ({ textDocument }) => {
   if (mode === "crash") process.exit(2);
   docs.set(textDocument.uri, { version: textDocument.version, text: textDocument.text });

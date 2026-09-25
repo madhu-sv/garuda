@@ -18,7 +18,7 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 | `banner.ts` | The chat start banner: GARUDA wordmark (saffron-to-gold gradient on true-color terminals), a card with version, model, sandbox, folder and extras (the detected build tools first, for example `Java (Maven)`), and a tips line. The card only below 60 columns; no colors with `NO_COLOR` or a pipe. Not shown for `-p`. |
 | `errors.ts` | `describeError`: the error chain as one message. |
 | `evalCommand.ts` | `garuda eval`: options, toolchain check before the run, `--prepare java\|python`, `--subagents on\|off`, `--subagent-model`, `--todo on\|off`, `--lsp on\|off` (checks for a server and the sandbox first), executor choice, run, report files. |
-| `lspCommand.ts` | `garuda lsp` (the state; starts no server) and `garuda lsp install typescript\|python`. See [lsp.md](lsp.md). |
+| `lspCommand.ts` | `garuda lsp` (the state; starts no server) and `garuda lsp install typescript\|python\|java`. See [lsp.md](lsp.md). |
 | `chat/*` | The Ink chat (below). |
 
 ## Start sequence (`index.ts`)

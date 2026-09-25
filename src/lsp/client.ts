@@ -39,6 +39,10 @@ export interface LspClientOptions {
   initTimeoutMs?: number;
   /** Wait for later results. */
   timeoutMs?: number;
+  /** Sent with initialize (jdtls reads its settings here). */
+  initializationOptions?: unknown;
+  /** A notification that says the server is ready (jdtls: language/status "Started"). */
+  ready?: { method: string; test: (params: unknown) => boolean };
 }
 
 export class LspTimeoutError extends Error {
@@ -53,6 +57,12 @@ export class LspClient {
   private readonly published = new Map<string, { version?: number; items: RawDiagnostic[] }>();
   private readonly waiters = new Set<() => void>();
   private pull = false;
+  /** Resolves when the `ready` notification came, or at once when there is none. */
+  private readonly isReady: Promise<void>;
+  private markReady: () => void = () => {};
+  private readyNow = false;
+  /** True after a first check timed out while the server was not ready. */
+  private readyWaited = false;
   private answered = false;
   private closed = false;
 
@@ -60,7 +70,17 @@ export class LspClient {
     private readonly connection: MessageConnection,
     private readonly process: RunningProcess,
     private readonly options: LspClientOptions,
-  ) {}
+  ) {
+    this.isReady =
+      options.ready === undefined
+        ? Promise.resolve()
+        : new Promise((resolve) => {
+            this.markReady = resolve;
+          });
+    this.isReady.then(() => {
+      this.readyNow = true;
+    });
+  }
 
   /** Connect to a started server and run the LSP handshake. */
   static async start(
@@ -98,6 +118,12 @@ export class LspClient {
         for (const wake of this.waiters) wake();
       },
     );
+    const ready = this.options.ready;
+    if (ready !== undefined) {
+      c.onNotification(ready.method, (params: unknown) => {
+        if (ready.test(params)) this.markReady();
+      });
+    }
     // Log and progress messages are not needed.
     c.onNotification(() => {});
     c.onClose(() => this.finish());
@@ -115,6 +141,9 @@ export class LspClient {
         rootUri,
         rootPath: this.options.root,
         workspaceFolders: [{ uri: rootUri, name: "root" }],
+        ...(this.options.initializationOptions === undefined
+          ? {}
+          : { initializationOptions: this.options.initializationOptions }),
         capabilities: {
           textDocument: {
             synchronization: { dynamicRegistration: false, didSave: false },
@@ -153,15 +182,46 @@ export class LspClient {
   ): Promise<Diagnostic[]> {
     if (this.closed) throw new Error("The language server has stopped.");
     const uri = pathToFileURL(path).href;
-    const version = await this.sync(uri, languageId, text);
     const ms = this.answered
       ? (this.options.timeoutMs ?? 5_000)
       : (this.options.firstTimeoutMs ?? 30_000);
+    // The first check waits until the server has loaded the project, within the same time. Later
+    // checks do not wait again: before the server is ready, its results would be wrong.
+    if (!this.readyNow) {
+      if (this.readyWaited) throw new LspTimeoutError(0);
+      try {
+        await this.waitReady(ms, signal);
+      } catch (error) {
+        if (error instanceof LspTimeoutError) this.readyWaited = true;
+        throw error;
+      }
+    }
+    const version = await this.sync(uri, languageId, text);
     const items = this.pull
       ? await this.pullDiagnostics(uri, ms, signal)
       : await this.waitPublished(uri, version, ms, signal);
     this.answered = true;
     return items.map(toDiagnostic);
+  }
+
+  private waitReady(ms: number, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return Promise.reject(signal.reason);
+    return new Promise((resolve, reject) => {
+      const done = (fn: () => void) => {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", onAbort);
+        fn();
+      };
+      const onAbort = () => done(() => reject(signal.reason));
+      const timer = setTimeout(() => done(() => reject(new LspTimeoutError(ms))), ms);
+      signal.addEventListener("abort", onAbort, { once: true });
+      this.isReady.then(() => done(resolve));
+    });
+  }
+
+  /** Resolves when the server is ready (a warm start waits for it), or when it stops. */
+  get ready(): Promise<void> {
+    return this.isReady;
   }
 
   /**
@@ -289,6 +349,7 @@ export class LspClient {
     if (this.closed) return;
     this.closed = true;
     for (const wake of this.waiters) wake();
+    this.markReady();
     this.connection.dispose();
   }
 }

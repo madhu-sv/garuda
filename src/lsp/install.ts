@@ -1,13 +1,15 @@
 import { mkdir } from "node:fs/promises";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
-import { type LspLanguage, MANAGED_PACKAGES, managedDir } from "./servers.js";
+import { jdtlsInstallCommand } from "./jdtls.js";
+import { type LspLanguage, MANAGED, managedDir } from "./servers.js";
 
 /**
- * The managed install (0.4): `npm install` of a pinned server into ~/.garuda/lsp/<language>.
+ * The managed install (0.4): a pinned server into ~/.garuda/lsp/<language>. npm for TS/JS and
+ * Python; for Java, the jdtls milestone from download.eclipse.org (see jdtls.ts).
  * Only the user starts it: `garuda lsp install`, `/lsp install`, or a "yes" to the question that
  * `autoInstall` adds. It needs the network, so it runs outside the sandbox, through the Executor
- * (N8). Install scripts are off (`--ignore-scripts`): the pinned packages need none.
+ * (N8). npm install scripts are off (`--ignore-scripts`): the pinned packages need none.
  */
 
 export const INSTALL_TIMEOUT_MS = 300_000;
@@ -36,6 +38,8 @@ export interface InstallResult {
 }
 
 export function installCommand(language: LspLanguage, dir: string): string {
+  const managed = MANAGED[language];
+  if (managed.kind === "eclipse") return jdtlsInstallCommand(dir, quote);
   return [
     "npm",
     "install",
@@ -45,7 +49,7 @@ export function installCommand(language: LspLanguage, dir: string): string {
     "--no-audit",
     "--no-fund",
     "--loglevel=error",
-    ...MANAGED_PACKAGES[language],
+    ...managed.packages,
   ].join(" ");
 }
 

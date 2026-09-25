@@ -131,7 +131,7 @@ export function buildSystemPrompt(
     "edit_file refuses a file that read_file did not read in this session.",
     ...(lsp
       ? [
-          "For TS/JS and Python files, the edit_file and write_file result lists the errors that a language",
+          "For TS/JS, Python and Java files, the edit_file and write_file result lists the errors that a language",
           "server finds in that file after the change. Fix the errors that your change caused.",
         ]
       : []),

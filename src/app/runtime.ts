@@ -390,6 +390,10 @@ export class Runtime {
     await this.startMcp(signal);
     const session = this.ensureSession();
     this.turnMode = this.selectedMode;
+    // jdtls imports a Maven or Gradle project for a while: start it now, not at the first edit.
+    if (this.lspEnabled && this.profiles.some((p) => p.id === "maven" || p.id === "gradle")) {
+      void this.lsp().then((m) => m.warm("java"));
+    }
     const notes = this.mcp?.takeNotes() ?? [];
     if (this.turnMode === "plan") notes.unshift(PLAN_NOTE);
     addUserMessage(session, prompt, notes);
@@ -539,15 +543,15 @@ export class Runtime {
   private async askInstall(language: LspLanguage, signal: AbortSignal): Promise<boolean> {
     const { installCommand } = await import("../lsp/install.js");
     const { LANGUAGE_LABELS } = await import("../lsp/manager.js");
-    const { MANAGED_PACKAGES, managedDir } = await import("../lsp/servers.js");
+    const { managedLabel, managedDir } = await import("../lsp/servers.js");
     const dir = managedDir(language, this.lspHome);
     const choice = await this.approver.ask(
       {
         tool: "lsp",
         target: { kind: "input", json: "{}" },
         preview: [
-          `Garuda can install ${MANAGED_PACKAGES[language].join(", ")} into ${dir}.`,
-          "npm downloads it outside the sandbox. The server then runs in the sandbox.",
+          `Garuda can install ${managedLabel(language)} into ${dir}.`,
+          "The download runs outside the sandbox. The server then runs in the sandbox.",
           `  $ ${installCommand(language, dir)}`,
         ].join("\n"),
         isolation: this.executor.isolation,

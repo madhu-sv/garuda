@@ -39,7 +39,8 @@ imports the CLI.
 
 ### `runTurn(prompt, signal)`
 
-0. The turn's mode is fixed: `turnMode = selectedMode` (0.4). `setMode()` during a turn applies to the
+0. The turn's mode is fixed: `turnMode = selectedMode` (0.4). With LSP on and a Maven or Gradle profile,
+   jdtls starts now in the background (`LspManager.warm("java")`), because its project import is slow. `setMode()` during a turn applies to the
    next one; the permission engine reads `turnMode`.
 1. `startHooks` (once): user hooks; project hooks after consent (hash in `trust.json`).
 2. `startMcp` (once): load the MCP manager with `import()`, start servers, register their tools.
