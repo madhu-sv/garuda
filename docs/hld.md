@@ -132,7 +132,11 @@ flowchart TD
   B -- yes --> DENY
   B -- no --> C{A deny rule matches?}
   C -- yes --> DENY
-  C -- no --> D{Read-only tool?}
+  C -- no --> PM{Plan mode and<br/>not read-only?}
+  PM -- yes --> PD{Command in the sandbox,<br/>or allow rule for a URL or MCP tool?}
+  PD -- yes --> ALLOW
+  PD -- no --> DENY
+  PM -- no --> D{Read-only tool?}
   D -- yes --> ALLOW[Allow]
   D -- no --> E{Command inside the OS sandbox?}
   E -- yes --> ALLOW
@@ -140,6 +144,9 @@ flowchart TD
   F -- yes --> ALLOW
   F -- no --> ASK[Ask: once, session, deny]
 ```
+
+Plan mode (0.4) never asks: file writes, edits and `remember` are always denied, and a command runs
+only in the OS sandbox, which then cannot write the project (temp folders and package caches only).
 
 Rules use one syntax everywhere: `tool` or `tool(pattern)`. Patterns are globs for paths, wildcards
 for commands (each part of `a && b | c` is checked), hosts for URLs, and a trailing `*` in the tool

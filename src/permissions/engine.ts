@@ -1,3 +1,4 @@
+import { sep } from "node:path";
 import type { ProfileAccess } from "../lang/profiles.js";
 import type { ExecPolicy, Isolation } from "../sandbox/types.js";
 import { formatRule, type Rule, ruleMatches } from "./rules.js";
@@ -5,6 +6,7 @@ import { sandboxPaths } from "./sandboxPaths.js";
 import { isProtectedFromWrites, isSensitive } from "./sensitive.js";
 import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 import type {
+  AgentMode,
   Approver,
   CallTarget,
   PermissionDecision,
@@ -37,13 +39,20 @@ export interface PermissionEngineOptions {
   isolation?: Isolation;
   /** Package caches and environment variables for the project's language profiles (0.3). */
   access?: ProfileAccess;
+  /** The mode of the current turn (0.4). Default: build. */
+  mode?: () => AgentMode;
 }
+
+/** What the model reads when plan mode blocks a call. */
+export const PLAN_MODE_DENIAL =
+  "Plan mode is on: this call would change something. Put the change in your plan instead; the user switches to build mode to carry it out.";
 
 /**
  * The permission engine (F17–F20). Order of checks:
  *   1. Sensitive path, and no allow rule names it   → deny (F20)
  *   2. Write to a protected path (.git/)             → deny
  *   3. A deny rule matches                           → deny (deny always wins, F19)
+ *   3b. Plan mode (0.4), a call that is not read-only → see planDecision (never asks)
  *   4. Read-only tool                                → allow (F17)
  *   5. A command in the OS sandbox                   → allow (0.2)
  *   6. An allow rule or a session rule matches       → allow
@@ -55,6 +64,7 @@ export class PermissionEngine implements PermissionGate {
   private readonly settings: Settings;
   private readonly isolation: Isolation;
   private readonly access: ProfileAccess;
+  private readonly mode: () => AgentMode;
   private readonly sessionRules: Rule[] = [];
 
   constructor(options: PermissionEngineOptions) {
@@ -63,6 +73,7 @@ export class PermissionEngine implements PermissionGate {
     this.settings = options.settings ?? DEFAULT_SETTINGS;
     this.isolation = options.isolation ?? "none";
     this.access = options.access ?? { writePaths: [], envAllow: [] };
+    this.mode = options.mode ?? (() => "build");
   }
 
   async check(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision> {
@@ -97,6 +108,10 @@ export class PermissionEngine implements PermissionGate {
       };
     }
 
+    if (this.mode() === "plan" && !request.readOnly) {
+      return this.planDecision(tool, target, allowRule !== undefined);
+    }
+
     if (request.readOnly) return { allowed: true, by: "read_only" };
     if (target?.kind === "command" && !target.outsideSandbox && this.isolation !== "none") {
       return { allowed: true, by: "sandbox" };
@@ -128,13 +143,43 @@ export class PermissionEngine implements PermissionGate {
     return { allowed: true, by: "user" };
   }
 
+  /**
+   * Plan mode: file changes and memory are always denied; a command runs only in the OS sandbox
+   * (which then cannot write the project, see execPolicy); other calls (web_fetch, MCP tools)
+   * need an allow rule. Plan mode never asks: the plan is the place for changes.
+   */
+  private planDecision(
+    tool: string,
+    target: CallTarget | undefined,
+    allowed: boolean,
+  ): PermissionDecision {
+    const deny: PermissionDecision = { allowed: false, by: "rule", reason: PLAN_MODE_DENIAL };
+    if (target?.kind === "command") {
+      if (target.outsideSandbox || this.isolation === "none") return deny;
+      return { allowed: true, by: "sandbox" };
+    }
+    if (target?.kind === "path" || tool === "remember") return deny;
+    const mustAsk = target?.kind === "url" && target.alwaysAsk === true;
+    return allowed && !mustAsk ? { allowed: true, by: "rule" } : deny;
+  }
+
   execPolicy(timeoutMs: number, { sandbox = true }: { sandbox?: boolean } = {}): ExecPolicy {
     const paths = sandboxPaths(this.root, this.settings.sandbox);
+    let writePaths = [...new Set([...paths.writePaths, ...this.access.writePaths])];
+    let denyWritePaths = paths.denyWritePaths;
+    if (this.mode() === "plan") {
+      // Plan mode: the project is read-only; temp folders and package caches stay writable.
+      // The root is also a read-only hole, for a project inside a writable folder (a temp dir).
+      const inRoot = (p: string) => p === this.root || p.startsWith(`${this.root}${sep}`);
+      writePaths = writePaths.filter((p) => !inRoot(p));
+      denyWritePaths = [this.root, ...denyWritePaths];
+    }
     return {
       root: this.root,
       sandbox,
       ...paths,
-      writePaths: [...new Set([...paths.writePaths, ...this.access.writePaths])],
+      writePaths,
+      denyWritePaths,
       network: !sandbox,
       envAllowlist: [
         ...new Set([...DEFAULT_ENV_ALLOWLIST, ...this.access.envAllow, ...this.settings.envAllow]),

@@ -38,10 +38,32 @@ Order of checks — the first match decides:
 | 1 | Path target is sensitive and no allow rule *with a pattern* names it (F20) | deny |
 | 2 | A write to a path inside `.git/` | deny |
 | 3 | A deny rule matches (F19) | deny |
+| 3b | Plan mode (0.4) and the tool is not read-only | see below; never asks |
 | 4 | Read-only tool (F17) | allow |
 | 5 | Command target, not `outsideSandbox`, and the executor has isolation | allow (`sandbox`) |
 | 6 | An allow rule or a session rule matches, and the target is not an `alwaysAsk` URL | allow |
 | 7 | Otherwise | ask the user (F18) |
+
+### Plan mode (0.4)
+
+The engine gets the mode of the current turn (`mode: () => AgentMode`). In plan mode a call that is not
+read-only is decided by `planDecision`, and the user is never asked:
+
+| Call | Plan mode |
+| --- | --- |
+| Command target, in the OS sandbox | allow (`sandbox`) |
+| Command outside the sandbox, or no OS sandbox | deny |
+| Path target (write_file, edit_file) or `remember` | deny, even with an allow rule |
+| Other targets (web_fetch, MCP tools) | allow only with an allow rule; an `alwaysAsk` URL is denied |
+
+The denial text is `PLAN_MODE_DENIAL`: it tells the model to put the change in its plan. Read-only tools
+(read_file, glob, grep, explore, todo_write, the code index) run as in build mode; sensitive files and
+deny rules still apply first.
+
+`execPolicy` in plan mode removes the root and every path inside it from the write paths, and adds the
+root as the first read-only path (for a project inside a writable folder such as a temp dir). Commands
+can still write temp folders and package caches, so tests that write nothing in the project run.
+Hooks use the same policy.
 
 "Session" answers add a session rule:
 

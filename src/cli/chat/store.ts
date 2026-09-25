@@ -48,6 +48,8 @@ export const APPROVAL_CHOICES: readonly { choice: ApprovalChoice; label: string 
 export interface Status {
   model: string;
   sandbox: string;
+  /** Shown only in plan mode (0.4). */
+  mode?: "plan";
   contextPercent?: number;
   costUsd?: number;
 }
@@ -185,6 +187,19 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   }
 
   // A turn.
+
+  /** Update the footer, for example after /plan. */
+  refreshStatus(status: Status): void {
+    this.update({ status });
+  }
+
+  /** Shift+Tab: the chat sets the handler; it switches the mode and returns the new status. */
+  onToggleMode: (() => Status) | undefined;
+
+  toggleMode(): void {
+    const status = this.onToggleMode?.();
+    if (status !== undefined) this.update({ status });
+  }
 
   /** Start a turn. `show: false` when the line is already on screen (a custom command). */
   begin(prompt: string, show = true): void {

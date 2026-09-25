@@ -34,7 +34,7 @@ import { lookupModel, type ModelInfo, type Price } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
-import type { Approver } from "../permissions/types.js";
+import type { AgentMode, Approver } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
 import type { RunLimits, StartRecord } from "../session/records.js";
@@ -44,6 +44,13 @@ import { newSessionId, type SessionStore } from "../session/store.js";
 import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { VERSION } from "../version.js";
+
+/**
+ * The note that starts each plan-mode turn (0.4). The system prompt stays the same in both modes
+ * (N2); the permission engine and the sandbox enforce the mode, this note explains it.
+ */
+export const PLAN_NOTE =
+  "Plan mode is on. Investigate and write a plan; do not change anything. File edits, file writes and remember are blocked, and bash runs in a sandbox that cannot write the project (temp folders only), so read-only commands and tests that write nothing in the project still work. End with a numbered plan: the files to change, the change in each, and how to test it.";
 
 /** What a line that starts with "/" means, when it is not a built-in command. */
 export type CommandResolution =
@@ -81,6 +88,8 @@ export interface RuntimeOptions {
   mcp?: false | { home?: string; env?: NodeJS.ProcessEnv };
   /** Hooks (0.2). Default: read ~/.garuda/hooks.json and <root>/.garuda/hooks.json. false: none. */
   hooks?: false | { home?: string };
+  /** The mode of the first turn (0.4). Default: build. */
+  mode?: AgentMode;
   /** Custom slash commands (0.4). Default: ~/.garuda/commands and .garuda/commands. false: none. */
   commands?: false | { home?: string };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
@@ -124,6 +133,10 @@ export class Runtime {
   private mcp: McpManager | undefined;
   private mcpStarted: Promise<void> | undefined;
   private readonly hookConfig: { user: Hook[]; project: Hook[]; home: string };
+  /** The mode that the user chose; the next turn uses it (0.4). */
+  private selectedMode: AgentMode;
+  /** The mode of the running turn: a switch during a turn waits for the next one. */
+  private turnMode: AgentMode = "build";
   private customCommands: CustomCommand[] = [];
   private commandsHome = homedir();
   /** Hashes of project commands that the user allowed for this process ("Yes, this time"). */
@@ -142,6 +155,7 @@ export class Runtime {
   ) {
     this.hookConfig = hookConfig;
     this.profiles = profiles;
+    this.selectedMode = options.mode ?? "build";
     this.approver = options.approver;
     this.settings = settings;
     this.mcpServers = mcpServers;
@@ -179,6 +193,7 @@ export class Runtime {
       approver: options.approver,
       isolation: this.executor.isolation,
       access: profileAccess(profiles),
+      mode: () => this.turnMode,
     });
     this.exploreModel = undefined;
     // Off by default: an A/B eval (hard suite, 3 runs per arm) showed no gain in steps or cost.
@@ -288,6 +303,16 @@ export class Runtime {
     return runtime;
   }
 
+  /** The mode for the next turn: build or plan (0.4). */
+  get mode(): AgentMode {
+    return this.selectedMode;
+  }
+
+  /** Switch the mode. It applies from the next turn, never in the middle of one. */
+  setMode(mode: AgentMode): void {
+    this.selectedMode = mode;
+  }
+
   /** Custom slash commands (0.4), sorted by name. */
   get commands(): readonly CustomCommand[] {
     return this.customCommands;
@@ -333,7 +358,10 @@ export class Runtime {
     await this.startHooks(signal);
     await this.startMcp(signal);
     const session = this.ensureSession();
-    addUserMessage(session, prompt, this.mcp?.takeNotes() ?? []);
+    this.turnMode = this.selectedMode;
+    const notes = this.mcp?.takeNotes() ?? [];
+    if (this.turnMode === "plan") notes.unshift(PLAN_NOTE);
+    addUserMessage(session, prompt, notes);
     return runAgent(session, {
       model: await this.client(),
       tools: this.tools,
@@ -362,6 +390,7 @@ export class Runtime {
     if (hooks > 0) out.push(`${hooks} hook${hooks === 1 ? "" : "s"}`);
     if (this.tools.get("web_fetch") !== undefined) out.push("web_fetch");
     if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
+    if (this.selectedMode === "plan") out.push("plan mode");
     if (this.exploreModel !== undefined)
       out.push(this.exploreModel === this.modelId ? "explore" : `explore: ${this.exploreModel}`);
     return out;

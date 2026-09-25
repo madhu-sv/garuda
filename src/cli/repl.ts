@@ -1,6 +1,8 @@
 import { createInterface } from "node:readline";
 import type { Runtime } from "../app/runtime.js";
+import type { Approver } from "../permissions/types.js";
 import { runCommand } from "./chat/commands.js";
+import { BUILD_PROMPT, planHandoff } from "./chat/plan.js";
 import type { Renderer } from "./renderer.js";
 import type { Interruptible } from "./turn.js";
 import { runTurnInTerminal } from "./turn.js";
@@ -21,7 +23,7 @@ type Input = { kind: "line"; text: string } | { kind: "eof" } | { kind: "interru
 
 export async function runRepl(
   runtime: Runtime,
-  approver: Interruptible,
+  approver: Interruptible & Approver,
   renderer: Renderer,
   sessionPath: (id: string) => string,
   exitNow: () => never,
@@ -32,7 +34,7 @@ export async function runRepl(
   let lastInterrupt = 0;
 
   for (;;) {
-    const input = await ask("› ", history);
+    const input = await ask(runtime.mode === "plan" ? "plan› " : "› ", history);
     if (input.kind === "eof") return;
     if (input.kind === "interrupt") {
       if (Date.now() - lastInterrupt < 2_000) return;
@@ -53,7 +55,15 @@ export async function runRepl(
       prompt = result.prompt;
     }
 
-    await runTurnInTerminal(runtime, approver, renderer, prompt, exitNow);
+    for (;;) {
+      const planning = runtime.mode === "plan";
+      const outcome = await runTurnInTerminal(runtime, approver, renderer, prompt, exitNow);
+      // A finished plan: ask whether to build it.
+      if (!planning || outcome.kind !== "done" || outcome.result.stopReason !== "done") break;
+      if ((await planHandoff(runtime, approver)) !== "now") break;
+      renderer.info(`› ${BUILD_PROMPT}`);
+      prompt = BUILD_PROMPT;
+    }
   }
 }
 

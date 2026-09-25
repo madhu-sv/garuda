@@ -106,6 +106,12 @@ interface ChatState {
 - **Tools:** `tool_call` adds a running line; `tool_result` prints the call and result lines and keeps
   the full output for Ctrl-O. A `todo_write` result also prints its checklist (`✔` done, `▶` in
   progress, `○` pending); the plain renderer prints the same lines.
+- **Plan mode (0.4):** `/plan` and `/build` switch the mode (both chats); Shift+Tab toggles it in the
+  Ink chat (`store.onToggleMode`, set by the controller); `garuda --plan` starts in plan mode. The footer
+  shows a yellow `PLAN`; the plain chat's prompt is `plan›`. The switch applies from the next turn. After a
+  plan turn that ends with `done`, `planHandoff` asks "Build this plan?": *Yes, build it now* switches to
+  build mode and runs "Carry out the plan above." as the next turn; *Switch to build mode; I will type the
+  task* only switches; *No* stays in plan mode. `-p` never asks.
 - **Custom commands (0.4):** a line that starts with `/` goes to `runCommand`; a custom command gives
   back its prompt, the chat shows the typed line once and runs the turn with the prompt. See
   [commands.md](commands.md).

@@ -65,6 +65,9 @@ async function runtimeFor(root: string, model: FakeModelClient, onEvent?: (e: ne
   return { runtime, renderer, out, err };
 }
 
+/** The plain chat's approver: these tests never reach an approval. */
+const replApprover = { onInterrupt: () => {}, ask: async () => "deny" as const };
+
 const noExit = (): never => {
   throw new Error("exit");
 };
@@ -85,7 +88,7 @@ describe("M5 acceptance", () => {
     const input = new PassThrough();
     input.end("What files are here?\n/usage\n\nWhat does it export?\n/session\n/exit\nnot read\n");
 
-    await runRepl(runtime, { onInterrupt: () => {} }, renderer, (id) => `${id}.jsonl`, noExit, {
+    await runRepl(runtime, replApprover, renderer, (id) => `${id}.jsonl`, noExit, {
       input,
       output: sink().stream,
     });
@@ -110,7 +113,7 @@ describe("M5 acceptance", () => {
     const { runtime, renderer } = await runtimeFor(root, model);
     const input = new PassThrough();
     input.end("/help\n");
-    await runRepl(runtime, { onInterrupt: () => {} }, renderer, (id) => id, noExit, {
+    await runRepl(runtime, replApprover, renderer, (id) => id, noExit, {
       input,
       output: sink().stream,
     });
@@ -118,7 +121,7 @@ describe("M5 acceptance", () => {
 
     const again = new PassThrough();
     again.end("first\n/new\nsecond\n");
-    await runRepl(runtime, { onInterrupt: () => {} }, renderer, (id) => id, noExit, {
+    await runRepl(runtime, replApprover, renderer, (id) => id, noExit, {
       input: again,
       output: sink().stream,
     });
@@ -133,7 +136,7 @@ describe("M5 acceptance", () => {
     ]);
     const { runtime, renderer, err } = await runtimeFor(root, model);
 
-    const turn = runTurnInTerminal(runtime, { onInterrupt: () => {} }, renderer, "wait", noExit);
+    const turn = runTurnInTerminal(runtime, replApprover, renderer, "wait", noExit);
     await waitFor(() => existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() !== "");
     const pid = Number.parseInt(readFileSync(pidFile, "utf8"), 10);
     process.emit("SIGINT");
@@ -163,7 +166,7 @@ describe("M5 acceptance", () => {
       runtime.executor.shutdown();
       throw new Error("exit");
     };
-    const turn = runTurnInTerminal(runtime, { onInterrupt: () => {} }, renderer, "wait", exitNow);
+    const turn = runTurnInTerminal(runtime, replApprover, renderer, "wait", exitNow);
     await waitFor(() => existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() !== "");
     // Hold the abort open: send both signals before the loop can react.
     const listeners = process.listeners("SIGINT");

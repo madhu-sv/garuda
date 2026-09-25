@@ -11,6 +11,7 @@ import {
 import type { ToolContext } from "../../tools/types.js";
 import type { Renderer } from "../renderer.js";
 import { formatTokens } from "../report.js";
+import { modeText } from "./plan.js";
 
 /** Chat commands (F2). The plain chat and the Ink chat share them. */
 
@@ -25,6 +26,8 @@ export const HELP = [
   "  /mcp       MCP servers: state, sandbox, network and tool count",
   "  /hooks     the active hooks",
   "  /commands  your custom commands (~/.garuda/commands, .garuda/commands)",
+  "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles)",
+  "  /build     build mode: change files and run commands (the default)",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -47,7 +50,10 @@ export async function runCommand(
   if (command === "/exit" || command === "/quit") return "exit";
   if (command === "/help") renderer.info(helpText(runtime));
   else if (command === "/commands") renderer.info(commandsText(runtime));
-  else if (command === "/usage") renderer.info(usageSummary(runtime));
+  else if (command === "/plan" || command === "/build") {
+    runtime.setMode(command === "/plan" ? "plan" : "build");
+    renderer.info(modeText(runtime));
+  } else if (command === "/usage") renderer.info(usageSummary(runtime));
   else if (command === "/session") {
     const id = runtime.session?.id;
     renderer.info(id === undefined ? "No session yet." : `Session ${id}\n${sessionPath(id)}`);

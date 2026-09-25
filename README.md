@@ -83,7 +83,7 @@ Set the context window, price and output limit per model, and add providers, in 
 `garuda` with no task starts a chat. Each line is one task; the conversation carries over.
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
-  (your custom commands), `/exit`.
+  (your custom commands), `/plan` and `/build` (plan mode), `/exit`.
 - Ctrl-C during a task stops the task and kills its commands. The chat goes on.
   A second Ctrl-C during the task exits Garuda at once.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
@@ -122,11 +122,25 @@ Review $1 for bugs and missing tests. List the problems by severity.
   file; a changed file asks again. Built-in commands, and your own commands, win over project commands
   with the same name.
 
+## Plan mode
+
+In plan mode the agent reads the code and writes a plan; it cannot change anything.
+
+- `/plan` and `/build` switch the mode; in the chat, Shift+Tab toggles it. `garuda --plan` starts in plan
+  mode. The footer shows `PLAN`.
+- Allowed: reading tools, and bash in the sandbox, which then cannot write the project (temp folders and
+  package caches only), so read-only commands and many tests still work. Denied, with no question: file
+  edits and writes, `remember`, commands outside the sandbox, and web_fetch or MCP tools without an allow
+  rule. With no OS sandbox, bash is off in plan mode.
+- When the plan is ready, Garuda asks "Build this plan?": build it now, switch to build mode and type the
+  task yourself, or keep planning.
+
 ## Todo list (opt-in)
 
 `"todo": { "enabled": true }` in `.garuda/settings.json` gives the model a `todo_write` tool: for a task
 with 3 or more steps it keeps a plan, and the chat shows it as a checklist (`✔`, `▶`, `○`). It is off by
-default until an A/B eval shows that it helps: `garuda eval -s hard --repeat 3 --todo on`.
+default: in the A/B eval on the hard suite the model never called it. Measure it again with
+`garuda eval -s hard --repeat 3 --todo on`.
 
 ## Evals
 

@@ -55,6 +55,12 @@ export interface PermissionGate {
   execPolicy(timeoutMs: number, options?: { sandbox?: boolean }): ExecPolicy;
 }
 
+/**
+ * The agent's mode (0.4). In plan mode the agent reads and plans: calls that change files or
+ * memory are denied, and commands run in a sandbox that cannot write the project.
+ */
+export type AgentMode = "build" | "plan";
+
 // Approval (F18).
 
 export type ApprovalChoice = "once" | "session" | "deny";

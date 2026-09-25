@@ -105,6 +105,9 @@ a failure with the stop reason `timeout`, not an error.
   $0.139; python 5/5, 31 steps, $0.120. Maven ran in the Seatbelt sandbox with no approval.
 - Explore subagent (A/B, 0.3): no gain in steps or cost, so it is off by default. Details and the table:
   [agents.md](agents.md#evals).
+- Todo tool (A/B, 0.4, claude-sonnet-5, hard suite, 3 runs per task, sums of means): off 18/18, 52.7
+  steps, 330k tokens, $0.213; on 18/18, 54.7 steps, 359k, $0.230. The model never called `todo_write`,
+  so the difference is noise plus the tool definition. It stays off by default.
 - The requirements doc keeps the per-task tables ("0.1 results", "0.2 results").
 
 ## Tests

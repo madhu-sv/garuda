@@ -27,6 +27,7 @@ import { runTurnInTerminal } from "./turn.js";
 
 interface Options {
   prompt?: string;
+  plan?: boolean;
   model?: string;
   subagentModel?: string;
   resume?: string | true;
@@ -46,6 +47,7 @@ async function main(): Promise<void> {
       "--subagent-model <id>",
       "model of the explore subagent (or set GARUDA_SUBAGENT_MODEL); default: the main model",
     )
+    .option("--plan", "start in plan mode: read and plan, change nothing")
     .option("-r, --resume [session-id]", "continue the last session, or the given one")
     .option("--replay <session-id-or-file>", "replay a recorded session with no API calls")
     .action(async (options: Options) => {
@@ -133,6 +135,7 @@ async function start(options: Options, program: Command): Promise<number> {
       : { subagentModel: { spec: sub.spec, model: () => sub.create(), info: sub.info } }),
     approver,
     store,
+    ...(options.plan === true ? { mode: "plan" as const } : {}),
     ...(options.resume === undefined ? {} : { resume: options.resume }),
     onEvent: (event) => events.event(event),
     onNotice: (text) => events.warn(text),

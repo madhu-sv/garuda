@@ -104,7 +104,7 @@ function InputLine({ state }: { state: ChatState }) {
 }
 
 function Footer({ state }: { state: ChatState }) {
-  const { model, sandbox, contextPercent, costUsd } = state.status;
+  const { model, sandbox, contextPercent, costUsd, mode } = state.status;
   const parts = [model, sandbox];
   if (contextPercent !== undefined) parts.push(`context ${contextPercent}%`);
   if (costUsd !== undefined) parts.push(`$${costUsd.toFixed(costUsd < 0.01 ? 4 : 2)}`);
@@ -112,9 +112,16 @@ function Footer({ state }: { state: ChatState }) {
     ? "Ctrl-C stop · Esc clear queue · Ctrl-O output"
     : "Ctrl-O output · /help";
   return (
-    <Text dimColor>
-      {parts.join(" · ")} {"  "}
-      {keys}
+    <Text>
+      {mode === "plan" ? (
+        <Text color="yellow" bold>
+          PLAN{" "}
+        </Text>
+      ) : null}
+      <Text dimColor>
+        {parts.join(" · ")} {"  "}
+        {keys}
+      </Text>
     </Text>
   );
 }
@@ -147,6 +154,7 @@ export interface Key {
   ctrl: boolean;
   meta: boolean;
   tab: boolean;
+  shift?: boolean;
   backspace: boolean;
   delete: boolean;
 }
@@ -188,8 +196,10 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
   else if (key.rightArrow) store.editLine({ type: key.meta ? "wordRight" : "right" });
   else if (key.upArrow) store.editLine({ type: "up" });
   else if (key.downArrow) store.editLine({ type: "down" });
-  else if (key.tab) return;
-  else if (/[\r\n]/.test(input)) typeAhead(store, input);
+  else if (key.tab) {
+    // Shift+Tab switches between build and plan mode (0.4).
+    if (key.shift) store.toggleMode();
+  } else if (/[\r\n]/.test(input)) typeAhead(store, input);
   else if (input !== "" && !key.meta) store.editLine({ type: "insert", text: input });
 }
 

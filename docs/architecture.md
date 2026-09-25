@@ -209,6 +209,7 @@ All state is in files. There is no server and no database.
 | Sessions | JSONL files behind `SessionStore` | Simple, readable, append-only; replaceable later. |
 | Java and Python support | Language profiles (marker files, offline commands, cache allowlist) and eval suites; no per-language subagents | Each language needs a toolchain and the right commands, not a different agent. The evals measure it. |
 | Subagents | Task-based (explore first), a tool of the main agent, same model by default, off by default | A child context keeps the main context small; one tool fits the loop, permissions and records with no new paths. The A/B eval showed no gain in steps or cost, so it is opt-in. |
-| Todo tool | `todo_write`, stateless (the list lives in the conversation), off by default | Same rule as explore and the code index: the default follows an A/B eval. |
+| Plan mode | Enforced by the permission engine and a read-only sandbox; the system prompt does not change; a note in the user message explains the mode | A prompt alone cannot stop a write; a fixed prompt keeps the cache. |
+| Todo tool | `todo_write`, stateless (the list lives in the conversation), off by default | The A/B eval (hard suite) showed no gain: the model never called it in 5–13-step tasks. |
 | Broken model streams | The loop retries a transient failure twice (1 s, 4 s) | The SDKs retry only before a stream starts; 4 of 54 eval runs lost the connection in the middle. |
 | Build caches in the sandbox | Only cache subfolders (`~/.m2/repository`, `~/.gradle/caches` …) are writable | Settings files and init scripts run later outside the sandbox; they stay read-only. |
