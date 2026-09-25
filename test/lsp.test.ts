@@ -249,6 +249,19 @@ describe("the LSP client against a fake server (0.4)", () => {
     });
   }
 
+  it("a slow start is not a slow check: initialize has its own, longer timeout", async () => {
+    const { root, client, executor } = await start("slow-init", {
+      firstTimeoutMs: 100,
+      timeoutMs: 100,
+    });
+    expect(client.usesPull).toBe(true);
+    expect(
+      await client.diagnostics(join(root, "a.py"), "python", "ERROR\n", signal()),
+    ).toHaveLength(1);
+    await client.close();
+    executor.shutdown();
+  });
+
   it("times out when the server gives nothing, and Ctrl-C stops the wait", async () => {
     const { root, client, executor } = await start("silent", {
       firstTimeoutMs: 200,

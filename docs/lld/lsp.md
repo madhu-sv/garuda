@@ -98,7 +98,8 @@ PATH), its path, and `found`, `running` or `failed: …`.
    - The server offers `diagnosticProvider`: pull with `textDocument/diagnostic`.
    - Otherwise: wait for `publishDiagnostics` of this version (or a later one; any, if the server sends
      no version).
-5. Timeouts: 30 s for the first answer (the server loads the project), 5 s after that.
+5. Timeouts: 30 s for `initialize`, 30 s for the first diagnostics (the server loads the project),
+   5 s after that. A slow start is not a slow check: `initialize` has its own timeout.
 
 The client checks only the changed file. It does not follow files that bash or the user change; the next
 edit of a file sends its full text again.
@@ -135,7 +136,8 @@ silent and crash):
   TypeScript 7 check (with a pnpm shim).
 - The text: errors only, sorting, the cap, cleaning.
 - `lsp.json`; the install command and policy (fake executor).
-- The client: pull, push and a stale push; a timeout; Ctrl-C.
+- The client: pull, push and a stale push; a slow `initialize` with short check timeouts; a timeout;
+  Ctrl-C.
 - `edit_file` and `write_file` with a diagnostics source; a failing source changes nothing.
 - Off by default; the setting, the option, the prompt lines and the banner.
 - The manager with no sandbox (one notice), with no server, and in the OS sandbox: a fake server, a crash,

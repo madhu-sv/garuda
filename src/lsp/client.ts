@@ -35,6 +35,8 @@ export interface LspClientOptions {
   root: string;
   /** Wait for the first result of a server (it loads the project first). */
   firstTimeoutMs?: number;
+  /** Wait for the answer to initialize. A slow start is not a slow check. Default: 30 s. */
+  initTimeoutMs?: number;
   /** Wait for later results. */
   timeoutMs?: number;
 }
@@ -123,7 +125,7 @@ export class LspClient {
           window: { workDoneProgress: false },
         },
       },
-      this.options.firstTimeoutMs ?? 30_000,
+      this.options.initTimeoutMs ?? 30_000,
       signal,
     )) as { capabilities?: { diagnosticProvider?: unknown } } | null;
     this.pull = result?.capabilities?.diagnosticProvider != null;

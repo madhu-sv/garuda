@@ -4,6 +4,7 @@
 //   push-old   sends a stale publishDiagnostics first, then the right one
 //   silent     never gives diagnostics (the client times out)
 //   crash      exits when a file opens
+//   slow-init  answers initialize after 400 ms, then works as pull
 // A line with ERROR gives an error there; WARN gives a warning; NOSEV gives no severity.
 import {
   createMessageConnection,
@@ -12,6 +13,7 @@ import {
 } from "vscode-jsonrpc/node";
 
 const mode = process.argv[2] ?? "pull";
+const pull = mode === "pull" || mode === "slow-init";
 const connection = createMessageConnection(
   new StreamMessageReader(process.stdin),
   new StreamMessageWriter(process.stdout),
@@ -59,24 +61,25 @@ function publish(uri) {
 }
 
 connection.onRequest("initialize", async () => {
+  if (mode === "slow-init") await new Promise((r) => setTimeout(r, 400));
   // Real servers ask for settings; the client must answer.
   const settings = await connection.sendRequest("workspace/configuration", {
     items: [{ section: "fake" }],
   });
   if (!Array.isArray(settings)) process.exit(3);
   return {
-    capabilities: { textDocumentSync: 1, ...(mode === "pull" ? { diagnosticProvider: {} } : {}) },
+    capabilities: { textDocumentSync: 1, ...(pull ? { diagnosticProvider: {} } : {}) },
   };
 });
 connection.onNotification("initialized", () => {});
 connection.onNotification("textDocument/didOpen", ({ textDocument }) => {
   if (mode === "crash") process.exit(2);
   docs.set(textDocument.uri, { version: textDocument.version, text: textDocument.text });
-  if (mode !== "pull") publish(textDocument.uri);
+  if (!pull) publish(textDocument.uri);
 });
 connection.onNotification("textDocument/didChange", ({ textDocument, contentChanges }) => {
   docs.set(textDocument.uri, { version: textDocument.version, text: contentChanges[0].text });
-  if (mode !== "pull") publish(textDocument.uri);
+  if (!pull) publish(textDocument.uri);
 });
 connection.onRequest("textDocument/diagnostic", ({ textDocument }) => ({
   kind: "full",
