@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.2.0.
+Garuda is a terminal coding agent. This is version 0.2.1.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
