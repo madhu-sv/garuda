@@ -14,11 +14,13 @@ interface Tool<I, O> {
   run(input, ctx): Promise<O>;
   toText?(output: O): string;
   isError?(output: O): boolean;       // an error result that is not an exception (MCP)
+  report?(output: O): SubagentReport | undefined; // a subagent's usage, for the session totals
 }
 
 interface ToolContext {
   root; signal; permissions: PermissionGate; files: FileTracker;
   executor?: Executor; knowledge?: KnowledgeIndex; hooks?: ToolHooks;
+  callId?: string; progress?: (text: string) => void;   // set by the loop for each call
 }
 ```
 
@@ -37,6 +39,7 @@ implements it; replay uses a recorded one.
   5. `permissions.check()` → "Permission denied: …".
   6. `run()`, `toText()`, `isError()`.
   7. `hooks.after()` may append feedback.
+  8. `report()`, when the tool has it, adds the subagent report to the outcome.
   Any exception becomes `Error: <tool> failed: <message>`.
 
 ## Built-in tools
@@ -54,7 +57,10 @@ implements it; replay uses a recorded one.
 | `find_references` | yes | – | Code index: every use, following imports. `lookup` or `all`. |
 | `repo_map` | yes | – | Code index: exports and imports per file; a folder summary above 30 files. `all` only. |
 | `web_fetch` | no | URL | See [web.md](web.md). Present unless `web.enabled` is false. |
+| `explore` | yes | – | A read-only subagent answers one question about the code. See [agents.md](agents.md). Present unless `subagents.enabled` is false. |
 | `mcp__<server>__<tool>` | no | input | See [mcp.md](mcp.md). |
+
+`readOnlyTools(codeIndex)` gives the tool set of a subagent.
 
 Helpers: `limits.ts` (`LIMITS`, `cutLine`, `joinWithinLimit`, `looksBinary`), `files.ts` (`listFiles`,
 `assertSafePattern`), `diff.ts` (unified diff for previews), `atomicWrite.ts`.

@@ -34,8 +34,16 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         state.start = record;
         break;
       case "user":
+        state.messages.push(record.message);
+        break;
       case "tool_results":
         state.messages.push(record.message);
+        // Subagent runs (explore) count toward the session totals.
+        for (const call of record.calls) {
+          if (call.subagent === undefined) continue;
+          state.usage = addUsage(state.usage, call.subagent.usage);
+          addCost(call.subagent.costUsd);
+        }
         break;
       case "assistant":
         state.usage = addUsage(state.usage, record.response.usage);

@@ -35,7 +35,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `start`, `resume` | sessionId, root, version, model, executor, isolation, limits (maxSteps, tokenBudget, contextWindow) |
 | `user` | message |
 | `assistant` | step, response, costUsd? |
-| `tool_results` | message, `calls` (per call: toolUseId, name, durationMs, executor and isolation for commands), `synthetic` for closed open calls |
+| `tool_results` | message, `calls` (per call: toolUseId, name, durationMs, executor and isolation for commands, `subagent` report for explore calls), `synthetic` for closed open calls |
 | `compaction` | stage, before and after tokens, the new messages, the summary response and its cost (stage 2) |
 | `end` | stopReason, steps |
 
@@ -44,12 +44,14 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 ```ts
 interface SessionStore {
   open(sessionId): Journal;          // Journal.write(record)
+  openChild(sessionId, childId): Journal;   // a subagent run, kept with its parent (0.3)
   read(sessionId): Promise<SessionRecord[]>;
   latest(): Promise<string | undefined>;
 }
 ```
 
-`FileSessionStore`: `.garuda/sessions/<id>.jsonl`. The folder is 0700 and files are 0600. Each record is
+`FileSessionStore`: `.garuda/sessions/<id>.jsonl`; subagent runs in `.garuda/sessions/<id>/<child id>.jsonl`
+(ids cleaned to `[A-Za-z0-9_-]`; `latest()` ignores the subfolders, so `--resume` never picks a child). The folder is 0700 and files are 0600. Each record is
 one `appendFileSync`, so a crash loses at most the line in progress. Every string passes the
 `Redactor` first. Ids: `YYYYMMDD-HHMMSS-xxxx`. `MemoryJournal` serves tests. A shared store (for example
 Redis) can implement the same interface later.
@@ -68,7 +70,7 @@ The model may see a secret, but Garuda never writes it to disk. The `Redactor` r
 ## Resume (`resume.ts`)
 
 `rebuildState(records)` replays the records into messages, usage, cost and context size (compaction
-records replace the messages). `resumeSession` loads the latest or a given session, writes a `resume`
+records replace the messages; subagent reports in `tool_results` add their usage and cost). `resumeSession` loads the latest or a given session, writes a `resume`
 record, and continues in the same file. The read tracking starts empty: the agent must read a file again
 before it edits it.
 

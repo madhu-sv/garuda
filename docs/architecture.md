@@ -45,6 +45,7 @@ flowchart TB
   end
   subgraph App[Application layer]
     runtime[app/Runtime]
+    agents[agents: explore subagent]
     evals[evals: runner, suites]
   end
   subgraph Core[Core layer]
@@ -72,6 +73,8 @@ flowchart TB
   runtime --> mcp
   runtime --> hooks
   runtime --> lang
+  runtime --> agents
+  agents --> loop
   loop --> context
   loop --> session
   loop --> tools
@@ -102,6 +105,7 @@ flowchart TB
 | Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown. |
 | Net | `src/net/` | Address checks (public, loopback) shared by web fetch and model providers. |
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
+| Subagents | `src/agents/` | The explore tool: a child agent loop with read-only tools, its own session and limits, that answers one question. |
 | Language profiles | `src/lang/` | Find the build tool from marker files (Maven, Gradle, Python): test commands, prompt notes, package caches for the sandbox. |
 | Evals | `src/evals/` | Eval tasks (Node, Java, Python), the generated "shopkit" repository, toolchain checks, the runner and the report. |
 
@@ -110,7 +114,7 @@ flowchart TB
 The rules keep the core independent of the interface, and keep risky code in one place. Tests in
 `test/architecture.test.ts` enforce them.
 
-1. The loop, the app, the evals, the context and the session never import the CLI.
+1. The loop, the app, the agents, the evals, the context and the session never import the CLI.
 2. Only `src/model/anthropic.ts` imports `@anthropic-ai/*` (N1).
 3. Only `src/sandbox/` imports `child_process` (N8). Biome also blocks it.
 4. Only `src/mcp/` imports `@modelcontextprotocol/*`, and never its stdio transport: MCP servers start
@@ -161,6 +165,7 @@ flowchart LR
 | Model → tools | A prompt injection makes the model do harm. | Permission engine: read-only tools run; writes, commands outside the sandbox, MCP calls and new web hosts ask. Deny rules always win. |
 | Commands → machine | A command deletes or leaks data. | OS sandbox: writes only in the root, temp and caches; home secrets unreadable; no network. Escape asks. |
 | Project config → Garuda | A cloned repo starts code (MCP servers, hooks). | Consent with the full command; answer pinned to a hash in `~/.garuda/trust.json`; changes ask again. |
+| Subagent → main agent | File text that the child read and repeats in its answer. | The child has only read-only tools through the same permission engine and hooks; its answer is a tool result (data); its reads do not allow edits in the main agent. |
 | MCP server / web page → model | Hidden instructions, terminal escape codes, fake markers. | Clean text, cap its size, wrap it in `<mcp_result>` / `<web_result>`, neutralize Garuda's own markers, mark it as untrusted in the prompt. |
 | web_fetch → network | Server-side request forgery; data leaks through URLs. | Only public addresses, checked on the resolved IP and pinned; each redirect hop checked; new hosts ask; unusual URLs always ask. |
 | Garuda → disk | Secrets in session logs. | Redactor on every journal line; files 0600. |
@@ -200,4 +205,5 @@ All state is in files. There is no server and no database.
 | Chat UI | Ink, loaded only for a chat on a terminal | Rich UI without slowing `-p`, pipes and evals. |
 | Sessions | JSONL files behind `SessionStore` | Simple, readable, append-only; replaceable later. |
 | Java and Python support | Language profiles (marker files, offline commands, cache allowlist) and eval suites; no per-language subagents | Each language needs a toolchain and the right commands, not a different agent. The evals measure it. |
+| Subagents | Task-based (explore first), a tool of the main agent, same model by default | A child context keeps the main context small; one tool fits the loop, permissions and records with no new paths. Evals decide if it helps. |
 | Build caches in the sandbox | Only cache subfolders (`~/.m2/repository`, `~/.gradle/caches` …) are writable | Settings files and init scripts run later outside the sandbox; they stay read-only. |

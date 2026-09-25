@@ -83,6 +83,7 @@ contain `-`.
   "permissions": { "allow": ["bash(pnpm test*)"], "deny": ["bash(git push*)"] },
   "env": { "allow": ["NODE_ENV"] },
   "web": { "enabled": true, "allowLocalhost": false },
+  "subagents": { "enabled": true, "maxSteps": 20, "tokenBudget": 150000 },
   "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
   "model": { "contextWindow": 200000, "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 } }
 }

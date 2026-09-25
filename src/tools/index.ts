@@ -10,6 +10,17 @@ import type { AnyTool } from "./types.js";
 import { createWebFetchTool, type WebFetchOptions } from "./webFetch.js";
 import { writeFileTool } from "./writeFile.js";
 
+/** The read-only tools for a subagent: file search and reads, and the code index when it is on. */
+export function readOnlyTools(codeIndex: CodeIndexMode = DEFAULT_CODE_INDEX_MODE): AnyTool[] {
+  return [
+    readFileTool,
+    globTool,
+    grepTool,
+    ...(codeIndex === "off" ? [] : [findSymbolTool, findReferencesTool]),
+    ...(codeIndex === "all" ? [repoMapTool] : []),
+  ];
+}
+
 /**
  * The tools that Garuda ships. `codeIndex` picks which code index tools the model gets.
  * `web` adds web_fetch (the Runtime passes it unless settings turn it off).

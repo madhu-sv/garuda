@@ -20,6 +20,7 @@ import type { SandboxSettings } from "./sandboxPaths.js";
  *   "env": { "allow": ["NODE_ENV"] },
  *   "web": { "enabled": true, "allowLocalhost": false },
  *   "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
+ *   "subagents": { "enabled": true, "maxSteps": 20, "tokenBudget": 150000 },
  *   "model": {
  *     "contextWindow": 200000,
  *     "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 }
@@ -56,6 +57,14 @@ const schema = z.strictObject({
       tokenBudget: z.number().int().min(1_000).optional(),
     })
     .optional(),
+  /** The explore subagent (0.3). enabled: default true. Limits per explore run. */
+  subagents: z
+    .strictObject({
+      enabled: z.boolean().optional(),
+      maxSteps: z.number().int().min(1).max(200).optional(),
+      tokenBudget: z.number().int().min(10_000).optional(),
+    })
+    .optional(),
   model: z
     .strictObject({
       contextWindow: z.number().int().min(10_000).optional(),
@@ -85,6 +94,7 @@ export interface Settings {
   tokenBudget?: number;
   contextWindow?: number;
   price?: Price;
+  subagents?: { enabled?: boolean; maxSteps?: number; tokenBudget?: number };
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
@@ -101,6 +111,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     limits = {},
     model = {},
     codeIndex,
+    subagents,
   } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
@@ -133,6 +144,15 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(limits.tokenBudget === undefined ? {} : { tokenBudget: limits.tokenBudget }),
     ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
     ...(model.price === undefined ? {} : { price: model.price }),
+    ...(subagents === undefined
+      ? {}
+      : {
+          subagents: {
+            ...(subagents.enabled === undefined ? {} : { enabled: subagents.enabled }),
+            ...(subagents.maxSteps === undefined ? {} : { maxSteps: subagents.maxSteps }),
+            ...(subagents.tokenBudget === undefined ? {} : { tokenBudget: subagents.tokenBudget }),
+          },
+        }),
   };
 }
 

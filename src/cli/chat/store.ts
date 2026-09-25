@@ -236,6 +236,16 @@ export class ChatStore implements Renderer, Approver, Interruptible {
           ],
         });
         return;
+      case "tool_progress": {
+        // A subagent's current step: replace the live line of that call.
+        const base = `${event.call.name} ${summariseCall(event.call)}`;
+        this.update({
+          running: this.state.running.map((r) =>
+            r.id === event.call.id ? { ...r, line: `${base} · ${event.text}` } : r,
+          ),
+        });
+        return;
+      }
       case "tool_result": {
         const summary = summariseResult(event.call, event.outcome);
         const line = `${this.paint("cyan", "●")} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`;

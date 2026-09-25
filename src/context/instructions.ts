@@ -53,6 +53,7 @@ export function buildSystemPrompt(
     web = false,
     hooks = false,
     languages,
+    explore = false,
   }: {
     codeIndex?: CodeIndexMode;
     sandboxed?: boolean;
@@ -61,6 +62,8 @@ export function buildSystemPrompt(
     hooks?: boolean;
     /** Notes from the language profiles (0.3): build and test commands of this project. */
     languages?: string | undefined;
+    /** The explore subagent is available (0.3). */
+    explore?: boolean;
   } = {},
 ): string {
   const base = [
@@ -76,6 +79,14 @@ export function buildSystemPrompt(
           "They are more exact than grep for definitions and uses.",
         ]),
     "These tools run at once, with no approval. Do not use bash for ls, cat, head, tail, find or grep.",
+    ...(explore
+      ? [
+          "For an open question that needs several searches (where is X used, how does Y work across files,",
+          "which files must change), call explore: a subagent searches in its own context and returns a short",
+          "answer with path:line references. You can run several explore calls at once for separate questions.",
+          "For one known file, use read_file. Read a file yourself before you edit it.",
+        ]
+      : []),
     "Use edit_file to change a file and write_file to create one. Read the file with read_file first:",
     "edit_file refuses a file that read_file did not read in this session.",
     "Use bash only to run programs, for example tests and builds.",

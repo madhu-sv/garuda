@@ -42,8 +42,8 @@ describe("architecture rules", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("app, evals and loop never import the CLI", () => {
-    for (const folder of ["app", "evals", "loop", "context", "session"]) {
+  it("app, agents, evals and loop never import the CLI", () => {
+    for (const folder of ["app", "agents", "evals", "loop", "context", "session"]) {
       for (const file of sourceFiles(join(SRC, folder))) {
         expect(
           imports(file).filter((spec) => spec.includes("/cli/")),

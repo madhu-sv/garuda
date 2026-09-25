@@ -87,9 +87,13 @@ export class ToolRegistry implements ToolRunner {
       const output: unknown = await tool.run(parsed.data, context);
       const content = tool.toText ? tool.toText(output) : String(output);
       const outcome = { content, isError: tool.isError?.(output) === true };
-      return context.hooks === undefined
-        ? outcome
-        : await context.hooks.after(hookCall, outcome, context.signal);
+      const final =
+        context.hooks === undefined
+          ? outcome
+          : await context.hooks.after(hookCall, outcome, context.signal);
+      // The usage report does not depend on hooks: the child run has happened either way.
+      const subagent = tool.report?.(output);
+      return subagent === undefined ? final : { ...final, subagent };
     } catch (error) {
       if (context.signal.aborted) throw error;
       const message = error instanceof Error ? error.message : String(error);

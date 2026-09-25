@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { createExploreTool, DEFAULT_EXPLORE_LIMITS } from "../agents/explore.js";
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
 import { HOOKS_FILE, type Hook, hooksHash, loadHooks } from "../hooks/config.js";
 import { HookRunner, hooksConsent } from "../hooks/runner.js";
@@ -32,7 +33,7 @@ import type { RunLimits, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
 import { addUserMessage, createSession, type Session } from "../session/session.js";
 import { newSessionId, type SessionStore } from "../session/store.js";
-import { defaultTools } from "../tools/index.js";
+import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { VERSION } from "../version.js";
 
@@ -68,6 +69,11 @@ export interface RuntimeOptions {
   hooks?: false | { home?: string };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
   profiles?: LanguageProfile[];
+  /**
+   * The model of the explore subagent (0.3). Default: the main model. Only the user picks it
+   * (command line or environment), never the project settings.
+   */
+  subagentModel?: { spec: string; model: () => Promise<ModelClient>; info: ModelInfo };
 }
 
 export class Runtime {
@@ -86,6 +92,8 @@ export class Runtime {
   readonly knowledge: KnowledgeIndex;
   /** Which code index tools the model gets. */
   readonly codeIndex: CodeIndexMode;
+  /** The explore subagent's model spec, or undefined when explore is off (0.3). */
+  readonly exploreModel: string | undefined;
   private readonly permissions: PermissionEngine;
   private readonly store: SessionStore;
   private readonly tools: ToolRegistry;
@@ -151,6 +159,46 @@ export class Runtime {
       isolation: this.executor.isolation,
       access: profileAccess(profiles),
     });
+    this.exploreModel = undefined;
+    if (settings.subagents?.enabled !== false) {
+      const sub = options.subagentModel;
+      let subClient: ModelClient | undefined;
+      const subPrice = sub === undefined ? this.price : sub.info.price;
+      this.exploreModel = sub?.spec ?? options.modelId;
+      this.tools.register(
+        createExploreTool({
+          model: {
+            spec: this.exploreModel,
+            client:
+              sub === undefined
+                ? () => this.client()
+                : async () => {
+                    subClient ??= await sub.model();
+                    return subClient;
+                  },
+            contextWindow: sub?.info.contextWindow ?? this.limits.contextWindow,
+            ...(subPrice === undefined ? {} : { price: subPrice }),
+          },
+          tools: new ToolRegistry(readOnlyTools(this.codeIndex)),
+          permissions: this.permissions,
+          knowledge: this.knowledge,
+          hooks: () => this.hookRunner,
+          journal: (childId) =>
+            this.current === undefined ? undefined : this.store.openChild(this.current.id, childId),
+          limits: {
+            maxSteps: settings.subagents?.maxSteps ?? DEFAULT_EXPLORE_LIMITS.maxSteps,
+            tokenBudget: settings.subagents?.tokenBudget ?? DEFAULT_EXPLORE_LIMITS.tokenBudget,
+          },
+          executor: { name: this.executor.name, isolation: this.executor.isolation },
+        }),
+      );
+    }
+  }
+
+  /** The main model client, loaded on first use (N3). */
+  private async client(): Promise<ModelClient> {
+    if (typeof this.model === "function") this.model = await this.model();
+    return this.model;
   }
 
   static async create(options: RuntimeOptions): Promise<Runtime> {
@@ -184,6 +232,7 @@ export class Runtime {
         web: settings.web?.enabled ?? true,
         hooks: hookConfig.user.length + hookConfig.project.length > 0,
         languages: profileNotes(profiles),
+        explore: settings.subagents?.enabled !== false,
       },
     );
     const runtime = new Runtime(
@@ -222,9 +271,8 @@ export class Runtime {
     await this.startMcp(signal);
     const session = this.ensureSession();
     addUserMessage(session, prompt, this.mcp?.takeNotes() ?? []);
-    if (typeof this.model === "function") this.model = await this.model();
     return runAgent(session, {
-      model: this.model,
+      model: await this.client(),
       tools: this.tools,
       system: this.system,
       permissions: this.permissions,
@@ -251,6 +299,8 @@ export class Runtime {
     if (hooks > 0) out.push(`${hooks} hook${hooks === 1 ? "" : "s"}`);
     if (this.tools.get("web_fetch") !== undefined) out.push("web_fetch");
     if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
+    if (this.exploreModel !== undefined)
+      out.push(this.exploreModel === this.modelId ? "explore" : `explore: ${this.exploreModel}`);
     return out;
   }
 

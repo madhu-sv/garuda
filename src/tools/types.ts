@@ -4,6 +4,7 @@ import type { ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { CallInfo, PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
 import type { FileTracker } from "../session/fileTracker.js";
+import type { SubagentReport } from "../session/records.js";
 
 export interface ToolContext {
   /** Absolute path of the working root (F1, F15). */
@@ -19,6 +20,10 @@ export interface ToolContext {
   knowledge?: KnowledgeIndex;
   /** The user's hooks (0.2). The registry calls them around each tool call. */
   hooks?: ToolHooks;
+  /** The id of the current call (the loop sets it per call). */
+  callId?: string;
+  /** A one-line status while a long call runs, for the live view (the loop sets it per call). */
+  progress?: (text: string) => void;
 }
 
 /** Hooks around tool calls. They can block a call or add feedback; they never approve one. */
@@ -58,6 +63,8 @@ export interface Tool<I = unknown, O = string> {
   toText?(output: O): string;
   /** True when the output is an error result (MCP tools report errors this way). */
   isError?(output: O): boolean;
+  /** For a subagent tool: the usage of the child run, for the session totals. */
+  report?(output: O): SubagentReport | undefined;
 }
 
 /** What the loop needs from a tool set. ToolRegistry implements it; replay uses a recorded one. */
@@ -72,6 +79,8 @@ export interface ToolRunner {
 export interface ToolOutcome {
   content: string;
   isError: boolean;
+  /** Set by subagent tools: the loop adds the child's usage to the session. */
+  subagent?: SubagentReport;
 }
 
 /** A tool with its generic types erased, as the registry stores it. */

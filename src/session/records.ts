@@ -1,4 +1,4 @@
-import type { Message, ModelResponse } from "../model/types.js";
+import type { Message, ModelResponse, Usage } from "../model/types.js";
 
 /**
  * One line of a session file (F24). The file is the full record of a session:
@@ -47,6 +47,19 @@ export interface ToolCallMeta {
   /** For tools that run commands: the executor and its isolation (N8). */
   executor?: string;
   isolation?: string;
+  /** For a subagent call (explore): what the child run used. Resume adds it to the totals. */
+  subagent?: SubagentReport;
+}
+
+/** What one subagent run used (0.3). Its own session file holds the details. */
+export interface SubagentReport {
+  /** The child session id; its file is .garuda/sessions/<parent id>/<child id>.jsonl. */
+  sessionId: string;
+  model: string;
+  steps: number;
+  stopReason: string;
+  usage: Usage;
+  costUsd?: number;
 }
 
 export interface ToolResultsRecord extends Base {

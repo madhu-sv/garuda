@@ -93,6 +93,31 @@ flowchart TD
   H2 --> OUT[Result to the model]
 ```
 
+### The explore subagent (0.3)
+
+`explore` is a read-only tool, so it passes the same pipeline with no approval. Its `run` starts a
+second agent loop with its own session and read-only tools. Details: [lld/agents.md](lld/agents.md).
+
+```mermaid
+sequenceDiagram
+  participant Main as Main loop
+  participant Reg as ToolRegistry
+  participant Ex as explore tool
+  participant Child as Child loop
+  participant RO as Read-only tools
+  Main->>Reg: explore(question)
+  Reg->>Ex: run (after hooks and permission check)
+  Ex->>Child: runAgent(child session, EXPLORE_SYSTEM, limits)
+  loop up to 20 steps
+    Child->>RO: glob, grep, read_file (same permissions and hooks)
+    RO-->>Child: results
+    Child-->>Main: tool_progress "step N · grep /x/"
+  end
+  Child-->>Ex: answer (a wrap-up call if a limit hit)
+  Ex-->>Reg: answer + trailer, usage report
+  Reg-->>Main: tool result, usage added to the session
+```
+
 ## 5. Permission decision
 
 ```mermaid

@@ -65,6 +65,8 @@ export class PlainRenderer implements Renderer {
         return;
       }
       case "step_end":
+      // Live status lines need a live view; plain output stays one line per call.
+      case "tool_progress":
         return;
     }
   }
@@ -113,6 +115,8 @@ export function summariseCall(call: ToolUseBlock): string {
       return `/${str("pattern")}/${str("path") ? ` in ${str("path")}` : ""}`;
     case "bash":
       return cut(str("command").split("\n")[0] ?? "", 100);
+    case "explore":
+      return cut(str("question").split("\n")[0] ?? "", 100);
     default:
       return cut(JSON.stringify(call.input), 100);
   }
@@ -133,6 +137,12 @@ export function summariseResult(call: ToolUseBlock, outcome: ToolOutcome): strin
       return first.startsWith("No ") ? first : `${lines} result line(s)`;
     case "bash":
       return first;
+    case "explore": {
+      // The answer's size and the run's trailer: "[explore: 7 steps · 12.3k tokens]".
+      const trailer = /^\[explore: (.*)\]$/m.exec(outcome.content)?.[1];
+      const answerLines = outcome.content.split("\n[explore: ")[0]?.trim().split("\n").length ?? 0;
+      return `answer (${answerLines} line(s))${trailer === undefined ? "" : ` · ${trailer}`}`;
+    }
     default:
       return cut(first, 160);
   }

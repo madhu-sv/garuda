@@ -28,6 +28,7 @@ import { runTurnInTerminal } from "./turn.js";
 interface Options {
   prompt?: string;
   model?: string;
+  subagentModel?: string;
   resume?: string | true;
   replay?: string;
 }
@@ -41,6 +42,10 @@ async function main(): Promise<void> {
     .version(VERSION)
     .option("-p, --prompt <task>", "run one task and exit")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
+    .option(
+      "--subagent-model <id>",
+      "model of the explore subagent (or set GARUDA_SUBAGENT_MODEL); default: the main model",
+    )
     .option("-r, --resume [session-id]", "continue the last session, or the given one")
     .option("--replay <session-id-or-file>", "replay a recorded session with no API calls")
     .action(async (options: Options) => {
@@ -61,6 +66,8 @@ async function main(): Promise<void> {
     .option("--executor <name>", "auto (default), os or host")
     .option("--keep", "keep the scratch folders")
     .option("--list", "list the tasks and exit")
+    .option("--subagents <mode>", "the explore subagent: on (default) or off, for A/B runs")
+    .option("--subagent-model <id>", "model of the explore subagent; default: the main model")
     .option(
       "--prepare <toolchain>",
       "java: download Maven plugins and JUnit once; python: check pytest",
@@ -70,6 +77,7 @@ async function main(): Promise<void> {
       process.exitCode = await runEvalCommand({
         ...options,
         model: options.model ?? process.env.GARUDA_MODEL,
+        subagentModel: options.subagentModel ?? process.env.GARUDA_SUBAGENT_MODEL,
       });
     });
 
@@ -98,6 +106,15 @@ async function start(options: Options, program: Command): Promise<number> {
     program.error((error as Error).message);
   }
   const modelId = resolved.spec;
+  const subSpec = options.subagentModel ?? process.env.GARUDA_SUBAGENT_MODEL;
+  let sub: ResolvedModel | undefined;
+  if (subSpec) {
+    try {
+      sub = resolveModel(subSpec, models.config);
+    } catch (error) {
+      program.error((error as Error).message);
+    }
+  }
 
   const renderer = new PlainRenderer();
   const terminalApprover = new TerminalApprover();
@@ -110,6 +127,9 @@ async function start(options: Options, program: Command): Promise<number> {
     model: () => resolved.create(),
     modelInfo: resolved.info,
     ...(resolved.maxTokens === undefined ? {} : { maxTokens: resolved.maxTokens }),
+    ...(sub === undefined
+      ? {}
+      : { subagentModel: { spec: sub.spec, model: () => sub.create(), info: sub.info } }),
     approver,
     store,
     ...(options.resume === undefined ? {} : { resume: options.resume }),

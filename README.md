@@ -114,6 +114,7 @@ garuda eval -s hard --repeat 3             # each task 3 times, with a mean row 
 garuda eval -s hard --repeat 3 --index lookup  # the same, with find_symbol and find_references (A/B)
 garuda eval -s java                        # 5 Maven projects with JUnit 5
 garuda eval -s python                      # 5 pytest projects
+garuda eval -s hard --repeat 3 --subagents off  # A/B: the same, without the explore subagent
 ```
 
 The Java and Python suites need a toolchain. `garuda eval` checks it before the first model call and
@@ -210,6 +211,23 @@ Settings:
   that it needs; Garuda then falls back to the host and says why.
 - Limit on Linux: a protected path that does not exist yet (for example `.git/hooks` in a folder with no
   `.git`) is not protected.
+
+## Explore subagent
+
+For an open question about the code ("where is the coupon applied, and who calls it?"), the model can
+call `explore`. A subagent searches with `glob`, `grep` and `read_file` in its own context and returns a
+short answer with `path:line` references. The main context stays small, and several explore calls can
+run at once.
+
+- The subagent can only read. It uses the same permissions and hooks, so secrets stay blocked.
+- Limits per call: 20 steps and 150 000 tokens. When it hits a limit, it still answers with what it
+  found, and says so.
+- It uses the main model. `--subagent-model <spec>` (or `GARUDA_SUBAGENT_MODEL`) picks another one, for
+  example `claude-haiku-4-5` under Sonnet. Its tokens and cost count in the session totals.
+- The chat shows one live line per call (`explore … · step 3 · grep /coupon/`); Ctrl-O shows the answer
+  and what it searched. Each run has its own file in `.garuda/sessions/<session id>/`.
+- Settings: `"subagents": { "enabled": false }` turns it off; `maxSteps` and `tokenBudget` change the
+  limits.
 
 ## Java and Python projects
 
@@ -400,6 +418,7 @@ Notes:
 | `src/app/` | `Runtime`: settings, executor, permissions and session for one process. The CLI and the evals share it |
 | `src/cli/` | Entry point, chat mode, renderer, terminal approver, `garuda eval` |
 | `src/evals/` | The eval suites (basic, hard, java, python), the shopkit repo generator, toolchain checks and the runner |
+| `src/agents/` | The explore subagent: a read-only child agent loop behind one tool |
 | `src/lang/` | Language profiles: build and test commands, prompt notes and sandbox caches for Maven, Gradle and Python projects |
 | `src/knowledge/` | The code index: `KnowledgeIndex`, `LanguageExpert`, the TypeScript/JavaScript expert |
 | `scripts/` | Build helpers. `package.mjs` makes the standalone binary |

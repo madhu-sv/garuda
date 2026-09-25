@@ -42,9 +42,16 @@ export async function replaySession(
     if (record.type === "compaction" && record.summary !== undefined)
       responses.push(record.summary);
     if (record.type === "tool_results" && record.synthetic !== true) {
+      const reports = new Map(record.calls.map((call) => [call.toolUseId, call.subagent]));
       for (const block of record.message.content) {
         if (block.type === "tool_result") {
-          outcomes.set(block.toolUseId, { content: block.content, isError: block.isError });
+          const subagent = reports.get(block.toolUseId);
+          outcomes.set(block.toolUseId, {
+            content: block.content,
+            isError: block.isError,
+            // Replay does not run the subagent again; its recorded usage still counts.
+            ...(subagent === undefined ? {} : { subagent }),
+          });
         }
       }
     }

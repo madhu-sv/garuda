@@ -18,14 +18,19 @@ imports the CLI.
 | `onEvent`, `onNotice` | Agent events; warnings outside tool calls. |
 | `mcp` | `false`, or `{ home, env }` to override where MCP config and trust are read. |
 | `hooks` | `false`, or `{ home }`. |
+| `profiles` | Language profiles; default: detected from the root (see [languages.md](languages.md)). |
+| `subagentModel` | `{ spec, model, info }` for the explore subagent; default: the main model (see [agents.md](agents.md)). |
 
 ### `Runtime.create`
 
 1. Load settings. `createExecutor(settings.executor)` → executor and an optional notice.
 2. Load MCP configs and hooks configs (problems go to `onNotice`).
-3. `buildSystemPrompt(root, GARUDA.md, memory.md, { codeIndex, sandboxed, mcp, web, hooks })`.
+3. Detect the language profiles. `buildSystemPrompt(root, GARUDA.md, memory.md, { codeIndex, sandboxed,
+   mcp, web, hooks, languages, explore })`.
 4. Build the tool registry (`defaultTools` with the code index mode and web options), limits (max steps,
-   token budget, context window from settings or the model table), the price, the permission engine.
+   token budget, context window from settings or the model table), the price, the permission engine
+   (with the profiles' cache access), and — unless `subagents.enabled` is false — the explore tool with
+   its own read-only registry.
 5. With `resume`, rebuild the session from its records.
 
 ### `runTurn(prompt, signal)`
@@ -35,7 +40,8 @@ imports the CLI.
    A Ctrl-C during the start clears the state, so the next turn tries again.
 3. `ensureSession()`: a new session with a `start` record, or the current one.
 4. `addUserMessage(session, prompt, mcp.takeNotes())`.
-5. Load the model if it is still a factory, then `runAgent(session, deps)`.
+5. Load the model if it is still a factory (`client()`; the explore tool shares it), then
+   `runAgent(session, deps)`.
 
 Other methods: `newSession()`, `recordStop(reason)`, `mcpStatus()`, `hookLines()`, `close()` (closes MCP
 clients).
@@ -63,15 +69,18 @@ while steps < maxSteps:
   if none: stop done | max_tokens | refusal (from the model stop reason)
   results = runTools(calls)         # see below
   addToolResults(session, results, meta)
+  for each call with a subagent report: add its usage and cost to the session and the run
   if the last 3 call signatures are equal: stop repeated_calls
 stop max_steps
 ```
 
 `runTools`: consecutive read-only calls run in parallel (`Promise.all`); other calls run one at a
 time, in order. Results keep the call order. Each result meta records the executor name and isolation
-for calls that run commands (N8).
+for calls that run commands (N8), and the subagent report for explore calls. Each call gets its own
+`callId` and `progress` callback in the tool context.
 
-Events: `text_delta`, `tool_call`, `tool_result`, `compaction`, `step_end`.
+Events: `text_delta`, `tool_call`, `tool_progress` (a one-line status of a long call, for example a
+subagent's current step), `tool_result`, `compaction`, `step_end`.
 
 Defaults: `DEFAULT_MAX_STEPS = 50`, `DEFAULT_MAX_TOKENS = 8192`, `DEFAULT_TOKEN_BUDGET = 20 000 000`,
 `REPEAT_LIMIT = 3`.

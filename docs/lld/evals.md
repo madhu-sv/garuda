@@ -76,6 +76,7 @@ environment list.
 ```text
 garuda eval [-m model] [-s basic|hard|java|python|all] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
+            [--subagents on|off] [--subagent-model spec]
 garuda eval --prepare java|python
 ```
 
@@ -93,6 +94,10 @@ a mean per task for `--repeat`, and `report.json`. Exit code 0 when all pass, 2 
   build, and change one thing per arm.
 - Results so far (claude-sonnet-5, hard suite, 3 runs per task): code index off 50.0 steps / $0.194 (the
   default); lookup 53.2 / $0.242; all 51.2 / $0.232; bash hints 49.1 / $0.208 (no measured gain).
+- Java and Python suites, first run (claude-haiku-4-5, one run each, before explore): java 5/5, 40 steps,
+  $0.139; python 5/5, 31 steps, $0.120. Maven ran in the Seatbelt sandbox with no approval.
+- Explore subagent: compare `--subagents off` and `on` on the hard suite with `--repeat 3`; the result
+  decides the default, as it did for the code index.
 - The requirements doc keeps the per-task tables ("0.1 results", "0.2 results").
 
 ## Tests

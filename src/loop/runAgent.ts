@@ -16,6 +16,7 @@ import type { Executor } from "../sandbox/types.js";
 import type { ToolCallMeta } from "../session/records.js";
 import {
   addAssistantResponse,
+  addCost,
   addToolResults,
   closeOpenToolCalls,
   type Session,
@@ -31,6 +32,8 @@ export type AgentEvent =
   | { type: "text_delta"; text: string }
   | { type: "tool_call"; call: ToolUseBlock }
   | { type: "tool_result"; call: ToolUseBlock; outcome: ToolOutcome }
+  /** A one-line status of a long call, for example a subagent's current step. */
+  | { type: "tool_progress"; call: ToolUseBlock; text: string }
   | { type: "step_end"; step: number; usage: Usage }
   | { type: "compaction"; result: CompactionResult };
 
@@ -140,6 +143,12 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
     };
     const { results, meta } = await runTools(calls, deps, context, emit);
     addToolResults(session, results, meta);
+    // Subagent runs count toward this session: its totals, the token budget and the run usage.
+    for (const { subagent } of meta) {
+      if (subagent === undefined) continue;
+      addCost(session, subagent.usage, subagent.costUsd);
+      usage = addUsage(usage, subagent.usage);
+    }
 
     for (const call of calls) recent.push(signature(call));
     if (repeated(recent)) return finish("repeated_calls");
@@ -179,11 +188,16 @@ async function runTools(
   const runOne = async (call: ToolUseBlock): Promise<ToolResultBlock> => {
     emit({ type: "tool_call", call });
     const started = Date.now();
-    const outcome = await tools.execute(call, context);
+    const outcome = await tools.execute(call, {
+      ...context,
+      callId: call.id,
+      progress: (text) => emit({ type: "tool_progress", call, text }),
+    });
     const item: ToolCallMeta = {
       toolUseId: call.id,
       name: call.name,
       durationMs: Date.now() - started,
+      ...(outcome.subagent === undefined ? {} : { subagent: outcome.subagent }),
     };
     if (executor !== undefined && tools.runsCommands(call.name)) {
       item.executor = executor.name;

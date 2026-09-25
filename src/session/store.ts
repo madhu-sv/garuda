@@ -16,6 +16,11 @@ export interface Journal {
  */
 export interface SessionStore {
   open(sessionId: string): Journal;
+  /**
+   * The journal of a subagent run (0.3), kept with its parent session. It is not a session of its
+   * own: `latest()` never returns it, so --resume never picks it.
+   */
+  openChild(sessionId: string, childId: string): Journal;
   read(sessionId: string): Promise<SessionRecord[]>;
   /** The most recently written session, or undefined. */
   latest(): Promise<string | undefined>;
@@ -42,8 +47,20 @@ export class FileSessionStore implements SessionStore {
   }
 
   open(sessionId: string): Journal {
-    mkdirSync(this.dir, { recursive: true, mode: 0o700 });
-    const file = this.path(sessionId);
+    return this.journal(this.dir, this.path(sessionId));
+  }
+
+  /** `.garuda/sessions/<session id>/<child id>.jsonl`. */
+  childPath(sessionId: string, childId: string): string {
+    return join(this.dir, safeId(sessionId), `${safeId(childId)}.jsonl`);
+  }
+
+  openChild(sessionId: string, childId: string): Journal {
+    return this.journal(join(this.dir, safeId(sessionId)), this.childPath(sessionId, childId));
+  }
+
+  private journal(dir: string, file: string): Journal {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
     return {
       write: (record) => {
         const line = { t: new Date().toISOString(), ...record };
@@ -70,6 +87,11 @@ export class FileSessionStore implements SessionStore {
     }
     return best?.id;
   }
+}
+
+/** An id as a file name: tool call ids come from the model provider, so keep only safe characters. */
+function safeId(id: string): string {
+  return id.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) || "_";
 }
 
 /** Parse a session file. A broken last line (a crash during a write) is skipped. */

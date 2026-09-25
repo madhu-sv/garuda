@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { copyFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Runtime } from "../app/runtime.js";
+import { Runtime, type RuntimeOptions } from "../app/runtime.js";
 import type { CodeIndexMode } from "../knowledge/mode.js";
 import type { AgentEvent } from "../loop/runAgent.js";
 import { type ModelInfo, totalTokens } from "../model/pricing.js";
@@ -53,6 +53,10 @@ export interface EvalOptions {
   codeIndex?: CodeIndexMode;
   /** Default: "auto", the OS sandbox when this machine has one. */
   executor?: ExecutorName;
+  /** The explore subagent (0.3). Default: on, as in the product. */
+  subagents?: boolean;
+  /** The explore subagent's model. Default: the main model. */
+  subagentModel?: RuntimeOptions["subagentModel"];
 }
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
@@ -69,6 +73,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     ...(options.executor === undefined ? {} : { executor: options.executor }),
     ...(options.codeIndex === undefined ? {} : { codeIndex: options.codeIndex }),
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
+    ...(options.subagents === undefined ? {} : { subagents: { enabled: options.subagents } }),
   });
   const store = new FileSessionStore(root);
   const runtime = await Runtime.create({
@@ -77,6 +82,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     model: async () => options.model(),
     ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo }),
     ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
+    ...(options.subagentModel === undefined ? {} : { subagentModel: options.subagentModel }),
     approver: new AutoApprover("once"),
     store,
     settings,
