@@ -57,6 +57,7 @@ export class PlainRenderer implements Renderer {
         this.line(
           `  ${this.paint("dim", "⎿")} ${event.outcome.isError ? this.paint("red", text) : this.paint("dim", text)}`,
         );
+        for (const line of todoLines(event.call, event.outcome)) this.line(`    ${line}`);
         return;
       }
       case "compaction": {
@@ -100,6 +101,17 @@ export class PlainRenderer implements Renderer {
   }
 }
 
+/** The steps of a todo list, with symbols, for the live view. Empty for other tools. */
+export function todoLines(call: ToolUseBlock, outcome: ToolOutcome): string[] {
+  if (call.name !== "todo_write" || outcome.isError) return [];
+  const marks: Record<string, string> = { "[x]": "✔", "[>]": "▶", "[ ]": "○" };
+  return outcome.content
+    .split("\n")
+    .map((line) => /^(\[[x> ]\]) (.*)$/.exec(line))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => `${marks[m[1] ?? ""] ?? "○"} ${m[2] ?? ""}`);
+}
+
 /** The notice for a retry of a broken model stream. */
 export function retryText(event: { attempt: number; maxRetries: number; reason: string }): string {
   return `The connection to the model broke (${event.reason}). Retrying (${event.attempt}/${event.maxRetries})…`;
@@ -125,6 +137,10 @@ export function summariseCall(call: ToolUseBlock): string {
       return cut(str("command").split("\n")[0] ?? "", 100);
     case "explore":
       return cut(str("question").split("\n")[0] ?? "", 100);
+    case "todo_write": {
+      const todos = Array.isArray(input.todos) ? input.todos : [];
+      return `${todos.length} step(s)`;
+    }
     default:
       return cut(JSON.stringify(call.input), 100);
   }
@@ -145,6 +161,8 @@ export function summariseResult(call: ToolUseBlock, outcome: ToolOutcome): strin
       return first.startsWith("No ") ? first : `${lines} result line(s)`;
     case "bash":
       return first;
+    case "todo_write":
+      return /\((\d+ of \d+ done)\)/.exec(first)?.[1] ?? first;
     case "explore": {
       // The answer's size and the run's trailer: "[explore: 7 steps · 12.3k tokens]".
       const trailer = /^\[explore: (.*)\]$/m.exec(outcome.content)?.[1];

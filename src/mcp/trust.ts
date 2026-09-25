@@ -11,6 +11,7 @@ import { z } from "zod";
  *   tools  the hash of the tool list seen at approval, to detect changed tools later
  *   toolHashes  one hash per tool, to say which tools were added, removed or changed
  * User servers are recorded under the key "~" (tools only; they need no consent).
+ * Project hooks and project slash commands (0.4) keep the hash of what the user allowed.
  */
 export const TRUST_FILE = join(".garuda", "trust.json");
 
@@ -25,6 +26,8 @@ const schema = z.object({
   mcp: z.record(z.string(), z.record(z.string(), entry)).default({}),
   /** Project root → hash of the approved project hooks. */
   hooks: z.record(z.string(), z.string()).default({}),
+  /** Project root → command name → hash of the approved command file (0.4). */
+  commands: z.record(z.string(), z.record(z.string(), z.string())).default({}),
 });
 type TrustData = z.infer<typeof schema>;
 export type TrustEntry = z.infer<typeof entry>;
@@ -32,7 +35,7 @@ export type TrustEntry = z.infer<typeof entry>;
 export const USER_SCOPE = "~";
 
 export class TrustStore {
-  private data: TrustData = { version: 1, mcp: {}, hooks: {} };
+  private data: TrustData = { version: 1, mcp: {}, hooks: {}, commands: {} };
 
   private constructor(private readonly file: string) {}
 
@@ -58,6 +61,17 @@ export class TrustStore {
 
   async setHooksHash(root: string, hash: string): Promise<void> {
     this.data.hooks[root] = hash;
+    await this.save();
+  }
+
+  commandHash(root: string, name: string): string | undefined {
+    return this.data.commands[root]?.[name];
+  }
+
+  async setCommandHash(root: string, name: string, hash: string): Promise<void> {
+    const commands = this.data.commands[root] ?? {};
+    this.data.commands[root] = commands;
+    commands[name] = hash;
     await this.save();
   }
 

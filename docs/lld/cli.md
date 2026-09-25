@@ -104,7 +104,11 @@ interface ChatState {
 - **Text:** `text_delta` appends to `streaming`; `takeBlocks` moves finished blocks to `items`, styled
   with `renderMarkdown`. A tool call, a step end or a note flushes the open block.
 - **Tools:** `tool_call` adds a running line; `tool_result` prints the call and result lines and keeps
-  the full output for Ctrl-O.
+  the full output for Ctrl-O. A `todo_write` result also prints its checklist (`✔` done, `▶` in
+  progress, `○` pending); the plain renderer prints the same lines.
+- **Custom commands (0.4):** a line that starts with `/` goes to `runCommand`; a custom command gives
+  back its prompt, the chat shows the typed line once and runs the turn with the prompt. See
+  [commands.md](commands.md).
 - **Approvals:** `ask()` prints the full header and preview into the scrollback, then shows only the
   choice. Keys: ↑↓ Enter, 1 2 3, y / a / n, Esc. Abort of the turn rejects the promise.
 - **Queue:** Enter while busy appends to `queue`; `nextInput()` takes from the queue first. Esc clears it.

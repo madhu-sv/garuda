@@ -45,12 +45,15 @@ export async function runRepl(
     if (text === "") continue;
     history.unshift(input.text);
 
+    let prompt = text;
     if (text.startsWith("/")) {
-      if ((await runCommand(text, { runtime, renderer, sessionPath })) === "exit") return;
-      continue;
+      const result = await runCommand(text, { runtime, renderer, sessionPath });
+      if (result === "exit") return;
+      if (result === "done") continue;
+      prompt = result.prompt;
     }
 
-    await runTurnInTerminal(runtime, approver, renderer, text, exitNow);
+    await runTurnInTerminal(runtime, approver, renderer, prompt, exitNow);
   }
 }
 

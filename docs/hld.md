@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.3.0. This document shows how the parts work together. The component documents in
+Version 0.4.0 (in progress). This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -29,7 +29,8 @@ sequenceDiagram
   RT->>RT: createExecutor(auto|os|host)
   RT->>FS: marker files (pom.xml, build.gradle, pyproject.toml …)
   RT->>RT: language profiles: commands, notes, cache paths
-  RT->>FS: GARUDA.md, .garuda/memory.md
+  RT->>FS: AGENTS.md, CLAUDE.md, GARUDA.md, .garuda/memory.md
+  RT->>FS: ~/.garuda/commands and .garuda/commands
   RT->>FS: ~/.garuda and .garuda: mcp.json, hooks.json
   RT->>RT: system prompt (fixed for the session)
   RT->>RT: tools, permission engine
@@ -172,7 +173,8 @@ flowchart LR
 ## 8. Context management
 
 - The system prompt is fixed for a session (N2). It holds the rules, the sandbox note, the MCP, web and
-  hooks notes when those features are on, `GARUDA.md` and `.garuda/memory.md`.
+  hooks notes when those features are on, the instruction files (`AGENTS.md`, `CLAUDE.md`, `GARUDA.md`) and
+  `.garuda/memory.md`.
 - At 80% of the context window, compaction runs: first it trims long tool outputs in older turns; if the
   context is still above 60%, the model summarises the older turns. The last 4 steps stay in full.
 - `read_file` does not send the same lines of an unchanged file twice.
@@ -195,6 +197,9 @@ The Ink chat keeps all state in `ChatStore`. The store is also the renderer, the
 Ctrl-C target of a turn, so the logic is testable without a terminal. Finished lines print once into
 the terminal scrollback; the live area holds only the open text block, running tools, the approval
 choice, the queue, the input line and a footer. See [cli.md](lld/cli.md).
+
+Custom slash commands (0.4) are Markdown prompts in `~/.garuda/commands` and `.garuda/commands`. A project
+command shows its text and asks the first time, like project hooks. See [commands.md](lld/commands.md).
 
 ## 11. Quality
 

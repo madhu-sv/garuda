@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.3.0.
+Garuda is a terminal coding agent. Version 0.3.0 is released; 0.4 is in progress.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -82,7 +82,8 @@ Set the context window, price and output limit per model, and add providers, in 
 
 `garuda` with no task starts a chat. Each line is one task; the conversation carries over.
 
-- `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/exit`.
+- `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
+  (your custom commands), `/exit`.
 - Ctrl-C during a task stops the task and kills its commands. The chat goes on.
   A second Ctrl-C during the task exits Garuda at once.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
@@ -99,6 +100,33 @@ Set the context window, price and output limit per model, and add providers, in 
 - `garuda --resume` continues the latest session in chat mode.
 
 Model text goes to stdout; tool activity and notes go to stderr. So `garuda -p "…" > answer.md` keeps only the answer.
+
+## Custom slash commands
+
+Save a prompt as a Markdown file and run it with `/name`:
+
+```markdown
+<!-- ~/.garuda/commands/review.md (yours) or .garuda/commands/review.md (the project's) -->
+---
+description: Review a file for bugs
+argument-hint: <path>
+---
+Review $1 for bugs and missing tests. List the problems by severity.
+```
+
+- `/review src/cart.ts` in the chat, or `garuda -p "/review src/cart.ts"`. `$ARGUMENTS` takes all
+  arguments, `$1` … `$9` one each. `/commands` lists them; `/help` shows them too.
+- A subfolder gives a name with a colon: `frontend/test.md` → `/frontend:test`.
+- A command is only a prompt. Its tool calls ask or run in the sandbox as usual.
+- A project command shows its full text and asks the first time. "Remember" pins the answer to the
+  file; a changed file asks again. Built-in commands, and your own commands, win over project commands
+  with the same name.
+
+## Todo list (opt-in)
+
+`"todo": { "enabled": true }` in `.garuda/settings.json` gives the model a `todo_write` tool: for a task
+with 3 or more steps it keeps a plan, and the chat shows it as a checklist (`✔`, `▶`, `○`). It is off by
+default until an A/B eval shows that it helps: `garuda eval -s hard --repeat 3 --todo on`.
 
 ## Evals
 
@@ -173,7 +201,8 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   to 2 times) and says so. The session keeps only the complete response.
 - At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,
   the model summarises the older turns. The last 4 turns always stay in full.
-- `GARUDA.md` in the project root goes into the system prompt.
+- `AGENTS.md`, `CLAUDE.md` and `GARUDA.md` in the project root go into the system prompt, in that order;
+  `GARUDA.md` wins on a conflict. A file with the same text as an earlier one goes in once.
 - Project memory: the `remember` tool saves lasting facts (build and test commands, layout, conventions)
   to `.garuda/memory.md`, with your approval. The next session loads them after `GARUDA.md`.
   Edit or delete lines freely. Add `remember` to `permissions.allow` to skip the question.
@@ -416,7 +445,8 @@ Notes:
 | --- | --- |
 | `src/model/` | Provider-neutral types, `ModelClient`, the Anthropic adapter, the fake model |
 | `src/loop/` | `runAgent(session, deps)`: the agent loop, limits, loop guard; `replaySession` |
-| `src/context/` | Compaction and the GARUDA.md loader |
+| `src/context/` | Compaction, the system prompt, and the loader of AGENTS.md, CLAUDE.md and GARUDA.md |
+| `src/commands/` | Custom slash commands |
 | `src/tools/` | `Tool<I, O>`, the registry, and the tools: `read_file`, `glob`, `grep`, `write_file`, `edit_file`, `bash` |
 | `src/permissions/` | Path guard (F15), rules, sensitive paths, settings, and the permission engine (F17–F20) |
 | `src/sandbox/` | `Executor` interface, `ExecPolicy`, `HostExecutor`, `SeatbeltExecutor`, `BwrapExecutor`. The only place that starts processes (N8) |

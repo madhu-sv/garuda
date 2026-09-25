@@ -1,6 +1,14 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createExploreTool, DEFAULT_EXPLORE_LIMITS } from "../agents/explore.js";
+import { BUILTIN_COMMANDS } from "../commands/builtins.js";
+import {
+  type CustomCommand,
+  commandConsent,
+  expandCommand,
+  loadCommands,
+  parseCommandLine,
+} from "../commands/custom.js";
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
 import { HOOKS_FILE, type Hook, hooksHash, loadHooks } from "../hooks/config.js";
 import { HookRunner, hooksConsent } from "../hooks/runner.js";
@@ -37,6 +45,12 @@ import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { VERSION } from "../version.js";
 
+/** What a line that starts with "/" means, when it is not a built-in command. */
+export type CommandResolution =
+  | { kind: "none" }
+  | { kind: "prompt"; prompt: string; command: CustomCommand }
+  | { kind: "denied"; message: string };
+
 /**
  * Everything one Garuda process needs to run turns: settings, executor, permissions,
  * the session and its store. The CLI (one-shot and chat) and the eval runner share it.
@@ -67,6 +81,8 @@ export interface RuntimeOptions {
   mcp?: false | { home?: string; env?: NodeJS.ProcessEnv };
   /** Hooks (0.2). Default: read ~/.garuda/hooks.json and <root>/.garuda/hooks.json. false: none. */
   hooks?: false | { home?: string };
+  /** Custom slash commands (0.4). Default: ~/.garuda/commands and .garuda/commands. false: none. */
+  commands?: false | { home?: string };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
   profiles?: LanguageProfile[];
   /**
@@ -108,6 +124,10 @@ export class Runtime {
   private mcp: McpManager | undefined;
   private mcpStarted: Promise<void> | undefined;
   private readonly hookConfig: { user: Hook[]; project: Hook[]; home: string };
+  private customCommands: CustomCommand[] = [];
+  private commandsHome = homedir();
+  /** Hashes of project commands that the user allowed for this process ("Yes, this time"). */
+  private readonly allowedCommands = new Set<string>();
   private hookRunner: HookRunner | undefined;
   private hooksStarted: Promise<void> | undefined;
 
@@ -140,6 +160,7 @@ export class Runtime {
       defaultTools({
         codeIndex: this.codeIndex,
         ...(web.enabled ? { web: { allowLocalhost: web.allowLocalhost } } : {}),
+        todo: settings.todo?.enabled === true,
       }),
     );
     const info = options.modelInfo ?? lookupModel(options.modelId);
@@ -234,6 +255,7 @@ export class Runtime {
         hooks: hookConfig.user.length + hookConfig.project.length > 0,
         languages: profileNotes(profiles),
         explore: settings.subagents?.enabled === true,
+        todo: settings.todo?.enabled === true,
       },
     );
     const runtime = new Runtime(
@@ -245,6 +267,16 @@ export class Runtime {
       hookConfig,
       profiles,
     );
+    if (options.commands !== false) {
+      runtime.commandsHome = options.commands?.home ?? homedir();
+      const loaded = await loadCommands({
+        home: runtime.commandsHome,
+        root: options.root,
+        builtins: BUILTIN_COMMANDS,
+      });
+      runtime.customCommands = loaded.commands;
+      for (const problem of loaded.problems) options.onNotice?.(problem);
+    }
     if (options.resume !== undefined) {
       runtime.current = await resumeSession({
         store: options.store,
@@ -254,6 +286,36 @@ export class Runtime {
       });
     }
     return runtime;
+  }
+
+  /** Custom slash commands (0.4), sorted by name. */
+  get commands(): readonly CustomCommand[] {
+    return this.customCommands;
+  }
+
+  /**
+   * The prompt for a custom command line (`/name args`). A project command shows its text and
+   * asks first; "remember" pins the answer to the file's hash in ~/.garuda/trust.json.
+   */
+  async resolveCommand(line: string, signal: AbortSignal): Promise<CommandResolution> {
+    const parsed = parseCommandLine(line);
+    const command =
+      parsed === undefined ? undefined : this.customCommands.find((c) => c.name === parsed.name);
+    if (parsed === undefined || command === undefined) return { kind: "none" };
+    if (command.source === "project" && !this.allowedCommands.has(command.hash)) {
+      const trust = await TrustStore.open(this.commandsHome);
+      const known = trust.commandHash(this.root, command.name);
+      if (known !== command.hash) {
+        const request = commandConsent(command, known !== undefined, this.executor.isolation);
+        const choice = await this.approver.ask(request, signal);
+        if (choice === "deny") {
+          return { kind: "denied", message: `You did not run /${command.name}.` };
+        }
+        if (choice === "session") await trust.setCommandHash(this.root, command.name, command.hash);
+      }
+      this.allowedCommands.add(command.hash);
+    }
+    return { kind: "prompt", prompt: expandCommand(command, parsed.args), command };
   }
 
   /** The current session, or undefined before the first turn of a new session. */

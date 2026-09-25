@@ -6,6 +6,7 @@ import { globTool } from "./glob.js";
 import { grepTool } from "./grep.js";
 import { readFileTool } from "./readFile.js";
 import { rememberTool } from "./remember.js";
+import { todoWriteTool } from "./todo.js";
 import type { AnyTool } from "./types.js";
 import { createWebFetchTool, type WebFetchOptions } from "./webFetch.js";
 import { writeFileTool } from "./writeFile.js";
@@ -28,9 +29,12 @@ export function readOnlyTools(codeIndex: CodeIndexMode = DEFAULT_CODE_INDEX_MODE
 export function defaultTools({
   codeIndex = DEFAULT_CODE_INDEX_MODE,
   web,
+  todo = false,
 }: {
   codeIndex?: CodeIndexMode;
   web?: WebFetchOptions;
+  /** todo_write (0.4). Off by default until an A/B eval decides. */
+  todo?: boolean;
 } = {}): AnyTool[] {
   return [
     readFileTool,
@@ -43,5 +47,6 @@ export function defaultTools({
     bashTool,
     rememberTool,
     ...(web === undefined ? [] : [createWebFetchTool(web)]),
+    ...(todo ? [todoWriteTool] : []),
   ];
 }

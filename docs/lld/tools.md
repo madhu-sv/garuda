@@ -52,6 +52,7 @@ implements it; replay uses a recorded one.
 | `write_file` (F10) | no | path | Create only (fails if the file exists), folders created, atomic (temp file + hard link). Approval shows the diff. |
 | `edit_file` (F11) | no | path | Replace one exact `old_string`. Fails on 0 or several matches, and when the file is unread or changed since the last read. The edit is planned before approval (real diff) and planned again after it. Atomic write that keeps the file mode and follows symlinks. |
 | `bash` (F14) | no | command | Runs through the Executor; timeout default 120 s, max 600 s; stdout and stderr capped at 30 000 bytes each (middle cut). Strips a leading `cd <root> &&`. Hints: read-only commands (use file tools), pipes into head/tail, sandbox blocks. `outside_sandbox: true` runs with no isolation and always asks. |
+| `todo_write` | yes | – | The model's plan for a task with several steps: the whole list each call (≤ 30 steps of ≤ 300 characters; status `pending`, `in_progress`, `completed`; at most one in progress). The result shows the list back with `[x]`, `[>]`, `[ ]`; the chat draws a checklist. No state outside the conversation. Only with `todo.enabled: true` (off by default, 0.4). |
 | `remember` | no | input | Appends one fact to `.garuda/memory.md` (max 8000 chars). The user approves each fact. Loads in the next session only (N2). |
 | `find_symbol` | yes | – | Code index: definitions (exact or fuzzy). Only when `codeIndex` is `lookup` or `all`. |
 | `find_references` | yes | – | Code index: every use, following imports. `lookup` or `all`. |

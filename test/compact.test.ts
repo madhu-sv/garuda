@@ -1,9 +1,13 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { compactIfNeeded, SUMMARY_SYSTEM, splitIndex } from "../src/context/compact.js";
-import { buildSystemPrompt, loadInstructions } from "../src/context/instructions.js";
+import {
+  buildSystemPrompt,
+  INSTRUCTIONS_MAX_CHARS,
+  loadInstructions,
+} from "../src/context/instructions.js";
 import { runAgent } from "../src/loop/runAgent.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import type { Message, Usage } from "../src/model/types.js";
@@ -158,20 +162,57 @@ describe("compaction (F23)", () => {
   });
 });
 
-describe("GARUDA.md (F21)", () => {
+describe("instruction files (F21)", () => {
   it("adds the file to the system prompt; no file gives the base prompt", async () => {
     const root = mkdtempSync(join(tmpdir(), "garuda-md-"));
     try {
-      expect(await loadInstructions(root)).toBeUndefined();
+      expect(await loadInstructions(root)).toEqual([]);
       writeFileSync(join(root, "GARUDA.md"), "Use pnpm, not npm.\n");
       const instructions = await loadInstructions(root);
-      expect(instructions).toBe("Use pnpm, not npm.");
+      expect(instructions).toEqual([{ name: "GARUDA.md", text: "Use pnpm, not npm." }]);
       const prompt = buildSystemPrompt(root, instructions);
       expect(prompt).toContain("# Project instructions (GARUDA.md)");
       expect(prompt.endsWith("Use pnpm, not npm.")).toBe(true);
       expect(buildSystemPrompt(root, undefined)).not.toContain("GARUDA.md");
+      expect(buildSystemPrompt(root, [])).toBe(buildSystemPrompt(root, undefined));
       // Same input, same bytes (N2).
       expect(buildSystemPrompt(root, instructions)).toBe(prompt);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reads AGENTS.md, CLAUDE.md and GARUDA.md in that order, once each, within one size limit", async () => {
+    const root = mkdtempSync(join(tmpdir(), "garuda-md-"));
+    try {
+      writeFileSync(join(root, "AGENTS.md"), "Run tests with npm test.\n");
+      // The same text (for example a link to AGENTS.md) goes in once.
+      writeFileSync(join(root, "CLAUDE.md"), "Run tests with npm test.");
+      writeFileSync(join(root, "GARUDA.md"), "Run tests with pnpm test.\n");
+      const files = await loadInstructions(root);
+      expect(files.map((f) => f.name)).toEqual(["AGENTS.md", "GARUDA.md"]);
+      const prompt = buildSystemPrompt(root, files);
+      expect(prompt).toContain("# Project instructions (AGENTS.md, GARUDA.md)");
+      expect(prompt).toContain("When two files disagree, the later file wins.");
+      expect(prompt.indexOf("## AGENTS.md")).toBeLessThan(prompt.indexOf("## GARUDA.md"));
+      expect(prompt.endsWith("Run tests with pnpm test.")).toBe(true);
+
+      // An empty file is skipped; a folder with the name is skipped too.
+      writeFileSync(join(root, "GARUDA.md"), "   \n");
+      rmSync(join(root, "CLAUDE.md"));
+      mkdirSync(join(root, "CLAUDE.md"));
+      expect((await loadInstructions(root)).map((f) => f.name)).toEqual(["AGENTS.md"]);
+
+      // Together they stay within the limit; GARUDA.md keeps its text first.
+      writeFileSync(join(root, "AGENTS.md"), "a".repeat(INSTRUCTIONS_MAX_CHARS));
+      writeFileSync(join(root, "GARUDA.md"), "Keep this.");
+      const big = await loadInstructions(root);
+      expect(big.find((f) => f.name === "GARUDA.md")?.text).toBe("Keep this.");
+      const agents = big.find((f) => f.name === "AGENTS.md")?.text ?? "";
+      expect(agents).toMatch(
+        /\[AGENTS\.md cut: the instruction files may hold 40000 characters together\]$/,
+      );
+      expect(agents.length).toBeLessThan(INSTRUCTIONS_MAX_CHARS + 100);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

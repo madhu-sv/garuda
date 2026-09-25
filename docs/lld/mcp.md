@@ -11,7 +11,7 @@ against silent changes. Spec 2026-07-28; SDK `@modelcontextprotocol/client` 2.1.
 | File | Role |
 | --- | --- |
 | `config.ts` | Read `~/.garuda/mcp.json` (user) and `<root>/.garuda/mcp.json` (project); `defHash`, `expandEnv`, `commandLine`. |
-| `trust.ts` | `TrustStore`: `~/.garuda/trust.json` (also used by hooks). |
+| `trust.ts` | `TrustStore`: `~/.garuda/trust.json` (also used by hooks and, since 0.4, project slash commands). |
 | `transport.ts` | `ProcessTransport`: the SDK `Transport` over a process from `Executor.start()`. |
 | `manager.ts` | `McpManager`: consent, start, pinning, calls, status, notes for the model. |
 | `tools.ts` | Adapt MCP tools to Garuda tools; hashes; result text. |

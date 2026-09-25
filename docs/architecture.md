@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.3.0. This document describes the parts of Garuda, their dependencies, the trust
+Version 0.4.0 (in progress). This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -99,7 +99,8 @@ flowchart TB
 | Permissions | `src/permissions/` | Decide per call: allow, deny or ask. Rules, settings, path guard, sensitive files, sandbox paths. |
 | Sandbox | `src/sandbox/` | The `Executor`: run a command or start a long-running process, on the host or in an OS sandbox. |
 | Session | `src/session/` | The conversation in memory, the JSONL journal, resume, redaction, read tracking. |
-| Context | `src/context/` | System prompt, `GARUDA.md` instructions, project memory, compaction. |
+| Context | `src/context/` | System prompt, instruction files (`AGENTS.md`, `CLAUDE.md`, `GARUDA.md`), project memory, compaction. |
+| Commands | `src/commands/` | Custom slash commands: load, expand, consent for project commands. |
 | Knowledge | `src/knowledge/` | Local code index: symbols, references, a code graph. No model call. |
 | MCP | `src/mcp/` | Start MCP servers in the sandbox, consent and pinning, tool adapters, text cleaning. |
 | Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown. |
@@ -165,6 +166,7 @@ flowchart LR
 | Model → tools | A prompt injection makes the model do harm. | Permission engine: read-only tools run; writes, commands outside the sandbox, MCP calls and new web hosts ask. Deny rules always win. |
 | Commands → machine | A command deletes or leaks data. | OS sandbox: writes only in the root, temp and caches; home secrets unreadable; no network. Escape asks. |
 | Project config → Garuda | A cloned repo starts code (MCP servers, hooks). | Consent with the full command; answer pinned to a hash in `~/.garuda/trust.json`; changes ask again. |
+| Project commands → model | A cloned repo's slash command hides instructions in its text, or links to a secret file. | First run shows the full text and asks (hash-pinned); symlinks refused; escape codes, invisible characters and Garuda's markers removed; a user command with the same name wins. |
 | Subagent → main agent | File text that the child read and repeats in its answer. | The child has only read-only tools through the same permission engine and hooks; its answer is a tool result (data); its reads do not allow edits in the main agent. |
 | MCP server / web page → model | Hidden instructions, terminal escape codes, fake markers. | Clean text, cap its size, wrap it in `<mcp_result>` / `<web_result>`, neutralize Garuda's own markers, mark it as untrusted in the prompt. |
 | web_fetch → network | Server-side request forgery; data leaks through URLs. | Only public addresses, checked on the resolved IP and pinned; each redirect hop checked; new hosts ask; unusual URLs always ask. |
@@ -183,9 +185,10 @@ All state is in files. There is no server and no database.
 | `<root>/.garuda/memory.md` | Project | Facts saved by the `remember` tool. Loaded into the next session. |
 | `<root>/.garuda/mcp.json`, `hooks.json` | Project | Project MCP servers and hooks. Need consent. |
 | `<root>/.garuda/index/code-graph.json` | Garuda | Code graph cache for the code index. |
-| `<root>/GARUDA.md` | Project | Instructions for the agent. |
+| `<root>/AGENTS.md`, `CLAUDE.md`, `GARUDA.md` | Project | Instructions for the agent (GARUDA.md wins on a conflict). |
+| `~/.garuda/commands/`, `<root>/.garuda/commands/` | User, project | Custom slash commands (Markdown). |
 | `~/.garuda/mcp.json`, `hooks.json` | User | Trusted MCP servers and hooks. |
-| `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers and hooks; tool-list hashes. 0600. |
+| `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers, hooks and slash commands; tool-list hashes. 0600. |
 | `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. |
 
 `SessionStore` is an interface, so a shared store (for example Redis) can replace the files later.
@@ -206,5 +209,6 @@ All state is in files. There is no server and no database.
 | Sessions | JSONL files behind `SessionStore` | Simple, readable, append-only; replaceable later. |
 | Java and Python support | Language profiles (marker files, offline commands, cache allowlist) and eval suites; no per-language subagents | Each language needs a toolchain and the right commands, not a different agent. The evals measure it. |
 | Subagents | Task-based (explore first), a tool of the main agent, same model by default, off by default | A child context keeps the main context small; one tool fits the loop, permissions and records with no new paths. The A/B eval showed no gain in steps or cost, so it is opt-in. |
+| Todo tool | `todo_write`, stateless (the list lives in the conversation), off by default | Same rule as explore and the code index: the default follows an A/B eval. |
 | Broken model streams | The loop retries a transient failure twice (1 s, 4 s) | The SDKs retry only before a stream starts; 4 of 54 eval runs lost the connection in the middle. |
 | Build caches in the sandbox | Only cache subfolders (`~/.m2/repository`, `~/.gradle/caches` …) are writable | Settings files and init scripts run later outside the sandbox; they stay read-only. |

@@ -21,6 +21,7 @@ import type { SandboxSettings } from "./sandboxPaths.js";
  *   "web": { "enabled": true, "allowLocalhost": false },
  *   "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
  *   "subagents": { "enabled": true, "maxSteps": 20, "tokenBudget": 150000 },
+ *   "todo": { "enabled": true },
  *   "model": {
  *     "contextWindow": 200000,
  *     "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 }
@@ -57,6 +58,8 @@ const schema = z.strictObject({
       tokenBudget: z.number().int().min(1_000).optional(),
     })
     .optional(),
+  /** The todo_write tool (0.4). enabled: default false. */
+  todo: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** The explore subagent (0.3). enabled: default false. Limits per explore run. */
   subagents: z
     .strictObject({
@@ -95,6 +98,7 @@ export interface Settings {
   contextWindow?: number;
   price?: Price;
   subagents?: { enabled?: boolean; maxSteps?: number; tokenBudget?: number };
+  todo?: { enabled: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
@@ -112,6 +116,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     model = {},
     codeIndex,
     subagents,
+    todo,
   } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
@@ -144,6 +149,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(limits.tokenBudget === undefined ? {} : { tokenBudget: limits.tokenBudget }),
     ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
     ...(model.price === undefined ? {} : { price: model.price }),
+    ...(todo?.enabled === undefined ? {} : { todo: { enabled: todo.enabled } }),
     ...(subagents === undefined
       ? {}
       : {

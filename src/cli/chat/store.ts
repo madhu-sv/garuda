@@ -2,7 +2,7 @@ import type { AgentEvent } from "../../loop/runAgent.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../../permissions/types.js";
 import { colorPreview, header } from "../approver.js";
 import type { Renderer } from "../renderer.js";
-import { retryText, summariseCall, summariseResult } from "../renderer.js";
+import { retryText, summariseCall, summariseResult, todoLines } from "../renderer.js";
 import type { Interruptible } from "../turn.js";
 import { type EditAction, type EditorState, edit, emptyEditor, submit } from "./lineEditor.js";
 import { ansi, type Paint, renderMarkdown, takeBlocks } from "./markdown.js";
@@ -186,8 +186,9 @@ export class ChatStore implements Renderer, Approver, Interruptible {
 
   // A turn.
 
-  begin(prompt: string): void {
-    this.add({ kind: "user", text: prompt });
+  /** Start a turn. `show: false` when the line is already on screen (a custom command). */
+  begin(prompt: string, show = true): void {
+    if (show) this.add({ kind: "user", text: prompt });
     this.update({ busy: true });
   }
 
@@ -255,7 +256,8 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         const summary = summariseResult(event.call, event.outcome);
         const line = `${this.paint("cyan", "●")} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`;
         const result = `  ${this.paint("dim", "⎿")} ${event.outcome.isError ? this.paint("red", summary) : this.paint("dim", summary)}`;
-        this.add({ kind: "tool", text: `${line}\n${result}` });
+        const todos = todoLines(event.call, event.outcome).map((l) => `    ${l}`);
+        this.add({ kind: "tool", text: [line, result, ...todos].join("\n") });
         this.lastOutput = {
           title: `${event.call.name} ${summariseCall(event.call)}`,
           text: event.outcome.content,

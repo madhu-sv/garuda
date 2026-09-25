@@ -17,14 +17,18 @@ export async function runChat(
     const input = await store.nextInput();
     if (input === undefined) return;
     const text = input.trim();
+    let prompt = text;
     if (text.startsWith("/")) {
       store.echo(text);
-      if ((await runCommand(text, { runtime, renderer: store, sessionPath })) === "exit") return;
-      continue;
+      const result = await runCommand(text, { runtime, renderer: store, sessionPath });
+      if (result === "exit") return;
+      if (result === "done") continue;
+      // A custom command: the chat shows what was typed; the model gets the command's prompt.
+      prompt = result.prompt;
     }
-    store.begin(text);
+    store.begin(text, prompt === text);
     try {
-      await runTurnInTerminal(runtime, store, store, text, exitNow);
+      await runTurnInTerminal(runtime, store, store, prompt, exitNow);
     } finally {
       store.end(statusOf(runtime));
     }

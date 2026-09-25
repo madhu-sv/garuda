@@ -55,6 +55,8 @@ export interface EvalOptions {
   executor?: ExecutorName;
   /** The explore subagent (0.3). Default: off, as in the product. */
   subagents?: boolean;
+  /** The todo_write tool (0.4). Default: off, as in the product. */
+  todo?: boolean;
   /** The explore subagent's model. Default: the main model. */
   subagentModel?: RuntimeOptions["subagentModel"];
 }
@@ -74,6 +76,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     ...(options.codeIndex === undefined ? {} : { codeIndex: options.codeIndex }),
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
     ...(options.subagents === undefined ? {} : { subagents: { enabled: options.subagents } }),
+    ...(options.todo === undefined ? {} : { todo: { enabled: options.todo } }),
   });
   const store = new FileSessionStore(root);
   const runtime = await Runtime.create({
@@ -89,6 +92,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     // The user's own MCP servers must not change eval results.
     mcp: false,
     hooks: false,
+    commands: false,
     ...(options.onEvent === undefined
       ? {}
       : { onEvent: (event: AgentEvent) => options.onEvent?.(task.id, event) }),

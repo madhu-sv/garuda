@@ -20,12 +20,18 @@ Parts, in order:
    | `mcp` | `mcp__*` tools and `<mcp_result>` are untrusted; `<garuda_note>` comes from Garuda. |
    | `hooks` | "Blocked by a hook" means the user's rules forbid the call; `<hook_feedback>` reports problems to fix. |
    | `explore` | For open questions that need several searches, call `explore`; several can run at once; use `read_file` for one known file; read a file before editing it. |
+   | `todo` | For a task with 3 or more steps, keep a plan with `todo_write`; one step in progress at a time; skip it for simple tasks. |
 
 3. `# Build and test (detected by Garuda)` (0.3): the notes of the language profiles (Maven, Gradle,
    Python): the test command, how to run one test, and what to do when a dependency is missing. Only when
    a profile matches. See [languages.md](languages.md).
-4. `# Project instructions (GARUDA.md)` (F21): the file in the root, cut at 40 000 characters. It comes
-   after the detected notes, so the project owner can override them.
+4. `# Project instructions (…)` (F21): the instruction files in the root, in this order: `AGENTS.md`,
+   `CLAUDE.md`, `GARUDA.md` (0.4). With one file the section looks as before; with several, each file gets
+   a `## <name>` heading and a note that the later file wins on a conflict. A file with the same text as
+   an earlier one (for example `CLAUDE.md` as a link to `AGENTS.md`) goes in once; empty files and
+   folders are skipped. All files share one limit of 40 000 characters, given first to `GARUDA.md`, then
+   `AGENTS.md`, then `CLAUDE.md`; a cut file ends with a note. Files that they name (`@imports`) are not
+   read. The section comes after the detected notes, so the project owner can override them.
 5. `# Project memory (.garuda/memory.md)`: facts from `remember`, cut at 8 000 characters, with a warning
    that they can be out of date.
 

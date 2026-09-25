@@ -30,6 +30,8 @@ export interface EvalCommandOptions {
   subagents?: string;
   /** --subagent-model <spec>. */
   subagentModel?: string;
+  /** --todo on|off: the todo_write tool (0.4). */
+  todo?: string;
 }
 
 /** `garuda eval` (N5). Results go to .garuda/evals/<run-id>/ in the current folder. */
@@ -77,6 +79,11 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const subagentsMode = options.subagents ?? "off";
   if (subagentsMode !== "on" && subagentsMode !== "off") {
     process.stderr.write(`Unknown subagents mode ${options.subagents}. Use: on, off.\n`);
+    return 1;
+  }
+  const todoMode = options.todo ?? "off";
+  if (todoMode !== "on" && todoMode !== "off") {
+    process.stderr.write(`Unknown todo mode ${options.todo}. Use: on, off.\n`);
     return 1;
   }
   let sub: ResolvedModel | undefined;
@@ -131,7 +138,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   const results = await runEvals(
@@ -145,6 +152,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
       codeIndex: index,
       subagents: subagentsMode === "on",
+      todo: todoMode === "on",
       ...(sub === undefined
         ? {}
         : { subagentModel: { spec: sub.spec, model: () => sub.create(), info: sub.info } }),
@@ -167,7 +175,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = formatReport(results);
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, executor: executor.name, results }, null, 2)}\n`,
+    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, executor: executor.name, results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

@@ -68,6 +68,7 @@ async function main(): Promise<void> {
     .option("--list", "list the tasks and exit")
     .option("--subagents <mode>", "the explore subagent: off (default) or on, for A/B runs")
     .option("--subagent-model <id>", "model of the explore subagent; default: the main model")
+    .option("--todo <mode>", "the todo_write tool: off (default) or on, for A/B runs")
     .option(
       "--prepare <toolchain>",
       "java: download Maven plugins and JUnit once; python: check pytest",
@@ -159,6 +160,16 @@ async function start(options: Options, program: Command): Promise<number> {
   }
 
   if (prompt !== undefined) {
+    // `garuda -p "/review src"` runs a custom command; other text goes to the model as it is.
+    if (prompt.startsWith("/")) {
+      const resolved = await runtime.resolveCommand(prompt, new AbortController().signal);
+      if (resolved.kind === "denied") {
+        renderer.info(resolved.message);
+        await runtime.close();
+        return 1;
+      }
+      if (resolved.kind === "prompt") prompt = resolved.prompt;
+    }
     const outcome = await runTurnInTerminal(runtime, terminalApprover, renderer, prompt, exitNow);
     await runtime.close();
     if (outcome.kind === "interrupted") return 130;

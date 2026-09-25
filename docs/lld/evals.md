@@ -76,7 +76,7 @@ environment list.
 ```text
 garuda eval [-m model] [-s basic|hard|java|python|all] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
-            [--subagents on|off] [--subagent-model spec]
+            [--subagents on|off] [--subagent-model spec] [--todo on|off]
 garuda eval --prepare java|python
 ```
 

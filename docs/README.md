@@ -26,7 +26,8 @@ Low-level design documents:
 | Hooks | `src/hooks/` | [hooks.md](lld/hooks.md) |
 | Language profiles | `src/lang/` | [languages.md](lld/languages.md) |
 | Subagents (explore) | `src/agents/` | [agents.md](lld/agents.md) |
+| Custom slash commands | `src/commands/` | [commands.md](lld/commands.md) |
 | Evals | `src/evals/` | [evals.md](lld/evals.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
-The code, the tests and the commits use the same IDs. The documents describe version 0.3.0.
+The code, the tests and the commits use the same IDs. The documents describe version 0.4.0 (in progress).

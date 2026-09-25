@@ -24,6 +24,7 @@ export const HELP = [
   "  /map [dir] what each JS/TS file exports and imports",
   "  /mcp       MCP servers: state, sandbox, network and tool count",
   "  /hooks     the active hooks",
+  "  /commands  your custom commands (~/.garuda/commands, .garuda/commands)",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -34,14 +35,18 @@ export interface CommandContext {
   sessionPath: (id: string) => string;
 }
 
-/** Run a line that starts with "/". */
+/**
+ * Run a line that starts with "/". A custom command gives back its prompt, for the caller to run
+ * as a turn.
+ */
 export async function runCommand(
   text: string,
   { runtime, renderer, sessionPath }: CommandContext,
-): Promise<"exit" | "done"> {
+): Promise<"exit" | "done" | { prompt: string }> {
   const command = text.split(/\s+/)[0];
   if (command === "/exit" || command === "/quit") return "exit";
-  if (command === "/help") renderer.info(HELP);
+  if (command === "/help") renderer.info(helpText(runtime));
+  else if (command === "/commands") renderer.info(commandsText(runtime));
   else if (command === "/usage") renderer.info(usageSummary(runtime));
   else if (command === "/session") {
     const id = runtime.session?.id;
@@ -60,8 +65,34 @@ export async function runCommand(
   } else if (command === "/new") {
     runtime.newSession();
     renderer.info("The next task starts a new session.");
-  } else renderer.warn(`Unknown command ${command}. Type /help.`);
+  } else {
+    const resolved = await runtime.resolveCommand(text, new AbortController().signal);
+    if (resolved.kind === "prompt") return { prompt: resolved.prompt };
+    if (resolved.kind === "denied") renderer.info(resolved.message);
+    else renderer.warn(`Unknown command ${command}. Type /help.`);
+  }
   return "done";
+}
+
+/** /help: the built-in commands, then the custom ones. */
+export function helpText(runtime: Runtime): string {
+  return runtime.commands.length === 0 ? HELP : `${HELP}\n\n${commandsText(runtime)}`;
+}
+
+/** /commands: the custom commands, with their source and description. */
+export function commandsText(runtime: Runtime): string {
+  if (runtime.commands.length === 0) {
+    return "No custom commands. Add Markdown files to ~/.garuda/commands/ or .garuda/commands/.";
+  }
+  const rows = runtime.commands.map((c) => ({
+    usage: `/${c.name}${c.argumentHint === undefined ? "" : ` ${c.argumentHint}`}`,
+    about: `${c.description ?? ""}${c.source === "project" ? " (project)" : ""}`,
+  }));
+  const width = Math.max(...rows.map((r) => r.usage.length));
+  return [
+    "Custom commands:",
+    ...rows.map((r) => `  ${r.usage.padEnd(width + 2)}${r.about}`.trimEnd()),
+  ].join("\n");
 }
 
 /** Answer a code question from the local index, with no model call. */
