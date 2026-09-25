@@ -104,6 +104,11 @@ describe("model specs and providers", () => {
       JSON.stringify({ providers: { x: { type: "grpc" } } }),
     );
     expect((await loadModelsConfig(home)).problem).toMatch(/models\.json/);
+    writeFileSync(
+      join(home, ".garuda", "models.json"),
+      JSON.stringify({ models: { "ollama/m": { textToolCalls: "yes" } } }),
+    );
+    expect((await loadModelsConfig(home)).problem).toMatch(/textToolCalls/);
   });
 });
 
@@ -369,6 +374,57 @@ describe("OpenAI-compatible client", () => {
       { type: "text_delta", text: "```python\n" },
       { type: "text_delta", text: "print(1)\n```" },
     ]);
+  });
+
+  it("reads calls between prose in lines mode, set per model in models.json", async () => {
+    const config = {
+      providers: { fake: { type: "openai-compatible" as const, baseUrl: url, local: true } },
+      models: { "fake/qwen": { textToolCalls: "lines" as const } },
+    };
+    const model = await resolveModel("fake/qwen", config).create({});
+    const reply = [
+      "Sure, I'll list the files.\n\n",
+      '  {"name": "read_file", "arguments": {"path": "README.md"}}\n\n',
+      "After reading the README, I'll list the files.",
+    ];
+    script = [
+      () => ({
+        sse: sse(...reply.map((content) => ({ choices: [{ delta: { content } }] })), {
+          choices: [{ delta: {}, finish_reason: "stop" }],
+        }),
+      }),
+    ];
+    const events: ModelEvent[] = [];
+    for await (const e of model.stream(request())) events.push(e);
+    const shown = events
+      .filter((e) => e.type === "text_delta")
+      .map((e) => (e as { text: string }).text)
+      .join("");
+    expect(shown).not.toContain('"name"');
+    expect(shown).toContain("Sure, I'll list the files.");
+    expect(shown).toContain("After reading the README");
+    expect(events.at(-1)).toMatchObject({
+      response: {
+        content: [
+          {
+            type: "text",
+            text: "Sure, I'll list the files.\n\nAfter reading the README, I'll list the files.",
+          },
+          { type: "tool_use", name: "read_file", input: { path: "README.md" } },
+        ],
+        stopReason: "tool_use",
+      },
+    });
+
+    // The default (whole) mode keeps this reply as text.
+    script = [
+      () => ({
+        sse: sse({ choices: [{ delta: { content: reply.join("") }, finish_reason: "stop" }] }),
+      }),
+    ];
+    expect((await collect(client())).at(-1)).toMatchObject({
+      response: { content: [{ type: "text" }], stopReason: "end_turn" },
+    });
   });
 
   it("runs a whole Garuda turn against a local server", async () => {

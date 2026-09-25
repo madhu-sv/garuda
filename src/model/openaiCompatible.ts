@@ -1,4 +1,4 @@
-import { mayBeToolCall, textToolCalls } from "./textToolCalls.js";
+import { extractTextToolCalls, StreamHold, type TextToolCallMode } from "./textToolCalls.js";
 import type {
   ContentBlock,
   Message,
@@ -24,9 +24,9 @@ import type {
  *   same bytes (N2), so servers with automatic prefix caching reuse them.
  * - Tool results become "tool" messages; the tool call id links them.
  * - A server that sends no usage gets an estimate (4 characters per token), so compaction still works.
- * - Some small models write a tool call as JSON text. When the whole message is such a call to a
- *   known tool, it becomes a real call (see textToolCalls.ts). While a streamed text can still be
- *   one, the adapter holds it back from the screen.
+ * - Some small models write a tool call as JSON text. Under the model's "textToolCalls" mode it
+ *   becomes a real call (see textToolCalls.ts). While streamed text can still be one, the adapter
+ *   holds it back from the screen.
  */
 
 export interface OpenAICompatibleOptions {
@@ -34,6 +34,8 @@ export interface OpenAICompatibleOptions {
   baseUrl: string;
   model: string;
   apiKey?: string;
+  /** How to read tool calls that the model writes as text. Default "whole". */
+  textToolCalls?: TextToolCallMode;
   /** For tests. */
   fetch?: typeof fetch;
   /** Waits before retry 1 and 2, in ms. */
@@ -55,10 +57,10 @@ export class OpenAICompatibleClient implements ModelClient {
 
   async *stream(request: ModelRequest, options?: StreamOptions): AsyncIterable<ModelEvent> {
     const http = await this.post(toWireBody(this.options.model, request), options?.signal);
+    const mode = request.tools.length === 0 ? "off" : (this.options.textToolCalls ?? "whole");
     const state = newStreamState();
-    // Text held back while it can still be a tool call written as text.
-    let held = "";
-    let holding = request.tools.length > 0;
+    // Holds back text while it can still be a tool call written as text.
+    const hold = new StreamHold(mode);
     for await (const data of sseData(http.body as ReadableStream<Uint8Array>, options?.signal)) {
       if (data === "[DONE]") break;
       let chunk: WireChunk;
@@ -69,23 +71,19 @@ export class OpenAICompatibleClient implements ModelClient {
       }
       if (chunk.error !== undefined)
         throw new Error(`${this.options.provider}: ${errorText(chunk.error)}`);
-      const text = applyChunk(state, chunk);
-      if (text === "") continue;
-      if (!holding) {
-        yield { type: "text_delta", text };
-        continue;
-      }
-      held += text;
-      if (!mayBeToolCall(held)) {
-        yield { type: "text_delta", text: held };
-        held = "";
-        holding = false;
-      }
+      const shown = hold.push(applyChunk(state, chunk));
+      if (shown !== "") yield { type: "text_delta", text: shown };
     }
-    const response = finishResponse(state, request);
-    // Show held text unless it became tool calls.
-    if (held !== "" && response.content.some((b) => b.type === "text"))
-      yield { type: "text_delta", text: held };
+    const response = finishResponse(state, request, mode);
+    // Show the held text, without the parts that became tool calls.
+    const held = hold.rest();
+    if (held !== "") {
+      const became = response.content.some((b) => b.type === "tool_use") && state.calls.size === 0;
+      const shown = became
+        ? (extractTextToolCalls(held, toolNames(request), mode)?.text ?? held)
+        : held;
+      if (shown.trim() !== "") yield { type: "text_delta", text: shown };
+    }
     yield { type: "response", response };
   }
 
@@ -270,17 +268,22 @@ export function applyChunk(state: StreamState, chunk: WireChunk): string {
   return text;
 }
 
-export function finishResponse(state: StreamState, request: ModelRequest): ModelResponse {
+export function finishResponse(
+  state: StreamState,
+  request: ModelRequest,
+  mode: TextToolCallMode = "whole",
+): ModelResponse {
   const content: (TextBlock | ToolUseBlock)[] = [];
   const text = state.text + (state.refusal === "" ? "" : state.refusal);
   // Some local servers send no id: make one, so results can refer to it.
   const newId = (n: number) => `call_${Date.now().toString(36)}_${n}`;
   const fromText =
     state.calls.size === 0 && state.refusal === "" && state.finish !== "length"
-      ? textToolCalls(text, new Set(request.tools.map((t) => t.name)))
+      ? extractTextToolCalls(text, toolNames(request), mode)
       : undefined;
   if (fromText !== undefined) {
-    for (const [i, call] of fromText.entries())
+    if (fromText.text !== "") content.push({ type: "text", text: fromText.text });
+    for (const [i, call] of fromText.calls.entries())
       content.push({ type: "tool_use", id: newId(i + 1), name: call.name, input: call.input });
   } else if (text !== "") {
     content.push({ type: "text", text });
@@ -301,6 +304,10 @@ export function finishResponse(state: StreamState, request: ModelRequest): Model
     stopReason: stopReason(state, content),
     usage: usageOf(state, request, content),
   };
+}
+
+function toolNames(request: ModelRequest): Set<string> {
+  return new Set(request.tools.map((t) => t.name));
 }
 
 /**

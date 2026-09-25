@@ -70,7 +70,9 @@ Set the context window, price and output limit per model, and add providers, in 
   Keys come from environment variables. Plain http works only to this machine (or with
   `"allowInsecureHttp": true`).
 - Some small models write a tool call as JSON text. When the whole reply is such a call to a known
-  tool, Garuda runs it as a real call, with the usual approvals. A call inside other text never runs.
+  tool, Garuda runs it as a real call, with the usual approvals. For a model that also writes
+  sentences around the call (for example `qwen2.5-coder:7b`), set `"textToolCalls": "lines"` for that
+  model: then a call on its own line runs too. A call in the middle of a sentence never runs.
 - Without a `contextWindow`, Garuda assumes 32 768 tokens for open models and says so. The server must
   allow the window too: for Ollama, start it with `OLLAMA_CONTEXT_LENGTH=65536 ollama serve`.
 - Local models cost $0. Tool calling quality varies by model: measure a model with `g eval` first.

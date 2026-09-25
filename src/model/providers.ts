@@ -45,6 +45,11 @@ const modelSchema = z.strictObject({
   contextWindow: z.number().int().min(4_096).optional(),
   price: priceSchema.optional(),
   maxTokens: z.number().int().min(256).optional(),
+  /**
+   * Tool calls that the model writes as JSON text (openai-compatible only): "whole" (default) when
+   * the whole reply is calls, "lines" when calls stand on their own lines between prose, "off".
+   */
+  textToolCalls: z.enum(["off", "whole", "lines"]).optional(),
 });
 
 const fileSchema = z.strictObject({
@@ -185,6 +190,7 @@ export function resolveModel(
         baseUrl: def.baseUrl as string,
         model,
         ...(apiKey === undefined ? {} : { apiKey }),
+        ...(entry?.textToolCalls === undefined ? {} : { textToolCalls: entry.textToolCalls }),
       });
     },
   };

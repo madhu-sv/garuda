@@ -77,6 +77,7 @@ The model part may hold `/` (OpenRouter ids): the spec splits at the first `/`.
   },
   "models": {
     "ollama/qwen3-coder:30b": { "contextWindow": 65536, "maxTokens": 8192 },
+    "ollama/qwen2.5-coder:7b": { "contextWindow": 32768, "textToolCalls": "lines" },
     "openrouter/qwen/qwen3-coder": { "price": { "input": 0.2, "output": 0.8, "cacheRead": 0, "cacheWrite": 0 } }
   }
 }
@@ -84,7 +85,8 @@ The model part may hold `/` (OpenRouter ids): the spec splits at the first `/`.
 
 `resolveModel(spec, config)` returns the provider, the model name, the provider definition, the model
 info (context window, price), `maxTokens`, notes for the user, and `create()`, which loads the adapter
-with `import()` on first use (N3).
+with `import()` on first use (N3). `create()` passes the model's `textToolCalls` mode to the
+OpenAI-compatible adapter (the Anthropic adapter does not need it).
 
 Security rules:
 
@@ -113,15 +115,25 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
   the tool's input check rejects it and the model can try again.
 - Tool calls written as text (`textToolCalls.ts`): some small models (for example `qwen2.5-coder`
   through Ollama) write a call as JSON in the message text, not in `tool_calls`. When the server sent
-  no real calls, the output was not cut at `length`, and the whole text is one or more calls, the
-  adapter turns them into real calls. Accepted forms: `{"name", "arguments" | "parameters"}` objects,
-  alone, one per line, in a JSON array, in ```` ```json ```` fences or in `<tool_call>` tags. Strict
-  rules: every name is a tool of this request, arguments are a JSON object, and nothing else is in the
-  text. A call inside prose never runs (it can be an example, or text quoted from a file). If one part
-  fails, all the text stays text. These calls get no extra power: the input check, hooks and the
-  permission engine apply as usual. While streamed text can still be a call (`mayBeToolCall`: it
-  starts with `{`, `[`, a fence or the tag), the adapter holds it back; it shows the text at the end if
-  the text is not a call, and at once when the start rules a call out. The session stores real
+  no real calls and the output was not cut at `length`, the adapter reads such calls under the model's
+  `textToolCalls` mode (set per model in `models.json`):
+
+  | Mode | Rule | Use it for |
+  | --- | --- | --- |
+  | `whole` (default) | The whole reply is one or more calls; nothing else. | Most models. |
+  | `lines` | Calls stand on their own lines (or in their own fence or tag) between lines of prose. The prose stays text. | A model that explains before and after it calls. |
+  | `off` | Text is always text. | A model that shows JSON examples often. |
+
+  Accepted forms: `{"name", "arguments" | "parameters"}` objects, alone, one per line, over several
+  lines, in a JSON array, in ```` ```json ```` fences or in `<tool_call>` tags. Rules in every mode:
+  every name is a tool of this request and arguments are a JSON object. In `whole` mode, if one part
+  fails, all the text stays text. In `lines` mode, a line that fails stays text; a call in the middle
+  of a sentence never runs; a fence of another language (```` ```python ````) stays text as a whole.
+  These calls get no extra power: the input check, hooks and the permission engine apply as usual.
+- Held text (`StreamHold`): text that can still be a call (`mayBeToolCall`: it starts with `{`, `[`, a
+  fence or the tag) is held back from the screen. In `whole` mode the adapter holds the reply until its
+  start rules a call out; in `lines` mode it shows each line at once and holds from the first line that
+  can start a call. At the end it shows the held text without the calls. The session stores real
   `tool_use` blocks, so the model sees proper `tool_calls` in the history.
 - Stop reasons: refusal or `content_filter` → refusal; tool calls → tool_use; `length` → max_tokens;
   `stop` → end_turn.
@@ -153,5 +165,6 @@ when the script ends. Builders: `text()`, `toolUse()`, `reply()`.
 `test/model.test.ts` (mapping, cache breakpoints, prices), `test/anthropic-stream.test.ts` (streaming
 with a fake SDK response), `test/providers.test.ts` (specs, presets, `models.json`, URL rules, message
 mapping, a local fake Chat Completions server: split chunks, tool calls, tool calls written as text,
-held text, usage, retries, errors, and a whole Garuda turn), `test/textToolCalls.test.ts` (the accepted
-forms and every rule that keeps text as text).
+held text, `lines` mode set in `models.json`, usage, retries, errors, and a whole Garuda turn),
+`test/textToolCalls.test.ts` (the accepted forms in each mode, every rule that keeps text as text, and
+`StreamHold`).
