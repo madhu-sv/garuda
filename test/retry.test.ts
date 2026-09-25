@@ -1,4 +1,3 @@
-import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { noColor } from "../src/cli/chat/markdown.js";
 import { ChatStore } from "../src/cli/chat/store.js";
@@ -10,7 +9,7 @@ import type { ModelClient, ModelEvent, ModelRequest } from "../src/model/types.j
 import { addUserMessage, createSession } from "../src/session/session.js";
 import { MemoryJournal } from "../src/session/store.js";
 import { ToolRegistry } from "../src/tools/registry.js";
-import { allowAll } from "./helpers.js";
+import { allowAll, sink } from "./helpers.js";
 
 /** A model whose first `failures` streams break after some text. */
 class FlakyModel implements ModelClient {
@@ -145,14 +144,12 @@ describe("retry notices", () => {
   };
 
   it("the plain renderer warns on stderr", () => {
-    const out = new PassThrough();
-    const err = new PassThrough();
-    const renderer = new PlainRenderer({ out, err }, false);
+    const out = sink();
+    const err = sink();
+    const renderer = new PlainRenderer({ out: out.stream, err: err.stream }, false);
     renderer.event({ type: "text_delta", text: "Half a sen" });
     renderer.event(event);
-    expect(err.read()?.toString()).toBe(
-      "The connection to the model broke (terminated). Retrying (1/2)…\n",
-    );
+    expect(err.text()).toBe("The connection to the model broke (terminated). Retrying (1/2)…\n");
   });
 
   it("the chat drops the unfinished text and shows a note", () => {

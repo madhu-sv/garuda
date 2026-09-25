@@ -14,7 +14,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough, Writable } from "node:stream";
+import { PassThrough } from "node:stream";
 import { afterAll, describe, expect, it } from "vitest";
 import { Runtime } from "../src/app/runtime.js";
 import { PlainRenderer, summariseCall, summariseResult } from "../src/cli/renderer.js";
@@ -26,22 +26,12 @@ import { parseSettings } from "../src/permissions/settings.js";
 import { Redactor } from "../src/session/redact.js";
 import { FileSessionStore } from "../src/session/store.js";
 import { writeFileAtomic } from "../src/tools/atomicWrite.js";
+import { sink } from "./helpers.js";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "garuda-m5-")));
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 
 /** Collects what the renderer writes. */
-function sink() {
-  let text = "";
-  const stream = new Writable({
-    write(chunk, _enc, done) {
-      text += String(chunk);
-      done();
-    },
-  });
-  return { stream, text: () => text };
-}
-
 function project(name: string): string {
   const root = join(base, name);
   writeFiles(root, { "README.md": "# Demo\n", "src/a.js": "export const a = 1;\n" });

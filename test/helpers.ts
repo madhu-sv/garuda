@@ -1,3 +1,4 @@
+import { Writable } from "node:stream";
 import { z } from "zod";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
@@ -43,4 +44,19 @@ export function toolContext(root: string, overrides: Partial<ToolContext> = {}):
     files: new FileTracker(),
     ...overrides,
   };
+}
+
+/**
+ * A stream that keeps what is written, in order. Use it instead of reading a PassThrough:
+ * `read()` returns one chunk or all of them, depending on the Node version.
+ */
+export function sink(): { stream: Writable; text: () => string } {
+  let text = "";
+  const stream = new Writable({
+    write(chunk, _encoding, done) {
+      text += String(chunk);
+      done();
+    },
+  });
+  return { stream, text: () => text };
 }

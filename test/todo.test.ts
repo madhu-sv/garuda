@@ -1,7 +1,6 @@
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough } from "node:stream";
 import { afterAll, describe, expect, it } from "vitest";
 import { Runtime } from "../src/app/runtime.js";
 import { noColor } from "../src/cli/chat/markdown.js";
@@ -15,7 +14,7 @@ import { parseSettings } from "../src/permissions/settings.js";
 import { FileSessionStore } from "../src/session/store.js";
 import { defaultTools } from "../src/tools/index.js";
 import { ToolRegistry } from "../src/tools/registry.js";
-import { allowAll, toolContext } from "./helpers.js";
+import { allowAll, sink, toolContext } from "./helpers.js";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "garuda-todo-")));
 afterAll(() => rmSync(base, { recursive: true, force: true }));
@@ -77,8 +76,8 @@ describe("todo_write (0.4)", () => {
       reply([text("Planned.")]),
     ]);
     const store = new ChatStore({ model: "fake", sandbox: "none" }, { paint: noColor });
-    const err = new PassThrough();
-    const plain = new PlainRenderer({ out: new PassThrough(), err }, false);
+    const err = sink();
+    const plain = new PlainRenderer({ out: sink().stream, err: err.stream }, false);
     const runtime = await Runtime.create({
       root: realpathSync(mkdtempSync(`${root}-`)),
       modelId: "fake",
@@ -104,9 +103,7 @@ describe("todo_write (0.4)", () => {
     expect(store.getState().items.map((i) => i.text)).toContain(
       `● todo_write 3 step(s)\n  ⎿ 1 of 3 done\n${checklist}`,
     );
-    expect(err.read()?.toString()).toContain(
-      `● todo_write 3 step(s)\n  ⎿ 1 of 3 done\n${checklist}\n`,
-    );
+    expect(err.text()).toContain(`● todo_write 3 step(s)\n  ⎿ 1 of 3 done\n${checklist}\n`);
     runtime.executor.shutdown();
   });
 
