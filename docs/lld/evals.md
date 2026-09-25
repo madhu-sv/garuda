@@ -110,7 +110,11 @@ a failure with the stop reason `timeout`, not an error.
   so the difference is noise plus the tool definition. It stays off by default.
 - LSP diagnostics (0.4): `--lsp on` needs the OS sandbox and at least one server (`garuda lsp`); the
   run prints the server per language before the first model call, and the report JSON records the mode.
-  Not measured yet, so it is off by default.
+  A/B (claude-haiku-4-5, hard suite, 3 runs per task, sums of means): off 18/18, 79.6 steps, 532k tokens,
+  $0.235; on 18/18, 85.8 steps, 582k, $0.234 (tsc 7.0.2 and pyright 1.1.414, managed, in Seatbelt). The
+  servers ran: 55 edit results said "No errors", none listed an error, and no server failed. The model made
+  no type errors in these tasks, so LSP had nothing to catch; the step difference is noise (one 29-step
+  run). It stays off by default. A fair test needs tasks where type errors are likely.
 - The requirements doc keeps the per-task tables ("0.1 results", "0.2 results").
 
 ## Tests

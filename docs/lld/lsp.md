@@ -4,7 +4,8 @@
 
 After `edit_file` or `write_file` changes a TS/JS or Python file, a real language server checks the file,
 and the tool result lists its errors. The model sees a type error at once, not after a test run. Added in
-0.4. Off by default until an A/B eval shows a gain.
+0.4. Off by default: the first A/B eval (hard suite) showed no gain, because the model made no type
+errors there (see [evals.md](evals.md#method)).
 
 ```
 Edited src/cart.ts.

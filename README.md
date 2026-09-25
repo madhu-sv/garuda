@@ -156,7 +156,8 @@ Edited src/cart.ts.
 - `garuda lsp` (or `/lsp` in the chat) shows the servers and their state.
 - Servers run only in the OS sandbox: the project is read-only for them, and they have no network. A
   missing, slow or broken server never blocks an edit.
-- Off by default until an A/B eval shows a gain: `garuda eval -s hard --repeat 3 --lsp on`.
+- Off by default: in the A/B eval on the hard suite the model made no type errors, so LSP had nothing to
+  catch. Measure it again with `garuda eval -s hard --repeat 3 --lsp on`.
 
 ## Todo list (opt-in)
 
