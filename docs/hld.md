@@ -13,6 +13,7 @@ Version 0.3.0 (in progress). This document shows how the parts work together. Th
 | `garuda --resume [id]` | Continue the latest or a given session. | Chat or one task. |
 | `garuda --replay <id\|file>` | Play a session back with recorded results. No API calls. | "matches" or a list of differences. |
 | `garuda eval` | Run eval tasks in scratch folders. | A table and `report.json`. |
+| `garuda eval -s java` / `--prepare java` | Check the toolchain, then run the Java (or Python) suite; `--prepare` fills `~/.m2` once. | A hint when a toolchain is missing; otherwise the same report. |
 
 ## 2. Start of a process
 
@@ -26,6 +27,8 @@ sequenceDiagram
   CLI->>RT: root, model spec and info, approver, store, event target
   RT->>FS: .garuda/settings.json
   RT->>RT: createExecutor(auto|os|host)
+  RT->>FS: marker files (pom.xml, build.gradle, pyproject.toml …)
+  RT->>RT: language profiles: commands, notes, cache paths
   RT->>FS: GARUDA.md, .garuda/memory.md
   RT->>FS: ~/.garuda and .garuda: mcp.json, hooks.json
   RT->>RT: system prompt (fixed for the session)
@@ -170,5 +173,6 @@ choice, the queue, the input line and a footer. See [cli.md](lld/cli.md).
 - 245 unit and acceptance tests, all with the fake model.
 - Contract tests run every executor (host, Seatbelt, bubblewrap) through the same suite.
 - Architecture tests enforce the dependency rules.
-- Evals: a basic suite (10 tasks) and a hard suite (6 tasks on a generated repo of about 107 files).
+- Evals: a basic suite (10 tasks), a hard suite (6 tasks on a generated repo of about 107 files), and
+  Java and Python suites (5 tasks each, Maven with JUnit 5 and pytest).
   0.1 baseline on claude-sonnet-5: basic 10/10; hard 6/6 at about 50 steps and $0.19 in total.

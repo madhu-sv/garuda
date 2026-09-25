@@ -1,3 +1,4 @@
+import type { ProfileAccess } from "../lang/profiles.js";
 import type { ExecPolicy, Isolation } from "../sandbox/types.js";
 import { formatRule, type Rule, ruleMatches } from "./rules.js";
 import { sandboxPaths } from "./sandboxPaths.js";
@@ -34,6 +35,8 @@ export interface PermissionEngineOptions {
   settings?: Settings;
   /** Isolation of the executor in use. With an OS sandbox, commands inside it need no approval. */
   isolation?: Isolation;
+  /** Package caches and environment variables for the project's language profiles (0.3). */
+  access?: ProfileAccess;
 }
 
 /**
@@ -51,6 +54,7 @@ export class PermissionEngine implements PermissionGate {
   private readonly approver: Approver;
   private readonly settings: Settings;
   private readonly isolation: Isolation;
+  private readonly access: ProfileAccess;
   private readonly sessionRules: Rule[] = [];
 
   constructor(options: PermissionEngineOptions) {
@@ -58,6 +62,7 @@ export class PermissionEngine implements PermissionGate {
     this.approver = options.approver;
     this.settings = options.settings ?? DEFAULT_SETTINGS;
     this.isolation = options.isolation ?? "none";
+    this.access = options.access ?? { writePaths: [], envAllow: [] };
   }
 
   async check(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision> {
@@ -124,12 +129,16 @@ export class PermissionEngine implements PermissionGate {
   }
 
   execPolicy(timeoutMs: number, { sandbox = true }: { sandbox?: boolean } = {}): ExecPolicy {
+    const paths = sandboxPaths(this.root, this.settings.sandbox);
     return {
       root: this.root,
       sandbox,
-      ...sandboxPaths(this.root, this.settings.sandbox),
+      ...paths,
+      writePaths: [...new Set([...paths.writePaths, ...this.access.writePaths])],
       network: !sandbox,
-      envAllowlist: [...new Set([...DEFAULT_ENV_ALLOWLIST, ...this.settings.envAllow])],
+      envAllowlist: [
+        ...new Set([...DEFAULT_ENV_ALLOWLIST, ...this.access.envAllow, ...this.settings.envAllow]),
+      ],
       timeoutMs,
       maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
     };

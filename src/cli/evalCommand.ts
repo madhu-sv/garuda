@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { formatReport, runEvals } from "../evals/runner.js";
-import { ALL_TASKS, EVAL_SUITES } from "../evals/suites.js";
+import { ALL_TASKS, EVAL_SUITES, requiredToolchains } from "../evals/suites.js";
+import { checkToolchains, prepareToolchain, TOOLCHAINS, toolchainId } from "../evals/toolchains.js";
 import {
   CODE_INDEX_MODES,
   type CodeIndexMode,
@@ -23,17 +24,21 @@ export interface EvalCommandOptions {
   index?: string;
   /** --executor auto|os|host. */
   executor?: ExecutorName;
+  /** --prepare java|python: fill the toolchain's caches (network), then exit. */
+  prepare?: string;
 }
 
 /** `garuda eval` (N5). Results go to .garuda/evals/<run-id>/ in the current folder. */
 export async function runEvalCommand(options: EvalCommandOptions): Promise<number> {
   if (options.list) {
     for (const [suite, tasks] of Object.entries(EVAL_SUITES)) {
-      process.stdout.write(`${suite}:\n`);
+      const needs = requiredToolchains(tasks).map((id) => TOOLCHAINS[id].title);
+      process.stdout.write(`${suite}:${needs.length > 0 ? ` (needs ${needs.join(", ")})` : ""}\n`);
       for (const task of tasks) process.stdout.write(`  ${task.id.padEnd(18)} ${task.title}\n`);
     }
     return 0;
   }
+  if (options.prepare !== undefined) return prepare(options.prepare);
   const modelId = options.model;
   if (!modelId) {
     process.stderr.write("Set a model with --model <id> or the GARUDA_MODEL variable.\n");
@@ -82,6 +87,22 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     process.stderr.write("No task matches. Use --list to see the task ids.\n");
     return 1;
   }
+  // Check the toolchains first: a missing one would fail every task and waste model calls.
+  const missing = (await checkToolchains(requiredToolchains(chosen))).filter((s) => !s.ok);
+  if (missing.length > 0) {
+    for (const status of missing) {
+      // The first lines name the problem (for Maven: the missing artifact).
+      const detail = status.output
+        .split("\n")
+        .filter((line) => line.trim() !== "")
+        .slice(0, 2)
+        .join("\n    ");
+      process.stderr.write(
+        `${TOOLCHAINS[status.id].hint}\n${detail === "" ? "" : `    ${detail}\n`}`,
+      );
+    }
+    return 1;
+  }
 
   const { executor, notice } = createExecutor(options.executor ?? "auto");
   if (notice !== undefined) process.stderr.write(`${notice}\n`);
@@ -124,4 +145,31 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;
+}
+
+/** `garuda eval --prepare java|python`. */
+async function prepare(name: string): Promise<number> {
+  const id = toolchainId(name);
+  if (id === undefined) {
+    process.stderr.write(`Unknown toolchain ${name}. Use: java, python.\n`);
+    return 1;
+  }
+  const toolchain = TOOLCHAINS[id];
+  if (toolchain.prepare !== undefined) {
+    process.stderr.write(
+      `Preparing ${toolchain.title}: running \`${toolchain.prepare}\` in a scratch project (downloads with network)…\n`,
+    );
+    const r = await prepareToolchain(id);
+    if (!r.ok) {
+      process.stderr.write(`It failed:\n${r.output}\n`);
+      return 1;
+    }
+  }
+  const [status] = await checkToolchains([id]);
+  if (status?.ok) {
+    process.stderr.write(`${toolchain.title}: ready.\n`);
+    return 0;
+  }
+  process.stderr.write(`${toolchain.hint}\n${status?.output ?? ""}\n`);
+  return 1;
 }

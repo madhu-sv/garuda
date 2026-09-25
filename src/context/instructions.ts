@@ -52,12 +52,15 @@ export function buildSystemPrompt(
     mcp = false,
     web = false,
     hooks = false,
+    languages,
   }: {
     codeIndex?: CodeIndexMode;
     sandboxed?: boolean;
     mcp?: boolean;
     web?: boolean;
     hooks?: boolean;
+    /** Notes from the language profiles (0.3): build and test commands of this project. */
+    languages?: string | undefined;
   } = {},
 ): string {
   const base = [
@@ -78,7 +81,8 @@ export function buildSystemPrompt(
     "Use bash only to run programs, for example tests and builds.",
     ...(sandboxed
       ? [
-          "Commands run in a sandbox with no approval: no network, and writes only in the working root and temp folders.",
+          "Commands run in a sandbox with no approval: no network, and writes only in the working root, temp folders",
+          "and package caches.",
           "If the sandbox blocks a command that must have network or other folders, run it again with",
           "outside_sandbox: true. The user must approve that. The user approves each file change.",
         ]
@@ -111,6 +115,9 @@ export function buildSystemPrompt(
     "Be brief. Cite file paths and line numbers when you point to code.",
   ].join("\n");
   const parts = [base];
+  if (languages !== undefined) {
+    parts.push("", "# Build and test (detected by Garuda)", "", languages);
+  }
   if (instructions !== undefined) {
     parts.push(
       "",

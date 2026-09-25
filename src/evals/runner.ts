@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
-import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { Runtime } from "../app/runtime.js";
 import type { CodeIndexMode } from "../knowledge/mode.js";
 import type { AgentEvent } from "../loop/runAgent.js";
@@ -13,7 +13,12 @@ import { parseSettings } from "../permissions/settings.js";
 import { HostExecutor } from "../sandbox/host.js";
 import type { ExecutorName } from "../sandbox/index.js";
 import { FileSessionStore } from "../session/store.js";
+import { writeFiles } from "./files.js";
+import { isProtectedPath } from "./projects.js";
+import { TOOLCHAIN_ENV } from "./toolchains.js";
 import type { EvalResult, EvalTask } from "./types.js";
+
+export { writeFiles };
 
 /**
  * The eval runner (N5). Each task runs in a new scratch folder with its own session.
@@ -54,7 +59,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   const started = Date.now();
   const root = realpathSync(await mkdtemp(join(tmpdir(), `garuda-eval-${task.id}-`)));
   await writeFiles(root, task.files);
-  const protect = task.protect ?? Object.keys(task.files).filter((p) => p.startsWith("test/"));
+  const protect = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
   const before = await snapshot(root, protect);
 
   const settings = parseSettings({
@@ -160,20 +165,12 @@ export async function runCheck(
     denyWritePaths: [],
     denyReadPaths: [],
     network: false,
-    envAllowlist: [...DEFAULT_ENV_ALLOWLIST],
+    envAllowlist: [...DEFAULT_ENV_ALLOWLIST, ...TOOLCHAIN_ENV],
     timeoutMs: 120_000,
     maxOutputBytes: 4_000,
   });
   const output = `${r.stdout.text}${r.stderr.text}`.trim();
   return { ok: r.exitCode === 0 && !r.timedOut, output };
-}
-
-export async function writeFiles(root: string, files: Record<string, string>): Promise<void> {
-  for (const [path, content] of Object.entries(files)) {
-    const full = join(root, path);
-    mkdirSync(dirname(full), { recursive: true });
-    await writeFile(full, content);
-  }
 }
 
 async function snapshot(root: string, paths: readonly string[]): Promise<Map<string, string>> {

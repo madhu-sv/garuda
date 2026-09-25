@@ -6,6 +6,12 @@ import { HookRunner, hooksConsent } from "../hooks/runner.js";
 import { KnowledgeIndex } from "../knowledge/index.js";
 import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
 import {
+  detectProfiles,
+  type LanguageProfile,
+  profileAccess,
+  profileNotes,
+} from "../lang/profiles.js";
+import {
   type AgentEvent,
   type AgentResult,
   DEFAULT_MAX_STEPS,
@@ -60,6 +66,8 @@ export interface RuntimeOptions {
   mcp?: false | { home?: string; env?: NodeJS.ProcessEnv };
   /** Hooks (0.2). Default: read ~/.garuda/hooks.json and <root>/.garuda/hooks.json. false: none. */
   hooks?: false | { home?: string };
+  /** Language profiles (0.3). Default: detect them from marker files in the root. */
+  profiles?: LanguageProfile[];
 }
 
 export class Runtime {
@@ -72,6 +80,8 @@ export class Runtime {
   /** Set when "auto" found no OS sandbox. The CLI shows it once. */
   readonly executorNotice: string | undefined;
   readonly system: string;
+  /** Build tools found in the root (0.3): Maven, Gradle, Python. */
+  readonly profiles: readonly LanguageProfile[];
   /** The local code index. It loads its language experts on first use. */
   readonly knowledge: KnowledgeIndex;
   /** Which code index tools the model gets. */
@@ -100,8 +110,10 @@ export class Runtime {
     choice: ExecutorChoice,
     mcpServers: ServerConfig[],
     hookConfig: { user: Hook[]; project: Hook[]; home: string },
+    profiles: LanguageProfile[],
   ) {
     this.hookConfig = hookConfig;
+    this.profiles = profiles;
     this.approver = options.approver;
     this.settings = settings;
     this.mcpServers = mcpServers;
@@ -137,6 +149,7 @@ export class Runtime {
       settings,
       approver: options.approver,
       isolation: this.executor.isolation,
+      access: profileAccess(profiles),
     });
   }
 
@@ -159,6 +172,7 @@ export class Runtime {
       hookConfig = { user: loaded.user, project: loaded.project, home };
       for (const problem of loaded.problems) options.onNotice?.(problem);
     }
+    const profiles = options.profiles ?? detectProfiles(options.root);
     const system = buildSystemPrompt(
       options.root,
       await loadInstructions(options.root),
@@ -169,9 +183,18 @@ export class Runtime {
         mcp: mcpServers.some((s) => s.def.enabled),
         web: settings.web?.enabled ?? true,
         hooks: hookConfig.user.length + hookConfig.project.length > 0,
+        languages: profileNotes(profiles),
       },
     );
-    const runtime = new Runtime(options, settings, system, choice, mcpServers, hookConfig);
+    const runtime = new Runtime(
+      options,
+      settings,
+      system,
+      choice,
+      mcpServers,
+      hookConfig,
+      profiles,
+    );
     if (options.resume !== undefined) {
       runtime.current = await resumeSession({
         store: options.store,
@@ -220,7 +243,8 @@ export class Runtime {
 
   /** What this session adds to the base tools, for the start banner. Counts configured items. */
   extras(): string[] {
-    const out: string[] = [];
+    // The build tools first: they say what kind of project this is.
+    const out: string[] = this.profiles.map((p) => p.label);
     const servers = this.mcpServers.filter((s) => s.def.enabled).length;
     if (servers > 0) out.push(`${servers} MCP server${servers === 1 ? "" : "s"}`);
     const hooks = this.hookConfig.user.length + this.hookConfig.project.length;

@@ -56,6 +56,9 @@ protected paths and denied read paths from `sandboxPaths()`, `network: !sandbox`
 allowlist (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`,
 `TZ` plus `env.allow` from settings), the timeout and a 30 000-byte output cap per stream.
 
+The engine option `access` (0.3) adds the language profiles' package caches to the write paths and their
+variables (for example `JAVA_HOME`) to the environment list. See [languages.md](languages.md).
+
 ## Rules (`rules.ts`)
 
 Syntax: `tool` or `tool(pattern)`. The tool name may end with `*` (prefix match, for MCP servers) and may
@@ -75,7 +78,7 @@ contain `-`.
 ```json
 {
   "executor": "auto",
-  "sandbox": { "writePaths": ["~/.gradle"], "denyRead": ["~/secrets"] },
+  "sandbox": { "writePaths": ["~/tools/cache"], "denyRead": ["~/secrets"] },
   "codeIndex": "off",
   "permissions": { "allow": ["bash(pnpm test*)"], "deny": ["bash(git push*)"] },
   "env": { "allow": ["NODE_ENV"] },
@@ -104,7 +107,7 @@ grep never searches them; the code index never indexes them.
 
 | List | Default |
 | --- | --- |
-| Writable | the root, `os.tmpdir()` and `/tmp` (real paths), `~/.cache`, `~/.npm`, `~/.local/share/pnpm`, `~/Library/Caches`, `~/Library/pnpm`, plus `sandbox.writePaths` |
+| Writable | the root, `os.tmpdir()` and `/tmp` (real paths), `~/.cache`, `~/.npm`, `~/.local/share/pnpm`, `~/Library/Caches`, `~/Library/pnpm`, plus `sandbox.writePaths`, plus the caches of the detected language profiles (for example `~/.m2/repository`) |
 | Read-only inside the root | `.git/hooks`, `.git/config`, `.garuda` (they run or apply later, outside the sandbox) |
 | Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, plus `sandbox.denyRead` |
 

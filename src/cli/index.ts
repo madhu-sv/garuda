@@ -51,7 +51,7 @@ async function main(): Promise<void> {
     .command("eval")
     .description("run the eval tasks in scratch folders and report pass/fail, steps and cost")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
-    .option("-s, --suite <name>", "basic (default), hard or all")
+    .option("-s, --suite <name>", "basic (default), hard, java, python or all")
     .option("-t, --task <ids...>", "run only these tasks (from any suite)")
     .option("--max-steps <n>", "step limit per task", (v) => Number.parseInt(v, 10))
     .option("--repeat <n>", "run each task n times and show the mean", (v) =>
@@ -61,6 +61,10 @@ async function main(): Promise<void> {
     .option("--executor <name>", "auto (default), os or host")
     .option("--keep", "keep the scratch folders")
     .option("--list", "list the tasks and exit")
+    .option(
+      "--prepare <toolchain>",
+      "java: download Maven plugins and JUnit once; python: check pytest",
+    )
     .action(async (options) => {
       const { runEvalCommand } = await import("./evalCommand.js");
       process.exitCode = await runEvalCommand({

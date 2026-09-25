@@ -21,7 +21,8 @@ describe("eval tasks (N5)", () => {
     expect(new Set(ALL_TASKS.map((t) => t.id)).size).toBe(ALL_TASKS.length);
   });
 
-  for (const task of ALL_TASKS) {
+  // Java and Python tasks have their own test files (evals.java.test.ts, evals.python.test.ts).
+  for (const task of ALL_TASKS.filter((t) => t.requires === undefined)) {
     it(`${task.id}: the check fails before the fix and passes with the solution`, async () => {
       const root = realpathSync(mkdtempSync(join(tmpdir(), `garuda-task-${task.id}-`)));
       try {

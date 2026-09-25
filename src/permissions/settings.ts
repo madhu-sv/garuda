@@ -12,7 +12,7 @@ import type { SandboxSettings } from "./sandboxPaths.js";
  *
  * {
  *   "executor": "auto",
- *   "sandbox": { "writePaths": ["~/.gradle"], "denyRead": ["~/secrets"] },
+ *   "sandbox": { "writePaths": ["~/tools/cache"], "denyRead": ["~/secrets"] },
  *   "permissions": {
  *     "allow": ["bash(pnpm test*)", "edit_file(src/**)"],
  *     "deny":  ["bash(rm -rf*)", "bash(git push*)"]

@@ -112,7 +112,22 @@ garuda eval -s hard                        # the hard suite (6 tasks on a 110-fi
 garuda eval -t fix-add hard-rename --keep  # some tasks, keep the scratch folders
 garuda eval -s hard --repeat 3             # each task 3 times, with a mean row per task
 garuda eval -s hard --repeat 3 --index lookup  # the same, with find_symbol and find_references (A/B)
+garuda eval -s java                        # 5 Maven projects with JUnit 5
+garuda eval -s python                      # 5 pytest projects
 ```
+
+The Java and Python suites need a toolchain. `garuda eval` checks it before the first model call and
+says what is missing:
+
+- Java: a JDK (17 or later), Maven, and JUnit 5 in `~/.m2`. Run `garuda eval --prepare java` once: it
+  runs Maven on a small project with network, to download the plugins and JUnit. The evals then run
+  offline.
+- Python: `python3` with pytest 7 or later (`python3 -m pip install --user pytest`).
+  `garuda eval --prepare python` checks it.
+
+The checks guard against shortcuts: the tests and build files (`pom.xml`, `pyproject.toml`) are
+protected, the Java check refuses a `.mvn` folder, and pytest reads only `pyproject.toml` and no
+`conftest.py`.
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).
 Commands run in the scratch folders, in the OS sandbox when there is one (`--executor auto|os|host`). Results and session files go to
@@ -168,7 +183,8 @@ In the sandbox, a command:
 
 - can read every file, except secrets in your home folder (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`,
   `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains and more);
-- can write only in the working root, the temp folders and package caches (`~/.cache`, `~/.npm`, pnpm);
+- can write only in the working root, the temp folders and package caches (`~/.cache`, `~/.npm`, pnpm,
+  and for a Java or Python project `~/.m2/repository`, `~/.gradle/caches` and similar);
 - cannot write `.git/hooks`, `.git/config` or `.garuda/` in the root, because those run or apply later
   outside the sandbox;
 - has no network (localhost works on macOS).
@@ -182,7 +198,7 @@ Settings:
 ```json
 {
   "executor": "auto",
-  "sandbox": { "writePaths": ["~/.gradle"], "denyRead": ["~/work-secrets"] }
+  "sandbox": { "writePaths": ["~/tools/cache"], "denyRead": ["~/work-secrets"] }
 }
 ```
 
@@ -194,6 +210,23 @@ Settings:
   that it needs; Garuda then falls back to the host and says why.
 - Limit on Linux: a protected path that does not exist yet (for example `.git/hooks` in a folder with no
   `.git`) is not protected.
+
+## Java and Python projects
+
+Garuda finds the build tool from files in the working root and tells the model how to build and test.
+The banner shows what it found, for example `Java (Maven)`.
+
+| Found | Test command | The sandbox may also write |
+| --- | --- | --- |
+| `pom.xml` | `mvn -B -q -o test` (or `./mvnw`) | `~/.m2/repository`, `~/.m2/wrapper` |
+| `build.gradle(.kts)`, `settings.gradle(.kts)` | `gradle test --offline -q` (or `./gradlew`) | `~/.gradle/caches`, `wrapper`, `daemon` and other cache folders |
+| `pyproject.toml`, `setup.py`, `requirements.txt` … | `python3 -m pytest -q` (or the project's `.venv`, `uv run`, `poetry run`) | `~/.local/share/uv` |
+
+- The commands run offline, because the sandbox has no network. When a dependency is missing, the model
+  asks to run the download outside the sandbox, and you approve it.
+- Settings files and init scripts (`~/.m2/settings.xml`, `~/.gradle/init.d`, `gradle.properties`) stay
+  read-only: the build tool runs them later, outside the sandbox.
+- `GARUDA.md` can override the detected commands. Gradle in the sandbox is not tested yet.
 
 ## MCP servers
 
@@ -366,7 +399,8 @@ Notes:
 | `src/session/` | Session state, records, `SessionStore` (JSONL files), resume, redaction, read tracking |
 | `src/app/` | `Runtime`: settings, executor, permissions and session for one process. The CLI and the evals share it |
 | `src/cli/` | Entry point, chat mode, renderer, terminal approver, `garuda eval` |
-| `src/evals/` | The eval suites (basic, hard), the shopkit repo generator and the runner |
+| `src/evals/` | The eval suites (basic, hard, java, python), the shopkit repo generator, toolchain checks and the runner |
+| `src/lang/` | Language profiles: build and test commands, prompt notes and sandbox caches for Maven, Gradle and Python projects |
 | `src/knowledge/` | The code index: `KnowledgeIndex`, `LanguageExpert`, the TypeScript/JavaScript expert |
 | `scripts/` | Build helpers. `package.mjs` makes the standalone binary |
 | `test/` | Vitest suites. `loop.test.ts`, `m2.acceptance.test.ts` and `m3.acceptance.test.ts`, `m4.acceptance.test.ts`, `m5.acceptance.test.ts` hold the milestone acceptance tests. `executorContract.ts` is the suite every executor must pass |

@@ -59,6 +59,7 @@ flowchart TB
     mcp[mcp: client, trust, sanitizing]
     web[web: SSRF-safe fetch]
     hooks[hooks: config, runner]
+    lang[lang: language profiles]
   end
   subgraph Platform[Platform layer]
     model[model: ModelClient, Anthropic adapter, fake, prices]
@@ -70,6 +71,7 @@ flowchart TB
   runtime --> loop
   runtime --> mcp
   runtime --> hooks
+  runtime --> lang
   loop --> context
   loop --> session
   loop --> tools
@@ -100,7 +102,8 @@ flowchart TB
 | Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown. |
 | Net | `src/net/` | Address checks (public, loopback) shared by web fetch and model providers. |
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
-| Evals | `src/evals/` | Eval tasks, the generated "shopkit" repository, the runner and the report. |
+| Language profiles | `src/lang/` | Find the build tool from marker files (Maven, Gradle, Python): test commands, prompt notes, package caches for the sandbox. |
+| Evals | `src/evals/` | Eval tasks (Node, Java, Python), the generated "shopkit" repository, toolchain checks, the runner and the report. |
 
 ## 4. Dependency rules
 
@@ -196,3 +199,5 @@ All state is in files. There is no server and no database.
 | Hooks | Block only; fail closed | A hook must never approve or let a call through by accident. |
 | Chat UI | Ink, loaded only for a chat on a terminal | Rich UI without slowing `-p`, pipes and evals. |
 | Sessions | JSONL files behind `SessionStore` | Simple, readable, append-only; replaceable later. |
+| Java and Python support | Language profiles (marker files, offline commands, cache allowlist) and eval suites; no per-language subagents | Each language needs a toolchain and the right commands, not a different agent. The evals measure it. |
+| Build caches in the sandbox | Only cache subfolders (`~/.m2/repository`, `~/.gradle/caches` …) are writable | Settings files and init scripts run later outside the sandbox; they stay read-only. |

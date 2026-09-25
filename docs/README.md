@@ -24,6 +24,7 @@ Low-level design documents:
 | MCP client | `src/mcp/` | [mcp.md](lld/mcp.md) |
 | Web fetch | `src/web/`, `src/net/`, `src/tools/webFetch.ts` | [web.md](lld/web.md) |
 | Hooks | `src/hooks/` | [hooks.md](lld/hooks.md) |
+| Language profiles | `src/lang/` | [languages.md](lld/languages.md) |
 | Evals | `src/evals/` | [evals.md](lld/evals.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).

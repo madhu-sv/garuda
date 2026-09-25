@@ -14,7 +14,7 @@ export interface BannerInfo {
   /** For example "seatbelt · no network", or "none: commands ask first". */
   sandbox: string;
   root: string;
-  /** Short facts, for example "1 MCP server", "2 hooks", "web_fetch". */
+  /** Short facts, for example "Java (Maven)", "1 MCP server", "2 hooks", "web_fetch". */
   extras: string[];
   /** The Ink chat has a queue and Esc; the plain chat does not. */
   ink: boolean;
