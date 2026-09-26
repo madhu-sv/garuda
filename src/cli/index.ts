@@ -1,8 +1,11 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { Command } from "commander";
+import { Writable } from "node:stream";
+import { Command, Option } from "commander";
 import { Runtime } from "../app/runtime.js";
+import { BUILTIN_COMMANDS } from "../commands/builtins.js";
 import { replaySession } from "../loop/replay.js";
+import { DEFAULT_MAX_TOKENS } from "../loop/runAgent.js";
 import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
 import { FileSessionStore, parseRecords } from "../session/store.js";
 import { defaultTools } from "../tools/index.js";
@@ -11,15 +14,17 @@ import { VERSION } from "../version.js";
 import { SwitchApprover, TerminalApprover } from "./approver.js";
 import { banner, colorLevel } from "./banner.js";
 import { describeError } from "./errors.js";
+import { JsonOutput, OUTPUT_FORMATS, type OutputFormat } from "./jsonOutput.js";
 import { PlainRenderer, type Renderer } from "./renderer.js";
 import { runRepl } from "./repl.js";
-import { formatTokens } from "./report.js";
-import { runTurnInTerminal } from "./turn.js";
+import { formatTokens, stopMessage } from "./report.js";
+import { runTurnInTerminal, type TurnOutcome } from "./turn.js";
 
 /**
  * Entry point (F1, F2):
  *   garuda                      chat in the current folder
  *   garuda -p "task"            run one task and exit (also: echo "task" | garuda)
+ *   garuda -p "task" --output-format json|stream-json   the same, as JSON for scripts (0.5)
  *   garuda --resume [id]        continue a session (chat, or one task with -p)
  *   garuda --replay <id|file>   replay a session with no API calls
  *   garuda eval                 run the eval tasks (N5)
@@ -37,6 +42,8 @@ interface Options {
   replay?: string;
   /** A first chat line, as if typed: `garuda init` runs "/init". */
   firstInput?: string;
+  outputFormat?: OutputFormat;
+  verbose?: boolean;
 }
 
 async function main(): Promise<void> {
@@ -56,6 +63,12 @@ async function main(): Promise<void> {
     .option("--lsp", "add language server errors to edit results (TS/JS, Python, Java)")
     .option("-r, --resume [session-id]", "continue the last session, or the given one")
     .option("--replay <session-id-or-file>", "replay a recorded session with no API calls")
+    .addOption(
+      new Option("--output-format <format>", "with a task: text (default), json or stream-json")
+        .choices(OUTPUT_FORMATS)
+        .default("text"),
+    )
+    .option("--verbose", "with json output: also show the tool activity on stderr")
     .action(async (options: Options) => {
       process.exitCode = await start(options, program);
     });
@@ -129,6 +142,10 @@ async function start(options: Options, program: Command): Promise<number> {
   let prompt = options.prompt;
   if (prompt === undefined && !process.stdin.isTTY) prompt = readFileSync(0, "utf8").trim();
   if (prompt === "") program.error("The task is empty.");
+  const format = options.outputFormat ?? "text";
+  if (format !== "text" && prompt === undefined) {
+    program.error(`--output-format ${format} needs a task: use -p "task" or give it on stdin.`);
+  }
 
   const spec = options.model ?? process.env.GARUDA_MODEL;
   if (!spec) program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
@@ -199,18 +216,63 @@ async function start(options: Options, program: Command): Promise<number> {
   }
 
   if (prompt !== undefined) {
+    const output =
+      format === "text"
+        ? undefined
+        : new JsonOutput({
+            format,
+            write: (line) => process.stdout.write(`${line}\n`),
+            // stdout holds only JSON: model text never goes there.
+            log: new PlainRenderer({ out: nullStream(), err: process.stderr }),
+            verbose: options.verbose === true,
+            sessionId: () => runtime.session?.id ?? "",
+            runInfo: () => ({
+              cwd: root,
+              model: modelId,
+              tools: runtime.toolNames(),
+              mcpServers: runtime.mcpStatus(),
+              permissionMode: runtime.mode === "plan" ? "plan" : "default",
+              slashCommands: [...BUILTIN_COMMANDS, ...runtime.commands.map((c) => c.name)],
+              apiKeySource:
+                !modelId.includes("/") && process.env.ANTHROPIC_API_KEY !== undefined
+                  ? "ANTHROPIC_API_KEY"
+                  : "none",
+            }),
+          });
+    if (output !== undefined) events = output;
+    const costBefore = runtime.session?.costUsd ?? 0;
+    const finish = (outcome: TurnOutcome) => {
+      const cost = runtime.session?.costUsd;
+      output?.finish(outcome, {
+        totalCostUsd: cost ?? 0,
+        runCostUsd: cost === undefined ? undefined : cost - costBefore,
+        contextWindow: runtime.limits.contextWindow,
+        maxOutputTokens: resolved.maxTokens ?? DEFAULT_MAX_TOKENS,
+        ...(outcome.kind === "done"
+          ? { stopMessage: stopMessage(outcome.result.stopReason, runtime.limits) }
+          : {}),
+      });
+    };
     // `garuda -p "/review src"` runs a custom command; other text goes to the model as it is.
     if (prompt.startsWith("/")) {
       const resolved = await runtime.resolveCommand(prompt, new AbortController().signal);
       if (resolved.kind === "denied") {
-        renderer.info(resolved.message);
+        (output ?? renderer).warn(resolved.message);
         await runtime.close();
+        finish({ kind: "error", message: resolved.message });
         return 1;
       }
       if (resolved.kind === "prompt") prompt = resolved.prompt;
     }
-    const outcome = await runTurnInTerminal(runtime, terminalApprover, renderer, prompt, exitNow);
+    const outcome = await runTurnInTerminal(
+      runtime,
+      terminalApprover,
+      output ?? renderer,
+      prompt,
+      exitNow,
+    );
     await runtime.close();
+    finish(outcome);
     if (outcome.kind === "interrupted") return 130;
     if (outcome.kind === "error") return 1;
     return outcome.result.stopReason === "done" ? 0 : 2;
@@ -267,6 +329,11 @@ async function start(options: Options, program: Command): Promise<number> {
   const id = runtime.session?.id;
   if (id !== undefined) renderer.info(`Session ${id}. Continue it with: garuda --resume ${id}`);
   return 0;
+}
+
+/** A stream that drops what it gets. */
+function nullStream(): Writable {
+  return new Writable({ write: (_chunk, _encoding, done) => done() });
 }
 
 /** The Ink chat needs a terminal on both sides. GARUDA_PLAIN=1 turns it off. */

@@ -96,8 +96,8 @@ describe("the loop retries a broken stream (0.3)", () => {
     expect((await result).stopReason).toBe("done");
     expect(model.calls).toBe(3);
     expect(events.filter((e) => e.type === "model_retry")).toEqual([
-      { type: "model_retry", attempt: 1, maxRetries: 2, reason: "terminated" },
-      { type: "model_retry", attempt: 2, maxRetries: 2, reason: "terminated" },
+      { type: "model_retry", attempt: 1, maxRetries: 2, delayMs: 0, reason: "terminated" },
+      { type: "model_retry", attempt: 2, maxRetries: 2, delayMs: 0, reason: "terminated" },
     ]);
     expect(session.messages.at(-1)).toEqual({
       role: "assistant",
@@ -140,6 +140,7 @@ describe("retry notices", () => {
     type: "model_retry",
     attempt: 1,
     maxRetries: 2,
+    delayMs: 1_000,
     reason: "terminated",
   };
 

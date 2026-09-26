@@ -15,6 +15,7 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 | `renderer.ts` | `Renderer` interface and `PlainRenderer`: model text to stdout, activity to stderr. |
 | `approver.ts` | `TerminalApprover` (inquirer select), `SwitchApprover`, shared `header` and `colorPreview`. |
 | `report.ts` | Usage line and stop messages. |
+| `jsonOutput.ts` | `-p --output-format json\|stream-json` (0.5): `JsonOutput` (a `Renderer`) and the pure `initLine`, `assistantLine`, `resultLine`. See below. |
 | `banner.ts` | The chat start banner: GARUDA wordmark (saffron-to-gold gradient on true-color terminals), a card with version, model, sandbox, folder and extras (the detected build tools first, for example `Java (Maven)`), and a tips line. The card only below 60 columns; no colors with `NO_COLOR` or a pipe. Not shown for `-p`. |
 | `errors.ts` | `describeError`: the error chain as one message. |
 | `evalCommand.ts` | `garuda eval`: options, toolchain check before the run, `--prepare java\|python`, `--subagents on\|off`, `--subagent-model`, `--todo on\|off`, `--lsp on\|off` (checks for a server and the sandbox first), executor choice, run, report files. |
@@ -27,9 +28,49 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 2. `Runtime.create` with a `SwitchApprover` (wraps `TerminalApprover`) and a switchable event target
    (starts as `PlainRenderer`). `onNotice` goes to the same target.
 3. Exit handlers: `process.on("exit")` calls `executor.shutdown()`, so no command or server outlives Garuda.
-4. `-p`: one `runTurnInTerminal`, then `runtime.close()`. Exit code: 0 done, 1 error, 2 limit, 130 Ctrl-C.
+4. `-p`: one `runTurnInTerminal`, then `runtime.close()`. Exit code: 0 done, 1 error, 2 limit (or the
+   model's own max_tokens or refusal stop), 130 Ctrl-C. The exit codes are the same for all output formats.
 5. Chat: if stdin and stdout are TTYs, `GARUDA_PLAIN` is not `1` and `TERM` is not `dumb`, load
    `chat/inkChat.js` with `import()`. If the import fails (the single binary), use the plain REPL.
+
+## JSON output (`jsonOutput.ts`, 0.5)
+
+`--output-format text|json|stream-json` works only with a task (`-p` or stdin). The field names are those
+of Claude Code's headless mode (checked against the `@anthropic-ai/claude-agent-sdk` types), so scripts
+for `claude -p --output-format …` read Garuda too.
+
+- stdout holds only JSON, one object per line. The model text never goes there: `JsonOutput` sends events
+  to a `PlainRenderer` whose stdout is a null stream. stderr gets warnings and errors; `--verbose` adds the
+  tool activity and the usage line. (Claude Code needs `--verbose` for stream-json; Garuda does not.)
+- `json`: one `result` line at the end.
+- `stream-json`, in order:
+
+| Line | When | Main fields |
+| --- | --- | --- |
+| `system/init` | before the first other line | `cwd`, `tools`, `mcp_servers` (`name`, `status`), `model`, `permissionMode` (`default` or `plan`), `slash_commands`, `apiKeySource`, `garuda_version` |
+| `assistant` | each model response (`step_end`) | `message`: an Anthropic Messages API message with all blocks (`text`, `tool_use`), `stop_reason`, `usage` |
+| `user` | each tool result | `message.content`: one `tool_result` block (`tool_use_id`, `content`, `is_error`) |
+| `system/api_retry` | a broken stream is sent again | `attempt`, `max_retries`, `retry_delay_ms`, `message` |
+| `system/compact_boundary` | compaction | `compact_metadata`: `trigger: "auto"`, `pre_tokens`, `post_tokens` |
+| `result` | last | see below |
+
+Every line has `session_id` and `uuid`; `parent_tool_use_id` is `null` (subagent steps are not streamed).
+
+The `result` line: `subtype`, `is_error`, `duration_ms`, `duration_api_ms`, `num_turns` (model calls),
+`result` (the last response's text, success only), `stop_reason`, `total_cost_usd` (the session total; 0
+when the price is unknown), `usage` (this run), `modelUsage` (one entry for the main model; subagent use is
+included in it), `permission_denials`, `errors` (error subtypes), `terminal_reason`.
+
+| Garuda stop | `subtype` | `terminal_reason` |
+| --- | --- | --- |
+| done, max_tokens, refusal | `success` | `completed` |
+| max_steps | `error_max_turns` | `max_turns` |
+| token_budget | `error_during_execution` (the budget counts tokens, not dollars) | `budget_exhausted` |
+| repeated_calls | `error_during_execution` | – |
+| an error | `error_during_execution`, `is_error: true` | – |
+| Ctrl-C | `error_during_execution`, errors `["Interrupted."]` | – |
+
+Not in 0.5: `--input-format stream-json`, `--include-partial-messages` (`stream_event` lines), `--json-schema`.
 
 commander uses `enablePositionalOptions()`, so options after `eval` belong to `eval` (`garuda eval -m x`).
 

@@ -16,7 +16,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
 | 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
 | 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo, remote MCP with OAuth | Done |
-| 0.5: `garuda init` (AGENTS.md, migrate from other agents) | In progress |
+| 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output | In progress |
 
 ## Use
 
@@ -40,6 +40,18 @@ Commands run in an OS sandbox when your machine has one (see Sandbox below). Wit
 each command asks first, so read each one before you allow it.
 Garuda removes a leading `cd <working root> &&` from a command, because each command already starts there.
 When the model reads files with bash, or pipes into head or tail, the result adds a short `[Garuda: …]` note that tells it to use the file tools.
+
+For scripts and CI, `--output-format json` prints one JSON result, and `--output-format stream-json`
+prints one JSON object per line as the task runs. The fields are those of Claude Code's headless mode
+(`claude -p --output-format …`), so the same scripts work:
+
+```sh
+g -p "Run the tests" --output-format json | jq -r '.subtype, .total_cost_usd, .result'
+g -p "Fix the lint errors" --output-format stream-json --verbose > run.jsonl
+```
+
+stdout holds only JSON; warnings and errors go to stderr (`--verbose` adds the tool activity). The exit
+code does not change. Details: [docs/lld/cli.md](docs/lld/cli.md#json-output-jsonoutputts-05).
 
 Try it on this repo:
 

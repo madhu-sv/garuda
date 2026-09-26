@@ -82,7 +82,7 @@ export class ToolRegistry implements ToolRunner {
         context.signal,
       );
       if (!decision.allowed) {
-        return { content: `Permission denied: ${decision.reason}`, isError: true };
+        return { content: `Permission denied: ${decision.reason}`, isError: true, denied: true };
       }
       const output: unknown = await tool.run(parsed.data, context);
       const content = tool.toText ? tool.toText(output) : String(output);

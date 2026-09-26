@@ -7,6 +7,7 @@ import {
   type ModelClient,
   type ModelRequest,
   type ModelResponse,
+  type StopReason,
   type ToolResultBlock,
   type ToolUseBlock,
   type Usage,
@@ -42,8 +43,9 @@ export type AgentEvent =
   /** A one-line status of a long call, for example a subagent's current step. */
   | { type: "tool_progress"; call: ToolUseBlock; text: string }
   /** The model stream broke; the loop sends the same request again. Text shown so far is void. */
-  | { type: "model_retry"; attempt: number; maxRetries: number; reason: string }
-  | { type: "step_end"; step: number; usage: Usage }
+  | { type: "model_retry"; attempt: number; maxRetries: number; delayMs: number; reason: string }
+  /** A model response is in the session. `response` has all its blocks (JSON output, 0.5). */
+  | { type: "step_end"; step: number; usage: Usage; response: ModelResponse }
   | { type: "compaction"; result: CompactionResult };
 
 export interface AgentDeps {
@@ -88,6 +90,10 @@ export interface AgentResult {
   steps: number;
   /** Token use for this run only. The session keeps the running total. */
   usage: Usage;
+  /** Time spent in model calls in this run, retries included (0.5). */
+  apiMs: number;
+  /** The stop reason of the last model response (0.5). */
+  modelStopReason?: StopReason;
 }
 
 export const DEFAULT_MAX_STEPS = 50;
@@ -110,10 +116,18 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   const recent: string[] = [];
   let usage = ZERO_USAGE;
   let steps = 0;
+  let apiMs = 0;
+  let modelStopReason: StopReason | undefined;
 
   const finish = (stopReason: AgentStopReason): AgentResult => {
     session.journal?.write({ type: "end", stopReason, steps });
-    return { stopReason, steps, usage };
+    return {
+      stopReason,
+      steps,
+      usage,
+      apiMs,
+      ...(modelStopReason === undefined ? {} : { modelStopReason }),
+    };
   };
 
   closeOpenToolCalls(session);
@@ -139,16 +153,20 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       tools,
       maxTokens: deps.maxTokens ?? DEFAULT_MAX_TOKENS,
     };
+    const started = performance.now();
     const response = await callModelWithRetry(
       deps.model,
       request,
       signal,
       emit,
       deps.retryDelaysMs ?? MODEL_RETRY_DELAYS_MS,
-    );
+    ).finally(() => {
+      apiMs += performance.now() - started;
+    });
+    modelStopReason = response.stopReason;
     usage = addUsage(usage, response.usage);
     addAssistantResponse(session, response, steps, cost(response));
-    emit({ type: "step_end", step: steps, usage: response.usage });
+    emit({ type: "step_end", step: steps, usage: response.usage, response });
 
     const calls = response.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
     if (calls.length === 0) return finish(finalReason(response));
@@ -196,13 +214,15 @@ async function callModelWithRetry(
       return await callModel(model, request, signal, emit);
     } catch (error) {
       if (signal.aborted || attempt >= delays.length || !isTransientModelError(error)) throw error;
+      const delayMs = delays[attempt] ?? 1_000;
       emit({
         type: "model_retry",
         attempt: attempt + 1,
         maxRetries: delays.length,
+        delayMs,
         reason: errorReason(error),
       });
-      await sleep(delays[attempt] ?? 1_000, signal);
+      await sleep(delayMs, signal);
     }
   }
 }

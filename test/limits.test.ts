@@ -134,7 +134,12 @@ describe("pricing and the usage line (F22)", () => {
     session.costUsd = 0.1234;
     session.contextTokens = 50_000;
     const line = usageLine(
-      { stopReason: "done", steps: 3, usage: { ...usage(2_000, 500), cacheReadTokens: 10_000 } },
+      {
+        stopReason: "done",
+        steps: 3,
+        usage: { ...usage(2_000, 500), cacheReadTokens: 10_000 },
+        apiMs: 0,
+      },
       session,
       0.042,
       200_000,

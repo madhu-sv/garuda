@@ -101,8 +101,12 @@ response, so a retry never leaves half a message in the record. The SDKs retry o
 starts; this covers the break in the middle.
 
 Events: `text_delta`, `tool_call`, `tool_progress` (a one-line status of a long call, for example a
-subagent's current step), `tool_result`, `model_retry` (attempt, max retries, reason), `compaction`,
-`step_end`.
+subagent's current step), `tool_result`, `model_retry` (attempt, max retries, delay, reason), `compaction`,
+`step_end` (the step's usage and, since 0.5, the full `response`).
+
+`AgentResult`: `stopReason`, `steps`, `usage` (this run, subagents included), `apiMs` (time in model calls,
+retries included; 0.5) and `modelStopReason` (the last response's stop reason; 0.5). The JSON output of
+`-p` uses the last three (see [cli.md](cli.md)).
 
 Defaults: `DEFAULT_MAX_STEPS = 50`, `DEFAULT_MAX_TOKENS = 8192`, `DEFAULT_TOKEN_BUDGET = 20 000 000`,
 `REPEAT_LIMIT = 3`.

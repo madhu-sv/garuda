@@ -514,6 +514,11 @@ export class Runtime {
     }
   }
 
+  /** The names of the tools the model sees, sorted (JSON output, 0.5). */
+  toolNames(): string[] {
+    return this.tools.specs().map((spec) => spec.name);
+  }
+
   /** MCP server states, for /mcp. */
   mcpStatus(): McpServerStatus[] {
     return this.mcp?.status() ?? [];

@@ -108,6 +108,8 @@ export interface ToolRunner {
 export interface ToolOutcome {
   content: string;
   isError: boolean;
+  /** The permission check refused the call (for `permission_denials` in JSON output, 0.5). */
+  denied?: boolean;
   /** Set by subagent tools: the loop adds the child's usage to the session. */
   subagent?: SubagentReport;
 }
