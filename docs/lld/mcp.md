@@ -108,6 +108,10 @@ a bad or oversized message is reported and the buffer is cleared), writes with `
 the last 40 lines of stderr for error messages, and on `close()` ends stdin and stops the process group.
 The SDK's own stdio transport is never used (it spawns processes itself; architecture test).
 
+When a server stops by itself, the manager marks it `failed` and says "MCP server "x" stopped. Its tools
+now fail." `McpManager.close()` (the end of a chat or a `-p` run) clears its list of connections before it
+closes them, so a planned stop gives no notice; the servers show as `stopped`.
+
 ## Tool adapter (`toGarudaTools`)
 
 | Rule | Value |

@@ -178,6 +178,9 @@ describe("remote MCP servers over Streamable HTTP (0.4)", () => {
     });
     expect(statSync(file).mode & 0o777).toBe(0o600);
     await manager.close();
+    // A planned stop is not a failure: no "stopped" notice (0.5).
+    expect(notices.join("\n")).not.toMatch(/stopped/);
+    expect(manager.status()[0]?.state).toBe("stopped");
 
     // A new session: the saved token works, no question, no browser.
     const again = new Recorder();

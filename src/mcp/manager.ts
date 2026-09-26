@@ -117,11 +117,13 @@ export class McpManager {
   }
 
   async close(): Promise<void> {
-    for (const { client, config } of this.connections.values()) {
+    // Clear first: a closed transport calls onclose, and a planned stop is not a failure to report.
+    const open = [...this.connections.values()];
+    this.connections.clear();
+    for (const { client, config } of open) {
       await client.close().catch(() => {});
       this.setStatus(config, "stopped", 0);
     }
-    this.connections.clear();
   }
 
   private async startOne(config: ServerConfig, signal: AbortSignal): Promise<AnyTool[]> {
