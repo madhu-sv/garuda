@@ -46,7 +46,9 @@ export type AgentEvent =
   | { type: "model_retry"; attempt: number; maxRetries: number; delayMs: number; reason: string }
   /** A model response is in the session. `response` has all its blocks (JSON output, 0.5). */
   | { type: "step_end"; step: number; usage: Usage; response: ModelResponse }
-  | { type: "compaction"; result: CompactionResult };
+  | { type: "compaction"; result: CompactionResult }
+  /** A line for the user from the runtime, not the model (0.6: attached @files). */
+  | { type: "notice"; text: string };
 
 export interface AgentDeps {
   model: ModelClient;

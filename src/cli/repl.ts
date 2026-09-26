@@ -2,6 +2,8 @@ import { createInterface } from "node:readline";
 import type { Runtime } from "../app/runtime.js";
 import type { Approver } from "../permissions/types.js";
 import { runCommand } from "./chat/commands.js";
+import { complete, rootLister } from "./chat/complete.js";
+import { commandNames } from "./chat/controller.js";
 import { BUILD_PROMPT, planHandoff } from "./chat/plan.js";
 import type { Renderer } from "./renderer.js";
 import type { Interruptible } from "./turn.js";
@@ -32,7 +34,16 @@ export async function runRepl(
   firstInput?: string,
 ): Promise<void> {
   const history: string[] = [];
-  const ask = lineSource(io);
+  // Tab completion (0.6): the same /commands and @paths as the Ink chat.
+  const list = rootLister(runtime.root);
+  const completer = (line: string): [string[], string] => {
+    const result = complete(line, line.length, { commands: commandNames(runtime), list });
+    if (result === undefined) return [[], line];
+    const word = line.slice(line.search(/\S*$/));
+    const done = result.text.slice(line.search(/\S*$/));
+    return [result.candidates.length > 0 ? result.candidates : [done], word];
+  };
+  const ask = lineSource(io, completer);
   let lastInterrupt = 0;
   let first = firstInput;
 
@@ -61,6 +72,21 @@ export async function runRepl(
     if (text === "") continue;
     history.unshift(raw);
 
+    // !command (0.6): run it like the bash tool; the output also goes with the next message.
+    if (text.startsWith("!") && text.length > 1) {
+      const controller = new AbortController();
+      approver.onInterrupt = () => controller.abort();
+      try {
+        const result = await runtime.runUserCommand(text.slice(1).trim(), controller.signal);
+        renderer.info(`${result.text}\n(The output goes to the model with your next message.)`);
+      } catch (error) {
+        renderer.warn(controller.signal.aborted ? "Command stopped." : (error as Error).message);
+      } finally {
+        approver.onInterrupt = () => {};
+      }
+      continue;
+    }
+
     let prompt = text;
     if (text.startsWith("/")) {
       const result = await runCommand(text, { runtime, renderer, sessionPath });
@@ -87,8 +113,13 @@ export async function runRepl(
  * prompt (inquirer) has the terminal to itself during a turn.
  * On a pipe: one interface for the whole chat, with a queue, so no buffered line is lost.
  */
-function lineSource(io: ReplIO): (prompt: string, history: string[]) => Promise<Input> {
-  if (io.input.isTTY === true) return (prompt, history) => askTerminal(prompt, history, io);
+function lineSource(
+  io: ReplIO,
+  completer?: (line: string) => [string[], string],
+): (prompt: string, history: string[]) => Promise<Input> {
+  if (io.input.isTTY === true) {
+    return (prompt, history) => askTerminal(prompt, history, io, completer);
+  }
 
   const rl = createInterface({ input: io.input, terminal: false });
   const queue: Input[] = [];
@@ -115,7 +146,12 @@ function lineSource(io: ReplIO): (prompt: string, history: string[]) => Promise<
   };
 }
 
-function askTerminal(prompt: string, history: string[], io: ReplIO): Promise<Input> {
+function askTerminal(
+  prompt: string,
+  history: string[],
+  io: ReplIO,
+  completer?: (line: string) => [string[], string],
+): Promise<Input> {
   return new Promise((resolve) => {
     const rl = createInterface({
       input: io.input,
@@ -123,6 +159,7 @@ function askTerminal(prompt: string, history: string[], io: ReplIO): Promise<Inp
       terminal: true,
       history: [...history],
       historySize: 100,
+      ...(completer === undefined ? {} : { completer }),
     });
     let done = false;
     const finish = (input: Input) => {

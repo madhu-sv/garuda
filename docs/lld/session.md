@@ -21,7 +21,7 @@ Every change goes through these functions, so the journal always matches memory:
 
 | Function | Change | Record |
 | --- | --- | --- |
-| `addUserMessage(session, text, notes)` | user message: the prompt, then one `<garuda_note>` text block per note | `user` |
+| `addUserMessage(session, text, notes, attachments)` | user message: the prompt, then one `<garuda_note>` text block per note, then one plain text block per attachment (`@path`, 0.6) | `user` |
 | `addAssistantResponse(session, response, step, cost)` | assistant content, usage, cost, context size | `assistant` |
 | `addToolResults(session, results, meta)` | one user message with the tool results | `tool_results` |
 | `closeOpenToolCalls(session)` | an error result for each `tool_use` with no result (after Ctrl-C or a crash) | `tool_results` |

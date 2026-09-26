@@ -180,6 +180,17 @@ interface ChatState {
 - **New lines (0.6):** Enter with `meta` (Alt/Option+Enter) inserts `\n`; Enter after a `\` at the cursor
   replaces the backslash with `\n`; else Enter submits. `typeAhead` does the same when "\" and Enter arrive in one chunk (fast typing). The
   footer shows `\ then Enter: new line · Ctrl-G editor`; the start banner's tips line says the same.
+- **`@path` (0.6):** the runtime attaches mentioned files (see runtime-and-loop.md); the chat shows the
+  `notice` event ("Attached src/a.ts (42 lines).").
+- **`!command` (0.6):** the controller (Ink) and the REPL send a line that starts with `!` to
+  `runtime.runUserCommand`; the Ink chat is busy while it runs (Esc/Ctrl-C abort it), prints the output and
+  says it goes with the next message. No session file is made for a command alone.
+- **Tab (0.6, `complete.ts`):** `complete(text, cursor, sources)`: `/word` at the start of the line →
+  built-in commands, custom commands and user-invocable skills (`commandNames`); `@path` anywhere → entries
+  of that folder in the root (`rootLister`: inside the root only, no `.git`/`node_modules`, hidden entries
+  only after a `.`). One match completes (a command gets a space, a folder keeps its `/`); several complete
+  their common start and are listed (at most 30). Ink: `store.completeLine()` (Shift+Tab stays plan mode);
+  the REPL: readline's `completer`.
 - **External editor (0.6, `externalEditor.ts`):** Ctrl-G or `/editor` (the controller handles it before
   `runCommand`) calls `store.openEditor()`. `inkChat` sets `store.externalEdit`: raw mode off, stdin paused,
   `editInEditor(text)` (a 0600 temp file, `$VISUAL`/`$EDITOR`/`vi` as argv with quotes, `runInTerminal` from

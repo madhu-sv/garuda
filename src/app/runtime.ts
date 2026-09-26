@@ -36,6 +36,7 @@ import type { LspManager } from "../lsp/manager.js";
 import type { LspLanguage } from "../lsp/servers.js";
 import { loadMcpConfig, type ServerConfig } from "../mcp/config.js";
 import type { McpManager, McpServerStatus } from "../mcp/manager.js";
+import { neutralizeTags } from "../mcp/sanitize.js";
 import { TrustStore } from "../mcp/trust.js";
 import { aliasModel, lookupModel, type ModelInfo, type Price } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
@@ -44,6 +45,7 @@ import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { AgentMode, Approver } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
+import { FileTracker } from "../session/fileTracker.js";
 import type { RunLimits, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
 import {
@@ -64,6 +66,7 @@ import { filesText, undoQuestion } from "../undo/question.js";
 import { SLOW_SNAPSHOT_MS, SnapshotError, SnapshotStore, storeDir } from "../undo/snapshots.js";
 import { VERSION } from "../version.js";
 import type { SearchConfig } from "../web/search.js";
+import { attachMentions } from "./mentions.js";
 
 /**
  * The note that starts each plan-mode turn (0.4). The system prompt stays the same in both modes
@@ -163,6 +166,9 @@ export interface RuntimeOptions {
     timeoutMs?: number;
   };
 }
+
+/** The output of a `!command` that goes to the model with the next message is cut here (0.6). */
+export const USER_COMMAND_NOTE_CHARS = 10_000;
 
 export class Runtime {
   readonly root: string;
@@ -579,6 +585,36 @@ export class Runtime {
     return cached;
   }
 
+  /**
+   * `!command` in the chat (0.6): the user runs a command as the bash tool would, through the same
+   * permission engine (deny rules; in the OS sandbox no question), hooks and executor. The output
+   * goes to the user now, and with the next message to the model.
+   */
+  async runUserCommand(
+    command: string,
+    signal: AbortSignal,
+  ): Promise<{ text: string; isError: boolean }> {
+    const outcome = await this.tools.execute(
+      { type: "tool_use", id: `user-${Date.now()}`, name: "bash", input: { command } },
+      {
+        root: this.root,
+        signal,
+        permissions: this.permissions,
+        files: this.current?.files ?? new FileTracker(),
+        executor: this.executor,
+        ...(this.hookRunner === undefined ? {} : { hooks: this.hookRunner }),
+      },
+    );
+    const output =
+      outcome.content.length > USER_COMMAND_NOTE_CHARS
+        ? `${outcome.content.slice(0, USER_COMMAND_NOTE_CHARS)}\n[… cut]`
+        : outcome.content;
+    this.pendingNotes.push(
+      `The user ran a command in the chat (not you):\n$ ${neutralizeTags(command)}\n${neutralizeTags(output)}`,
+    );
+    return { text: outcome.content, isError: outcome.isError };
+  }
+
   /** Skills (0.5), sorted by name. */
   get skills(): readonly Skill[] {
     return this.skillList;
@@ -666,7 +702,19 @@ export class Runtime {
     await this.snapshot(session, prompt, signal);
     const notes = [...this.pendingNotes.splice(0), ...(this.mcp?.takeNotes() ?? [])];
     if (this.turnMode === "plan") notes.unshift(PLAN_NOTE);
-    addUserMessage(session, prompt, notes);
+    // @path in the prompt (0.6): the files go with the message and count as read.
+    const mentions = await attachMentions(prompt, this.root, session.files);
+    const lines = [
+      ...mentions.attachments.map((a) => `Attached ${a.summary}.`),
+      ...mentions.skipped.map((s) => `Not attached: ${s}.`),
+    ];
+    if (lines.length > 0) this.onEvent?.({ type: "notice", text: lines.join("\n") });
+    addUserMessage(
+      session,
+      prompt,
+      notes,
+      mentions.attachments.map((a) => a.text),
+    );
     return runAgent(session, {
       model: await this.client(),
       tools: this.tools,

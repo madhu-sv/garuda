@@ -226,8 +226,9 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
   else if (key.upArrow) store.editLine({ type: "up" });
   else if (key.downArrow) store.editLine({ type: "down" });
   else if (key.tab) {
-    // Shift+Tab switches between build and plan mode (0.4).
+    // Shift+Tab switches between build and plan mode (0.4); Tab completes (0.6).
     if (key.shift) store.toggleMode();
+    else store.completeLine();
   } else if (/[\r\n]/.test(input)) typeAhead(store, input);
   else if (input !== "" && !key.meta) store.editLine({ type: "insert", text: input });
 }

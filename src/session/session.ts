@@ -67,11 +67,18 @@ export function createSession(
  * Add the user's prompt. `notes` become extra text blocks after it: notes from Garuda
  * (in <garuda_note>), for example about MCP servers that are not available.
  */
-export function addUserMessage(session: Session, text: string, notes: string[] = []): void {
+export function addUserMessage(
+  session: Session,
+  text: string,
+  notes: string[] = [],
+  /** Text blocks the user attached, for example @files (0.6). */
+  attachments: string[] = [],
+): void {
   const message: Message = {
     role: "user",
     content: [
       { type: "text", text },
+      ...attachments.map((a) => ({ type: "text" as const, text: a })),
       ...notes.map((note) => ({
         type: "text" as const,
         text: `<garuda_note>${note}</garuda_note>`,

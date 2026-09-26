@@ -82,6 +82,13 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   private interruptAt = 0;
   /** A stop of the running turn was asked (Esc or Ctrl-C): Esc does not ask again. */
   private stopping = false;
+  /** Tab (0.6): the chat sets it; see complete.ts. */
+  completer:
+    | ((
+        text: string,
+        cursor: number,
+      ) => { text: string; cursor: number; candidates: string[] } | undefined)
+    | undefined;
   /** Ctrl-G and /editor (0.6): the chat sets it; it edits the text in the user's editor. */
   externalEdit: ((text: string) => { text?: string; problem?: string }) | undefined;
   private readonly paint: Paint;
@@ -175,6 +182,15 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     if (!this.state.busy || this.stopping) return;
     this.stopping = true;
     this.onInterrupt();
+  }
+
+  /** Tab (0.6): complete a /command or an @path at the cursor; several matches are listed. */
+  completeLine(): void {
+    const { text, cursor } = this.state.editor;
+    const result = this.completer?.(text, cursor);
+    if (result === undefined) return;
+    this.editLine({ type: "set", text: result.text, cursor: result.cursor });
+    if (result.candidates.length > 0) this.info(result.candidates.join("  "));
   }
 
   /** Ctrl-G or /editor (0.6): edit the input line in $VISUAL or $EDITOR. The text is not sent. */
@@ -324,6 +340,9 @@ export class ChatStore implements Renderer, Approver, Interruptible {
       }
       case "step_end":
         this.flushText();
+        return;
+      case "notice":
+        this.info(event.text);
         return;
     }
   }

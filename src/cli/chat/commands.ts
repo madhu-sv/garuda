@@ -17,7 +17,8 @@ import { modeText } from "./plan.js";
 /** Chat commands (F2). The plain chat and the Ink chat share them. */
 
 export const HELP = [
-  "Type a task and press Enter. Commands:",
+  "Type a task and press Enter. @path attaches a file or folder, !command runs a command, Tab completes.",
+  "Commands:",
   "  /help      show this help",
   "  /usage     tokens and cost of this session",
   "  /session   the session id and file",

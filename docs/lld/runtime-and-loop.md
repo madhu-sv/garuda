@@ -51,16 +51,24 @@ imports the CLI.
    A Ctrl-C during the start clears the state, so the next turn tries again.
 3. `ensureSession()`: a new session with a `start` record, or the current one. With undo on, a snapshot
    of the files and a `snapshot` record (a failure turns undo off with a notice).
-4. `addUserMessage(session, prompt, notes)`: in plan mode the first note is `PLAN_NOTE` (what plan mode
-   allows, and to end with a numbered plan), then the MCP notes. The system prompt is the same in both
+4. `attachMentions(prompt, root, session.files)` (0.6, `app/mentions.ts`): each `@path` that is a file or
+   folder in the root becomes a text block (a file numbered like read_file, ≤ 2 000 lines, recorded as read so
+   `edit_file` works at once; a folder as its entry list, ≤ 200). Sensitive, binary, too large (10 MB) and
+   outside-root paths are skipped with a reason; at most 10 attachments and 150 000 characters. A `notice`
+   event tells the user what was attached.
+5. `addUserMessage(session, prompt, notes, attachments)`: in plan mode the first note is `PLAN_NOTE` (what plan mode
+   allows, and to end with a numbered plan), then the pending notes (undo, `!command` output) and the MCP
+   notes; the attachments follow as plain text blocks. The system prompt is the same in both
    modes, so the prompt cache stays valid (N2).
-5. Load the model if it is still a factory (`client()`; the explore tool shares it), then
+6. Load the model if it is still a factory (`client()`; the explore tool shares it), then
    `runAgent(session, deps)`. With LSP on, `deps.diagnostics` calls the `LspManager`, which the runtime
    creates with `import()` on the first edit (N3).
 
 Other methods: `newSession()`, `recordStop(reason)`, `mcpStatus()`, `hookLines()`, `close()` (closes MCP
 clients and language servers), `mode` and `setMode()` (0.4), `commands` and `resolveCommand()` (0.4),
-`lspEnabled`, `lspStatus()` and `installLsp()` (0.4), `agents` and `allowAgent()` (0.5: custom agents; see [agents.md](agents.md)), `skills` and `allowSkill()` (0.5: the consent for a
+`lspEnabled`, `lspStatus()` and `installLsp()` (0.4), `runUserCommand(command, signal)` (0.6: a `!command` from the chat runs through `tools.execute` as a
+`bash` call, so the permission engine, hooks and executor apply; the output, cut at 10 000 characters and
+with Garuda's markers neutralized, goes into `pendingNotes` for the next message), `agents` and `allowAgent()` (0.5: custom agents; see [agents.md](agents.md)), `skills` and `allowSkill()` (0.5: the consent for a
 project skill; `resolveCommand` checks skills before custom commands; see [skills.md](skills.md)), `init(signal)` (0.5: loads `init/run.js` with `import()`, runs the migration and git steps with the runtime's approver and executor, and returns the report and the init prompt; see [init.md](init.md)).
 
 ## Agent loop (`loop/runAgent.ts`)
@@ -104,7 +112,7 @@ server, or a user abort; Ctrl-C during the wait stops at once. The session gets 
 response, so a retry never leaves half a message in the record. The SDKs retry only before a stream
 starts; this covers the break in the middle.
 
-Events: `text_delta`, `tool_call`, `tool_progress` (a one-line status of a long call, for example a
+Events (the runtime adds `notice`, 0.6: a line for the user, for example the attached files): `text_delta`, `tool_call`, `tool_progress` (a one-line status of a long call, for example a
 subagent's current step), `tool_result`, `model_retry` (attempt, max retries, delay, reason), `compaction`,
 `step_end` (the step's usage and, since 0.5, the full `response`).
 

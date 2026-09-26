@@ -68,6 +68,9 @@ export class PlainRenderer implements Renderer {
       case "model_retry":
         this.warn(retryText(event));
         return;
+      case "notice":
+        this.info(event.text);
+        return;
       case "step_end":
       // Live status lines need a live view; plain output stays one line per call.
       case "tool_progress":

@@ -37,7 +37,9 @@ export type EditAction =
   | { type: "killToEnd" }
   | { type: "up" }
   | { type: "down" }
-  | { type: "clear" };
+  | { type: "clear" }
+  /** Replace the text and put the cursor (Tab completion, 0.6). */
+  | { type: "set"; text: string; cursor: number };
 
 export function edit(state: EditorState, action: EditAction): EditorState {
   const { text, cursor } = state;
@@ -81,6 +83,8 @@ export function edit(state: EditorState, action: EditAction): EditorState {
       return set(text.slice(0, cursor), cursor);
     case "clear":
       return { ...emptyEditor(state.history) };
+    case "set":
+      return set(action.text, action.cursor);
     case "up": {
       if (state.historyIndex + 1 >= state.history.length) return state;
       const index = state.historyIndex + 1;

@@ -104,6 +104,13 @@ Set the context window, price and output limit per model, and add providers, in 
   chat goes on. A second Ctrl-C during the task exits Garuda at once; Esc never exits.
 - New lines: end the line with `\` and press Enter, or press Alt+Enter (Option+Enter on a Mac with
   "Use Option as Meta"). Pasted text keeps its new lines and is never sent by itself.
+- `@path` attaches a file or folder: `fix the bug in @src/cart.ts`. The file's text goes with your
+  message (numbered, up to 2,000 lines) and counts as read, so the model can edit it at once; a folder gives
+  its list of entries. The same rules as `read_file`: only files in the folder, no secrets (`.env`, keys).
+  Garuda shows what it attached. A word after `@` that is not a path stays text.
+- `!command` runs a command yourself, like the bash tool: in the sandbox with no question, deny rules and
+  hooks apply. You see the output, and it goes to the model with your next message. Esc stops it.
+- Tab completes `/commands` (built-in, your own, skills) and `@paths`; with several matches it lists them.
 - Ctrl-G (or `/editor`) opens the prompt in `$VISUAL` or `$EDITOR` (default `vi`). The saved text comes
   back into the input line; press Enter to send it. The plain chat also joins lines that end with `\`.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
