@@ -54,6 +54,7 @@ interface SessionStore {
 ```
 
 `FileSessionStore`: `.garuda/sessions/<id>.jsonl`; subagent runs in `.garuda/sessions/<id>/<child id>.jsonl`
+(`explore-<call id>` for explore, `agent-<name>-<call id>` for custom agents, 0.5)
 (ids cleaned to `[A-Za-z0-9_-]`; `latest()` ignores the subfolders, so `--resume` never picks a child). The folder is 0700 and files are 0600. Each record is
 one `appendFileSync`, so a crash loses at most the line in progress. Every string passes the
 `Redactor` first. Ids: `YYYYMMDD-HHMMSS-xxxx`. `MemoryJournal` serves tests. A shared store (for example

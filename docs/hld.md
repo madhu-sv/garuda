@@ -222,6 +222,19 @@ At start, the runtime reads skill folders (`~/.garuda/skills`, `~/.claude/skills
 skill's name and description, and adds two lines to the system prompt. The model loads a skill with the tool;
 the user runs one with `/name`. A project skill asks at its first load. Details: [lld/skills.md](lld/skills.md).
 
+### JSON output (0.5)
+
+With `-p --output-format json` the CLI prints one `result` line at the end; with `stream-json` it prints
+`system/init`, then an `assistant` line per model response and a `user` line per tool result, then the
+`result`. The field names are Claude Code's. A `JsonOutput` renderer takes the agent events, so the loop
+does not change; stdout holds only JSON. Details: [lld/cli.md](lld/cli.md).
+
+### Web search (0.5)
+
+`web_search` is a normal tool. It calls the user's backend (Brave, Tavily or SearXNG, configured only in
+the home folder), after a question that shows the query. Results come back as untrusted text; the model
+reads pages with `web_fetch`. Details: [lld/web.md](lld/web.md).
+
 ### Init (0.5)
 
 `garuda init` starts the chat with `/init` as the first line. `/init` reads other agents' files (no
@@ -231,8 +244,8 @@ Details: [lld/init.md](lld/init.md).
 
 ## 8. Context management
 
-- The system prompt is fixed for a session (N2). It holds the rules, the sandbox note, the MCP, web and
-  hooks notes when those features are on, the instruction files (`AGENTS.md`, `CLAUDE.md`, `GARUDA.md`) and
+- The system prompt is fixed for a session (N2). It holds the rules, the sandbox note, the MCP, web, web
+  search, hooks, skills and agents notes when those features are on, the instruction files (`AGENTS.md`, `CLAUDE.md`, `GARUDA.md`) and
   `.garuda/memory.md`.
 - At 80% of the context window, compaction runs: first it trims long tool outputs in older turns; if the
   context is still above 60%, the model summarises the older turns. The last 4 steps stay in full.
@@ -245,6 +258,10 @@ Details: [lld/init.md](lld/init.md).
 | MCP servers (stdio) | `~/.garuda/mcp.json`, `.garuda/mcp.json` | Tools named `mcp__<server>__<tool>`. |
 | Hooks | `~/.garuda/hooks.json`, `.garuda/hooks.json` | Checks before calls, feedback after calls. |
 | Web fetch | `.garuda/settings.json` (`web`) | The `web_fetch` tool. |
+| Web search (0.5) | `~/.garuda/search.json` or `BRAVE_API_KEY` / `TAVILY_API_KEY` (user only) | The `web_search` tool. |
+| Skills (0.5) | `~/.garuda/skills`, `~/.claude/skills`, `.garuda/skills`, `.claude/skills` | The `skill` tool and `/name`. |
+| Custom agents (0.5) | `~/.garuda/agents`, `~/.claude/agents`, `.garuda/agents`, `.claude/agents` | The `agent` tool and `/agents`. |
+| Custom slash commands (0.4) | `~/.garuda/commands`, `.garuda/commands` | `/name` prompts. |
 | Code index | `.garuda/settings.json` (`codeIndex`) | `find_symbol`, `find_references`, `repo_map`. |
 | LSP diagnostics | `.garuda/settings.json` (`lsp`), `--lsp`, `~/.garuda/lsp.json` | Language server errors in edit results. |
 | Language experts | `src/knowledge/` (`LanguageExpert`) | Code index support for a language. |

@@ -39,6 +39,8 @@ permission engine and the sandbox, as for a typed prompt.
 1. A built-in name (`/help`, `/new`, `/exit` …) always wins; a file with that name is skipped.
 2. A user command wins over a project command with the same name: a repository cannot replace a command
    that you trust.
+3. A skill with the same name wins over a command (0.5, as in Claude Code): `resolveCommand` checks skills
+   first. See [skills.md](skills.md).
 
 Each skipped file gives a notice at start (`onNotice`).
 

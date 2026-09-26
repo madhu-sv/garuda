@@ -28,7 +28,7 @@ flowchart LR
 | N1 | Provider-neutral model access | The loop sees only the `ModelClient` interface. `anthropic.ts` (the only module with the Anthropic SDK) and `openaiCompatible.ts` (plain fetch) are the adapters. |
 | N2 | Prompt caching | The system prompt and the tool list stay the same bytes for a whole session. Cache breakpoints on the system prompt, the last tool and the last message. |
 | N3 | Start in less than 1 s | Heavy modules load with `import()` on first use: the SDK, inquirer, Ink and React, TypeScript 6, the MCP SDK, the HTML converter. `--version` takes about 240 ms. |
-| N4 | Testable without the network | `FakeModelClient` plays a script. 245 tests run with no API calls. |
+| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0). |
 | N5 | Measured quality | `garuda eval` runs fixed tasks in scratch folders and reports pass rate, steps, tokens and cost. |
 | N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). |
 | N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. |
@@ -45,7 +45,8 @@ flowchart TB
   end
   subgraph App[Application layer]
     runtime[app/Runtime]
-    agents[agents: explore subagent]
+    agents[agents: explore, custom agents, child run]
+    init[init: set-up and migration]
     evals[evals: runner, suites]
   end
   subgraph Core[Core layer]
@@ -58,9 +59,11 @@ flowchart TB
     permissions[permissions: engine, rules, settings, sandbox paths]
     knowledge[knowledge: code index, language experts]
     mcp[mcp: client, trust, sanitizing]
-    web[web: SSRF-safe fetch]
+    web[web: SSRF-safe fetch, search backends]
     hooks[hooks: config, runner]
     lang[lang: language profiles]
+    skills[skills: Agent Skills, skill tool]
+    commands[commands: custom slash commands]
   end
   subgraph Platform[Platform layer]
     model[model: ModelClient, Anthropic adapter, fake, prices]
@@ -74,7 +77,12 @@ flowchart TB
   runtime --> hooks
   runtime --> lang
   runtime --> agents
+  runtime --> init
+  runtime --> skills
+  runtime --> commands
   agents --> loop
+  agents --> tools
+  init --> sandbox
   loop --> context
   loop --> session
   loop --> tools

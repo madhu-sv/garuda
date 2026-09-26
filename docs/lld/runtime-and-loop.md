@@ -22,6 +22,9 @@ imports the CLI.
 | `mode` | `build` (default) or `plan` for the first turn (0.4; `--plan`). |
 | `commands` | `false`, or `{ home }` for custom slash commands (0.4). |
 | `subagentModel` | `{ spec, model, info }` for the explore subagent; default: the main model (see [agents.md](agents.md)). |
+| `skills` | `{ home? }` (0.5): skills from `~/.garuda/skills`, `~/.claude/skills` and the project. Absent: no skills (tests, evals). The CLI passes it; `skills.enabled: false` in settings wins. See [skills.md](skills.md). |
+| `agents` | `{ home?, resolveModel? }` (0.5): custom agents from the four agent folders; `resolveModel` turns a model id of a user agent into a client (the CLI passes its provider lookup). Absent: no agents. `agents.enabled: false` wins. See [agents.md](agents.md). |
+| `search` | `{ config, fetch? }` (0.5): the web search backend that the CLI loaded from `~/.garuda/search.json` or the environment. Absent: no `web_search`. `web.enabled: false` wins. See [web.md](web.md). |
 | `undo` | `{ home? }` (0.4): snapshots before each turn in `~/.garuda/snapshots`. Absent: no snapshots. The CLI passes it; `undo.enabled: false` in settings wins. See [undo.md](undo.md). |
 | `lsp` | `{ enabled?, home?, path?, firstTimeoutMs?, timeoutMs? }` (0.4). `enabled` overrides `lsp.enabled` from settings (`--lsp`, evals); `home` holds `~/.garuda/lsp.json` and the managed servers; `path` is the PATH to search. See [lsp.md](lsp.md). |
 

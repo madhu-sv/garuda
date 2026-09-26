@@ -15,6 +15,7 @@ Garuda reads Claude Code's skill folders where they are, so no copy is needed.
 | --- | --- |
 | `load.ts` | `loadSkills` (the four folders, precedence, problems), `parseSkill`, `parseSkillFrontmatter`, `expandSkill` (arguments), `skillConsent` (the question for a project skill). |
 | `tool.ts` | `createSkillTool` (the `skill` tool), `skillText` (the loaded text, also for `/name`), `skillFolder`. |
+| `frontmatter.ts` | `parseFrontmatterBlock`: the small frontmatter reader, shared with custom agents (plain, quoted and block values; lists become `a, b`; maps are skipped). |
 
 ## Where skills live
 
