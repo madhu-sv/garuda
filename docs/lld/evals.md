@@ -115,6 +115,10 @@ a failure with the stop reason `timeout`, not an error.
   servers ran: 55 edit results said "No errors", none listed an error, and no server failed. The model made
   no type errors in these tasks, so LSP had nothing to catch; the step difference is noise (one 29-step
   run). It stays off by default. A fair test needs tasks where type errors are likely.
+- LSP for Java (0.4, jdtls 1.61.0, claude-haiku-4-5, java suite, 3 runs per task, sums of means): off 15/15,
+  36.6 steps, 186k tokens, $0.130; on 15/15, 37.6 steps, 195k, $0.132; task times the same (13–31 s), so
+  the warm start hid the Maven import. jdtls answered every edit in the Seatbelt sandbox (23 "No errors"
+  results, no errors, no notices). Again no type errors to catch: no gain, no extra cost; off by default.
 - The requirements doc keeps the per-task tables ("0.1 results", "0.2 results").
 
 ## Tests

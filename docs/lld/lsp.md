@@ -4,8 +4,8 @@
 
 After `edit_file` or `write_file` changes a TS/JS, Python or Java file, a real language server checks the file,
 and the tool result lists its errors. The model sees a type error at once, not after a test run. Added in
-0.4. Off by default: the first A/B eval (hard suite) showed no gain, because the model made no type
-errors there (see [evals.md](evals.md#method)).
+0.4. Off by default: the A/B evals (hard suite for TS, java suite for jdtls) showed no gain and no extra
+cost, because the model made no type errors there (see [evals.md](evals.md#method)).
 
 ```
 Edited src/cart.ts.
