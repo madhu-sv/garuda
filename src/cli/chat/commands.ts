@@ -27,7 +27,7 @@ export const HELP = [
   "  /mcp       MCP servers: state, sandbox, network and tool count; /mcp logout <server>",
   "  /hooks     the active hooks",
   "  /lsp       language servers for diagnostics; /lsp install <typescript|python|java>",
-  "  /commands  your custom commands (~/.garuda/commands, .garuda/commands)",
+  "  /commands  your custom commands and skills (~/.garuda, .garuda, .claude)",
   "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles)",
   "  /build     build mode: change files and run commands (the default)",
   "  /undo      take back the last turn: its file changes and its messages",
@@ -131,25 +131,50 @@ async function lspCommand(runtime: Runtime, renderer: Renderer, arg: string): Pr
   );
 }
 
-/** /help: the built-in commands, then the custom ones. */
+/** /help: the built-in commands, then the custom ones and the skills. */
 export function helpText(runtime: Runtime): string {
-  return runtime.commands.length === 0 ? HELP : `${HELP}\n\n${commandsText(runtime)}`;
+  return runtime.commands.length + runtime.skills.length === 0
+    ? HELP
+    : `${HELP}\n\n${commandsText(runtime)}`;
 }
 
-/** /commands: the custom commands, with their source and description. */
+/** /commands: the custom commands and the skills, with their source and description. */
 export function commandsText(runtime: Runtime): string {
-  if (runtime.commands.length === 0) {
-    return "No custom commands. Add Markdown files to ~/.garuda/commands/ or .garuda/commands/.";
+  const skills = runtime.skills;
+  if (runtime.commands.length + skills.length === 0) {
+    return [
+      "No custom commands and no skills.",
+      "Commands: Markdown files in ~/.garuda/commands/ or .garuda/commands/.",
+      "Skills: <name>/SKILL.md folders in ~/.garuda/skills/, .garuda/skills/ (or .claude/skills/).",
+    ].join("\n");
   }
-  const rows = runtime.commands.map((c) => ({
-    usage: `/${c.name}${c.argumentHint === undefined ? "" : ` ${c.argumentHint}`}`,
-    about: `${c.description ?? ""}${c.source === "project" ? " (project)" : ""}`,
+  const rows = (
+    list: readonly { name: string; argumentHint?: string; about: string; project: boolean }[],
+  ) =>
+    list.map((c) => ({
+      usage: `/${c.name}${c.argumentHint === undefined ? "" : ` ${c.argumentHint}`}`,
+      about: `${c.about}${c.project ? " (project)" : ""}`,
+    }));
+  const commandRows = rows(
+    runtime.commands.map((c) => ({
+      name: c.name,
+      ...(c.argumentHint === undefined ? {} : { argumentHint: c.argumentHint }),
+      about: c.description ?? "",
+      project: c.source === "project",
+    })),
+  );
+  const skillRows = skills.map((s) => ({
+    usage: s.userInvocable
+      ? `/${s.name}${s.argumentHint === undefined ? "" : ` ${s.argumentHint}`}`
+      : s.name,
+    about: `${s.description.length > 80 ? `${s.description.slice(0, 79)}…` : s.description} (${s.shown}${s.modelInvocable ? "" : ", you only"}${s.userInvocable ? "" : ", model only"})`,
   }));
-  const width = Math.max(...rows.map((r) => r.usage.length));
-  return [
-    "Custom commands:",
-    ...rows.map((r) => `  ${r.usage.padEnd(width + 2)}${r.about}`.trimEnd()),
-  ].join("\n");
+  const width = Math.max(...[...commandRows, ...skillRows].map((r) => r.usage.length));
+  const table = (title: string, list: { usage: string; about: string }[]) =>
+    list.length === 0
+      ? []
+      : [title, ...list.map((r) => `  ${r.usage.padEnd(width + 2)}${r.about}`.trimEnd())];
+  return [...table("Custom commands:", commandRows), ...table("Skills:", skillRows)].join("\n");
 }
 
 /** Answer a code question from the local index, with no model call. */

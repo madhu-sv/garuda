@@ -208,6 +208,13 @@ Before each turn, the runtime takes a snapshot of the files in a git store of Ga
 snapshot and cuts the turn out of the messages (`undo` record); `/redo` does the reverse. Details:
 [lld/undo.md](lld/undo.md).
 
+### Skills (0.5)
+
+At start, the runtime reads skill folders (`~/.garuda/skills`, `~/.claude/skills`, `.garuda/skills`,
+`.claude/skills`). When at least one exists, it registers the `skill` tool, whose description lists each
+skill's name and description, and adds two lines to the system prompt. The model loads a skill with the tool;
+the user runs one with `/name`. A project skill asks at its first load. Details: [lld/skills.md](lld/skills.md).
+
 ### Init (0.5)
 
 `garuda init` starts the chat with `/init` as the first line. `/init` reads other agents' files (no

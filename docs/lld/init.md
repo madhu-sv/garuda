@@ -57,7 +57,8 @@ At most 200 files per command folder.
 | Instruction files | – | Not copied. The init turn reads them and carries over what still applies into AGENTS.md. |
 
 Not imported, with a line in the preview: hooks (another format), personal permission rules (Garuda has
-project settings only), Claude Code skills.
+project settings only). Claude Code skills (`.claude/skills`, `~/.claude/skills`) need no import: Garuda reads
+them where they are (0.5, see [skills.md](skills.md)).
 
 ## The plan: new files only
 

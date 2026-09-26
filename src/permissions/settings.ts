@@ -24,6 +24,7 @@ import type { SandboxSettings } from "./sandboxPaths.js";
  *   "todo": { "enabled": true },
  *   "lsp": { "enabled": true },
  *   "undo": { "enabled": false },
+ *   "skills": { "enabled": false },
  *   "model": {
  *     "contextWindow": 200000,
  *     "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 }
@@ -64,6 +65,8 @@ const schema = z.strictObject({
   todo: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** Undo snapshots before each turn (0.4). enabled: default true. */
   undo: z.strictObject({ enabled: z.boolean().optional() }).optional(),
+  /** Skills (0.5). enabled: default true (the skill tool appears only when skills exist). */
+  skills: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** Language server diagnostics after edits (0.4). enabled: default false. */
   lsp: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** The explore subagent (0.3). enabled: default false. Limits per explore run. */
@@ -107,6 +110,7 @@ export interface Settings {
   todo?: { enabled: boolean };
   lsp?: { enabled: boolean };
   undo?: { enabled: boolean };
+  skills?: { enabled: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
@@ -127,6 +131,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     todo,
     lsp,
     undo,
+    skills,
   } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
@@ -162,6 +167,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(todo?.enabled === undefined ? {} : { todo: { enabled: todo.enabled } }),
     ...(lsp?.enabled === undefined ? {} : { lsp: { enabled: lsp.enabled } }),
     ...(undo?.enabled === undefined ? {} : { undo: { enabled: undo.enabled } }),
+    ...(skills?.enabled === undefined ? {} : { skills: { enabled: skills.enabled } }),
     ...(subagents === undefined
       ? {}
       : {

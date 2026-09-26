@@ -101,6 +101,7 @@ flowchart TB
 | Session | `src/session/` | The conversation in memory, the JSONL journal, resume, redaction, read tracking. |
 | Context | `src/context/` | System prompt, instruction files (`AGENTS.md`, `CLAUDE.md`, `GARUDA.md`), project memory, compaction. |
 | Commands | `src/commands/` | Custom slash commands: load, expand, consent for project commands. |
+| Skills | `src/skills/` | Load Agent Skills folders (Garuda's and Claude Code's); the `skill` tool; consent for project skills; `/name`. |
 | Undo | `src/undo/` | Snapshots of the project before each turn in a git store of Garuda's own; `/undo` and `/redo`. |
 | Init | `src/init/` | `garuda init` and `/init`: read other agents' files (read only), write new Garuda files after one yes, offer `git init`, give the prompt of the init turn. |
 | LSP | `src/lsp/` | Language servers in the sandbox: find, install, start; errors of a changed file after an edit. |
@@ -170,6 +171,7 @@ flowchart LR
 | Commands → machine | A command deletes or leaks data. | OS sandbox: writes only in the root, temp and caches; home secrets unreadable; no network. Escape asks. |
 | Project config → Garuda | A cloned repo starts code (MCP servers, hooks). | Consent with the full command; answer pinned to a hash in `~/.garuda/trust.json`; changes ask again. |
 | Project commands → model | A cloned repo's slash command hides instructions in its text, or links to a secret file. | First run shows the full text and asks (hash-pinned); symlinks refused; escape codes, invisible characters and Garuda's markers removed; a user command with the same name wins. |
+| Project skills → model | A cloned repo's skill (`.garuda/skills`, `.claude/skills`) hides instructions, or replaces a skill the user trusts. | Only name and description reach the model before consent; the first load shows the full SKILL.md and asks (hash-pinned); user skills win on a name clash; symlinks refused; text cleaned and markers neutralized; `file` reads stay inside the skill folder. |
 | Project → language servers | A cloned repo plants a "server" in `node_modules/.bin`, or a server runs project code (a Python venv, Maven plugins during a jdtls import). | Servers only from `~/.garuda/lsp` or absolute PATH entries outside the root; they run only in the OS sandbox with the project read-only and no network; installs only on the user's command or a yes (`autoInstall` is in `~/.garuda` only); server text is cleaned. |
 | Subagent → main agent | File text that the child read and repeats in its answer. | The child has only read-only tools through the same permission engine and hooks; its answer is a tool result (data); its reads do not allow edits in the main agent. |
 | Project config → remote MCP server | A cloned repo points Garuda at a server that collects data, or at an internal address (SSRF). | Consent that shows the URL, pinned to it; https only; public addresses only, checked at each connection with the connection pinned to the checked address; no redirects. |
@@ -193,8 +195,9 @@ All state is in files. There is no server and no database.
 | `<root>/.garuda/index/code-graph.json` | Garuda | Code graph cache for the code index. |
 | `<root>/AGENTS.md`, `CLAUDE.md`, `GARUDA.md` | Project | Instructions for the agent (GARUDA.md wins on a conflict). |
 | `~/.garuda/commands/`, `<root>/.garuda/commands/` | User, project | Custom slash commands (Markdown). |
+| `~/.garuda/skills/`, `~/.claude/skills/`, `<root>/.garuda/skills/`, `<root>/.claude/skills/` | User, project | Skills: `<name>/SKILL.md` folders in the Agent Skills format (0.5). |
 | `~/.garuda/mcp.json`, `hooks.json` | User | Trusted MCP servers and hooks. |
-| `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers, hooks and slash commands; tool-list hashes. 0600. |
+| `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers, hooks, slash commands and skills; tool-list hashes. 0600. |
 | `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. |
 | `~/.garuda/mcp-auth.json` | Garuda | OAuth clients and tokens of remote MCP servers. 0600. |
 | `~/.garuda/snapshots/<hash of root>/` | Garuda | Undo snapshots: a git folder per project (0700). |
@@ -223,6 +226,7 @@ All state is in files. There is no server and no database.
 | LSP diagnostics | Real language servers (TypeScript 7 `tsc --lsp`, pyright, jdtls), errors only, in the edit result; PATH or a pinned managed install; off by default | The model sees type errors at the edit, with no extra tool call. Real servers give the same errors as the build. The first A/B eval (hard suite) showed no gain: the model made no type errors to catch. Off by default. |
 | Undo | A snapshot per turn in a separate git store (`~/.garuda/snapshots`), files and conversation together, on by default | Commands in the sandbox change files with no approval, so every turn must be reversible. A separate store never touches the user's repository and works without git. Measured cost: 15–90 ms per turn. |
 | Init and migration | Read other agents' files with no model; one preview and one yes; new files only (`.gitignore` lines are the one exception); secrets and headers never copied; AGENTS.md written by a normal model turn | The user sees every change before it happens, and nothing they wrote is lost. Imported project servers and commands are ordinary project files, so the consent rules do not change. The model writes AGENTS.md because only reading the code gives correct build commands. |
+| Skills | The Agent Skills format, read from Claude Code's folders too; a `skill` tool whose description lists names and descriptions; on only when skills exist | One format for all agents; no copy to keep in step. The list in the tool description keeps the system prompt and the tool bytes fixed per session (N2), and the body loads only when needed. No A/B: the value is in the skill's text. |
 | JSON output | `-p --output-format json\|stream-json` with Claude Code's field names; stdout only JSON | Scripts and CI written for `claude -p` work with Garuda. The mapping lives in one file of the CLI; the loop only adds the full response to `step_end` and the model time to the result. |
 | Broken model streams | The loop retries a transient failure twice (1 s, 4 s) | The SDKs retry only before a stream starts; 4 of 54 eval runs lost the connection in the middle. |
 | Build caches in the sandbox | Only cache subfolders (`~/.m2/repository`, `~/.gradle/caches` …) are writable | Settings files and init scripts run later outside the sandbox; they stay read-only. |

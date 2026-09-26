@@ -52,6 +52,8 @@ import {
   undoTurn,
 } from "../session/session.js";
 import { newSessionId, type SessionStore } from "../session/store.js";
+import { loadSkills, type Skill, skillConsent } from "../skills/load.js";
+import { createSkillTool, skillText } from "../skills/tool.js";
 import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { filesText, undoQuestion } from "../undo/question.js";
@@ -68,7 +70,7 @@ export const PLAN_NOTE =
 /** What a line that starts with "/" means, when it is not a built-in command. */
 export type CommandResolution =
   | { kind: "none" }
-  | { kind: "prompt"; prompt: string; command: CustomCommand }
+  | { kind: "prompt"; prompt: string; command?: CustomCommand; skill?: Skill }
   | { kind: "denied"; message: string };
 
 /**
@@ -107,6 +109,12 @@ export interface RuntimeOptions {
   mode?: AgentMode;
   /** Custom slash commands (0.4). Default: ~/.garuda/commands and .garuda/commands. false: none. */
   commands?: false | { home?: string };
+  /**
+   * Skills (0.5): ~/.garuda/skills, ~/.claude/skills, .garuda/skills and .claude/skills (`home`
+   * overrides the home folder). Absent: no skills (tests, evals), so results do not depend on the
+   * user's setup. The CLI passes it; the setting `skills.enabled: false` turns it off.
+   */
+  skills?: { home?: string };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
   profiles?: LanguageProfile[];
   /**
@@ -175,6 +183,12 @@ export class Runtime {
   private commandsHome = homedir();
   /** Hashes of project commands that the user allowed for this process ("Yes, this time"). */
   private readonly allowedCommands = new Set<string>();
+  private skillList: Skill[] = [];
+  private skillsHome = homedir();
+  /** Hashes of project skills that the user allowed for this process. */
+  private readonly allowedSkills = new Set<string>();
+  /** Skill questions wait for each other: parallel read-only calls may load two at once. */
+  private skillQueue: Promise<unknown> = Promise.resolve();
   private hookRunner: HookRunner | undefined;
   private hooksStarted: Promise<void> | undefined;
   /** The snapshot store for undo, or undefined when undo is off (0.4). */
@@ -311,6 +325,16 @@ export class Runtime {
       for (const problem of loaded.problems) options.onNotice?.(problem);
     }
     const profiles = options.profiles ?? detectProfiles(options.root);
+    let skills: Skill[] = [];
+    if (options.skills !== undefined && settings.skills?.enabled !== false) {
+      const loaded = await loadSkills({
+        home: options.skills.home ?? homedir(),
+        root: options.root,
+        builtins: BUILTIN_COMMANDS,
+      });
+      skills = loaded.skills;
+      for (const problem of loaded.problems) options.onNotice?.(problem);
+    }
     const system = buildSystemPrompt(
       options.root,
       await loadInstructions(options.root),
@@ -325,6 +349,7 @@ export class Runtime {
         explore: settings.subagents?.enabled === true,
         todo: settings.todo?.enabled === true,
         lsp: options.lsp?.enabled ?? settings.lsp?.enabled === true,
+        skills: skills.some((s) => s.modelInvocable),
       },
     );
     const runtime = new Runtime(
@@ -352,6 +377,18 @@ export class Runtime {
       });
       runtime.customCommands = loaded.commands;
       for (const problem of loaded.problems) options.onNotice?.(problem);
+    }
+    runtime.skillList = skills;
+    runtime.skillsHome = options.skills?.home ?? homedir();
+    if (skills.some((s) => s.modelInvocable)) {
+      runtime.tools.register(
+        createSkillTool({
+          skills,
+          root: options.root,
+          home: runtime.skillsHome,
+          allow: (skill, signal) => runtime.allowSkill(skill, signal),
+        }),
+      );
     }
     if (options.resume !== undefined) {
       runtime.current = await resumeSession({
@@ -383,8 +420,51 @@ export class Runtime {
    * The prompt for a custom command line (`/name args`). A project command shows its text and
    * asks first; "remember" pins the answer to the file's hash in ~/.garuda/trust.json.
    */
+  /** Skills (0.5), sorted by name. */
+  get skills(): readonly Skill[] {
+    return this.skillList;
+  }
+
+  /**
+   * May this skill load? User skills: yes. A project skill asks once (its full text), and "Yes,
+   * and remember" pins the hash of SKILL.md in ~/.garuda/trust.json, so a changed file asks again.
+   */
+  allowSkill(skill: Skill, signal: AbortSignal): Promise<boolean> {
+    if (skill.source === "user" || this.allowedSkills.has(skill.hash)) return Promise.resolve(true);
+    const next = this.skillQueue.then(() => this.askSkill(skill, signal));
+    this.skillQueue = next.catch(() => undefined);
+    return next;
+  }
+
+  private async askSkill(skill: Skill, signal: AbortSignal): Promise<boolean> {
+    if (this.allowedSkills.has(skill.hash)) return true;
+    const trust = await TrustStore.open(this.skillsHome);
+    const known = trust.skillHash(this.root, skill.name);
+    if (known !== skill.hash) {
+      const choice = await this.approver.ask(
+        skillConsent(skill, known !== undefined, this.executor.isolation),
+        signal,
+      );
+      if (choice === "deny") return false;
+      if (choice === "session") await trust.setSkillHash(this.root, skill.name, skill.hash);
+    }
+    this.allowedSkills.add(skill.hash);
+    return true;
+  }
+
   async resolveCommand(line: string, signal: AbortSignal): Promise<CommandResolution> {
     const parsed = parseCommandLine(line);
+    // A skill wins over a custom command with the same name, as in Claude Code.
+    const skill =
+      parsed === undefined
+        ? undefined
+        : this.skillList.find((s) => s.name === parsed.name && s.userInvocable);
+    if (parsed !== undefined && skill !== undefined) {
+      if (!(await this.allowSkill(skill, signal))) {
+        return { kind: "denied", message: `You did not allow the project skill "${skill.name}".` };
+      }
+      return { kind: "prompt", prompt: await skillText(skill, parsed.args, this), skill };
+    }
     const command =
       parsed === undefined ? undefined : this.customCommands.find((c) => c.name === parsed.name);
     if (parsed === undefined || command === undefined) return { kind: "none" };
@@ -464,6 +544,8 @@ export class Runtime {
     if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
     if (this.selectedMode === "plan") out.push("plan mode");
     if (this.lspEnabled) out.push("LSP");
+    if (this.skillList.length > 0)
+      out.push(`${this.skillList.length} skill${this.skillList.length === 1 ? "" : "s"}`);
     if (this.exploreModel !== undefined)
       out.push(this.exploreModel === this.modelId ? "explore" : `explore: ${this.exploreModel}`);
     return out;

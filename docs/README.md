@@ -30,6 +30,7 @@ Low-level design documents:
 | LSP diagnostics | `src/lsp/` | [lsp.md](lld/lsp.md) |
 | Undo | `src/undo/`, `src/session/undo.ts` | [undo.md](lld/undo.md) |
 | Init and migration | `src/init/` | [init.md](lld/init.md) |
+| Skills | `src/skills/` | [skills.md](lld/skills.md) |
 | Evals | `src/evals/` | [evals.md](lld/evals.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).

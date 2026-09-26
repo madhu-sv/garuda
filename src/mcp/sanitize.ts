@@ -52,5 +52,5 @@ export function cleanJson(value: unknown): unknown {
  * </web_result> could end a wrapper early, and a fake <garuda_note> could pose as Garuda.
  */
 export function neutralizeTags(text: string): string {
-  return text.replace(/<(\/?)(mcp_result|web_result|garuda_note)/gi, "<\\$1$2");
+  return text.replace(/<(\/?)(mcp_result|web_result|garuda_note|skill_file|skill)/gi, "<\\$1$2");
 }

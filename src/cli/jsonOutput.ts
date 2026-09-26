@@ -29,6 +29,8 @@ export interface RunInfo {
   mcpServers: { name: string; state: McpState }[];
   permissionMode: "default" | "plan";
   slashCommands: string[];
+  /** Skill names (0.5). */
+  skills?: string[];
   apiKeySource: "ANTHROPIC_API_KEY" | "none";
 }
 
@@ -194,7 +196,7 @@ export function initLine(info: RunInfo): Line {
     slash_commands: info.slashCommands,
     apiKeySource: info.apiKeySource,
     output_style: "default",
-    skills: [],
+    skills: info.skills ?? [],
     plugins: [],
     garuda_version: VERSION,
   };

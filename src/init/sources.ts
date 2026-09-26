@@ -123,12 +123,7 @@ function claudeCode({ root, home }: SourceOptions): ImportItem[] {
       ),
     );
   }
-  for (const [dir, where] of [
-    [join(root, ".claude/skills"), ".claude/skills"],
-    [join(home, ".claude/skills"), "~/.claude/skills"],
-  ] as const) {
-    if (existsSync(dir)) out.push(skipped(agent, where, "skills", "Garuda has no skills yet"));
-  }
+  // Skills in .claude/skills and ~/.claude/skills need no import: Garuda reads them there (0.5).
   return out;
 }
 

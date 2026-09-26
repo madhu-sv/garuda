@@ -189,6 +189,8 @@ async function start(options: Options, program: Command): Promise<number> {
     ...(options.lsp === true ? { lsp: { enabled: true } } : {}),
     // Undo snapshots are on for the chat and for -p (a later chat can undo the task).
     undo: {},
+    // Skills from ~/.garuda/skills, ~/.claude/skills and the project (0.5).
+    skills: {},
     ...(options.resume === undefined ? {} : { resume: options.resume }),
     onEvent: (event) => events.event(event),
     onNotice: (text) => events.warn(text),
@@ -232,7 +234,12 @@ async function start(options: Options, program: Command): Promise<number> {
               tools: runtime.toolNames(),
               mcpServers: runtime.mcpStatus(),
               permissionMode: runtime.mode === "plan" ? "plan" : "default",
-              slashCommands: [...BUILTIN_COMMANDS, ...runtime.commands.map((c) => c.name)],
+              slashCommands: [
+                ...BUILTIN_COMMANDS,
+                ...runtime.commands.map((c) => c.name),
+                ...runtime.skills.filter((k) => k.userInvocable).map((k) => k.name),
+              ],
+              skills: runtime.skills.map((k) => k.name),
               apiKeySource:
                 !modelId.includes("/") && process.env.ANTHROPIC_API_KEY !== undefined
                   ? "ANTHROPIC_API_KEY"

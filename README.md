@@ -16,7 +16,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
 | 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
 | 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo, remote MCP with OAuth | Done |
-| 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output | In progress |
+| 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output, skills | In progress |
 
 ## Use
 
@@ -98,7 +98,7 @@ Set the context window, price and output limit per model, and add providers, in 
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
   (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
-  `/init` (set up this folder, see below), `/exit`.
+  `/init` (set up this folder, see below), `/exit`. Your custom commands and skills run with `/name`.
 - Ctrl-C during a task stops the task and kills its commands. The chat goes on.
   A second Ctrl-C during the task exits Garuda at once.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
@@ -154,6 +154,33 @@ Review $1 for bugs and missing tests. List the problems by severity.
 - A project command shows its full text and asks the first time. "Remember" pins the answer to the
   file; a changed file asks again. Built-in commands, and your own commands, win over project commands
   with the same name.
+
+## Skills
+
+A skill is a folder with a `SKILL.md`: instructions for one kind of task, in the
+[Agent Skills](https://agentskills.io/specification) format that Claude Code uses. Garuda reads your
+Claude Code skills where they are.
+
+```markdown
+<!-- ~/.garuda/skills/release-notes/SKILL.md (or ~/.claude/skills, .garuda/skills, .claude/skills) -->
+---
+name: release-notes
+description: Write release notes from the git log. Use when the user asks for release notes or a changelog.
+---
+Read `git log --oneline $0..HEAD`. Group the changes into Added, Changed and Fixed. Follow
+references/style.md in this folder.
+```
+
+- The model sees each skill's name and description. When a task matches, it loads the skill with the
+  `skill` tool, and reads the skill's other files (`references/`, `scripts/`) only when it needs them.
+- Run one yourself: `/release-notes v0.4.0`. `$ARGUMENTS`, `$0`, `$1` … and `${CLAUDE_SKILL_DIR}` work as in
+  Claude Code. A skill wins over a custom command with the same name. `/commands` lists them.
+- A project skill shows its full text and asks the first time it loads. "Remember" pins the answer to
+  SKILL.md; a changed file asks again. Your own skills win over project skills with the same name.
+- `disable-model-invocation: true`: only you can run it. `user-invocable: false`: only the model can.
+  `allowed-tools` is ignored: every call still asks or runs in the sandbox.
+- Nothing changes when you have no skills. `"skills": { "enabled": false }` in `.garuda/settings.json`
+  turns them off. Details: [docs/lld/skills.md](docs/lld/skills.md).
 
 ## Plan mode
 
