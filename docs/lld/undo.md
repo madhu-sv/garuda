@@ -68,6 +68,20 @@ Conversation rules (`src/session/undo.ts`):
 - At most 50 undo points per session.
 - The records are in the session file, so `/undo` works after `garuda --resume`; replay applies them too.
 
+## `/diff` (0.6)
+
+`Runtime.diff(scope, path)` compares a base snapshot with a new one taken now (so the user's own changes
+count too):
+
+- `session`: the first `snapshot` record in the session file (cached per session id). It survives the
+  50-point limit and `/undo`.
+- `last`: the last undo point, the files before the last turn that is still in effect.
+- `SnapshotStore.stats(from, to)`: `changes()` plus `diff-tree --numstat` counts (none for binary files).
+- `SnapshotStore.patch(from, to, path?)`: `diff-tree -p` with no color, no external diff and no textconv. The
+  path is checked with `resolveInRoot`, quoted as one shell word, and given as a `:(literal)` pathspec.
+- Undo off, no turn yet, or a path outside the root: a message, no error. Git errors (for example, a
+  snapshot that git pruned after two weeks) become a message too.
+
 ## Turn it on or off
 
 On by default in the CLI (chat and `-p`, so a later chat can undo a `-p` task). `"undo": { "enabled": false }`
@@ -82,7 +96,8 @@ in `.garuda/settings.json` turns it off. The `Runtime` option `undo` enables it;
 
 ## Tests
 
-`test/undo.test.ts`: take, changes and restore (added, changed, deleted files); `.gitignore`, Garuda's
+`test/notifyDiff.test.ts` (0.6): `/diff` for the session, the last turn, one path, the user's own change,
+the cut and Ctrl-O, undo off. `test/undo.test.ts`: take, changes and restore (added, changed, deleted files); `.gitignore`, Garuda's
 records and the project's own git untouched; a file that changed after the snapshot; too many files and bad
 ids; the store folder and its mode; the conversation steps and their records (undo, redo, a new prompt, a
 compaction); `/undo` and `/redo` through `Runtime` with an edit and a command; "No"; undo after

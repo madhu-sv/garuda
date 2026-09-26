@@ -35,6 +35,10 @@ import type { SandboxSettings } from "./sandboxPaths.js";
 
 export const SETTINGS_FILE = join(".garuda", "settings.json");
 
+/** How the chat tells the user that it waits or is done (0.6). "auto" picks from TERM_PROGRAM. */
+export const NOTIFY_CHOICES = ["auto", "osc9", "bell", "off"] as const;
+export type NotifyChoice = (typeof NOTIFY_CHOICES)[number];
+
 const schema = z.strictObject({
   executor: z.enum(EXECUTOR_NAMES).optional(),
   sandbox: z
@@ -70,6 +74,16 @@ const schema = z.strictObject({
   skills: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** Custom agents (0.5). enabled: default true (the agent tool appears only when agents exist). */
   agents: z.strictObject({ enabled: z.boolean().optional() }).optional(),
+  /**
+   * Notifications in the chat (0.6): when an approval waits, and when a turn that ran at least
+   * `afterSeconds` (default 10) ends. channel: default "auto". GARUDA_NOTIFY overrides the channel.
+   */
+  notifications: z
+    .strictObject({
+      channel: z.enum(NOTIFY_CHOICES).optional(),
+      afterSeconds: z.number().int().min(0).max(86_400).optional(),
+    })
+    .optional(),
   /** Language server diagnostics after edits (0.4). enabled: default false. */
   lsp: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** The explore subagent (0.3). enabled: default false. Limits per explore run. */
@@ -115,6 +129,7 @@ export interface Settings {
   undo?: { enabled: boolean };
   skills?: { enabled: boolean };
   agents?: { enabled: boolean };
+  notifications?: { channel?: NotifyChoice; afterSeconds?: number };
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
@@ -137,6 +152,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     undo,
     skills,
     agents,
+    notifications,
   } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
@@ -174,6 +190,16 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(undo?.enabled === undefined ? {} : { undo: { enabled: undo.enabled } }),
     ...(skills?.enabled === undefined ? {} : { skills: { enabled: skills.enabled } }),
     ...(agents?.enabled === undefined ? {} : { agents: { enabled: agents.enabled } }),
+    ...(notifications === undefined
+      ? {}
+      : {
+          notifications: {
+            ...(notifications.channel === undefined ? {} : { channel: notifications.channel }),
+            ...(notifications.afterSeconds === undefined
+              ? {}
+              : { afterSeconds: notifications.afterSeconds }),
+          },
+        }),
     ...(subagents === undefined
       ? {}
       : {

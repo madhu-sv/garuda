@@ -10,10 +10,11 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 | File | Role |
 | --- | --- |
 | `index.ts` | Entry point (commander). Modes: chat, `-p`, stdin task, `--resume`, `--replay`, `eval`, `init` (the chat with `/init` as the first line, `firstInput`). With no first line, the banner gets `initTip` (see [init.md](init.md)). |
-| `turn.ts` | `runTurnInTerminal`: one turn with Ctrl-C handling, usage line and stop message. |
+| `turn.ts` | `runTurnInTerminal`: one turn with Ctrl-C handling, usage line and stop message; an optional `TurnWatcher` (0.6) is told when it starts and ends. |
+| `notify.ts` | Notifications (0.6): `pickChannel`, `notificationBytes`, `Notifier`. See below. |
 | `repl.ts` | Plain chat (readline). Used for pipes, `GARUDA_PLAIN=1`, and the single binary. |
 | `renderer.ts` | `Renderer` interface and `PlainRenderer`: model text to stdout, activity to stderr. |
-| `approver.ts` | `TerminalApprover` (inquirer select), `SwitchApprover`, shared `header` and `colorPreview`. |
+| `approver.ts` | `TerminalApprover` (inquirer select), `SwitchApprover` (with `onAsk`, 0.6), shared `header`, `colorPreview` and `colorDiff`. |
 | `report.ts` | Usage line and stop messages. |
 | `jsonOutput.ts` | `-p --output-format json\|stream-json` (0.5): `JsonOutput` (a `Renderer`) and the pure `initLine`, `assistantLine`, `resultLine`. See below. |
 | `banner.ts` | The chat start banner: GARUDA wordmark (saffron-to-gold gradient on true-color terminals), a card with version, model, sandbox, folder and extras (the detected build tools first, for example `Java (Maven)`), and a tips line. The card only below 60 columns; no colors with `NO_COLOR` or a pipe. Not shown for `-p`. |
@@ -76,12 +77,25 @@ commander uses `enablePositionalOptions()`, so options after `eval` belong to `e
 
 ## Ctrl-C (`turn.ts`)
 
-`runTurnInTerminal(runtime, interruptible, renderer, prompt, exitNow)`:
+`runTurnInTerminal(runtime, interruptible, renderer, prompt, exitNow, watcher?)`:
 
 - It creates an `AbortController` for the turn and sets `interruptible.onInterrupt = stop`.
 - First Ctrl-C: prints "Stopping…" and aborts. The executor kills the command's process group.
 - Second Ctrl-C during the same turn: `exitNow()` (exit 130).
 - On abort it records `end: interrupted` in the journal; on an error, `end: error`.
+
+## Notifications (`notify.ts`, 0.6)
+
+- `pickChannel(setting, env)`: `GARUDA_NOTIFY` first, then `notifications.channel`, then `auto`. `auto`
+  gives `osc9` when `TERM_PROGRAM` is `iTerm.app`, `ghostty` or `WezTerm` and there is no tmux or screen
+  (they drop the code), else `bell`.
+- `notificationBytes`: `ESC ] 9 ; text BEL` (control characters in the text become spaces, at most 120
+  characters), or `BEL`, or nothing for `off`. It only writes to the terminal; it starts no process (N8).
+- `Notifier` is a `TurnWatcher`. `approval(request)` notifies only while a turn runs (a question after
+  `/undo` comes when the user is there). `turnEnded` notifies when the turn took at least `afterSeconds`
+  (default 10) and the user did not stop it: done, stopped (the stop reason) or failed.
+- `index.ts` makes the notifier only for a chat with stdout on a terminal: `approver.onAsk` calls
+  `approval`, and `runInkChat`/`runRepl` pass it to `runTurnInTerminal`. `-p` and JSON output never notify.
 
 ## Plain renderer
 
@@ -114,7 +128,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /exit; /name: skill or command]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /diff /exit; /name: skill or command]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
@@ -206,6 +220,10 @@ interface ChatState {
   records (so it is redacted; notes and file text are left out, but each attachment and `!command` gets a
   line; undo, redo, compaction, a model change and a stopped turn get an italic line), and `writeExport`
   writes it inside the root with the `wx` flag (never overwrites).
+- **`/diff` (0.6):** `runtime.diff(scope, path)` gives the file stats and the patch; `commands.ts`
+  prints the list (`A`/`M`/`D`, `+`/`−` counts, "binary") and the colored patch (`colorDiff`), cut at
+  `DIFF_LINES` (300). The Ink controller passes `output` in the `CommandContext`: it prints the text as it is
+  and keeps the full patch for Ctrl-O (`store.keepOutput`). The plain chat prints with `renderer.info`.
 - **Type-ahead at start:** keys typed before raw mode arrive as one chunk with `\n` (cooked mode);
   `typeAhead` treats each line end as Enter. Bracketed paste (`usePaste`) inserts text and never submits.
 - **Ctrl-C:** busy → `onInterrupt`; idle with text → clear the line; idle and empty → exit on a second
@@ -213,6 +231,7 @@ interface ChatState {
 
 ## Tests
 
+`test/notifyDiff.test.ts` (0.6: notification channel, bytes, rules and wiring; `/diff`),
 `test/chat.test.tsx` (markdown, editor, store, type-ahead, Ink integration with `ink-testing-library`),
 `test/m5.acceptance.test.ts` (plain chat and `-p`), `test/cli.test.ts`. The cloud workspace also
 drives the Ink chat in a real pseudo-terminal for smoke tests.

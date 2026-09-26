@@ -1,5 +1,6 @@
 import type { Runtime } from "../../app/runtime.js";
 import { BUILTIN_COMMANDS } from "../../commands/builtins.js";
+import type { Notifier } from "../notify.js";
 import { runTurnInTerminal } from "../turn.js";
 import { runCommand } from "./commands.js";
 import { complete, rootLister } from "./complete.js";
@@ -15,6 +16,8 @@ export async function runChat(
   store: ChatStore,
   sessionPath: (id: string) => string,
   exitNow: () => never,
+  /** Tells the user when a long turn ends (0.6). */
+  notifier?: Notifier,
 ): Promise<void> {
   store.onToggleMode = () => {
     runtime.setMode(runtime.mode === "plan" ? "build" : "plan");
@@ -40,7 +43,15 @@ export async function runChat(
     }
     if (text.startsWith("/")) {
       store.echo(text);
-      const result = await runCommand(text, { runtime, renderer: store, sessionPath });
+      const result = await runCommand(text, {
+        runtime,
+        renderer: store,
+        sessionPath,
+        output: (shown, full) => {
+          store.print(shown);
+          if (full !== undefined) store.keepOutput(full.title, full.text);
+        },
+      });
       store.refreshStatus(statusOf(runtime));
       if (result === "exit") return;
       if (result === "done") continue;
@@ -53,7 +64,7 @@ export async function runChat(
       store.begin(display, prompt === display);
       let outcome: Awaited<ReturnType<typeof runTurnInTerminal>>;
       try {
-        outcome = await runTurnInTerminal(runtime, store, store, prompt, exitNow);
+        outcome = await runTurnInTerminal(runtime, store, store, prompt, exitNow, notifier);
       } finally {
         store.end(statusOf(runtime));
       }

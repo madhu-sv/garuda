@@ -48,6 +48,7 @@ import {
 } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
+import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { AgentMode, Approver } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
@@ -71,7 +72,13 @@ import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { createWebSearchTool } from "../tools/webSearch.js";
 import { filesText, undoQuestion } from "../undo/question.js";
-import { SLOW_SNAPSHOT_MS, SnapshotError, SnapshotStore, storeDir } from "../undo/snapshots.js";
+import {
+  type FileStat,
+  SLOW_SNAPSHOT_MS,
+  SnapshotError,
+  SnapshotStore,
+  storeDir,
+} from "../undo/snapshots.js";
 import { VERSION } from "../version.js";
 import type { SearchConfig } from "../web/search.js";
 import { attachMentions } from "./mentions.js";
@@ -254,6 +261,8 @@ export class Runtime {
   private hooksStarted: Promise<void> | undefined;
   /** The snapshot store for undo, or undefined when undo is off (0.4). */
   private snapshots: SnapshotStore | undefined;
+  /** The first snapshot tree of each session, for /diff (0.6). */
+  private readonly sessionBase = new Map<string, string>();
   /** Notes for the next turn, for example after an undo that kept the conversation. */
   private readonly pendingNotes: string[] = [];
   /** LSP diagnostics after edits are on (0.4). */
@@ -368,6 +377,11 @@ export class Runtime {
         }),
       );
     }
+  }
+
+  /** The notification settings for the chat (0.6); the CLI applies them. */
+  get notificationSettings(): Settings["notifications"] {
+    return this.settings.notifications;
   }
 
   /** The main model spec, as the session records it. */
@@ -1135,6 +1149,65 @@ export class Runtime {
       this.mcpStarted = undefined;
       await this.mcp?.close();
       throw error;
+    }
+  }
+
+  /**
+   * /diff (0.6): the file changes since the first turn of this session ("session") or since the
+   * start of the last turn ("last"), up to now, from the undo snapshots. Now includes changes the
+   * user made outside Garuda. `path` limits the diff to one file or folder in the root.
+   */
+  async diff(
+    scope: "session" | "last",
+    path: string | undefined,
+    signal: AbortSignal,
+  ): Promise<{ files: FileStat[]; patch: string; path?: string } | { problem: string }> {
+    const store = this.snapshots;
+    if (store === undefined) {
+      return {
+        problem:
+          "/diff needs the undo snapshots, and they are off for this session (see /help or the undo setting).",
+      };
+    }
+    const session = this.current;
+    if (session === undefined) return { problem: "No turn has run in this session yet." };
+    let base: string | undefined;
+    if (scope === "last") base = session.undo.points.at(-1)?.tree;
+    else {
+      base = this.sessionBase.get(session.id);
+      if (base === undefined) {
+        const records = await this.store.read(session.id);
+        base = records.find((r) => r.type === "snapshot")?.tree;
+        if (base !== undefined) this.sessionBase.set(session.id, base);
+      }
+    }
+    if (base === undefined) return { problem: "No turn has run in this session yet." };
+    let shown: string | undefined;
+    if (path !== undefined) {
+      try {
+        shown = displayPath(this.root, await resolveInRoot(this.root, path));
+      } catch (error) {
+        if (error instanceof PathOutsideRootError) {
+          return { problem: `${path} is outside the working folder.` };
+        }
+        throw error;
+      }
+    }
+    try {
+      const now = await store.take(signal);
+      const all = await store.stats(base, now, signal);
+      const files =
+        shown === undefined || shown === "."
+          ? all
+          : all.filter((f) => f.path === shown || f.path.startsWith(`${shown}/`));
+      const patch =
+        files.length === 0
+          ? ""
+          : await store.patch(base, now, shown === "." ? undefined : shown, signal);
+      return { files, patch, ...(shown === undefined ? {} : { path: shown }) };
+    } catch (error) {
+      if (!(error instanceof SnapshotError)) throw error;
+      return { problem: `/diff failed: ${error.message}` };
     }
   }
 

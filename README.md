@@ -99,7 +99,8 @@ Set the context window, price and output limit per model, and add providers, in 
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
   (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
-  `/init` (set up this folder, see below), `/editor`, `/exit`. Your custom commands and skills run with `/name`.
+  `/init` (set up this folder, see below), `/editor`, `/diff` (see Undo), `/exit`. Your custom commands and
+  skills run with `/name`.
 - `/sessions` lists this project's sessions (newest first: time, first prompt, turns, cost, model).
   `/sessions <number or id>` continues one in the chat, as `--resume` does. Read tracking starts again.
 - `/models` lists the known Claude models and the models in `~/.garuda/models.json`, with context window and
@@ -132,6 +133,12 @@ Set the context window, price and output limit per model, and add providers, in 
 - Approvals show the full diff or command in the scrollback. Answer with ↑↓ and Enter, or
   y (once), a (session), n or Esc (deny).
 - `GARUDA_PLAIN=1` turns Ink off. Pipes, `-p`, the evals and the standalone binary always use plain output.
+- Notifications: when an approval waits during a task, and when a task that ran 10 s or longer ends, Garuda
+  tells you. In iTerm2, Ghostty and WezTerm it sends a desktop notification (the OSC 9 escape code); in other
+  terminals and in tmux it rings the bell. `GARUDA_NOTIFY=off|bell|osc9|auto`, or
+  `"notifications": { "channel": "off", "afterSeconds": 30 }` in `.garuda/settings.json`, changes it.
+  In iTerm2 the notification needs "Send escape sequence-generated alerts" (Settings › Profiles › Terminal),
+  which is on by default.
 - Files are written atomically (a temporary file, then a rename), so an exit never leaves half a file.
 - `garuda --resume` continues the latest session in chat mode.
 
@@ -227,6 +234,10 @@ forgets it. `/redo` brings it back.
   branches do not change, and the project does not need git. `.gitignore` rules apply.
 - It works after `garuda --resume`. After the conversation was compacted, undo restores only the files.
 - Cost: about 15–90 ms per turn. `"undo": { "enabled": false }` in `.garuda/settings.json` turns it off.
+- `/diff` shows what changed since the first turn of this session: the files with `+`/`−` line counts, then
+  the diff (300 lines; Ctrl-O shows all). `/diff last` shows only the last turn; `/diff <path>` or
+  `/diff last <path>` limits it to one file or folder. It compares with the files now, so your own changes
+  count too. It uses the undo snapshots, so it is off when undo is off.
 
 ## LSP diagnostics (opt-in)
 

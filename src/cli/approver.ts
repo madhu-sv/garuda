@@ -53,9 +53,13 @@ export class TerminalApprover implements Approver {
 
 /** Passes each question to `current`. The Ink chat swaps in its own approver. */
 export class SwitchApprover implements Approver {
+  /** Called before each question: the chat's notifier (0.6). */
+  onAsk: (request: ApprovalRequest) => void = () => {};
+
   constructor(public current: Approver) {}
 
   ask(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
+    this.onAsk(request);
     return this.current.ask(request, signal);
   }
 }
@@ -80,10 +84,16 @@ export function header({ tool, target, isolation, title }: ApprovalRequest): str
 export function colorPreview({ target, preview }: ApprovalRequest): string {
   if (target.kind === "command") return styleText("cyan", `  $ ${preview}`);
   if (target.kind === "url") return preview;
-  return preview
+  return colorDiff(preview);
+}
+
+/** A unified diff with colors: + green, - red, hunk headers cyan, file headers bold. */
+export function colorDiff(text: string): string {
+  return text
     .split("\n")
     .map((line) => {
-      if (line.startsWith("+++") || line.startsWith("---")) return styleText("bold", line);
+      if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff --git"))
+        return styleText("bold", line);
       if (line.startsWith("+")) return styleText("green", line);
       if (line.startsWith("-")) return styleText("red", line);
       if (line.startsWith("@@")) return styleText("cyan", line);

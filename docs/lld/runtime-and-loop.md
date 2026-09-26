@@ -80,6 +80,8 @@ Sessions and models in the chat (0.6):
 - `sessionRecords()`: the current session's records, for `/export`.
 - `modelList()`: `knownModels()` from `pricing.ts`, then the specs of `~/.garuda/models.json` that resolve
   (option `models.configured`); the main model is always in the list.
+- `diff(scope, path, signal)`: `/diff` from the undo snapshots (see [undo.md](undo.md)).
+- `notificationSettings`: the `notifications` setting, for the CLI's notifier.
 - `setModel(ref)`: a number, an alias (`aliasModel`) or a spec. `options.models.resolve(spec)` gives the
   client (created at once, so a missing API key shows now), the window, price and `maxTokens`. Settings
   (`contextWindow`, `price`) still override. It writes a `model` record with the new start fields. `modelId`,

@@ -10,6 +10,7 @@ import {
   repoMapTool,
 } from "../../tools/codeTools.js";
 import type { ToolContext } from "../../tools/types.js";
+import { colorDiff } from "../approver.js";
 import type { Renderer } from "../renderer.js";
 import { formatTokens } from "../report.js";
 import { modeText } from "./plan.js";
@@ -25,6 +26,7 @@ export const HELP = [
   "  /sessions  this project's sessions; /sessions <n|id> continues one",
   "  /models    the models; /models <n|id|opus|sonnet|haiku> switches for this chat",
   "  /export    write this conversation as Markdown; /export <file>",
+  "  /diff      file changes in this session; /diff last (last turn); /diff [last] <path>",
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /refs X    every use of symbol X (code index, no model call)",
   "  /map [dir] what each JS/TS file exports and imports",
@@ -47,6 +49,11 @@ export interface CommandContext {
   runtime: Runtime;
   renderer: Renderer;
   sessionPath: (id: string) => string;
+  /**
+   * Text with its own colors (0.6: /diff), and the full text for Ctrl-O when the shown text is cut.
+   * Default: renderer.info.
+   */
+  output?: (text: string, full?: { title: string; text: string }) => void;
 }
 
 /**
@@ -55,7 +62,7 @@ export interface CommandContext {
  */
 export async function runCommand(
   text: string,
-  { runtime, renderer, sessionPath }: CommandContext,
+  { runtime, renderer, sessionPath, output }: CommandContext,
 ): Promise<"exit" | "done" | { prompt: string }> {
   const command = text.split(/\s+/)[0];
   if (command === "/exit" || command === "/quit") return "exit";
@@ -79,6 +86,8 @@ export async function runCommand(
       if (result.ok) renderer.info(result.text);
       else renderer.warn(result.text);
     }
+  } else if (command === "/diff") {
+    await diffCommand(runtime, renderer, text.slice(command.length).trim(), output);
   } else if (command === "/export") {
     await exportCommand(runtime, renderer, text.slice(command.length).trim());
   } else if (command === "/where" || command === "/refs" || command === "/map") {
@@ -185,6 +194,67 @@ export function modelsText(runtime: Runtime): string {
     "Switch with /models <number, id or opus|sonnet|haiku|fable>. It is for this chat only.",
     "Add other models (Ollama, OpenRouter …) in ~/.garuda/models.json.",
   ].join("\n");
+}
+
+/** The diff lines /diff shows before it cuts; Ctrl-O shows all. */
+export const DIFF_LINES = 300;
+
+/** /diff [last] [path]: the file changes of this session or of the last turn (0.6). */
+async function diffCommand(
+  runtime: Runtime,
+  renderer: Renderer,
+  arg: string,
+  /** The Ink chat's output (colors, Ctrl-O); the plain chat prints with renderer.info. */
+  output: CommandContext["output"],
+): Promise<void> {
+  const words = arg === "" ? [] : arg.split(/\s+/);
+  const scope = words[0] === "last" ? "last" : "session";
+  const path = (scope === "last" ? words.slice(1) : words).join(" ");
+  const result = await runtime.diff(
+    scope,
+    path === "" ? undefined : path,
+    new AbortController().signal,
+  );
+  if ("problem" in result) {
+    renderer.warn(result.problem);
+    return;
+  }
+  const since =
+    scope === "last" ? "since the start of the last turn" : "since the first turn of this session";
+  const where = result.path === undefined ? "" : ` in ${result.path}`;
+  if (result.files.length === 0) {
+    renderer.info(`No file changed${where} ${since}.`);
+    return;
+  }
+  const plus = result.files.reduce((n, f) => n + (f.added ?? 0), 0);
+  const minus = result.files.reduce((n, f) => n + (f.removed ?? 0), 0);
+  const width = Math.max(...result.files.map((f) => f.path.length));
+  const mark = { added: "A", modified: "M", deleted: "D" } as const;
+  const rows = result.files.map((f) => {
+    const counts =
+      f.added === undefined
+        ? "binary"
+        : [f.added > 0 ? `+${f.added}` : "", f.removed ? `−${f.removed}` : ""]
+            .filter(Boolean)
+            .join(" ");
+    return `  ${mark[f.status]} ${f.path.padEnd(width + 2)}${counts}`;
+  });
+  const lines = result.patch.replace(/\n$/, "").split("\n");
+  const cut = lines.length > DIFF_LINES;
+  const more =
+    output === undefined
+      ? "/diff <path> shows one file."
+      : "Ctrl-O shows all; /diff <path> shows one file.";
+  (output ?? ((t: string) => renderer.info(t)))(
+    [
+      `Changes${where} ${since} (${result.files.length} file${result.files.length === 1 ? "" : "s"}, +${plus} −${minus}). Changes you made yourself count too.`,
+      ...rows,
+      "",
+      colorDiff(lines.slice(0, DIFF_LINES).join("\n")),
+      ...(cut ? [`… ${lines.length - DIFF_LINES} more lines. ${more}`] : []),
+    ].join("\n"),
+    cut ? { title: `diff ${since}${where}`, text: colorDiff(result.patch) } : undefined,
+  );
 }
 
 /** /export [file]: the conversation as Markdown in the working folder (0.6). */

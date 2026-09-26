@@ -33,6 +33,9 @@ const GC_EVERY = 20;
 
 export type FileChange = { status: "added" | "modified" | "deleted"; path: string };
 
+/** A change with its line counts (0.6, /diff). Binary files have no counts. */
+export type FileStat = FileChange & { added?: number; removed?: number };
+
 export class SnapshotError extends Error {}
 
 export class SnapshotStore {
@@ -80,6 +83,36 @@ export class SnapshotStore {
       changes.push({ status, path });
     }
     return changes;
+  }
+
+  /** The changes from → to with added and removed line counts (0.6, /diff). */
+  async stats(from: string, to: string, signal?: AbortSignal): Promise<FileStat[]> {
+    const changes = await this.changes(from, to, signal);
+    const out = await this.git(
+      `diff-tree -r -z --no-renames --numstat ${tree(from)} ${tree(to)}`,
+      signal,
+    );
+    // -z --numstat: "added<TAB>removed<TAB>path<NUL>"; binary files give "-<TAB>-".
+    const counts = new Map<string, { added?: number; removed?: number }>();
+    for (const entry of out.split("\0")) {
+      const match = /^(\d+|-)\t(\d+|-)\t(.*)$/s.exec(entry);
+      if (match === null) continue;
+      counts.set(
+        match[3] as string,
+        match[1] === "-" ? {} : { added: Number(match[1]), removed: Number(match[2]) },
+      );
+    }
+    return changes.map((c) => ({ ...c, ...counts.get(c.path) }));
+  }
+
+  /** The unified diff from → to, of all files or of one path (0.6, /diff). No color, no textconv. */
+  async patch(from: string, to: string, path?: string, signal?: AbortSignal): Promise<string> {
+    // :(literal): the path is a file name, never a glob or other pathspec magic.
+    const only = path === undefined ? "" : ` -- ${shellQuote(`:(literal)${path}`)}`;
+    return this.git(
+      `diff-tree -r -p --no-renames --no-color --no-ext-diff --no-textconv ${tree(from)} ${tree(to)}${only}`,
+      signal,
+    );
   }
 
   /**
@@ -154,6 +187,11 @@ export class SnapshotStore {
 export function storeDir(root: string, home: string = homedir()): string {
   const id = createHash("sha256").update(root).digest("hex").slice(0, 16);
   return join(home, ".garuda", "snapshots", id);
+}
+
+/** One shell word: the path for /diff comes from the user. */
+function shellQuote(text: string): string {
+  return `'${text.replace(/'/g, "'\\''")}'`;
 }
 
 /** A tree id from our own records; checked, because it goes into a command line. */

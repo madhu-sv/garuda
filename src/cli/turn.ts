@@ -25,6 +25,32 @@ export async function runTurnInTerminal(
   renderer: Renderer,
   prompt: string,
   exitNow: () => never,
+  /** Told when the turn starts and ends: the chat's notifier (0.6). */
+  watcher?: TurnWatcher,
+): Promise<TurnOutcome> {
+  const started = performance.now();
+  watcher?.turnStarted();
+  let outcome: TurnOutcome | undefined;
+  try {
+    outcome = await runTurn(runtime, approver, renderer, prompt, exitNow);
+    return outcome;
+  } finally {
+    watcher?.turnEnded(outcome, performance.now() - started);
+  }
+}
+
+export interface TurnWatcher {
+  turnStarted(): void;
+  /** `outcome` is undefined when the turn threw (for example, Garuda exits). */
+  turnEnded(outcome: TurnOutcome | undefined, ms: number): void;
+}
+
+async function runTurn(
+  runtime: Runtime,
+  approver: Interruptible,
+  renderer: Renderer,
+  prompt: string,
+  exitNow: () => never,
 ): Promise<TurnOutcome> {
   const controller = new AbortController();
   const stop = () => {

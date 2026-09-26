@@ -16,6 +16,7 @@ import { SwitchApprover, TerminalApprover } from "./approver.js";
 import { banner, colorLevel } from "./banner.js";
 import { describeError } from "./errors.js";
 import { JsonOutput, OUTPUT_FORMATS, type OutputFormat } from "./jsonOutput.js";
+import { Notifier, pickChannel } from "./notify.js";
 import { PlainRenderer, type Renderer } from "./renderer.js";
 import { runRepl } from "./repl.js";
 import { formatTokens, stopMessage } from "./report.js";
@@ -336,6 +337,16 @@ async function start(options: Options, program: Command): Promise<number> {
     if (tip !== undefined) startBanner += `\n${tip}`;
   }
   const sessionPath = (id: string) => join(store.dir, `${id}.jsonl`);
+  // Notifications (0.6): only for a chat on a terminal; escape codes go to the terminal itself.
+  const notify = runtime.notificationSettings;
+  const notifier = process.stdout.isTTY
+    ? new Notifier(
+        pickChannel(notify?.channel),
+        (bytes) => process.stdout.write(bytes),
+        notify?.afterSeconds,
+      )
+    : undefined;
+  if (notifier !== undefined) approver.onAsk = (request) => notifier.approval(request);
   if (ink !== undefined) {
     const setEventTarget = (target: Renderer) => {
       events = target;
@@ -348,6 +359,7 @@ async function start(options: Options, program: Command): Promise<number> {
       sessionPath,
       exitNow,
       options.firstInput,
+      notifier,
     );
   } else {
     process.stderr.write(`${startBanner}\n`);
@@ -359,6 +371,7 @@ async function start(options: Options, program: Command): Promise<number> {
       exitNow,
       undefined,
       options.firstInput,
+      notifier,
     );
   }
   await runtime.close();

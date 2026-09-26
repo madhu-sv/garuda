@@ -2,6 +2,7 @@ import { render } from "ink";
 import { createElement } from "react";
 import type { Runtime } from "../../app/runtime.js";
 import type { SwitchApprover } from "../approver.js";
+import type { Notifier } from "../notify.js";
 import type { Renderer } from "../renderer.js";
 import { runChat, statusOf } from "./controller.js";
 import { editInEditor } from "./externalEditor.js";
@@ -22,6 +23,7 @@ export async function runInkChat(
   exitNow: () => never,
   /** A first line to run, as if typed (garuda init runs "/init"). */
   firstInput?: string,
+  notifier?: Notifier,
 ): Promise<void> {
   const store = new ChatStore(statusOf(runtime));
   store.print(banner);
@@ -48,7 +50,7 @@ export async function runInkChat(
     return exitNow();
   };
   try {
-    await runChat(runtime, store, sessionPath, exitClean);
+    await runChat(runtime, store, sessionPath, exitClean, notifier);
   } finally {
     ink.unmount();
   }

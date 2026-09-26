@@ -5,6 +5,7 @@ import { runCommand } from "./chat/commands.js";
 import { complete, rootLister } from "./chat/complete.js";
 import { commandNames } from "./chat/controller.js";
 import { BUILD_PROMPT, planHandoff } from "./chat/plan.js";
+import type { Notifier } from "./notify.js";
 import type { Renderer } from "./renderer.js";
 import type { Interruptible } from "./turn.js";
 import { runTurnInTerminal } from "./turn.js";
@@ -32,6 +33,8 @@ export async function runRepl(
   io: ReplIO = { input: process.stdin, output: process.stderr },
   /** A first line to run, as if typed (garuda init runs "/init"). */
   firstInput?: string,
+  /** Tells the user when a long turn ends (0.6). */
+  notifier?: Notifier,
 ): Promise<void> {
   const history: string[] = [];
   // Tab completion (0.6): the same /commands and @paths as the Ink chat.
@@ -97,7 +100,14 @@ export async function runRepl(
 
     for (;;) {
       const planning = runtime.mode === "plan";
-      const outcome = await runTurnInTerminal(runtime, approver, renderer, prompt, exitNow);
+      const outcome = await runTurnInTerminal(
+        runtime,
+        approver,
+        renderer,
+        prompt,
+        exitNow,
+        notifier,
+      );
       // A finished plan: ask whether to build it.
       if (!planning || outcome.kind !== "done" || outcome.result.stopReason !== "done") break;
       if ((await planHandoff(runtime, approver)) !== "now") break;
