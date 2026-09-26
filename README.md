@@ -16,7 +16,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
 | 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
 | 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo, remote MCP with OAuth | Done |
-| 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output, skills, custom agents | In progress |
+| 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output, skills, custom agents, web search | In progress |
 
 ## Use
 
@@ -497,6 +497,26 @@ Security:
 - Settings: `"web": { "enabled": false }` removes the tool. `"web": { "allowLocalhost": true }` allows
   loopback addresses (for a local docs server); private network ranges stay blocked.
 - The evals turn web_fetch off.
+
+## Web search
+
+`web_search` finds pages for a query (0.5). Set a key and it appears:
+
+```sh
+export BRAVE_API_KEY=...       # Brave Search, or:
+export TAVILY_API_KEY=...      # Tavily
+```
+
+Or pick a backend in `~/.garuda/search.json`: `{ "provider": "brave" }`, `{ "provider": "tavily" }`, or
+your own SearXNG server: `{ "provider": "searxng", "url": "http://localhost:8888" }` (turn on its JSON
+format). Keys come only from environment variables; a project cannot configure search.
+
+- The query leaves your machine, so each search shows the query and asks. "Yes, for this session" skips
+  the question for later searches; `"permissions": { "allow": ["web_search"] }` skips it for good (and allows
+  searches in plan mode).
+- A query with a long token (it could be a key) is refused.
+- Results are titles, URLs and short texts, marked as untrusted. The model reads pages with `web_fetch`.
+- `"web": { "enabled": false }` removes both web tools. Details: [docs/lld/web.md](docs/lld/web.md).
 
 ## Hooks
 

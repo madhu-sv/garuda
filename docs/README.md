@@ -22,7 +22,7 @@ Low-level design documents:
 | Context (prompt, memory, compaction) | `src/context/` | [context.md](lld/context.md) |
 | Code index | `src/knowledge/` | [knowledge.md](lld/knowledge.md) |
 | MCP client | `src/mcp/` | [mcp.md](lld/mcp.md) |
-| Web fetch | `src/web/`, `src/net/`, `src/tools/webFetch.ts` | [web.md](lld/web.md) |
+| Web fetch and web search | `src/web/`, `src/net/`, `src/tools/webFetch.ts`, `src/tools/webSearch.ts` | [web.md](lld/web.md) |
 | Hooks | `src/hooks/` | [hooks.md](lld/hooks.md) |
 | Language profiles | `src/lang/` | [languages.md](lld/languages.md) |
 | Subagents (explore, custom agents) | `src/agents/` | [agents.md](lld/agents.md) |

@@ -108,7 +108,7 @@ flowchart TB
 | LSP | `src/lsp/` | Language servers in the sandbox: find, install, start; errors of a changed file after an edit. |
 | Knowledge | `src/knowledge/` | Local code index: symbols, references, a code graph. No model call. |
 | MCP | `src/mcp/` | Start local MCP servers in the sandbox, connect to remote ones (Streamable HTTP, OAuth), consent and pinning, tool adapters, text cleaning. |
-| Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown. |
+| Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown; web search through the user's backend (0.5). |
 | Net | `src/net/` | Address checks (public, loopback) shared by web fetch and model providers. |
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
 | Subagents | `src/agents/` | The explore tool: a child agent loop with read-only tools, its own session and limits, that answers one question. |
@@ -179,6 +179,7 @@ flowchart LR
 | Project config → remote MCP server | A cloned repo points Garuda at a server that collects data, or at an internal address (SSRF). | Consent that shows the URL, pinned to it; https only; public addresses only, checked at each connection with the connection pinned to the checked address; no redirects. |
 | Remote MCP sign-in | Token theft, a forged callback, a malicious sign-in page. | PKCE (SDK); `state` checked on the callback; only https sign-in pages; tokens only in `~/.garuda/mcp-auth.json` (0600), never in session files; the callback server listens on 127.0.0.1 only, for one answer. |
 | MCP server / web page → model | Hidden instructions, terminal escape codes, fake markers. | Clean text, cap its size, wrap it in `<mcp_result>` / `<web_result>`, neutralize Garuda's own markers, mark it as untrusted in the prompt. |
+| web_search → search backend | The query carries code or secrets out; a project sends queries to its own server. | Only the user configures search (`~/.garuda/search.json`, environment keys); each search shows the query and asks (or a session answer or rule); queries with long tokens are refused; results are cleaned and marked untrusted. |
 | web_fetch → network | Server-side request forgery; data leaks through URLs. | Only public addresses, checked on the resolved IP and pinned; each redirect hop checked; new hosts ask; unusual URLs always ask. |
 | Garuda → disk | Secrets in session logs. | Redactor on every journal line; files 0600. |
 | Model text → tool call | A small model's text (or file text it repeats) is read as a tool call. | Default: only when the whole reply is calls to tools of this request. A user can allow calls on their own lines for one model (`"textToolCalls": "lines"` in `~/.garuda/models.json`; never from project settings). A call in the middle of a sentence never runs. The call then passes the same input check, hooks and permissions. |
@@ -201,6 +202,7 @@ All state is in files. There is no server and no database.
 | `~/.garuda/agents/`, `~/.claude/agents/`, `<root>/.garuda/agents/`, `<root>/.claude/agents/` | User, project | Custom agents: Markdown files in Claude Code's format (0.5). |
 | `~/.garuda/mcp.json`, `hooks.json` | User | Trusted MCP servers and hooks. |
 | `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers, hooks, slash commands, skills and agents; tool-list hashes. 0600. |
+| `~/.garuda/search.json` | User | The web search backend (Brave, Tavily, SearXNG); keys come from environment variables. |
 | `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. |
 | `~/.garuda/mcp-auth.json` | Garuda | OAuth clients and tokens of remote MCP servers. 0600. |
 | `~/.garuda/snapshots/<hash of root>/` | Garuda | Undo snapshots: a git folder per project (0700). |
@@ -229,6 +231,7 @@ All state is in files. There is no server and no database.
 | LSP diagnostics | Real language servers (TypeScript 7 `tsc --lsp`, pyright, jdtls), errors only, in the edit result; PATH or a pinned managed install; off by default | The model sees type errors at the edit, with no extra tool call. Real servers give the same errors as the build. The first A/B eval (hard suite) showed no gain: the model made no type errors to catch. Off by default. |
 | Undo | A snapshot per turn in a separate git store (`~/.garuda/snapshots`), files and conversation together, on by default | Commands in the sandbox change files with no approval, so every turn must be reversible. A separate store never touches the user's repository and works without git. Measured cost: 15–90 ms per turn. |
 | Init and migration | Read other agents' files with no model; one preview and one yes; new files only (`.gitignore` lines are the one exception); secrets and headers never copied; AGENTS.md written by a normal model turn | The user sees every change before it happens, and nothing they wrote is lost. Imported project servers and commands are ordinary project files, so the consent rules do not change. The model writes AGENTS.md because only reading the code gives correct build commands. |
+| Web search | A normal tool over search APIs (Brave, Tavily, SearXNG) first; the Anthropic server tool later | Works with every model, open models too, and keeps Garuda's message types provider-neutral. The server tool needs encrypted result blocks kept in the session, so it comes as a separate backend. |
 | Custom agents | Claude Code's subagent format, read from its folders too; read-only tools unless the file names more; user agents win on a clash; no general-purpose agent | Users keep one set of agents for both tools. Read-only by default keeps a project agent harmless until the user looks at it; the explore A/B showed no gain for a general agent, so it waits for its own eval. |
 | Skills | The Agent Skills format, read from Claude Code's folders too; a `skill` tool whose description lists names and descriptions; on only when skills exist | One format for all agents; no copy to keep in step. The list in the tool description keeps the system prompt and the tool bytes fixed per session (N2), and the body loads only when needed. No A/B: the value is in the skill's text. |
 | JSON output | `-p --output-format json\|stream-json` with Claude Code's field names; stdout only JSON | Scripts and CI written for `claude -p` work with Garuda. The mapping lives in one file of the CLI; the loop only adds the full response to `step_end` and the model time to the result. |

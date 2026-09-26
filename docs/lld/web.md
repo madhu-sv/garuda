@@ -1,4 +1,4 @@
-# Web fetch (`src/web/`, `src/net/`, `src/tools/webFetch.ts`)
+# Web fetch and web search (`src/web/`, `src/net/`, `src/tools/webFetch.ts`, `src/tools/webSearch.ts`)
 
 ## Purpose
 
@@ -12,6 +12,8 @@ server-side request forgery (SSRF) and data leaks through URLs.
 | `net/address.ts` | `checkAddress(ip, allowLocalhost)`, `isIpLiteral`, `isLoopbackHost` (ipaddr.js). Shared with the model providers. |
 | `web/fetch.ts` | `checkUrl`, `fetchPage`, `htmlToMarkdown`, `decodeEntities`, `FetchError`. |
 | `tools/webFetch.ts` | The `web_fetch` tool: approval target, paging, cache, output. |
+| `web/search.ts` | Web search (0.5): `loadSearchConfig`, `search` (Brave, Tavily, SearXNG), `parseResults`. |
+| `tools/webSearch.ts` | The `web_search` tool: approval, the secret check, `resultsText`. |
 
 ## URL check (`checkUrl`)
 
@@ -85,7 +87,61 @@ Input: `url`, `start` (character offset, default 0), `max_chars` (1 000–100 00
 
 No HTTP proxy support yet (corporate networks). Only GET. Text types only.
 
+## Web search (0.5)
+
+### Backends
+
+| Backend | Call | Key | Results |
+| --- | --- | --- | --- |
+| Brave Search | `GET https://api.search.brave.com/res/v1/web/search?q=…&count=N` | `X-Subscription-Token`, from `BRAVE_API_KEY` | `web.results[]`: title, url, description, age |
+| Tavily | `POST https://api.tavily.com/search` `{query, max_results, search_depth: "basic"}` | `Authorization: Bearer`, from `TAVILY_API_KEY` | `results[]`: title, url, content |
+| SearXNG | `GET <url>/search?q=…&format=json` | none (your own server; the JSON format must be on) | `results[]`: title, url, content, publishedDate |
+
+### Config
+
+Only the user configures search: `~/.garuda/search.json`, or a key in the environment. A project cannot
+(queries would leave the machine to a place the repo picks).
+
+```json
+{ "provider": "brave" }
+{ "provider": "tavily", "apiKeyEnv": "MY_TAVILY_KEY", "maxResults": 3 }
+{ "provider": "searxng", "url": "http://localhost:8888" }
+```
+
+- Without the file: `BRAVE_API_KEY` picks Brave, else `TAVILY_API_KEY` picks Tavily, else no search.
+- Keys come only from environment variables (`apiKeyEnv` names another one). A key in the file is an error.
+- SearXNG: https, or http for this machine only; no user:password in the URL.
+- A file or key problem gives one warning at start ("Web search is off: …"); Garuda runs on.
+
+### The call
+
+- 20 s time limit, 2 MB answer limit, no redirects. Errors say what to do: 401/403 "Check the API key",
+  429 "Too many searches", no JSON from SearXNG "turn on the json format".
+- Results with a URL that is not http(s) are dropped. At most 10 results (default 5).
+
+### Tool (`web_search`)
+
+Only when a backend is set and `web.enabled` is not false. Input: `query` (2–400 characters), `max_results`
+(1–10). Not read-only: the query leaves the machine.
+
+- Approval: the target is `input` with the query; the preview shows the query and the backend. "Yes, for
+  this session" allows all later searches in the session; the rule `web_search` in `permissions.allow`
+  allows them for good. Plan mode allows a search only with that rule (it never asks), like web_fetch.
+- A query with a run of 40 or more letters, digits or `+/_=-` is refused before the question: it could be a
+  key or token from the session.
+- Output: `<web_result search="…">`, then per result `N. title`, the URL (and age), and the snippet (HTML
+  tags removed, entities decoded, cleaned, Garuda's markers neutralized, at most 500 characters), then
+  `</web_result>` and "Read a page with web_fetch before you rely on it."
+- The system prompt gets two lines: results are untrusted; no code, secrets or file contents in queries.
+
+The Anthropic server-side search tool (Claude models only) is planned as a second backend in a later patch.
+
 ## Tests
+
+`test/webSearch.test.ts`: the config (environment keys, the file, keys only from the environment, SearXNG
+URL rules, bad JSON); each backend's request and parsing with a fake fetch; error messages; the size limit;
+the output (tags, entities, markers, snippet cap); the secret check; the runtime (the question with the
+query, a session answer, a No sends nothing, plan mode with and without the rule, `web.enabled: false`).
 
 `test/webFetch.test.ts` with a local HTTP server and a fake DNS resolver: address ranges, URL rules,
 private DNS answers, loopback without the setting, HTML to Markdown, gzip, a compression bomb, content

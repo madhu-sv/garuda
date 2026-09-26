@@ -98,6 +98,7 @@ contain `-`.
 | path | Glob relative to the root. A pattern without `/` matches at any depth. `**`, `*`, `?`. | `edit_file(src/**)`, `read_file(.env.example)` |
 | command | `*` matches any text. The command is split at `;`, `&&`, `\|\|`, `\|` and `$(…)`. An allow rule must match every part; a deny rule needs one part (or the whole command). | `bash(pnpm test*)`, `bash(rm -rf*)` |
 | url | A host; `*.example.com` matches subdomains only. | `web_fetch(docs.python.org)` |
+| input (web_search, 0.5) | Only the bare tool rule: it allows every search. | `web_search` |
 | input | Only bare tool rules match. | `mcp__github__get_issue`, `mcp__github__*` |
 
 ## Settings (`settings.ts`)

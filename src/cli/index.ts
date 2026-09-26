@@ -11,6 +11,7 @@ import { FileSessionStore, parseRecords } from "../session/store.js";
 import { defaultTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { VERSION } from "../version.js";
+import { loadSearchConfig } from "../web/search.js";
 import { SwitchApprover, TerminalApprover } from "./approver.js";
 import { banner, colorLevel } from "./banner.js";
 import { describeError } from "./errors.js";
@@ -169,6 +170,9 @@ async function start(options: Options, program: Command): Promise<number> {
     }
   }
 
+  // Web search (0.5): only the user's ~/.garuda/search.json and environment configure it.
+  const searchConfig = await loadSearchConfig();
+
   const renderer = new PlainRenderer();
   const terminalApprover = new TerminalApprover();
   const approver = new SwitchApprover(terminalApprover);
@@ -191,6 +195,7 @@ async function start(options: Options, program: Command): Promise<number> {
     undo: {},
     // Skills from ~/.garuda/skills, ~/.claude/skills and the project (0.5).
     skills: {},
+    ...(searchConfig.config === undefined ? {} : { search: { config: searchConfig.config } }),
     // Custom agents from ~/.garuda/agents, ~/.claude/agents and the project (0.5). A model id in a
     // user agent file goes through the same providers as -m (only ~/.garuda/models.json).
     agents: {
@@ -212,6 +217,8 @@ async function start(options: Options, program: Command): Promise<number> {
   };
 
   if (runtime.executorNotice !== undefined) renderer.warn(runtime.executorNotice);
+  if (searchConfig.problem !== undefined)
+    renderer.warn(`Web search is off: ${searchConfig.problem}`);
   const session = runtime.session;
   if (session !== undefined) {
     renderer.info(

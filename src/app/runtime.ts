@@ -59,9 +59,11 @@ import { loadSkills, type Skill, skillConsent } from "../skills/load.js";
 import { createSkillTool, skillText } from "../skills/tool.js";
 import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
+import { createWebSearchTool } from "../tools/webSearch.js";
 import { filesText, undoQuestion } from "../undo/question.js";
 import { SLOW_SNAPSHOT_MS, SnapshotError, SnapshotStore, storeDir } from "../undo/snapshots.js";
 import { VERSION } from "../version.js";
+import type { SearchConfig } from "../web/search.js";
 
 /**
  * The note that starts each plan-mode turn (0.4). The system prompt stays the same in both modes
@@ -123,6 +125,11 @@ export interface RuntimeOptions {
    * Absent: no agents (tests, evals). `resolveModel` turns a model id from a user agent file into a
    * client (the CLI passes its provider lookup); without it, such agents fail with a message.
    */
+  /**
+   * Web search (0.5): the backend from ~/.garuda/search.json or the environment (the CLI loads it).
+   * Absent: no web_search tool. `web.enabled: false` in the settings also turns it off.
+   */
+  search?: { config: SearchConfig; fetch?: typeof fetch };
   agents?: {
     home?: string;
     resolveModel?: (spec: string) => {
@@ -377,6 +384,7 @@ export class Runtime {
         sandboxed: choice.executor.isolation !== "none",
         mcp: mcpServers.some((s) => s.def.enabled),
         web: settings.web?.enabled ?? true,
+        search: options.search !== undefined && settings.web?.enabled !== false,
         hooks: hookConfig.user.length + hookConfig.project.length > 0,
         languages: profileNotes(profiles),
         explore: settings.subagents?.enabled === true,
@@ -411,6 +419,14 @@ export class Runtime {
       });
       runtime.customCommands = loaded.commands;
       for (const problem of loaded.problems) options.onNotice?.(problem);
+    }
+    if (options.search !== undefined && settings.web?.enabled !== false) {
+      runtime.tools.register(
+        createWebSearchTool({
+          config: options.search.config,
+          ...(options.search.fetch === undefined ? {} : { fetch: options.search.fetch }),
+        }),
+      );
     }
     runtime.skillList = skills;
     runtime.skillsHome = options.skills?.home ?? homedir();
@@ -684,6 +700,7 @@ export class Runtime {
     const hooks = this.hookConfig.user.length + this.hookConfig.project.length;
     if (hooks > 0) out.push(`${hooks} hook${hooks === 1 ? "" : "s"}`);
     if (this.tools.get("web_fetch") !== undefined) out.push("web_fetch");
+    if (this.tools.get("web_search") !== undefined) out.push("web_search");
     if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
     if (this.selectedMode === "plan") out.push("plan mode");
     if (this.lspEnabled) out.push("LSP");
