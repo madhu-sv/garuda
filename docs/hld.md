@@ -201,6 +201,13 @@ flowchart LR
   F -->|FakeModel + recorded results| RP[--replay]
 ```
 
+### Undo (0.4)
+
+Before each turn, the runtime takes a snapshot of the files in a git store of Garuda's own
+(`~/.garuda/snapshots`) and writes a `snapshot` record. `/undo` asks, restores the files to the last
+snapshot and cuts the turn out of the messages (`undo` record); `/redo` does the reverse. Details:
+[lld/undo.md](lld/undo.md).
+
 ## 8. Context management
 
 - The system prompt is fixed for a session (N2). It holds the rules, the sandbox note, the MCP, web and

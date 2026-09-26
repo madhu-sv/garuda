@@ -157,6 +157,8 @@ async function start(options: Options, program: Command): Promise<number> {
     store,
     ...(options.plan === true ? { mode: "plan" as const } : {}),
     ...(options.lsp === true ? { lsp: { enabled: true } } : {}),
+    // Undo snapshots are on for the chat and for -p (a later chat can undo the task).
+    undo: {},
     ...(options.resume === undefined ? {} : { resume: options.resume }),
     onEvent: (event) => events.event(event),
     onNotice: (text) => events.warn(text),

@@ -28,6 +28,7 @@ Low-level design documents:
 | Subagents (explore) | `src/agents/` | [agents.md](lld/agents.md) |
 | Custom slash commands | `src/commands/` | [commands.md](lld/commands.md) |
 | LSP diagnostics | `src/lsp/` | [lsp.md](lld/lsp.md) |
+| Undo | `src/undo/`, `src/session/undo.ts` | [undo.md](lld/undo.md) |
 | Evals | `src/evals/` | [evals.md](lld/evals.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).

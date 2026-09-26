@@ -5,6 +5,7 @@ import type { PermissionGate } from "../permissions/types.js";
 import type { SessionRecord, StartRecord } from "../session/records.js";
 import { rebuildState } from "../session/resume.js";
 import { closeOpenToolCalls, createSession } from "../session/session.js";
+import { popPoint, pushPoint, redoPoint } from "../session/undo.js";
 import type { ToolContext, ToolOutcome, ToolRunner } from "../tools/types.js";
 import { runAgent, signature } from "./runAgent.js";
 
@@ -69,6 +70,14 @@ export async function replaySession(
     const record = records[i];
     if (record === undefined) break;
     if (record.type === "start" || record.type === "resume") limits = record.limits;
+    // Undo and redo change the conversation between runs (0.4): apply them as they were.
+    if (record.type === "snapshot") {
+      pushPoint(session.undo, record.tree, record.messages, record.prompt);
+    } else if (record.type === "undo") {
+      popPoint(session.undo, session.messages, record.after);
+    } else if (record.type === "redo") {
+      redoPoint(session.undo, session.messages);
+    }
     if (record.type !== "user") continue;
 
     const endIndex = records.findIndex((r, j) => j > i && (r.type === "end" || r.type === "user"));

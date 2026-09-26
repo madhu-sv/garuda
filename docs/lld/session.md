@@ -37,6 +37,9 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `assistant` | step, response, costUsd? |
 | `tool_results` | message, `calls` (per call: toolUseId, name, durationMs, executor and isolation for commands, `subagent` report for explore calls), `synthetic` for closed open calls |
 | `compaction` | stage, before and after tokens, the new messages, the summary response and its cost (stage 2) |
+| `snapshot` | tree (the undo snapshot of the files before the turn), messages (the count before the turn), prompt (one short line), durationMs (0.4) |
+| `undo` | after (the snapshot of the files at the undo) (0.4) |
+| `redo` | – (0.4) |
 | `end` | stopReason, steps |
 
 ## Store (`store.ts`)
@@ -70,7 +73,9 @@ The model may see a secret, but Garuda never writes it to disk. The `Redactor` r
 ## Resume (`resume.ts`)
 
 `rebuildState(records)` replays the records into messages, usage, cost and context size (compaction
-records replace the messages; subagent reports in `tool_results` add their usage and cost). `resumeSession` loads the latest or a given session, writes a `resume`
+records replace the messages; subagent reports in `tool_results` add their usage and cost; `snapshot`,
+`undo` and `redo` records rebuild the undo state and take turns out of the messages or put them back, with
+the same steps as live, from `undo.ts`). `resumeSession` loads the latest or a given session, writes a `resume`
 record, and continues in the same file. The read tracking starts empty: the agent must read a file again
 before it edits it.
 

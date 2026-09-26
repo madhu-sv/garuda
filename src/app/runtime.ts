@@ -43,10 +43,19 @@ import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
 import type { RunLimits, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
-import { addUserMessage, createSession, type Session } from "../session/session.js";
+import {
+  addSnapshot,
+  addUserMessage,
+  createSession,
+  redoTurn,
+  type Session,
+  undoTurn,
+} from "../session/session.js";
 import { newSessionId, type SessionStore } from "../session/store.js";
 import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
+import { filesText, undoQuestion } from "../undo/question.js";
+import { SLOW_SNAPSHOT_MS, SnapshotError, SnapshotStore, storeDir } from "../undo/snapshots.js";
 import { VERSION } from "../version.js";
 
 /**
@@ -107,6 +116,12 @@ export interface RuntimeOptions {
    * Language server diagnostics (0.4). `enabled` overrides the setting (the --lsp flag, evals).
    * `home` holds ~/.garuda/lsp.json and the managed servers; `path` is the PATH to search.
    */
+  /**
+   * Undo (0.4): a snapshot of the files before each turn, in ~/.garuda/snapshots (`home` overrides
+   * the home folder). Absent: no snapshots (tests, evals). The CLI passes it; the setting
+   * `undo.enabled: false` turns it off.
+   */
+  undo?: { home?: string };
   lsp?: {
     enabled?: boolean;
     home?: string;
@@ -158,6 +173,10 @@ export class Runtime {
   private readonly allowedCommands = new Set<string>();
   private hookRunner: HookRunner | undefined;
   private hooksStarted: Promise<void> | undefined;
+  /** The snapshot store for undo, or undefined when undo is off (0.4). */
+  private snapshots: SnapshotStore | undefined;
+  /** Notes for the next turn, for example after an undo that kept the conversation. */
+  private readonly pendingNotes: string[] = [];
   /** LSP diagnostics after edits are on (0.4). */
   readonly lspEnabled: boolean;
   private readonly lspOptions: NonNullable<RuntimeOptions["lsp"]>;
@@ -177,6 +196,13 @@ export class Runtime {
     this.hookConfig = hookConfig;
     this.profiles = profiles;
     this.lspOptions = options.lsp ?? {};
+    if (options.undo !== undefined && settings.undo?.enabled !== false) {
+      this.snapshots = new SnapshotStore(
+        options.root,
+        choice.executor,
+        storeDir(options.root, options.undo.home),
+      );
+    }
     this.lspEnabled = options.lsp?.enabled ?? settings.lsp?.enabled === true;
     this.selectedMode = options.mode ?? "build";
     this.approver = options.approver;
@@ -394,7 +420,8 @@ export class Runtime {
     if (this.lspEnabled && this.profiles.some((p) => p.id === "maven" || p.id === "gradle")) {
       void this.lsp().then((m) => m.warm("java"));
     }
-    const notes = this.mcp?.takeNotes() ?? [];
+    await this.snapshot(session, prompt, signal);
+    const notes = [...this.pendingNotes.splice(0), ...(this.mcp?.takeNotes() ?? [])];
     if (this.turnMode === "plan") notes.unshift(PLAN_NOTE);
     addUserMessage(session, prompt, notes);
     return runAgent(session, {
@@ -597,6 +624,107 @@ export class Runtime {
       await this.mcp?.close();
       throw error;
     }
+  }
+
+  /** True when turns get snapshots (0.4). */
+  get undoEnabled(): boolean {
+    return this.snapshots !== undefined;
+  }
+
+  /** Snapshot the files before a turn. A failure turns undo off with a notice; the turn goes on. */
+  private async snapshot(session: Session, prompt: string, signal: AbortSignal): Promise<void> {
+    const store = this.snapshots;
+    if (store === undefined) return;
+    const started = Date.now();
+    try {
+      const tree = await store.take(signal);
+      const ms = Date.now() - started;
+      addSnapshot(session, tree, prompt, ms);
+      if (ms > SLOW_SNAPSHOT_MS) {
+        this.snapshots = undefined;
+        this.onNotice?.(
+          `The undo snapshot took ${(ms / 1000).toFixed(1)} s, so undo is off for this session. Add big folders to .gitignore, or set "undo": { "enabled": false } in .garuda/settings.json.`,
+        );
+      }
+    } catch (error) {
+      if (signal.aborted) throw error;
+      this.snapshots = undefined;
+      this.onNotice?.(`Undo is off for this session: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * /undo (0.4): show what the last turn changed, ask, then restore the files and take the turn out
+   * of the conversation. Returns the text for the user.
+   */
+  async undo(signal: AbortSignal): Promise<string> {
+    return this.undoRedo("undo", signal);
+  }
+
+  /** /redo (0.4): bring back the last undone turn: its files and its messages. */
+  async redo(signal: AbortSignal): Promise<string> {
+    return this.undoRedo("redo", signal);
+  }
+
+  private async undoRedo(kind: "undo" | "redo", signal: AbortSignal): Promise<string> {
+    try {
+      return kind === "undo" ? await this.undoNow(signal) : await this.redoNow(signal);
+    } catch (error) {
+      if (!(error instanceof SnapshotError)) throw error;
+      return `The ${kind} failed, and no file changed: ${error.message}`;
+    }
+  }
+
+  private async undoNow(signal: AbortSignal): Promise<string> {
+    const store = this.snapshots;
+    if (store === undefined) return "Undo is off for this session.";
+    const session = this.current;
+    const point = session?.undo.points.at(-1);
+    if (session === undefined || point === undefined) return "There is no turn to undo.";
+    const now = await store.take(signal);
+    const changes = await store.changes(now, point.tree, signal);
+    const choice = await this.approver.ask(
+      undoQuestion("undo", point.prompt, changes, point.conversation, this.executor.isolation),
+      signal,
+    );
+    if (choice === "deny") return "Nothing changed.";
+    await store.restore(now, point.tree, signal);
+    undoTurn(session, now);
+    if (!point.conversation) {
+      this.pendingNotes.push(
+        `The user undid the turn "${point.prompt}": its file changes are gone. Read files again before you edit them.`,
+      );
+    }
+    return `Undid "${point.prompt}": ${filesText(changes)}${point.conversation ? "; the conversation went back too" : ""}. /redo brings it back.`;
+  }
+
+  private async redoNow(signal: AbortSignal): Promise<string> {
+    const store = this.snapshots;
+    if (store === undefined) return "Undo is off for this session.";
+    const session = this.current;
+    const entry = session?.undo.redo.at(-1);
+    if (session === undefined || entry === undefined) return "There is nothing to redo.";
+    const now = await store.take(signal);
+    const changes = await store.changes(now, entry.after, signal);
+    const choice = await this.approver.ask(
+      undoQuestion(
+        "redo",
+        entry.point.prompt,
+        changes,
+        entry.removed.length > 0,
+        this.executor.isolation,
+      ),
+      signal,
+    );
+    if (choice === "deny") return "Nothing changed.";
+    await store.restore(now, entry.after, signal);
+    redoTurn(session);
+    if (entry.removed.length === 0) {
+      this.pendingNotes.push(
+        `The user redid the turn "${entry.point.prompt}": its file changes are back. Read files again before you edit them.`,
+      );
+    }
+    return `Redid "${entry.point.prompt}": ${filesText(changes)}.`;
   }
 
   /** Record a turn that ended with no result: Ctrl-C ("interrupted") or an error. */

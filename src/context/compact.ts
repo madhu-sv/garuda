@@ -7,6 +7,7 @@ import type {
 } from "../model/types.js";
 import type { Session } from "../session/session.js";
 import { addCost } from "../session/session.js";
+import { compacted } from "../session/undo.js";
 
 /**
  * Compaction (F23). When the context passes `threshold` of the window, compaction runs in two stages:
@@ -113,6 +114,7 @@ function apply(
   extra: { summary?: ModelResponse; costUsd?: number | undefined } = {},
 ): CompactionResult {
   session.messages = messages;
+  compacted(session.undo);
   session.files.forgetReads();
   session.contextTokens = result.afterTokens;
   session.journal?.write({

@@ -115,6 +115,7 @@ contain `-`.
   "subagents": { "enabled": true, "maxSteps": 20, "tokenBudget": 150000 },
   "todo": { "enabled": true },
   "lsp": { "enabled": true },
+  "undo": { "enabled": false },
   "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
   "model": { "contextWindow": 200000, "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 } }
 }

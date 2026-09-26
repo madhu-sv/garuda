@@ -22,6 +22,7 @@ imports the CLI.
 | `mode` | `build` (default) or `plan` for the first turn (0.4; `--plan`). |
 | `commands` | `false`, or `{ home }` for custom slash commands (0.4). |
 | `subagentModel` | `{ spec, model, info }` for the explore subagent; default: the main model (see [agents.md](agents.md)). |
+| `undo` | `{ home? }` (0.4): snapshots before each turn in `~/.garuda/snapshots`. Absent: no snapshots. The CLI passes it; `undo.enabled: false` in settings wins. See [undo.md](undo.md). |
 | `lsp` | `{ enabled?, home?, path?, firstTimeoutMs?, timeoutMs? }` (0.4). `enabled` overrides `lsp.enabled` from settings (`--lsp`, evals); `home` holds `~/.garuda/lsp.json` and the managed servers; `path` is the PATH to search. See [lsp.md](lsp.md). |
 
 ### `Runtime.create`
@@ -45,7 +46,8 @@ imports the CLI.
 1. `startHooks` (once): user hooks; project hooks after consent (hash in `trust.json`).
 2. `startMcp` (once): load the MCP manager with `import()`, start servers, register their tools.
    A Ctrl-C during the start clears the state, so the next turn tries again.
-3. `ensureSession()`: a new session with a `start` record, or the current one.
+3. `ensureSession()`: a new session with a `start` record, or the current one. With undo on, a snapshot
+   of the files and a `snapshot` record (a failure turns undo off with a notice).
 4. `addUserMessage(session, prompt, notes)`: in plan mode the first note is `PLAN_NOTE` (what plan mode
    allows, and to end with a numbered plan), then the MCP notes. The system prompt is the same in both
    modes, so the prompt cache stays valid (N2).

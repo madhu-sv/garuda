@@ -3,6 +3,15 @@ import { addUsage, type Message, ZERO_USAGE } from "../model/types.js";
 import type { SessionRecord, StartRecord } from "./records.js";
 import { closeOpenToolCalls, createSession, type Session } from "./session.js";
 import type { SessionStore } from "./store.js";
+import {
+  compacted,
+  emptyUndoState,
+  newUserMessage,
+  popPoint,
+  pushPoint,
+  redoPoint,
+  type UndoState,
+} from "./undo.js";
 
 export interface RebuiltState {
   messages: Message[];
@@ -11,6 +20,8 @@ export interface RebuiltState {
   contextTokens: number;
   /** The last start or resume record: model, root and limits in use. */
   start: StartRecord | undefined;
+  /** Undo points and redo entries (0.4). */
+  undo: UndoState;
 }
 
 /** Rebuild the conversation and the totals from session records (F25). */
@@ -21,6 +32,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
     costUsd: 0,
     contextTokens: 0,
     start: undefined,
+    undo: emptyUndoState(),
   };
   const addCost = (cost: number | undefined) => {
     state.costUsd =
@@ -35,6 +47,16 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         break;
       case "user":
         state.messages.push(record.message);
+        newUserMessage(state.undo);
+        break;
+      case "snapshot":
+        pushPoint(state.undo, record.tree, record.messages, record.prompt);
+        break;
+      case "undo":
+        popPoint(state.undo, state.messages, record.after);
+        break;
+      case "redo":
+        redoPoint(state.undo, state.messages);
         break;
       case "tool_results":
         state.messages.push(record.message);
@@ -55,6 +77,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         break;
       case "compaction":
         state.messages = structuredClone(record.messages);
+        compacted(state.undo);
         state.contextTokens = record.afterTokens;
         if (record.summary !== undefined) {
           state.usage = addUsage(state.usage, record.summary.usage);
@@ -96,6 +119,7 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
   session.usage = state.usage;
   session.costUsd = state.costUsd;
   session.contextTokens = state.contextTokens;
+  session.undo = state.undo;
   journal.write({ type: "resume", sessionId: id, ...options.start });
   closeOpenToolCalls(session);
   return session;

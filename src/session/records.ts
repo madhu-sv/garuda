@@ -82,6 +82,26 @@ export interface CompactionRecord extends Base {
   costUsd?: number;
 }
 
+/** Before a turn (0.4): the snapshot of the files, and the message count before the turn. */
+export interface SnapshotRecord extends Base {
+  type: "snapshot";
+  tree: string;
+  messages: number;
+  prompt: string;
+  durationMs: number;
+}
+
+/** /undo (0.4): the last turn went back; `after` is the snapshot of the files before the undo. */
+export interface UndoRecord extends Base {
+  type: "undo";
+  after: string;
+}
+
+/** /redo (0.4): the last undo went back. */
+export interface RedoRecord extends Base {
+  type: "redo";
+}
+
 export interface EndRecord extends Base {
   type: "end";
   stopReason: string;
@@ -94,6 +114,9 @@ export type SessionRecord =
   | AssistantRecord
   | ToolResultsRecord
   | CompactionRecord
+  | SnapshotRecord
+  | UndoRecord
+  | RedoRecord
   | EndRecord;
 
 /** A record before the journal adds the time. */

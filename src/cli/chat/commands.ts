@@ -30,6 +30,8 @@ export const HELP = [
   "  /commands  your custom commands (~/.garuda/commands, .garuda/commands)",
   "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles)",
   "  /build     build mode: change files and run commands (the default)",
+  "  /undo      take back the last turn: its file changes and its messages",
+  "  /redo      bring back the last undone turn",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -72,6 +74,9 @@ export async function runCommand(
     renderer.info(mcpSummary(runtime));
   } else if (command === "/lsp") {
     await lspCommand(runtime, renderer, text.slice(command.length).trim());
+  } else if (command === "/undo" || command === "/redo") {
+    const signal = new AbortController().signal;
+    renderer.info(await (command === "/undo" ? runtime.undo(signal) : runtime.redo(signal)));
   } else if (command === "/new") {
     runtime.newSession();
     renderer.info("The next task starts a new session.");

@@ -15,7 +15,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M5 CLI polish and evals | Done |
 | 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
 | 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
-| 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in) | In progress |
+| 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo | In progress |
 
 ## Use
 
@@ -84,7 +84,7 @@ Set the context window, price and output limit per model, and add providers, in 
 `garuda` with no task starts a chat. Each line is one task; the conversation carries over.
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
-  (your custom commands), `/plan` and `/build` (plan mode), `/lsp` (language servers), `/exit`.
+  (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers), `/exit`.
 - Ctrl-C during a task stops the task and kills its commands. The chat goes on.
   A second Ctrl-C during the task exits Garuda at once.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
@@ -135,6 +135,18 @@ In plan mode the agent reads the code and writes a plan; it cannot change anythi
   rule. With no OS sandbox, bash is off in plan mode.
 - When the plan is ready, Garuda asks "Build this plan?": build it now, switch to build mode and type the
   task yourself, or keep planning.
+
+## Undo
+
+Before each turn, Garuda takes a snapshot of the project. `/undo` takes back the last turn: its file
+changes (edits, new and deleted files, and files that commands changed) and its messages, so the model
+forgets it. `/redo` brings it back.
+
+- It asks first, with the list of files. Changes that you made after the turn go back too.
+- Snapshots are in `~/.garuda/snapshots`, in a git store of Garuda's own. Your repository, index and
+  branches do not change, and the project does not need git. `.gitignore` rules apply.
+- It works after `garuda --resume`. After the conversation was compacted, undo restores only the files.
+- Cost: about 15–90 ms per turn. `"undo": { "enabled": false }` in `.garuda/settings.json` turns it off.
 
 ## LSP diagnostics (opt-in)
 

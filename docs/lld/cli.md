@@ -70,7 +70,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /new /exit]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /new /exit]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
@@ -121,6 +121,8 @@ interface ChatState {
   question and choices. Keys: ↑↓ Enter, the numbers of the choices shown, y / a / n, Esc (`approvalKeys`
   writes the hint line). A key for a choice that is not shown does nothing. Abort of the turn rejects the
   promise.
+- **Undo (0.4):** `/undo` and `/redo` ask first (the turn, the files, the conversation), then restore. See
+  [undo.md](undo.md).
 - **LSP (0.4):** `--lsp` turns diagnostics on for the run; `/lsp` shows the state, and
   `/lsp install <language>` runs the managed install. See [lsp.md](lsp.md).
 - **Queue:** Enter while busy appends to `queue`; `nextInput()` takes from the queue first. Esc clears it.

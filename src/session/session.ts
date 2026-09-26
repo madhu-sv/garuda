@@ -10,6 +10,16 @@ import {
 import { FileTracker } from "./fileTracker.js";
 import type { ToolCallMeta } from "./records.js";
 import { type Journal, newSessionId } from "./store.js";
+import {
+  emptyUndoState,
+  newUserMessage,
+  popPoint,
+  pushPoint,
+  type RedoEntry,
+  redoPoint,
+  type UndoPoint,
+  type UndoState,
+} from "./undo.js";
 
 /**
  * Session state. Every change to the conversation goes through the functions below,
@@ -30,6 +40,8 @@ export interface Session {
   files: FileTracker;
   /** Where records go. Absent in tests that do not need a record. */
   journal?: Journal;
+  /** Turns that /undo can take back, and undos that /redo can bring back (0.4). */
+  undo: UndoState;
 }
 
 export function createSession(
@@ -45,6 +57,7 @@ export function createSession(
     costUsd: 0,
     contextTokens: 0,
     files: new FileTracker(),
+    undo: emptyUndoState(),
   };
   if (journal !== undefined) session.journal = journal;
   return session;
@@ -66,7 +79,35 @@ export function addUserMessage(session: Session, text: string, notes: string[] =
     ],
   };
   session.messages.push(message);
+  newUserMessage(session.undo);
   session.journal?.write({ type: "user", message });
+}
+
+/** Before a turn (0.4): record the snapshot of the files as an undo point. */
+export function addSnapshot(
+  session: Session,
+  tree: string,
+  prompt: string,
+  durationMs: number,
+): void {
+  const messages = session.messages.length;
+  pushPoint(session.undo, tree, messages, prompt);
+  const point = session.undo.points.at(-1) as UndoPoint;
+  session.journal?.write({ type: "snapshot", tree, messages, prompt: point.prompt, durationMs });
+}
+
+/** /undo (0.4): take the last turn out of the conversation. The caller restores the files. */
+export function undoTurn(session: Session, after: string): UndoPoint | undefined {
+  const point = popPoint(session.undo, session.messages, after);
+  if (point !== undefined) session.journal?.write({ type: "undo", after });
+  return point;
+}
+
+/** /redo (0.4): bring the last undone turn back. The caller restores the files. */
+export function redoTurn(session: Session): RedoEntry | undefined {
+  const entry = redoPoint(session.undo, session.messages);
+  if (entry !== undefined) session.journal?.write({ type: "redo" });
+  return entry;
 }
 
 export function addAssistantResponse(
