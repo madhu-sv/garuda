@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import { checkAddress, isIpLiteral, isLoopbackHost } from "../net/address.js";
 
 /**
  * MCP server configuration (0.2). Two files, same format:
@@ -21,8 +22,13 @@ import { z } from "zod";
  *   }
  * }
  *
- * Only stdio servers in 0.2. `${NAME}` in an env value takes NAME from Garuda's environment.
- * Garuda passes no other variables than its normal allowlist and these.
+ * `${NAME}` in an env value takes NAME from Garuda's environment. Garuda passes no other
+ * variables than its normal allowlist and these.
+ *
+ * Remote servers (0.4) use Streamable HTTP, with OAuth when the server asks for it:
+ *     "linear": { "url": "https://mcp.linear.app/mcp" }
+ * https only; http only for localhost in the user's own file. A project file may define them too
+ * (with consent, pinned to the URL), but Garuda connects only to public addresses for those.
  */
 
 export const MCP_FILE = join(".garuda", "mcp.json");
@@ -30,7 +36,7 @@ export const MCP_FILE = join(".garuda", "mcp.json");
 /** Server names become part of tool names: mcp__<server>__<tool>. */
 export const SERVER_NAME = /^[a-z0-9][a-z0-9_]{0,31}$/;
 
-const serverSchema = z.strictObject({
+const stdioSchema = z.strictObject({
   command: z.string().min(1),
   args: z.array(z.string()).default([]),
   env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string()).default({}),
@@ -43,11 +49,28 @@ const serverSchema = z.strictObject({
   enabled: z.boolean().default(true),
 });
 
+const httpSchema = z.strictObject({
+  type: z.literal("http").optional(),
+  url: z.string().min(1),
+  /** Time limit for one tool call. */
+  timeoutMs: z.number().int().min(1_000).max(600_000).default(60_000),
+  enabled: z.boolean().default(true),
+});
+
+const serverSchema = z.union([httpSchema, stdioSchema]);
+
 const fileSchema = z.strictObject({
   servers: z.record(z.string(), serverSchema).default({}),
 });
 
-export type ServerDef = z.infer<typeof serverSchema>;
+export type StdioDef = z.infer<typeof stdioSchema>;
+export type HttpDef = z.infer<typeof httpSchema>;
+export type ServerDef = StdioDef | HttpDef;
+
+/** True for a remote (Streamable HTTP) server. */
+export function isHttp(def: ServerDef): def is HttpDef {
+  return "url" in def;
+}
 export type ServerSource = "user" | "project";
 
 export interface ServerConfig {
@@ -100,6 +123,13 @@ export async function loadMcpConfig(
         );
         continue;
       }
+      if (isHttp(def)) {
+        const problem = checkServerUrl(def.url, source);
+        if (problem !== undefined) {
+          problems.push(`${file}: server "${name}": ${problem}`);
+          continue;
+        }
+      }
       out.push({ name, source, file, def });
     }
     return out;
@@ -118,8 +148,42 @@ export async function loadMcpConfig(
   return { servers: [...user, ...project.filter((s) => !userNames.has(s.name))], problems };
 }
 
+/**
+ * The rules for a remote server's URL: https (http only for localhost in the user's own file), no
+ * user:password, no fragment. A project server must use a host name or a public address; its
+ * addresses are checked again at each connection (src/net/pinnedFetch.ts).
+ */
+export function checkServerUrl(raw: string, source: ServerSource): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return `"${raw.slice(0, 200)}" is not a valid URL.`;
+  }
+  if (url.username !== "" || url.password !== "")
+    return "a URL with a user name or password is not allowed.";
+  if (url.hash !== "") return "a URL with a #fragment is not allowed.";
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  const loopback = isLoopbackHost(host);
+  if (url.protocol === "http:") {
+    if (!loopback || source === "project")
+      return "use https (http only for localhost, in your own ~/.garuda/mcp.json).";
+  } else if (url.protocol !== "https:") {
+    return `only https URLs are allowed, not ${url.protocol}`;
+  }
+  if (source === "project" && (loopback || (isIpLiteral(host) && !checkAddress(host, false).ok))) {
+    return "a project server must be on a public address.";
+  }
+  return undefined;
+}
+
 /** A stable hash of what the server will run and may do. Consent is pinned to it. */
 export function defHash(def: ServerDef): string {
+  if (isHttp(def)) {
+    return createHash("sha256")
+      .update(JSON.stringify({ type: "http", url: def.url }))
+      .digest("hex");
+  }
   const canonical = JSON.stringify({
     command: def.command,
     args: def.args,
@@ -148,7 +212,7 @@ export function expandEnv(
 }
 
 /** The full command line, quoted, for the consent prompt. Never cut. */
-export function commandLine(def: ServerDef): string {
+export function commandLine(def: StdioDef): string {
   const quote = (s: string) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`);
   return [def.command, ...def.args].map(quote).join(" ");
 }

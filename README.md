@@ -15,7 +15,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | M5 CLI polish and evals | Done |
 | 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
 | 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
-| 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo | In progress |
+| 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo, remote MCP with OAuth | In progress |
 
 ## Use
 
@@ -334,7 +334,8 @@ The banner shows what it found, for example `Java (Maven)`.
 
 ## MCP servers
 
-Garuda connects to local MCP servers over stdio (0.2). Remote HTTP servers come later.
+Garuda connects to local MCP servers over stdio (0.2) and to remote servers over Streamable HTTP,
+with OAuth sign-in (0.4).
 
 ```json
 {
@@ -354,6 +355,10 @@ Garuda connects to local MCP servers over stdio (0.2). Remote HTTP servers come 
   `timeoutMs` (default 60000), `enabled`. `${NAME}` in an env value comes from your environment,
   so secrets stay out of the file.
 - Servers start with the first task. `/mcp` shows their state.
+- A remote server needs only its URL: `"linear": { "url": "https://mcp.linear.app/mcp" }`. When it
+  asks for a sign-in, Garuda asks you, opens your browser, and keeps the tokens in
+  `~/.garuda/mcp-auth.json` (only you can read it). Tokens refresh by themselves;
+  `/mcp logout <server>` removes them.
 
 Security:
 
@@ -361,7 +366,10 @@ Security:
   shows the full command, the sandbox, the network setting, the env variables and warnings
   (npx, shell commands, secrets). "Remember" pins your answer to a hash of the definition in
   `~/.garuda/trust.json`; any change asks again. A project cannot replace one of your own servers.
-- Each server runs in the OS sandbox, like bash: it can write only in the project and temp folders,
+- A remote server is not in the sandbox: it runs on another computer and gets the arguments of its
+  tool calls. A project's remote server needs your consent (pinned to its URL), must use https and a
+  public address, and Garuda checks the address at each connection.
+- Each local server runs in the OS sandbox, like bash: it can write only in the project and temp folders,
   cannot read `~/.ssh` and other secrets, and has no network unless `"network": true`.
   It gets only the normal environment variables and the ones in its `env`.
 - Garuda remembers each server's tools (a hash per tool). When they change later (a "rug pull"),

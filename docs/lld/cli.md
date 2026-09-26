@@ -121,6 +121,8 @@ interface ChatState {
   question and choices. Keys: ↑↓ Enter, the numbers of the choices shown, y / a / n, Esc (`approvalKeys`
   writes the hint line). A key for a choice that is not shown does nothing. Abort of the turn rejects the
   promise.
+- **MCP (0.4):** `/mcp` shows each server (remote ones with their URL and sign-in state); `/mcp logout
+  <server>` removes a remote server's tokens. See [mcp.md](mcp.md).
 - **Undo (0.4):** `/undo` and `/redo` ask first (the turn, the files, the conversation), then restore. See
   [undo.md](undo.md).
 - **LSP (0.4):** `--lsp` turns diagnostics on for the run; `/lsp` shows the state, and

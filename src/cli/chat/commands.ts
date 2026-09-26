@@ -24,7 +24,7 @@ export const HELP = [
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /refs X    every use of symbol X (code index, no model call)",
   "  /map [dir] what each JS/TS file exports and imports",
-  "  /mcp       MCP servers: state, sandbox, network and tool count",
+  "  /mcp       MCP servers: state, sandbox, network and tool count; /mcp logout <server>",
   "  /hooks     the active hooks",
   "  /lsp       language servers for diagnostics; /lsp install <typescript|python|java>",
   "  /commands  your custom commands (~/.garuda/commands, .garuda/commands)",
@@ -71,7 +71,19 @@ export async function runCommand(
         : lines.join("\n"),
     );
   } else if (command === "/mcp") {
-    renderer.info(mcpSummary(runtime));
+    const [verb, name] = text.slice(command.length).trim().split(/\s+/);
+    if (verb === "logout" && name !== undefined && name !== "") {
+      const removed = await runtime.mcpLogout(name);
+      renderer.info(
+        removed > 0
+          ? `Signed out of MCP server "${name}": its tokens are gone. The next session asks you to sign in again.`
+          : `There are no tokens for MCP server "${name}".`,
+      );
+    } else if (verb !== undefined && verb !== "") {
+      renderer.warn("Use: /mcp, or /mcp logout <server>.");
+    } else {
+      renderer.info(mcpSummary(runtime));
+    }
   } else if (command === "/lsp") {
     await lspCommand(runtime, renderer, text.slice(command.length).trim());
   } else if (command === "/undo" || command === "/redo") {
@@ -182,9 +194,13 @@ function mcpSummary(runtime: Runtime): string {
   }
   return servers
     .map((s) => {
+      const note = s.message === undefined ? "" : ` (${s.message})`;
+      if (s.transport === "http") {
+        const auth = s.signedIn ? "signed in" : "no sign-in";
+        return `${s.name} [${s.source}] ${s.state}${note} · ${s.tools} tool(s) · remote ${s.url ?? ""} · ${auth}`;
+      }
       const box = s.sandboxed ? "sandbox" : "NO sandbox";
       const net = s.network ? "network" : "no network";
-      const note = s.message === undefined ? "" : ` (${s.message})`;
       return `${s.name} [${s.source}] ${s.state}${note} · ${s.tools} tool(s) · ${box} · ${net}`;
     })
     .join("\n");

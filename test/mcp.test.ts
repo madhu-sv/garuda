@@ -17,7 +17,7 @@ import {
   expandEnv,
   loadMcpConfig,
   type ServerConfig,
-  type ServerDef,
+  type StdioDef,
 } from "../src/mcp/config.js";
 import { McpManager, warnings } from "../src/mcp/manager.js";
 import { capText, cleanText } from "../src/mcp/sanitize.js";
@@ -45,7 +45,7 @@ const dirs = () => {
   return { home, root };
 };
 
-const def = (over: Partial<ServerDef> = {}): ServerDef => ({
+const def = (over: Partial<StdioDef> = {}): StdioDef => ({
   command: process.execPath,
   args: [FIXTURE],
   env: {},
@@ -55,7 +55,11 @@ const def = (over: Partial<ServerDef> = {}): ServerDef => ({
   enabled: true,
   ...over,
 });
-const server = (name: string, source: "user" | "project", d: ServerDef = def()): ServerConfig => ({
+const server = (
+  name: string,
+  source: "user" | "project",
+  d: StdioDef = def(),
+): ServerConfig & { def: StdioDef } => ({
   name,
   source,
   file: `${source}/mcp.json`,
@@ -116,19 +120,18 @@ describe("MCP config", () => {
       }),
     );
     const { servers, problems } = await loadMcpConfig({ home, root });
-    expect(servers.map((s) => `${s.name}:${s.source}:${s.def.command}`)).toEqual([
-      "gh:user:gh-mcp",
-      "db:project:db-mcp",
-    ]);
+    expect(
+      servers.map((s) => `${s.name}:${s.source}:${"command" in s.def ? s.def.command : s.def.url}`),
+    ).toEqual(["gh:user:gh-mcp", "db:project:db-mcp"]);
     expect(problems.join("\n")).toMatch(/"Bad-Name" is not valid/);
     expect(problems.join("\n")).toMatch(/server "gh" is ignored/);
   });
 
-  it("rejects unknown keys (for example a url: HTTP comes later)", async () => {
+  it("rejects unknown keys (for example a url together with a command)", async () => {
     const { home, root } = dirs();
     writeFileSync(
       join(root, ".garuda", "mcp.json"),
-      JSON.stringify({ servers: { a: { url: "https://x" } } }),
+      JSON.stringify({ servers: { a: { url: "https://x.example", command: "x" } } }),
     );
     const { servers, problems } = await loadMcpConfig({ home, root });
     expect(servers).toEqual([]);

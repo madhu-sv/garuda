@@ -1,11 +1,22 @@
 import { type CallToolResult, Client, type Tool as McpTool } from "@modelcontextprotocol/client";
+import { pinnedFetch } from "../net/pinnedFetch.js";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
 import { type SandboxSettings, sandboxPaths } from "../permissions/sandboxPaths.js";
 import type { ApprovalRequest, Approver } from "../permissions/types.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import type { AnyTool } from "../tools/types.js";
 import { VERSION } from "../version.js";
-import { commandLine, defHash, expandEnv, type ServerConfig } from "./config.js";
+import {
+  commandLine,
+  defHash,
+  expandEnv,
+  type HttpDef,
+  isHttp,
+  type ServerConfig,
+  type StdioDef,
+} from "./config.js";
+import { connectHttp } from "./http.js";
+import { type AuthStore, authKey } from "./oauth.js";
 import { cleanText } from "./sanitize.js";
 import { perToolHashes, type ToolChanges, toGarudaTools, toolChanges, toolsHash } from "./tools.js";
 import { ProcessTransport } from "./transport.js";
@@ -23,6 +34,11 @@ export interface McpServerStatus {
   tools: number;
   sandboxed: boolean;
   network: boolean;
+  /** stdio: a local program in the sandbox; http: a remote server (0.4). */
+  transport: "stdio" | "http";
+  /** http: the server's URL, and whether Garuda holds tokens for it. */
+  url?: string;
+  signedIn?: boolean;
   message?: string;
 }
 
@@ -35,12 +51,16 @@ export interface McpManagerOptions {
   env?: NodeJS.ProcessEnv;
   /** Warnings for the user (missing env vars, changed tools, failed servers). */
   notify?: (text: string) => void;
+  /** OAuth tokens of remote servers (0.4). Default: ~/.garuda/mcp-auth.json, opened on first use. */
+  auth?: AuthStore;
+  /** For tests: open the sign-in page. Default: the system browser. */
+  openBrowser?: (url: URL) => Promise<void>;
 }
 
 interface Connection {
   config: ServerConfig;
   client: Client;
-  transport: ProcessTransport;
+  transport: { onclose?: (() => void) | undefined };
 }
 
 /**
@@ -128,35 +148,9 @@ export class McpManager {
       if (remember) await this.options.trust.set(scope, name, { def: hash });
     }
 
-    const { env, missing } = expandEnv(def.env, this.options.env);
-    if (missing.length > 0) {
-      this.notify(
-        `MCP server "${name}": ${missing.map((m) => `$${m}`).join(", ")} is not set, so it gets an empty value.`,
-      );
-    }
-    const process = this.options.executor.start(
-      [def.command, ...def.args],
-      this.policy(config),
-      env,
-    );
-    const transport = new ProcessTransport(process);
-    const client = new Client(
-      { name: "garuda", version: VERSION },
-      // No capabilities: no sampling, no roots, no elicitation.
-      { capabilities: {}, versionNegotiation: { mode: "auto" } },
-    );
-    const timeout = AbortSignal.any([signal, AbortSignal.timeout(CONNECT_TIMEOUT_MS)]);
-    let serverTools: McpTool[];
-    try {
-      await withSignal(client.connect(transport), timeout);
-      serverTools = await withSignal(listAllTools(client), timeout);
-    } catch (error) {
-      await client.close().catch(() => {});
-      const stderr = transport.lastStderr().slice(-3).join(" | ");
-      const why =
-        timeout.aborted && !signal.aborted ? "no answer in 30 s" : (error as Error).message;
-      throw new Error(stderr === "" ? why : `${why} (server said: ${stderr})`);
-    }
+    const { client, transport, serverTools } = isHttp(def)
+      ? await this.connectRemote({ ...config, def }, scope, signal)
+      : await this.connectLocal({ ...config, def }, signal);
 
     const toolHash = toolsHash(serverTools);
     if (trusted.tools !== undefined && trusted.tools !== toolHash) {
@@ -188,6 +182,7 @@ export class McpManager {
     }
 
     const { tools, problems } = toGarudaTools(name, serverTools, this);
+
     for (const problem of problems) this.notify(`MCP server "${name}": ${problem}.`);
     this.connections.set(name, { config, client, transport });
     transport.onclose = () => {
@@ -200,7 +195,90 @@ export class McpManager {
     return tools;
   }
 
-  private policy(config: ServerConfig): ExecPolicy {
+  /** A local server: the program in the OS sandbox, over stdio. */
+  private async connectLocal(
+    config: ServerConfig & { def: StdioDef },
+    signal: AbortSignal,
+  ): Promise<{ client: Client; transport: ProcessTransport; serverTools: McpTool[] }> {
+    const { def, name } = config;
+    const { env, missing } = expandEnv(def.env, this.options.env);
+    if (missing.length > 0) {
+      this.notify(
+        `MCP server "${name}": ${missing.map((m) => `$${m}`).join(", ")} is not set, so it gets an empty value.`,
+      );
+    }
+    const process = this.options.executor.start(
+      [def.command, ...def.args],
+      this.policy(config),
+      env,
+    );
+    const transport = new ProcessTransport(process);
+    const client = new Client(
+      { name: "garuda", version: VERSION },
+      // No capabilities: no sampling, no roots, no elicitation.
+      { capabilities: {}, versionNegotiation: { mode: "auto" } },
+    );
+    const timeout = AbortSignal.any([signal, AbortSignal.timeout(CONNECT_TIMEOUT_MS)]);
+    try {
+      await withSignal(client.connect(transport), timeout);
+      return { client, transport, serverTools: await withSignal(listAllTools(client), timeout) };
+    } catch (error) {
+      await client.close().catch(() => {});
+      const stderr = transport.lastStderr().slice(-3).join(" | ");
+      const why =
+        timeout.aborted && !signal.aborted ? "no answer in 30 s" : (error as Error).message;
+      throw new Error(stderr === "" ? why : `${why} (server said: ${stderr})`);
+    }
+  }
+
+  /** A remote server over Streamable HTTP, with OAuth when it asks (0.4). */
+  private async connectRemote(
+    config: ServerConfig & { def: HttpDef },
+    scope: string,
+    signal: AbortSignal,
+  ) {
+    const auth = await this.authStore();
+    const { client, transport } = await connectHttp(
+      config,
+      {
+        scope,
+        auth,
+        approver: this.options.approver,
+        executor: this.options.executor,
+        notify: (t) => this.notify(t),
+        connectTimeoutMs: CONNECT_TIMEOUT_MS,
+        // A project's server: only public addresses, checked at each request.
+        ...(config.source === "project" ? { fetch: pinnedFetch() } : {}),
+        ...(this.options.openBrowser === undefined
+          ? {}
+          : { openBrowser: this.options.openBrowser }),
+      },
+      signal,
+    );
+    const timeout = AbortSignal.any([signal, AbortSignal.timeout(CONNECT_TIMEOUT_MS)]);
+    try {
+      return { client, transport, serverTools: await withSignal(listAllTools(client), timeout) };
+    } catch (error) {
+      await client.close().catch(() => {});
+      throw error;
+    }
+  }
+
+  private auth: AuthStore | undefined;
+
+  private async authStore(): Promise<AuthStore> {
+    if (this.options.auth !== undefined) return this.options.auth;
+    const { AuthStore } = await import("./oauth.js");
+    this.auth ??= await AuthStore.open();
+    return this.auth;
+  }
+
+  /** /mcp logout: forget the tokens and the client registration of a remote server. */
+  async logout(server: string): Promise<number> {
+    return (await this.authStore()).remove(server);
+  }
+
+  private policy(config: ServerConfig & { def: StdioDef }): ExecPolicy {
     const { root, sandbox = {} } = this.options;
     const paths = sandboxPaths(root, {
       ...sandbox,
@@ -220,6 +298,32 @@ export class McpManager {
   private consentRequest(config: ServerConfig, previous: string | undefined): ApprovalRequest {
     const { def, name, file } = config;
     const isolation = this.options.executor.isolation;
+    const labels = {
+      once: "Yes, for this session only",
+      session: "Yes, and remember (asks again if the config changes)",
+      deny: previous === undefined && isHttp(def) ? "No, do not connect" : "No, do not start it",
+    };
+    if (isHttp(def)) {
+      const lines = [
+        previous === undefined
+          ? `This project wants to connect to MCP server "${name}" (from ${file}).`
+          : `MCP server "${name}" in ${file} changed since you allowed it.`,
+        "It is a remote server:",
+        `  URL: ${cleanText(def.url)}`,
+        "  Garuda connects from its own process (not the sandbox), only to public addresses.",
+        "  ! The server gets the arguments of every call to its tools: that data leaves this machine.",
+        "  ! It may ask you to sign in; then it acts with your account.",
+        "Allow it only if you trust this project and this server.",
+      ];
+      return {
+        tool: "mcp",
+        target: { kind: "input", json: JSON.stringify({ server: name }) },
+        preview: lines.join("\n"),
+        isolation,
+        title: `Connect to MCP server "${name}"?`,
+        labels,
+      };
+    }
     const envNames = Object.entries(def.env).map(([k, v]) => {
       const refs = [...v.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)].map((m) => `$${m[1]}`);
       return refs.length > 0 ? `${k} (from ${refs.join(", ")})` : `${k} (a fixed value)`;
@@ -236,7 +340,7 @@ export class McpManager {
       `  Network: ${def.network ? "YES" : "no"}`,
       ...(def.writePaths.length > 0 ? [`  Extra write paths: ${def.writePaths.join(", ")}`] : []),
       `  Environment: ${envNames.length > 0 ? envNames.join(", ") : "only the normal variables"}`,
-      ...warnings(config, isolation === "none").map((w) => `  ! ${w}`),
+      ...warnings({ ...config, def }, isolation === "none").map((w) => `  ! ${w}`),
       "Allow it only if you trust this project.",
     ];
     return {
@@ -245,11 +349,7 @@ export class McpManager {
       preview: lines.join("\n"),
       isolation,
       title: `Start MCP server "${name}"?`,
-      labels: {
-        once: "Yes, for this session only",
-        session: "Yes, and remember (asks again if the config changes)",
-        deny: "No, do not start it",
-      },
+      labels,
     };
   }
 
@@ -305,13 +405,26 @@ export class McpManager {
   }
 
   private setStatus(config: ServerConfig, state: McpState, tools: number, message?: string): void {
+    const { def } = config;
+    const remote = isHttp(def);
+    const scope = config.source === "user" ? USER_SCOPE : this.options.root;
     this.statuses.set(config.name, {
       name: config.name,
       source: config.source,
       state,
       tools,
-      sandboxed: this.options.executor.isolation !== "none",
-      network: config.def.network,
+      sandboxed: !remote && this.options.executor.isolation !== "none",
+      network: remote || def.network,
+      transport: remote ? "http" : "stdio",
+      ...(remote
+        ? {
+            url: def.url,
+            signedIn:
+              (this.options.auth ?? this.auth)?.hasTokens(
+                authKey(scope, config.name, new URL(def.url).toString()),
+              ) ?? false,
+          }
+        : {}),
       ...(message === undefined ? {} : { message }),
     });
   }
@@ -361,7 +474,7 @@ function changeSummary(changes: ToolChanges): string {
 }
 
 /** Patterns in a server command that deserve a warning in the consent prompt. */
-export function warnings(config: ServerConfig, noSandbox: boolean): string[] {
+export function warnings(config: ServerConfig & { def: StdioDef }, noSandbox: boolean): string[] {
   const { def } = config;
   const line = commandLine(def);
   const out: string[] = [];

@@ -98,7 +98,9 @@ export interface RuntimeOptions {
    * MCP servers (0.2). Default: read ~/.garuda/mcp.json and <root>/.garuda/mcp.json.
    * false: no MCP servers (the evals use this, so results do not depend on the user's setup).
    */
-  mcp?: false | { home?: string; env?: NodeJS.ProcessEnv };
+  mcp?:
+    | false
+    | { home?: string; env?: NodeJS.ProcessEnv; openBrowser?: (url: URL) => Promise<void> };
   /** Hooks (0.2). Default: read ~/.garuda/hooks.json and <root>/.garuda/hooks.json. false: none. */
   hooks?: false | { home?: string };
   /** The mode of the first turn (0.4). Default: build. */
@@ -158,7 +160,9 @@ export class Runtime {
   private readonly approver: Approver;
   private readonly settings: Settings;
   private readonly mcpServers: ServerConfig[];
-  private readonly mcpOptions: { home?: string; env?: NodeJS.ProcessEnv };
+  private readonly mcpOptions:
+    | Exclude<RuntimeOptions["mcp"], false | undefined>
+    | Record<string, never>;
   private readonly onNotice: ((text: string) => void) | undefined;
   private mcp: McpManager | undefined;
   private mcpStarted: Promise<void> | undefined;
@@ -515,6 +519,14 @@ export class Runtime {
     return this.mcp?.status() ?? [];
   }
 
+  /** /mcp logout (0.4): forget the OAuth tokens of a remote server. Returns how many entries went. */
+  async mcpLogout(server: string): Promise<number> {
+    if (this.mcp !== undefined) return this.mcp.logout(server);
+    const { AuthStore } = await import("../mcp/oauth.js");
+    const store = await AuthStore.open(this.mcpOptions.home ?? homedir());
+    return store.remove(server);
+  }
+
   /** Stop the MCP and language servers. The CLI calls it before it exits. */
   async close(): Promise<void> {
     await Promise.all([this.mcp?.close(), this.lspManager?.close()]);
@@ -604,11 +616,16 @@ export class Runtime {
     this.mcpStarted ??= (async () => {
       // The MCP SDK loads only when a server is configured (N3).
       const { McpManager } = await import("../mcp/manager.js");
+      const { AuthStore } = await import("../mcp/oauth.js");
       const manager = new McpManager({
         root: this.root,
         executor: this.executor,
         approver: this.approver,
         trust: await TrustStore.open(this.mcpOptions.home ?? homedir()),
+        auth: await AuthStore.open(this.mcpOptions.home ?? homedir()),
+        ...(this.mcpOptions.openBrowser === undefined
+          ? {}
+          : { openBrowser: this.mcpOptions.openBrowser }),
         ...(this.settings.sandbox === undefined ? {} : { sandbox: this.settings.sandbox }),
         ...(this.mcpOptions.env === undefined ? {} : { env: this.mcpOptions.env }),
         ...(this.onNotice === undefined ? {} : { notify: this.onNotice }),

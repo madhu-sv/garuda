@@ -104,7 +104,7 @@ flowchart TB
 | Undo | `src/undo/` | Snapshots of the project before each turn in a git store of Garuda's own; `/undo` and `/redo`. |
 | LSP | `src/lsp/` | Language servers in the sandbox: find, install, start; errors of a changed file after an edit. |
 | Knowledge | `src/knowledge/` | Local code index: symbols, references, a code graph. No model call. |
-| MCP | `src/mcp/` | Start MCP servers in the sandbox, consent and pinning, tool adapters, text cleaning. |
+| MCP | `src/mcp/` | Start local MCP servers in the sandbox, connect to remote ones (Streamable HTTP, OAuth), consent and pinning, tool adapters, text cleaning. |
 | Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown. |
 | Net | `src/net/` | Address checks (public, loopback) shared by web fetch and model providers. |
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
@@ -171,6 +171,8 @@ flowchart LR
 | Project commands → model | A cloned repo's slash command hides instructions in its text, or links to a secret file. | First run shows the full text and asks (hash-pinned); symlinks refused; escape codes, invisible characters and Garuda's markers removed; a user command with the same name wins. |
 | Project → language servers | A cloned repo plants a "server" in `node_modules/.bin`, or a server runs project code (a Python venv, Maven plugins during a jdtls import). | Servers only from `~/.garuda/lsp` or absolute PATH entries outside the root; they run only in the OS sandbox with the project read-only and no network; installs only on the user's command or a yes (`autoInstall` is in `~/.garuda` only); server text is cleaned. |
 | Subagent → main agent | File text that the child read and repeats in its answer. | The child has only read-only tools through the same permission engine and hooks; its answer is a tool result (data); its reads do not allow edits in the main agent. |
+| Project config → remote MCP server | A cloned repo points Garuda at a server that collects data, or at an internal address (SSRF). | Consent that shows the URL, pinned to it; https only; public addresses only, checked at each connection with the connection pinned to the checked address; no redirects. |
+| Remote MCP sign-in | Token theft, a forged callback, a malicious sign-in page. | PKCE (SDK); `state` checked on the callback; only https sign-in pages; tokens only in `~/.garuda/mcp-auth.json` (0600), never in session files; the callback server listens on 127.0.0.1 only, for one answer. |
 | MCP server / web page → model | Hidden instructions, terminal escape codes, fake markers. | Clean text, cap its size, wrap it in `<mcp_result>` / `<web_result>`, neutralize Garuda's own markers, mark it as untrusted in the prompt. |
 | web_fetch → network | Server-side request forgery; data leaks through URLs. | Only public addresses, checked on the resolved IP and pinned; each redirect hop checked; new hosts ask; unusual URLs always ask. |
 | Garuda → disk | Secrets in session logs. | Redactor on every journal line; files 0600. |
@@ -193,6 +195,7 @@ All state is in files. There is no server and no database.
 | `~/.garuda/mcp.json`, `hooks.json` | User | Trusted MCP servers and hooks. |
 | `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers, hooks and slash commands; tool-list hashes. 0600. |
 | `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. |
+| `~/.garuda/mcp-auth.json` | Garuda | OAuth clients and tokens of remote MCP servers. 0600. |
 | `~/.garuda/snapshots/<hash of root>/` | Garuda | Undo snapshots: a git folder per project (0700). |
 | `~/.garuda/lsp.json`, `~/.garuda/lsp/<language>/` | User, Garuda | `autoInstall`; the managed language servers (npm, pinned versions). |
 
@@ -208,7 +211,7 @@ All state is in files. There is no server and no database.
 | Sandbox scope | Writes only; reads everywhere except secrets; no network | Toolchains keep working; data cannot leave. |
 | Approvals in the sandbox | Commands in the sandbox need no approval | The sandbox is the control; approvals stay for escapes and writes. |
 | Code index | Off for the model by default | An A/B test with 3 runs per task showed no gain in steps or cost. The index stays for the user (`/where`, `/refs`, `/map`). |
-| MCP | stdio only, in the sandbox, consent for project servers | HTTP with OAuth is a large surface; it comes as its own step. |
+| MCP | stdio in the sandbox (0.2); Streamable HTTP with OAuth (0.4, SDK flow, tokens in `~/.garuda/mcp-auth.json`); consent for project servers | Local servers are contained by the sandbox. A remote server cannot be: consent pinned to its URL, public addresses only for project servers, and every call still asks. |
 | Hooks | Block only; fail closed | A hook must never approve or let a call through by accident. |
 | Chat UI | Ink, loaded only for a chat on a terminal | Rich UI without slowing `-p`, pipes and evals. |
 | Sessions | JSONL files behind `SessionStore` | Simple, readable, append-only; replaceable later. |
