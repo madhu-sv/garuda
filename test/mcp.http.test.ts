@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   checkServerUrl,
   defHash,
@@ -153,7 +153,11 @@ describe("remote MCP servers over Streamable HTTP (0.4)", () => {
     const approver = new Recorder(["once"]);
     const notices: string[] = [];
     const manager = await managerFor({ approver, home, notices });
+    const warn = vi.spyOn(console, "warn");
     const tools = await manager.start([remote("secure", fixture.url)], signal());
+    // The SDK warns when a provider cannot keep the discovery state (SEP-2352); Garuda keeps it.
+    expect(warn.mock.calls.flat().join(" ")).not.toMatch(/SEP-2352|discoveryState/);
+    warn.mockRestore();
     expect(tools.map((t) => t.name)).toEqual(["mcp__secure__echo"]);
     expect(approver.requests[0]).toMatchObject({
       title: 'Sign in to "secure"?',
@@ -168,6 +172,10 @@ describe("remote MCP servers over Streamable HTTP (0.4)", () => {
     expect(fixture.log.find((l) => l.startsWith("register"))).toMatch(/127\.0\.0\.1:\d+\/callback/);
     expect(manager.status()[0]).toMatchObject({ signedIn: true, state: "connected" });
     const file = join(home, ".garuda", "mcp-auth.json");
+    const saved = (await AuthStore.open(home)).get(authKey("~", "secure", fixture.url));
+    expect(saved.discovery).toMatchObject({
+      authorizationServerUrl: expect.stringContaining("127.0.0.1"),
+    });
     expect(statSync(file).mode & 0o777).toBe(0o600);
     await manager.close();
 

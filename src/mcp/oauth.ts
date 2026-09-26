@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import type {
   OAuthClientMetadata,
   OAuthClientProvider,
+  OAuthDiscoveryState,
   StoredOAuthClientInformation,
   StoredOAuthTokens,
 } from "@modelcontextprotocol/client";
@@ -30,6 +31,8 @@ const entrySchema = z.object({
   client: z.record(z.string(), z.unknown()).optional(),
   tokens: z.record(z.string(), z.unknown()).optional(),
   port: z.number().int().min(1).max(65_535).optional(),
+  /** Where the sign-in happens (authorization server), from discovery (SDK: SEP-2352). */
+  discovery: z.record(z.string(), z.unknown()).optional(),
 });
 const fileSchema = z.object({
   version: z.literal(1),
@@ -152,6 +155,19 @@ export class GarudaOAuthProvider implements OAuthClientProvider {
     this.verifier = verifier;
   }
 
+  /**
+   * The discovery result, kept with the other sign-in data. The SDK checks at the callback that the
+   * authorization server is still the one that it sent the user to (SEP-2352): a code and its PKCE
+   * verifier must never go to another server's token endpoint.
+   */
+  async saveDiscoveryState(state: OAuthDiscoveryState): Promise<void> {
+    await this.store.update(this.key, { discovery: state });
+  }
+
+  discoveryState(): OAuthDiscoveryState | undefined {
+    return this.store.get(this.key).discovery as OAuthDiscoveryState | undefined;
+  }
+
   codeVerifier(): string {
     if (this.verifier === undefined)
       throw new Error("No PKCE code verifier: start the sign-in again.");
@@ -162,6 +178,9 @@ export class GarudaOAuthProvider implements OAuthClientProvider {
     scope: "all" | "client" | "tokens" | "verifier" | "discovery",
   ): Promise<void> {
     if (scope === "verifier" || scope === "all") this.verifier = undefined;
+    if (scope === "discovery" || scope === "all") {
+      await this.store.update(this.key, { discovery: undefined });
+    }
     if (scope === "tokens" || scope === "all")
       await this.store.update(this.key, { tokens: undefined });
     if (scope === "client" || scope === "all")

@@ -95,7 +95,8 @@ dynamic client registration, authorization code with PKCE (S256), token refresh.
 | Question | On a 401, "Sign in to "x"?": the server URL, the sign-in page's origin, the callback; yes or skip. A skipped sign-in leaves the server `failed` ("it needs a sign-in, and you skipped it"). |
 | Browser | `open` / `xdg-open` through the Executor, outside the sandbox. Only an https page (http only on localhost). A notice also prints the URL. |
 | Callback | A one-shot server on 127.0.0.1: it checks `state` (the SDK does not); a request with another state gets 400 and is ignored; an `error` shows only its short code (the description is server text). 5 minutes; Ctrl-C stops it. Then `transport.finishAuth(params)` and a new connection. |
-| Tokens | `~/.garuda/mcp-auth.json` (0600, atomic writes, 0700 folder), per `scope::name::url`: client, tokens, port. Never in session files. The SDK refreshes expired tokens with no question. |
+| Discovery | The discovery result (which authorization server) is kept with the entry. At the callback the SDK checks that the server is still the one it sent the user to (SEP-2352), so a code and its PKCE verifier never go to another token endpoint. |
+| Tokens | `~/.garuda/mcp-auth.json` (0600, atomic writes, 0700 folder), per `scope::name::url`: client, tokens, port, discovery. Never in session files. The SDK refreshes expired tokens with no question. |
 | Logout | `/mcp logout <server>` removes the server's entries; the next session asks again. |
 
 `/mcp` shows a remote server as `remote <url> · signed in` or `no sign-in`.
