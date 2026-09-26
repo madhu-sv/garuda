@@ -178,7 +178,8 @@ interface ChatState {
 - **Esc (0.6):** busy → `stopTurn()`: drop the queue and call `onInterrupt` once per turn (a `stopping` flag,
   also set by Ctrl-C, reset by `begin`/`end`), so Esc never reaches the second-stop exit. Idle → drop the queue.
 - **New lines (0.6):** Enter with `meta` (Alt/Option+Enter) inserts `\n`; Enter after a `\` at the cursor
-  replaces the backslash with `\n`; else Enter submits. The footer shows `\+Enter new line · Ctrl-G editor`.
+  replaces the backslash with `\n`; else Enter submits. `typeAhead` does the same when "\" and Enter arrive in one chunk (fast typing). The
+  footer shows `\ then Enter: new line · Ctrl-G editor`; the start banner's tips line says the same.
 - **External editor (0.6, `externalEditor.ts`):** Ctrl-G or `/editor` (the controller handles it before
   `runCommand`) calls `store.openEditor()`. `inkChat` sets `store.externalEdit`: raw mode off, stdin paused,
   `editInEditor(text)` (a 0600 temp file, `$VISUAL`/`$EDITOR`/`vi` as argv with quotes, `runInTerminal` from

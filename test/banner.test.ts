@@ -19,7 +19,7 @@ describe("start banner", () => {
     expect(out).toContain("│   model    claude-haiku-4-5-20251001");
     expect(out).toContain("│   folder   ~/dev/garuda-live");
     expect(out).toContain("│   extras   1 MCP server · 2 hooks · web_fetch");
-    expect(out).toContain(" /help commands · Ctrl-C stops a task · Esc clears the queue");
+    expect(out).toContain(" /help · Esc stops a task · \\ then Enter: new line · Ctrl-G editor");
     // Every card line has the same width.
     const card = lines(out).filter((l) => /^[╭│╰]/.test(l));
     expect(new Set(card.map((l) => [...l].length)).size).toBe(1);
@@ -32,7 +32,8 @@ describe("start banner", () => {
     );
     expect(out).not.toContain("██");
     expect(out).toMatch(/folder {3}….*project\/folder/);
-    expect(out).not.toContain("Esc clears the queue");
+    expect(out).toContain(" /help · Ctrl-C stops a task · \\ at the end: new line");
+    expect(out).not.toContain("Ctrl-G");
     for (const l of lines(out)) expect([...l].length).toBeLessThanOrEqual(WORDMARK_MIN_COLUMNS - 1);
   });
 

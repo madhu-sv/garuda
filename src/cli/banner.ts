@@ -59,8 +59,8 @@ export function banner(info: BannerInfo, options: BannerOptions): string {
   }
   lines.push(...card(info, options, c));
   const tips = info.ink
-    ? "/help commands · Ctrl-C stops a task · Esc clears the queue"
-    : "/help commands · Ctrl-C stops a task";
+    ? "/help · Esc stops a task · \\ then Enter: new line · Ctrl-G editor"
+    : "/help · Ctrl-C stops a task · \\ at the end: new line";
   lines.push(c.dim(` ${tips}`), "");
   return lines.join("\n");
 }

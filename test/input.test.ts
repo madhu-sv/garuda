@@ -71,6 +71,16 @@ describe("chat input (0.6)", () => {
     expect(await sent).toBe("first \nsecond\nthird");
   });
 
+  it("a backslash and Enter in one chunk (fast typing) still make a new line", async () => {
+    const { typeAhead } = await import("../src/cli/chat/ui.js");
+    const store = newStore();
+    typeAhead(store, "one \\\rtwo");
+    expect(store.getState().editor.text).toBe("one \ntwo");
+    const sent = store.nextInput();
+    typeAhead(store, "\r");
+    expect(await sent).toBe("one \ntwo");
+  });
+
   it("Ctrl-G puts the edited text into the input line; it is not sent", () => {
     const store = newStore();
     type(store, "draft");

@@ -124,7 +124,7 @@ function Footer({ state }: { state: ChatState }) {
   if (costUsd !== undefined) parts.push(`$${costUsd.toFixed(costUsd < 0.01 ? 4 : 2)}`);
   const keys = state.busy
     ? "Esc stop · Ctrl-O output"
-    : "\\+Enter new line · Ctrl-G editor · /help";
+    : "\\ then Enter: new line · Ctrl-G editor · /help";
   return (
     <Text>
       {mode === "plan" ? (
@@ -240,7 +240,13 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
 export function typeAhead(store: ChatStore, chunk: string): void {
   const parts = chunk.split(/\r\n|\r|\n/);
   parts.forEach((part, i) => {
+    const last = i === parts.length - 1;
+    // Keys that arrive together ("\" and Enter typed fast): the backslash still means a new line.
+    if (!last && part.endsWith("\\")) {
+      store.editLine({ type: "insert", text: `${part.slice(0, -1)}\n` });
+      return;
+    }
     if (part !== "") store.editLine({ type: "insert", text: part });
-    if (i < parts.length - 1) store.submitLine();
+    if (!last) store.submitLine();
   });
 }
