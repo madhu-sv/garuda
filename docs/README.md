@@ -25,7 +25,7 @@ Low-level design documents:
 | Web fetch | `src/web/`, `src/net/`, `src/tools/webFetch.ts` | [web.md](lld/web.md) |
 | Hooks | `src/hooks/` | [hooks.md](lld/hooks.md) |
 | Language profiles | `src/lang/` | [languages.md](lld/languages.md) |
-| Subagents (explore) | `src/agents/` | [agents.md](lld/agents.md) |
+| Subagents (explore, custom agents) | `src/agents/` | [agents.md](lld/agents.md) |
 | Custom slash commands | `src/commands/` | [commands.md](lld/commands.md) |
 | LSP diagnostics | `src/lsp/` | [lsp.md](lld/lsp.md) |
 | Undo | `src/undo/`, `src/session/undo.ts` | [undo.md](lld/undo.md) |

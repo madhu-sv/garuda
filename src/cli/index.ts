@@ -191,6 +191,14 @@ async function start(options: Options, program: Command): Promise<number> {
     undo: {},
     // Skills from ~/.garuda/skills, ~/.claude/skills and the project (0.5).
     skills: {},
+    // Custom agents from ~/.garuda/agents, ~/.claude/agents and the project (0.5). A model id in a
+    // user agent file goes through the same providers as -m (only ~/.garuda/models.json).
+    agents: {
+      resolveModel: (spec: string) => {
+        const r = resolveModel(spec, models.config);
+        return { spec: r.spec, model: () => r.create(), info: r.info };
+      },
+    },
     ...(options.resume === undefined ? {} : { resume: options.resume }),
     onEvent: (event) => events.event(event),
     onNotice: (text) => events.warn(text),
@@ -240,6 +248,7 @@ async function start(options: Options, program: Command): Promise<number> {
                 ...runtime.skills.filter((k) => k.userInvocable).map((k) => k.name),
               ],
               skills: runtime.skills.map((k) => k.name),
+              agents: runtime.agents.map((a) => a.name),
               apiKeySource:
                 !modelId.includes("/") && process.env.ANTHROPIC_API_KEY !== undefined
                   ? "ANTHROPIC_API_KEY"

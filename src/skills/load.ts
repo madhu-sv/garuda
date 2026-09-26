@@ -3,6 +3,7 @@ import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { cleanText, neutralizeTags } from "../mcp/sanitize.js";
 import type { ApprovalRequest } from "../permissions/types.js";
+import { parseFrontmatterBlock } from "./frontmatter.js";
 
 /**
  * Skills (0.5): folders with a SKILL.md, in the Agent Skills format that Claude Code uses
@@ -150,7 +151,7 @@ export function parseSkill(
   text: string,
   place: { entry: string; dir: string; shown: string; source: SkillSource },
 ): Skill | string {
-  const { meta, body: raw } = parseSkillFrontmatter(text);
+  const { meta, body: raw } = parseFrontmatterBlock(text);
   const name = meta.name ?? place.entry;
   if (!SKILL_NAME.test(name)) {
     return `the name "${name}" is not valid. Use a–z, 0–9 and single hyphens (up to 64).`;
@@ -183,43 +184,8 @@ export function parseSkill(
 
 const TRUE = new Set(["true", "yes", "on", "1"]);
 const FALSE = new Set(["false", "no", "off", "0"]);
-const isTrue = (v: string | undefined) => v !== undefined && TRUE.has(v.toLowerCase());
-const isFalse = (v: string | undefined) => v !== undefined && FALSE.has(v.toLowerCase());
-
-/**
- * The frontmatter keys Garuda uses: plain `key: value` lines, quoted values, and block values
- * (`key: >` or `key: |` with indented lines). Nested maps and lists (for example `metadata:` or
- * `allowed-tools: [..]`) are skipped: Garuda does not use them, so no YAML library is needed.
- */
-export function parseSkillFrontmatter(text: string): {
-  meta: Record<string, string>;
-  body: string;
-} {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
-  if (match === null) return { meta: {}, body: text };
-  const meta: Record<string, string> = {};
-  const lines = (match[1] ?? "").split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const kv = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(lines[i] ?? "");
-    if (kv?.[1] === undefined) continue;
-    const key = kv[1].toLowerCase();
-    const value = (kv[2] ?? "").trim();
-    if (value === ">" || value === "|" || value === ">-" || value === "|-" || value === "") {
-      const block: string[] = [];
-      while (i + 1 < lines.length && /^(\s+|$)/.test(lines[i + 1] ?? "")) {
-        block.push((lines[++i] ?? "").trim());
-      }
-      // An indented list or map under the key: not a text value.
-      if (block.some((l) => /^-\s|^[\w-]+\s*:/.test(l))) continue;
-      const joined = value.startsWith("|") ? block.join("\n") : block.join(" ");
-      if (joined.trim() !== "") meta[key] = joined.trim();
-      continue;
-    }
-    if (value.startsWith("[") || value.startsWith("{")) continue;
-    meta[key] = /^(["']).*\1$/.test(value) ? value.slice(1, -1) : value;
-  }
-  return { meta, body: text.slice(match[0].length) };
-}
+export const isTrue = (v: string | undefined) => v !== undefined && TRUE.has(v.toLowerCase());
+export const isFalse = (v: string | undefined) => v !== undefined && FALSE.has(v.toLowerCase());
 
 /**
  * The text a skill gives: its body with arguments. As in Claude Code, `$ARGUMENTS` takes all
@@ -271,3 +237,6 @@ export function skillConsent(
     },
   };
 }
+
+/** Kept for the tests and callers of 0.5: the shared reader (frontmatter.ts). */
+export { parseFrontmatterBlock as parseSkillFrontmatter } from "./frontmatter.js";

@@ -16,7 +16,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
 | 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
 | 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo, remote MCP with OAuth | Done |
-| 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output, skills | In progress |
+| 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output, skills, custom agents | In progress |
 
 ## Use
 
@@ -353,6 +353,33 @@ Settings:
   that it needs; Garuda then falls back to the host and says why.
 - Limit on Linux: a protected path that does not exist yet (for example `.git/hooks` in a folder with no
   `.git`) is not protected.
+
+## Custom agents
+
+A custom agent is a Markdown file in Claude Code's subagent format. Garuda reads your Claude Code agents
+where they are.
+
+```markdown
+<!-- ~/.garuda/agents/test-writer.md (or ~/.claude/agents, .garuda/agents, .claude/agents) -->
+---
+name: test-writer
+description: Writes unit tests for a module. Use when the user asks for tests.
+tools: Read, Grep, Glob, Write, Bash
+model: haiku
+---
+You write focused unit tests with the project's test tool. Run them before you answer.
+```
+
+- The model hands a task to an agent with the `agent` tool. The agent works in its own context with its
+  own instructions and tools, and returns a short report. Agents cannot start agents.
+- Without `tools`, an agent can only read. Named write tools and bash still ask or run in the sandbox,
+  and plan mode holds. An agent that may write never runs at the same time as another call.
+- `model`: `haiku`, `sonnet`, `opus`, or a model id (your own agents only). Default: `--subagent-model`,
+  else the main model. Its tokens and cost count in the session.
+- A project agent shows its tools and instructions and asks the first time. Your own agents win over
+  project agents with the same name (in Claude Code, the project wins).
+- `/agents` lists them. Nothing changes without agent files; `"agents": { "enabled": false }` turns them
+  off. Details: [docs/lld/agents.md](docs/lld/agents.md).
 
 ## Explore subagent
 

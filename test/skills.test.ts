@@ -66,7 +66,7 @@ class Recorder implements Approver {
 const signal = () => new AbortController().signal;
 
 describe("skills: the SKILL.md format (0.5)", () => {
-  it("reads plain, quoted and block values, and skips lists and maps", () => {
+  it("reads plain, quoted and block values and lists, and skips maps", () => {
     const { meta, body } = parseSkillFrontmatter(
       [
         "---",
@@ -90,6 +90,7 @@ describe("skills: the SKILL.md format (0.5)", () => {
       name: "pdf-tools",
       description: "Fill PDF forms and merge files. Use for PDFs.",
       "argument-hint": "[file]",
+      "allowed-tools": "Read, Bash(git *)",
       when_to_use: "The user mentions a PDF.",
       "disable-model-invocation": "yes",
     });

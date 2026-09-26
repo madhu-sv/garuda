@@ -29,7 +29,9 @@ interface ToolContext {
 fails the call: the file is already written.
 
 `ToolRunner` is what the loop needs (`specs`, `isReadOnly`, `runsCommands`, `execute`). `ToolRegistry`
-implements it; replay uses a recorded one.
+implements it; replay uses a recorded one. `isReadOnly` decides the loop's parallel batches: a read-only tool with
+`runsAlone` (0.5: the agent tool when an agent may write) is not batched, while the permission engine still
+treats it as read-only.
 
 ## Registry (`registry.ts`)
 

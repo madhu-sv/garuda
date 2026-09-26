@@ -208,6 +208,13 @@ Before each turn, the runtime takes a snapshot of the files in a git store of Ga
 snapshot and cuts the turn out of the messages (`undo` record); `/redo` does the reverse. Details:
 [lld/undo.md](lld/undo.md).
 
+### Custom agents (0.5)
+
+When agent files exist, the runtime registers the `agent` tool. A call runs a child session (shared with
+explore, `agents/child.ts`) with the agent's instructions and tools, through the same permission engine,
+hooks and executor, and returns a short report. A project agent asks at its first use. Details:
+[lld/agents.md](lld/agents.md).
+
 ### Skills (0.5)
 
 At start, the runtime reads skill folders (`~/.garuda/skills`, `~/.claude/skills`, `.garuda/skills`,

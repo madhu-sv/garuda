@@ -81,6 +81,11 @@ export interface Tool<I = unknown, O = string> {
   jsonSchema?: Record<string, unknown>;
   /** Read-only tools run without approval (F17) and can run in parallel (F8). */
   readOnly: boolean;
+  /**
+   * A read-only tool whose calls must not run in parallel (0.5): the agent tool, when an agent may
+   * write files. The permission check still treats it as read-only; its child calls are checked.
+   */
+  runsAlone?: boolean;
   /** True for tools that run commands through the Executor. The session log records the executor (N8). */
   runsCommands?: boolean;
   /**

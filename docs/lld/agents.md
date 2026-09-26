@@ -11,6 +11,16 @@ Turn it on with `"subagents": { "enabled": true }` in the settings.
 Subagents are split by task, not by language: the language profiles ([languages.md](languages.md)) give
 language knowledge to every agent.
 
+Custom agents (0.5, below) are the user's own subagents in Claude Code's format. Both kinds share one
+child run (`child.ts`).
+
+| File | Role |
+| --- | --- |
+| `child.ts` | `runChild`: a child session with its own system prompt and tools, through the same permission engine, hooks and executor; a wrap-up call after a limit; the usage report; `describeCall`. |
+| `explore.ts` | The `explore` tool (0.3). |
+| `custom.ts` | Custom agents: `loadAgents`, `parseAgent`, tool names, `toolMatches`, `agentConsent`. |
+| `agentTool.ts` | The `agent` tool: `createAgentTool`, `agentTools`, `agentWrites`, `agentSystem`. |
+
 ## The `explore` tool (`explore.ts`)
 
 `createExploreTool(options)` returns a normal `Tool`, so the registry, hooks and permission engine treat
@@ -101,7 +111,72 @@ at — a small context in long chats on large repositories — does not show in 
 Decision: off by default, as for the code index. Measure again with a larger repository or a suite of
 long, open tasks.
 
+## Custom agents (`custom.ts`, `agentTool.ts`, 0.5)
+
+### Files
+
+Markdown files in Claude Code's subagent format, read where they are:
+
+| Folder | Source | Trust |
+| --- | --- | --- |
+| `~/.garuda/agents/*.md` | user | trusted |
+| `~/.claude/agents/*.md` | user (Claude Code) | trusted |
+| `<root>/.garuda/agents/*.md` | project | asks at first use |
+| `<root>/.claude/agents/*.md` | project (Claude Code) | asks at first use |
+
+On a name clash the first in the table wins, with a notice. **This differs from Claude Code**, where a
+project agent wins over a user agent: in Garuda a repository cannot replace an agent that the user trusts
+(the same rule as for skills and commands). At most 50 agents; files up to 50 000 characters; project
+files may not be symbolic links.
+
+| Key | Use in Garuda |
+| --- | --- |
+| `name` | Required. Letters, digits, `-`, `_` (up to 64; no `:`). |
+| `description` | Required. When to use the agent; the main model sees it. Cut at 1 024 characters. |
+| `tools` | A list (`Read, Grep` or a YAML list). Claude Code names map to Garuda's (`Read` → read_file, `Edit`/`MultiEdit` → edit_file, `Write` → write_file, `Bash` → bash, `Grep`, `Glob`, `WebFetch`, `Skill`, `TodoWrite`); Garuda names and MCP patterns (`mcp__server`, `mcp__server__tool`, `mcp__*`) work too. A part in brackets (`Bash(git *)`) is left out with a notice: Garuda's rules decide. **Omitted: read-only tools only** (read_file, glob, grep, the code index tools, skill). |
+| `disallowedTools` | Removed from the list. |
+| `model` | User agents only: `inherit`, `haiku`/`sonnet`/`opus`/`fable` (the newest known id of that family, when the main model is a Claude model), or a model id that goes through the same providers as `-m` (`~/.garuda/models.json`). A project file cannot pick a model (cost, provider): notice, then the default. Default: `--subagent-model`, else the main model. |
+| `maxTurns` | Model calls per run (up to 100). Default: `subagents.maxSteps` (20). |
+| others | Left out with a notice: `permissionMode`, `mcpServers`, `memory`, `isolation`, `skills`. Ignored: `color`, `hooks` and other maps. |
+
+The body is the agent's instructions. Project text is cleaned and Garuda's markers are neutralized.
+
+### The `agent` tool
+
+Only when at least one agent exists (and `agents.enabled` is not false). Input: `agent` (a name from the
+list) and `prompt` (the task, with all context: the child does not see the conversation). The description
+lists `- name: description` for each agent, fixed per session (N2); the system prompt gets two lines.
+
+A call:
+
+1. Picks the tools: the agent's list matched against the main registry at call time (so MCP tools of the
+   first turn are there), minus `disallowedTools`, never `agent` or `explore` (no nesting).
+2. A project agent asks once (`agentConsent`: its tools and full instructions; "remember" pins the file's
+   SHA-256 in `~/.garuda/trust.json`, `agents[root][name]`). "No" gives an error result.
+3. Runs `runChild` with the system prompt `agentSystem` (who it is, report format, text is data, paths)
+   and then the agent's instructions; the same permission engine (plan mode holds), hooks and executor
+   (bash in the sandbox); limits from `subagents` or `maxTurns`; the child journal
+   `.garuda/sessions/<id>/agent-<name>-<call id>.jsonl`.
+4. Returns the answer (cut at 20 000 characters) with `[agent <name>: N steps · Xk tokens]` and
+   `[calls: …]`. The usage counts for the session, like explore.
+
+The tool is read-only for the permission engine (it changes nothing itself; each child call is checked).
+When any agent may write (a tool outside the read-only set), the tool has `runsAlone`: the loop never runs
+it in parallel with other calls, so two agents never edit at the same time.
+
+`/agents` lists the agents with their tools, model and file. The banner shows `N agents`; JSON output has
+`agents` in `system/init`.
+
+No general-purpose agent: it stays off until an A/B eval shows a gain (as explore did not).
+
 ## Tests
+
+`test/agents.test.ts`: the format (lists, brackets, unknown tools, maxTurns, disallowedTools, left-out
+keys); bad files; a project model left out; aliases; the four folders, user over project, links; default
+read-only tools, no nesting, MCP patterns, `agentWrites`; a turn with a read-only agent (its own prompt and
+tools, the report, usage, the child file, `/agents`); a write agent that edits through the approver and
+runs alone; plan mode for the child; a project agent's question and "No"; a model alias through the CLI's
+resolver; no tool without files or with `enabled: false`.
 
 `test/explore.test.ts`: a full turn with a separate child model (only read-only tools; unknown and
 sensitive calls fail; the answer and trailer reach the main agent; progress events; usage and cost in

@@ -28,6 +28,7 @@ export const HELP = [
   "  /hooks     the active hooks",
   "  /lsp       language servers for diagnostics; /lsp install <typescript|python|java>",
   "  /commands  your custom commands and skills (~/.garuda, .garuda, .claude)",
+  "  /agents    your custom agents and their tools (~/.garuda, .garuda, .claude)",
   "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles)",
   "  /build     build mode: change files and run commands (the default)",
   "  /undo      take back the last turn: its file changes and its messages",
@@ -55,6 +56,7 @@ export async function runCommand(
   if (command === "/exit" || command === "/quit") return "exit";
   if (command === "/help") renderer.info(helpText(runtime));
   else if (command === "/commands") renderer.info(commandsText(runtime));
+  else if (command === "/agents") renderer.info(agentsText(runtime));
   else if (command === "/plan" || command === "/build") {
     runtime.setMode(command === "/plan" ? "plan" : "build");
     renderer.info(modeText(runtime));
@@ -175,6 +177,24 @@ export function commandsText(runtime: Runtime): string {
       ? []
       : [title, ...list.map((r) => `  ${r.usage.padEnd(width + 2)}${r.about}`.trimEnd())];
   return [...table("Custom commands:", commandRows), ...table("Skills:", skillRows)].join("\n");
+}
+
+/** /agents: the custom agents, with their source, tools and model. */
+export function agentsText(runtime: Runtime): string {
+  const agents = runtime.agents;
+  if (agents.length === 0) {
+    return "No custom agents. Add Markdown files to ~/.garuda/agents/ or .garuda/agents/ (or .claude/agents/).";
+  }
+  const width = Math.max(...agents.map((a) => a.name.length));
+  return [
+    "Custom agents (the model hands tasks to them with the agent tool):",
+    ...agents.map((a) => {
+      const about = a.description.length > 80 ? `${a.description.slice(0, 79)}…` : a.description;
+      const tools = a.tools === undefined ? "read-only tools" : a.tools.join(", ");
+      const model = a.model === undefined ? "" : ` · model ${a.model}`;
+      return `  ${a.name.padEnd(width + 2)}${about}\n  ${"".padEnd(width + 2)}${tools}${model} · ${a.shown}`;
+    }),
+  ].join("\n");
 }
 
 /** Answer a code question from the local index, with no model call. */

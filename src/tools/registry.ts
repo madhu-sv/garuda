@@ -19,8 +19,10 @@ export class ToolRegistry implements ToolRunner {
     return this.tools.get(name);
   }
 
+  /** For the loop's batches: read-only calls run in parallel, unless the tool runs alone. */
   isReadOnly(name: string): boolean {
-    return this.tools.get(name)?.readOnly === true;
+    const tool = this.tools.get(name);
+    return tool?.readOnly === true && tool.runsAlone !== true;
   }
 
   runsCommands(name: string): boolean {

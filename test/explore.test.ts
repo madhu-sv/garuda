@@ -114,7 +114,7 @@ describe("explore subagent (0.3)", () => {
       events.filter((e) => e.type === "tool_progress").map((e) => (e as { text: string }).text),
     ).toEqual([
       "step 1 · grep /applyCoupon/",
-      'step 2 · write_file {"path":"hacked.txt","content":"x"}',
+      "step 2 · write_file hacked.txt",
       'step 3 · explore {"question":"Recurse into another subagent?"}',
       "step 4 · read_file .env",
     ]);

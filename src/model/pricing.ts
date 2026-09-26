@@ -43,6 +43,15 @@ function p(input: number, output: number, cacheRead: number, cacheWrite: number)
   return { input, output, cacheRead, cacheWrite };
 }
 
+/**
+ * The newest known model id of a family: haiku, sonnet, opus or fable (0.5, for `model: sonnet` in
+ * an agent file, as in Claude Code). Undefined for other names.
+ */
+export function aliasModel(alias: string): string | undefined {
+  if (!/^(haiku|sonnet|opus|fable)$/.test(alias)) return undefined;
+  return KNOWN.find(([prefix]) => prefix.startsWith(`claude-${alias}-`))?.[0];
+}
+
 export function lookupModel(modelId: string): ModelInfo {
   let best: { prefix: string; info: ModelInfo } | undefined;
   for (const [prefix, info] of KNOWN) {

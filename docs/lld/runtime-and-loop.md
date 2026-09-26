@@ -57,7 +57,7 @@ imports the CLI.
 
 Other methods: `newSession()`, `recordStop(reason)`, `mcpStatus()`, `hookLines()`, `close()` (closes MCP
 clients and language servers), `mode` and `setMode()` (0.4), `commands` and `resolveCommand()` (0.4),
-`lspEnabled`, `lspStatus()` and `installLsp()` (0.4), `skills` and `allowSkill()` (0.5: the consent for a
+`lspEnabled`, `lspStatus()` and `installLsp()` (0.4), `agents` and `allowAgent()` (0.5: custom agents; see [agents.md](agents.md)), `skills` and `allowSkill()` (0.5: the consent for a
 project skill; `resolveCommand` checks skills before custom commands; see [skills.md](skills.md)), `init(signal)` (0.5: loads `init/run.js` with `import()`, runs the migration and git steps with the runtime's approver and executor, and returns the report and the init prompt; see [init.md](init.md)).
 
 ## Agent loop (`loop/runAgent.ts`)

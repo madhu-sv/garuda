@@ -1,5 +1,8 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { createAgentTool } from "../agents/agentTool.js";
+import type { ChildModel } from "../agents/child.js";
+import { agentConsent, type CustomAgent, loadAgents } from "../agents/custom.js";
 import { createExploreTool, DEFAULT_EXPLORE_LIMITS } from "../agents/explore.js";
 import { BUILTIN_COMMANDS } from "../commands/builtins.js";
 import {
@@ -34,7 +37,7 @@ import type { LspLanguage } from "../lsp/servers.js";
 import { loadMcpConfig, type ServerConfig } from "../mcp/config.js";
 import type { McpManager, McpServerStatus } from "../mcp/manager.js";
 import { TrustStore } from "../mcp/trust.js";
-import { lookupModel, type ModelInfo, type Price } from "../model/pricing.js";
+import { aliasModel, lookupModel, type ModelInfo, type Price } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -115,6 +118,19 @@ export interface RuntimeOptions {
    * user's setup. The CLI passes it; the setting `skills.enabled: false` turns it off.
    */
   skills?: { home?: string };
+  /**
+   * Custom agents (0.5): ~/.garuda/agents, ~/.claude/agents, .garuda/agents and .claude/agents.
+   * Absent: no agents (tests, evals). `resolveModel` turns a model id from a user agent file into a
+   * client (the CLI passes its provider lookup); without it, such agents fail with a message.
+   */
+  agents?: {
+    home?: string;
+    resolveModel?: (spec: string) => {
+      spec: string;
+      model: () => Promise<ModelClient>;
+      info: ModelInfo;
+    };
+  };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
   profiles?: LanguageProfile[];
   /**
@@ -189,6 +205,13 @@ export class Runtime {
   private readonly allowedSkills = new Set<string>();
   /** Skill questions wait for each other: parallel read-only calls may load two at once. */
   private skillQueue: Promise<unknown> = Promise.resolve();
+  private agentList: CustomAgent[] = [];
+  /** --subagent-model: explore and agents without their own model use it. */
+  private readonly subagentModelOption: RuntimeOptions["subagentModel"];
+  /** Hashes of project agents that the user allowed for this process. */
+  private readonly allowedAgents = new Set<string>();
+  /** Model clients of agents, by spec. */
+  private readonly agentModels = new Map<string, Promise<ChildModel>>();
   private hookRunner: HookRunner | undefined;
   private hooksStarted: Promise<void> | undefined;
   /** The snapshot store for undo, or undefined when undo is off (0.4). */
@@ -214,6 +237,7 @@ export class Runtime {
     this.hookConfig = hookConfig;
     this.profiles = profiles;
     this.lspOptions = options.lsp ?? {};
+    this.subagentModelOption = options.subagentModel;
     if (options.undo !== undefined && settings.undo?.enabled !== false) {
       this.snapshots = new SnapshotStore(
         options.root,
@@ -335,6 +359,15 @@ export class Runtime {
       skills = loaded.skills;
       for (const problem of loaded.problems) options.onNotice?.(problem);
     }
+    let agents: CustomAgent[] = [];
+    if (options.agents !== undefined && settings.agents?.enabled !== false) {
+      const loaded = await loadAgents({
+        home: options.agents.home ?? homedir(),
+        root: options.root,
+      });
+      agents = loaded.agents;
+      for (const problem of loaded.problems) options.onNotice?.(problem);
+    }
     const system = buildSystemPrompt(
       options.root,
       await loadInstructions(options.root),
@@ -350,6 +383,7 @@ export class Runtime {
         todo: settings.todo?.enabled === true,
         lsp: options.lsp?.enabled ?? settings.lsp?.enabled === true,
         skills: skills.some((s) => s.modelInvocable),
+        agents: agents.length > 0,
       },
     );
     const runtime = new Runtime(
@@ -390,6 +424,29 @@ export class Runtime {
         }),
       );
     }
+    runtime.agentList = agents;
+    if (agents.length > 0) {
+      runtime.tools.register(
+        createAgentTool({
+          agents,
+          mainTools: () => runtime.tools,
+          model: (agent) => runtime.agentModel(agent, options.agents?.resolveModel),
+          permissions: runtime.permissions,
+          knowledge: runtime.knowledge,
+          hooks: () => runtime.hookRunner,
+          executor: runtime.executor,
+          journal: (childId) =>
+            runtime.current === undefined
+              ? undefined
+              : runtime.store.openChild(runtime.current.id, childId),
+          limits: {
+            maxSteps: settings.subagents?.maxSteps ?? DEFAULT_EXPLORE_LIMITS.maxSteps,
+            tokenBudget: settings.subagents?.tokenBudget ?? DEFAULT_EXPLORE_LIMITS.tokenBudget,
+          },
+          allow: (agent, tools, signal) => runtime.allowAgent(agent, tools, signal),
+        }),
+      );
+    }
     if (options.resume !== undefined) {
       runtime.current = await resumeSession({
         store: options.store,
@@ -420,6 +477,92 @@ export class Runtime {
    * The prompt for a custom command line (`/name args`). A project command shows its text and
    * asks first; "remember" pins the answer to the file's hash in ~/.garuda/trust.json.
    */
+  /** Custom agents (0.5), sorted by name. */
+  get agents(): readonly CustomAgent[] {
+    return this.agentList;
+  }
+
+  /**
+   * May this agent run? User agents: yes. A project agent asks once (its instructions and tools),
+   * pinned like skills. Questions share the skill queue: calls may run at the same time.
+   */
+  allowAgent(agent: CustomAgent, tools: readonly string[], signal: AbortSignal): Promise<boolean> {
+    if (agent.source === "user" || this.allowedAgents.has(agent.hash)) return Promise.resolve(true);
+    const next = this.skillQueue.then(async () => {
+      if (this.allowedAgents.has(agent.hash)) return true;
+      const trust = await TrustStore.open(this.skillsHome);
+      const known = trust.agentHash(this.root, agent.name);
+      if (known !== agent.hash) {
+        const choice = await this.approver.ask(
+          agentConsent(agent, tools, known !== undefined, this.executor.isolation),
+          signal,
+        );
+        if (choice === "deny") return false;
+        if (choice === "session") await trust.setAgentHash(this.root, agent.name, agent.hash);
+      }
+      this.allowedAgents.add(agent.hash);
+      return true;
+    });
+    this.skillQueue = next.catch(() => undefined);
+    return next;
+  }
+
+  /**
+   * The model of an agent: the agent's own (user agents: an id, or haiku/sonnet/opus/fable as in
+   * Claude Code), else --subagent-model, else the main model.
+   */
+  private agentModel(
+    agent: CustomAgent,
+    resolve: NonNullable<RuntimeOptions["agents"]>["resolveModel"],
+  ): Promise<ChildModel> {
+    const main = (): ChildModel => {
+      const sub = this.subagentModelOption;
+      if (sub !== undefined) {
+        let client: Promise<ModelClient> | undefined;
+        return {
+          spec: sub.spec,
+          client: () => {
+            client ??= sub.model();
+            return client as Promise<ModelClient>;
+          },
+          contextWindow: sub.info.contextWindow,
+          ...(sub.info.price === undefined ? {} : { price: sub.info.price }),
+        };
+      }
+      return {
+        spec: this.modelId,
+        client: () => this.client(),
+        contextWindow: this.limits.contextWindow,
+        ...(this.price === undefined ? {} : { price: this.price }),
+      };
+    };
+    if (agent.model === undefined) return Promise.resolve(main());
+    const spec = aliasModel(agent.model) ?? agent.model;
+    if (aliasModel(agent.model) !== undefined && this.modelId.includes("/")) {
+      // An alias names a Claude model; with another provider, the main model does the work.
+      return Promise.resolve(main());
+    }
+    let cached = this.agentModels.get(spec);
+    if (cached === undefined) {
+      cached = (async (): Promise<ChildModel> => {
+        if (resolve === undefined) throw new Error(`Garuda cannot use the model "${spec}" here.`);
+        const resolved = resolve(spec);
+        let client: Promise<ModelClient> | undefined;
+        return {
+          spec: resolved.spec,
+          client: () => {
+            client ??= resolved.model();
+            return client as Promise<ModelClient>;
+          },
+          contextWindow: resolved.info.contextWindow,
+          ...(resolved.info.price === undefined ? {} : { price: resolved.info.price }),
+        };
+      })();
+      this.agentModels.set(spec, cached);
+    }
+    return cached;
+  }
+
   /** Skills (0.5), sorted by name. */
   get skills(): readonly Skill[] {
     return this.skillList;
@@ -544,6 +687,8 @@ export class Runtime {
     if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
     if (this.selectedMode === "plan") out.push("plan mode");
     if (this.lspEnabled) out.push("LSP");
+    if (this.agentList.length > 0)
+      out.push(`${this.agentList.length} agent${this.agentList.length === 1 ? "" : "s"}`);
     if (this.skillList.length > 0)
       out.push(`${this.skillList.length} skill${this.skillList.length === 1 ? "" : "s"}`);
     if (this.exploreModel !== undefined)

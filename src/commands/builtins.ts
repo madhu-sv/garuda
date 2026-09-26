@@ -13,6 +13,7 @@ export const BUILTIN_COMMANDS: readonly string[] = [
   "hooks",
   "lsp",
   "commands",
+  "agents",
   "plan",
   "build",
   "new",

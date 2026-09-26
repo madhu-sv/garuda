@@ -31,6 +31,8 @@ export interface RunInfo {
   slashCommands: string[];
   /** Skill names (0.5). */
   skills?: string[];
+  /** Custom agent names (0.5). */
+  agents?: string[];
   apiKeySource: "ANTHROPIC_API_KEY" | "none";
 }
 
@@ -197,6 +199,7 @@ export function initLine(info: RunInfo): Line {
     apiKeySource: info.apiKeySource,
     output_style: "default",
     skills: info.skills ?? [],
+    agents: info.agents ?? [],
     plugins: [],
     garuda_version: VERSION,
   };

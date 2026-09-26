@@ -31,6 +31,8 @@ const schema = z.object({
   commands: z.record(z.string(), z.record(z.string(), z.string())).default({}),
   /** Project root → skill name → hash of the approved SKILL.md (0.5). */
   skills: z.record(z.string(), z.record(z.string(), z.string())).default({}),
+  /** Project root → agent name → hash of the approved agent file (0.5). */
+  agents: z.record(z.string(), z.record(z.string(), z.string())).default({}),
 });
 type TrustData = z.infer<typeof schema>;
 export type TrustEntry = z.infer<typeof entry>;
@@ -38,7 +40,14 @@ export type TrustEntry = z.infer<typeof entry>;
 export const USER_SCOPE = "~";
 
 export class TrustStore {
-  private data: TrustData = { version: 1, mcp: {}, hooks: {}, commands: {}, skills: {} };
+  private data: TrustData = {
+    version: 1,
+    mcp: {},
+    hooks: {},
+    commands: {},
+    skills: {},
+    agents: {},
+  };
 
   private constructor(private readonly file: string) {}
 
@@ -86,6 +95,17 @@ export class TrustStore {
     const skills = this.data.skills[root] ?? {};
     this.data.skills[root] = skills;
     skills[name] = hash;
+    await this.save();
+  }
+
+  agentHash(root: string, name: string): string | undefined {
+    return this.data.agents[root]?.[name];
+  }
+
+  async setAgentHash(root: string, name: string, hash: string): Promise<void> {
+    const agents = this.data.agents[root] ?? {};
+    this.data.agents[root] = agents;
+    agents[name] = hash;
     await this.save();
   }
 

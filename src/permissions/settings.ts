@@ -25,6 +25,7 @@ import type { SandboxSettings } from "./sandboxPaths.js";
  *   "lsp": { "enabled": true },
  *   "undo": { "enabled": false },
  *   "skills": { "enabled": false },
+ *   "agents": { "enabled": false },
  *   "model": {
  *     "contextWindow": 200000,
  *     "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 }
@@ -67,6 +68,8 @@ const schema = z.strictObject({
   undo: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** Skills (0.5). enabled: default true (the skill tool appears only when skills exist). */
   skills: z.strictObject({ enabled: z.boolean().optional() }).optional(),
+  /** Custom agents (0.5). enabled: default true (the agent tool appears only when agents exist). */
+  agents: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** Language server diagnostics after edits (0.4). enabled: default false. */
   lsp: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** The explore subagent (0.3). enabled: default false. Limits per explore run. */
@@ -111,6 +114,7 @@ export interface Settings {
   lsp?: { enabled: boolean };
   undo?: { enabled: boolean };
   skills?: { enabled: boolean };
+  agents?: { enabled: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
@@ -132,6 +136,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     lsp,
     undo,
     skills,
+    agents,
   } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
@@ -168,6 +173,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(lsp?.enabled === undefined ? {} : { lsp: { enabled: lsp.enabled } }),
     ...(undo?.enabled === undefined ? {} : { undo: { enabled: undo.enabled } }),
     ...(skills?.enabled === undefined ? {} : { skills: { enabled: skills.enabled } }),
+    ...(agents?.enabled === undefined ? {} : { agents: { enabled: agents.enabled } }),
     ...(subagents === undefined
       ? {}
       : {

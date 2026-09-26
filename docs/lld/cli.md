@@ -111,7 +111,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /new /exit; /name: skill or command]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /exit; /name: skill or command]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
