@@ -100,6 +100,15 @@ Set the context window, price and output limit per model, and add providers, in 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
   (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
   `/init` (set up this folder, see below), `/editor`, `/exit`. Your custom commands and skills run with `/name`.
+- `/sessions` lists this project's sessions (newest first: time, first prompt, turns, cost, model).
+  `/sessions <number or id>` continues one in the chat, as `--resume` does. Read tracking starts again.
+- `/models` lists the known Claude models and the models in `~/.garuda/models.json`, with context window and
+  price. `/models <number, id or opus|sonnet|haiku|fable>` switches the main model for the next turns of this
+  chat. The session records the change; a new chat starts with `-m` or `GARUDA_MODEL` again. The prompt cache
+  starts again; a smaller window makes Garuda compact the conversation first. Explore keeps the start model.
+- `/export [file]` writes the conversation as Markdown in the working folder (default
+  `garuda-<session id>.md`): prompts and answers in full, one line per tool call. It comes from the session
+  file, so secrets are redacted. It never overwrites a file and never writes outside the folder.
 - Esc or Ctrl-C during a task stops the task and kills its commands (Esc also drops queued lines). The
   chat goes on. A second Ctrl-C during the task exits Garuda at once; Esc never exits.
 - New lines: end the line with `\` and press Enter, or press Alt+Enter (Option+Enter on a Mac with

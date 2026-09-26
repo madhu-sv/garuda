@@ -60,7 +60,7 @@ imports the CLI.
    allows, and to end with a numbered plan), then the pending notes (undo, `!command` output) and the MCP
    notes; the attachments follow as plain text blocks. The system prompt is the same in both
    modes, so the prompt cache stays valid (N2).
-6. Load the model if it is still a factory (`client()`; the explore tool shares it), then
+6. Load the model if it is still a factory (`client()`), then
    `runAgent(session, deps)`. With LSP on, `deps.diagnostics` calls the `LspManager`, which the runtime
    creates with `import()` on the first edit (N3).
 
@@ -70,6 +70,23 @@ clients and language servers), `mode` and `setMode()` (0.4), `commands` and `res
 `bash` call, so the permission engine, hooks and executor apply; the output, cut at 10 000 characters and
 with Garuda's markers neutralized, goes into `pendingNotes` for the next message), `agents` and `allowAgent()` (0.5: custom agents; see [agents.md](agents.md)), `skills` and `allowSkill()` (0.5: the consent for a
 project skill; `resolveCommand` checks skills before custom commands; see [skills.md](skills.md)), `init(signal)` (0.5: loads `init/run.js` with `import()`, runs the migration and git steps with the runtime's approver and executor, and returns the report and the init prompt; see [init.md](init.md)).
+
+Sessions and models in the chat (0.6):
+
+- `listSessions(max = 20)`: `store.list()` and a `summariseSession` (from `session/list.ts`) for each:
+  first prompt line, prompts, model, cost.
+- `switchSession(ref)`: `resumeSession` for a number from the list, an id, or the unique start of an id;
+  it writes a `resume` record, drops the pending notes, and says how full the context is.
+- `sessionRecords()`: the current session's records, for `/export`.
+- `modelList()`: `knownModels()` from `pricing.ts`, then the specs of `~/.garuda/models.json` that resolve
+  (option `models.configured`); the main model is always in the list.
+- `setModel(ref)`: a number, an alias (`aliasModel`) or a spec. `options.models.resolve(spec)` gives the
+  client (created at once, so a missing API key shows now), the window, price and `maxTokens`. Settings
+  (`contextWindow`, `price`) still override. It writes a `model` record with the new start fields. `modelId`,
+  `limits` and `price` are getters, so the footer, `/usage`, agents without a model and the next turn use the
+  new values. Explore without `--subagent-model` keeps the start model (its own client of `options.model`).
+  The system prompt does not change (N2), but the provider's prompt cache is per model, so the next request
+  writes the cache again.
 
 ## Agent loop (`loop/runAgent.ts`)
 

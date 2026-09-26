@@ -100,7 +100,7 @@ flowchart TB
 | Component | Folder | Responsibility |
 | --- | --- | --- |
 | CLI | `src/cli/` | Parse the command line; run one task (`-p`), a chat (plain or Ink), `--resume`, `--replay` or `eval`. Ask the user for approvals. Show events. |
-| Runtime | `src/app/` | Build everything one Garuda process needs from settings: executor, permission engine, tools, system prompt, session, MCP servers, hooks. Run one turn; attach `@path` files to the prompt (0.6); run the user's `!command`. |
+| Runtime | `src/app/` | Build everything one Garuda process needs from settings: executor, permission engine, tools, system prompt, session, MCP servers, hooks. Run one turn; attach `@path` files to the prompt (0.6); run the user's `!command`; switch the session or the model from the chat (0.6). |
 | Agent loop | `src/loop/` | Call the model, run the tool calls, repeat until the model stops or a limit hits. Replay a recorded session. |
 | Model | `src/model/` | The `ModelClient` interface, providers and model specs, the Anthropic and OpenAI-compatible adapters, the fake model, prices and context windows. |
 | Tools | `src/tools/` | The tool interface, the registry (validation, hooks, permission check, run), and the built-in tools. |

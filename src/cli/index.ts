@@ -204,6 +204,19 @@ async function start(options: Options, program: Command): Promise<number> {
         return { spec: r.spec, model: () => r.create(), info: r.info };
       },
     },
+    // /models (0.6): the same providers as -m; the list adds the user's configured models.
+    models: {
+      resolve: (spec: string) => {
+        const r = resolveModel(spec, models.config);
+        return {
+          spec: r.spec,
+          model: () => r.create(),
+          info: r.info,
+          ...(r.maxTokens === undefined ? {} : { maxTokens: r.maxTokens }),
+        };
+      },
+      configured: Object.keys(models.config.models),
+    },
     ...(options.resume === undefined ? {} : { resume: options.resume }),
     onEvent: (event) => events.event(event),
     onNotice: (text) => events.warn(text),

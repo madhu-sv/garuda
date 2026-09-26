@@ -114,7 +114,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /exit; /name: skill or command]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /exit; /name: skill or command]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
@@ -197,6 +197,15 @@ interface ChatState {
   `src/sandbox/terminal.ts` with the real terminal, trailing new lines dropped, the temp folder removed),
   then raw mode on and `ink.clear()`. The text replaces the input line; it is not sent. A failed editor
   gives a warning and keeps the line. The plain REPL joins lines that end with `\` (prompt `… `).
+- **Sessions, models, export (0.6):** `/sessions` prints `runtime.listSessions()` (at most 20, two lines
+  each; the open one is marked); `/sessions <n|id>` calls `runtime.switchSession(ref)` (a number from the
+  list, an id, or the unique start of one). `/models` prints `modelsText(runtime)` from `runtime.modelList()`
+  (● marks the current model; `modelFacts` gives "1.0M context, $4/$20 per M tokens"); `/models <ref>` calls
+  `runtime.setModel(ref)`. The footer shows the new model after the command. `/export [file]` loads
+  `src/cli/export.ts` with `import()`: `sessionMarkdown(records, id)` builds the Markdown from the session
+  records (so it is redacted; notes and file text are left out, but each attachment and `!command` gets a
+  line; undo, redo, compaction, a model change and a stopped turn get an italic line), and `writeExport`
+  writes it inside the root with the `wx` flag (never overwrites).
 - **Type-ahead at start:** keys typed before raw mode arrive as one chunk with `\n` (cooked mode);
   `typeAhead` treats each line end as Enter. Bracketed paste (`usePaste`) inserts text and never submits.
 - **Ctrl-C:** busy → `onInterrupt`; idle with text → clear the line; idle and empty → exit on a second

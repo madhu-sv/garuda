@@ -43,6 +43,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
     switch (record.type) {
       case "start":
       case "resume":
+      case "model":
         state.start = record;
         break;
       case "user":

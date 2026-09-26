@@ -69,7 +69,8 @@ export async function replaySession(
   for (let i = 0; i < records.length; i++) {
     const record = records[i];
     if (record === undefined) break;
-    if (record.type === "start" || record.type === "resume") limits = record.limits;
+    if (record.type === "start" || record.type === "resume" || record.type === "model")
+      limits = record.limits;
     // Undo and redo change the conversation between runs (0.4): apply them as they were.
     if (record.type === "snapshot") {
       pushPoint(session.undo, record.tree, record.messages, record.prompt);

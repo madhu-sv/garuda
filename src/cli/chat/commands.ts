@@ -1,4 +1,4 @@
-import type { Runtime } from "../../app/runtime.js";
+import { modelFacts, type Runtime } from "../../app/runtime.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { totalTokens } from "../../model/pricing.js";
 import {
@@ -22,6 +22,9 @@ export const HELP = [
   "  /help      show this help",
   "  /usage     tokens and cost of this session",
   "  /session   the session id and file",
+  "  /sessions  this project's sessions; /sessions <n|id> continues one",
+  "  /models    the models; /models <n|id|opus|sonnet|haiku> switches for this chat",
+  "  /export    write this conversation as Markdown; /export <file>",
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /refs X    every use of symbol X (code index, no model call)",
   "  /map [dir] what each JS/TS file exports and imports",
@@ -66,6 +69,18 @@ export async function runCommand(
   else if (command === "/session") {
     const id = runtime.session?.id;
     renderer.info(id === undefined ? "No session yet." : `Session ${id}\n${sessionPath(id)}`);
+  } else if (command === "/sessions") {
+    await sessionsCommand(runtime, renderer, text.slice(command.length).trim());
+  } else if (command === "/models") {
+    const arg = text.slice(command.length).trim();
+    if (arg === "") renderer.info(modelsText(runtime));
+    else {
+      const result = await runtime.setModel(arg);
+      if (result.ok) renderer.info(result.text);
+      else renderer.warn(result.text);
+    }
+  } else if (command === "/export") {
+    await exportCommand(runtime, renderer, text.slice(command.length).trim());
   } else if (command === "/where" || command === "/refs" || command === "/map") {
     await lookup(runtime, renderer, command, text.slice(command.length).trim());
   } else if (command === "/hooks") {
@@ -111,6 +126,82 @@ export async function runCommand(
     else renderer.warn(`Unknown command ${command}. Type /help.`);
   }
   return "done";
+}
+
+/** /sessions: the list; /sessions <n|id>: continue that session (0.6). */
+async function sessionsCommand(runtime: Runtime, renderer: Renderer, arg: string): Promise<void> {
+  if (arg !== "") {
+    const result = await runtime.switchSession(arg);
+    if (result.ok) renderer.info(result.text);
+    else renderer.warn(result.text);
+    return;
+  }
+  const { sessions, total } = await runtime.listSessions();
+  if (sessions.length === 0) {
+    renderer.info("There are no sessions in this project yet.");
+    return;
+  }
+  const open = runtime.session?.id;
+  const width = String(sessions.length).length;
+  const rows = sessions.flatMap((s, i) => {
+    const facts = [
+      s.id,
+      `${s.turns} turn${s.turns === 1 ? "" : "s"}`,
+      ...(s.costUsd === undefined || s.costUsd === 0 ? [] : [`$${s.costUsd.toFixed(2)}`]),
+      ...(s.model === undefined ? [] : [s.model]),
+    ].join(" · ");
+    return [
+      `  ${String(i + 1).padStart(width)}. ${localTime(s.updated)}  ${s.title === "" ? "(no prompt)" : s.title}${s.id === open ? "  (open)" : ""}`,
+      `  ${"".padStart(width)}  ${facts}`,
+    ];
+  });
+  renderer.info(
+    [
+      "Sessions in this project, newest first:",
+      ...rows,
+      ...(total > sessions.length ? [`  … ${total - sessions.length} older`] : []),
+      "Continue one with /sessions <number or id>. /new starts a new one.",
+    ].join("\n"),
+  );
+}
+
+/** "2026-09-26 10:15" in local time. */
+function localTime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** /models: the known and configured models, the current one marked (0.6). */
+export function modelsText(runtime: Runtime): string {
+  const list = runtime.modelList();
+  const width = Math.max(...list.map((m) => m.spec.length));
+  const numbers = String(list.length).length;
+  return [
+    "Models (● the current one):",
+    ...list.map((m, i) => {
+      const mark = m.spec === runtime.modelId ? "●" : " ";
+      return `  ${mark} ${String(i + 1).padStart(numbers)}  ${m.spec.padEnd(width + 2)}${modelFacts(m.info.contextWindow, m.info.price)}`;
+    }),
+    "Switch with /models <number, id or opus|sonnet|haiku|fable>. It is for this chat only.",
+    "Add other models (Ollama, OpenRouter …) in ~/.garuda/models.json.",
+  ].join("\n");
+}
+
+/** /export [file]: the conversation as Markdown in the working folder (0.6). */
+async function exportCommand(runtime: Runtime, renderer: Renderer, file: string): Promise<void> {
+  const records = await runtime.sessionRecords();
+  const id = runtime.session?.id;
+  if (records === undefined || id === undefined) {
+    renderer.info("There is no conversation to export yet.");
+    return;
+  }
+  const { sessionMarkdown, writeExport } = await import("../export.js");
+  const result = await writeExport(runtime.root, id, sessionMarkdown(records, id), file);
+  if ("problem" in result) renderer.warn(result.problem);
+  else
+    renderer.info(
+      `Wrote the conversation to ${result.path}. Secrets are redacted as in the session file.`,
+    );
 }
 
 /** /lsp: the status; /lsp install <language>: the managed install (npm, network). */

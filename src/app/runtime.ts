@@ -12,6 +12,7 @@ import {
   loadCommands,
   parseCommandLine,
 } from "../commands/custom.js";
+import { COMPACTION_DEFAULTS } from "../context/compact.js";
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
 import { HOOKS_FILE, type Hook, hooksHash, loadHooks } from "../hooks/config.js";
 import { HookRunner, hooksConsent } from "../hooks/runner.js";
@@ -38,7 +39,13 @@ import { loadMcpConfig, type ServerConfig } from "../mcp/config.js";
 import type { McpManager, McpServerStatus } from "../mcp/manager.js";
 import { neutralizeTags } from "../mcp/sanitize.js";
 import { TrustStore } from "../mcp/trust.js";
-import { aliasModel, lookupModel, type ModelInfo, type Price } from "../model/pricing.js";
+import {
+  aliasModel,
+  knownModels,
+  lookupModel,
+  type ModelInfo,
+  type Price,
+} from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -46,7 +53,8 @@ import type { AgentMode, Approver } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
 import { FileTracker } from "../session/fileTracker.js";
-import type { RunLimits, StartRecord } from "../session/records.js";
+import { type SessionSummary, summariseSession } from "../session/list.js";
+import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
 import {
   addSnapshot,
@@ -141,6 +149,20 @@ export interface RuntimeOptions {
       info: ModelInfo;
     };
   };
+  /**
+   * Model switching for /models (0.6). `resolve` turns a spec into a client (the CLI passes its
+   * provider lookup, as for agents); `configured` lists the specs of ~/.garuda/models.json.
+   * Absent: /models lists the known models but cannot switch.
+   */
+  models?: {
+    resolve: (spec: string) => {
+      spec: string;
+      model: () => Promise<ModelClient>;
+      info: ModelInfo;
+      maxTokens?: number;
+    };
+    configured?: readonly string[];
+  };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
   profiles?: LanguageProfile[];
   /**
@@ -172,10 +194,13 @@ export const USER_COMMAND_NOTE_CHARS = 10_000;
 
 export class Runtime {
   readonly root: string;
-  readonly modelId: string;
-  readonly limits: RunLimits;
-  readonly price: Price | undefined;
-  private readonly maxTokens: number | undefined;
+  /** The main model: set at start, changed by /models (0.6). */
+  private currentModelId: string;
+  private currentLimits: RunLimits;
+  private currentPrice: Price | undefined;
+  private maxTokens: number | undefined;
+  /** How /models turns a spec into a client (0.6). Absent: /models cannot switch. */
+  private readonly modelChoices: RuntimeOptions["models"];
   readonly executor: Executor;
   /** Set when "auto" found no OS sandbox. The CLI shows it once. */
   readonly executorNotice: string | undefined;
@@ -266,8 +291,9 @@ export class Runtime {
     this.mcpOptions = options.mcp === false || options.mcp === undefined ? {} : options.mcp;
     this.onNotice = options.onNotice;
     this.root = options.root;
-    this.modelId = options.modelId;
+    this.currentModelId = options.modelId;
     this.model = options.model;
+    this.modelChoices = options.models;
     this.store = options.store;
     this.onEvent = options.onEvent;
     this.system = system;
@@ -283,8 +309,8 @@ export class Runtime {
     );
     const info = options.modelInfo ?? lookupModel(options.modelId);
     this.maxTokens = options.maxTokens;
-    this.price = settings.price ?? info.price;
-    this.limits = {
+    this.currentPrice = settings.price ?? info.price;
+    this.currentLimits = {
       maxSteps: settings.maxSteps ?? DEFAULT_MAX_STEPS,
       tokenBudget: settings.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
       contextWindow: settings.contextWindow ?? info.contextWindow,
@@ -304,20 +330,28 @@ export class Runtime {
     if (settings.subagents?.enabled === true) {
       const sub = options.subagentModel;
       let subClient: ModelClient | undefined;
-      const subPrice = sub === undefined ? this.price : sub.info.price;
+      const subPrice = sub === undefined ? this.currentPrice : sub.info.price;
       this.exploreModel = sub?.spec ?? options.modelId;
+      // Without --subagent-model, explore keeps the start model: /models changes only the main one.
+      const startModel = options.model;
+      let startClient: Promise<ModelClient> | undefined;
       this.tools.register(
         createExploreTool({
           model: {
             spec: this.exploreModel,
             client:
               sub === undefined
-                ? () => this.client()
+                ? () => {
+                    startClient ??= Promise.resolve(
+                      typeof startModel === "function" ? startModel() : startModel,
+                    );
+                    return startClient;
+                  }
                 : async () => {
                     subClient ??= await sub.model();
                     return subClient;
                   },
-            contextWindow: sub?.info.contextWindow ?? this.limits.contextWindow,
+            contextWindow: sub?.info.contextWindow ?? this.currentLimits.contextWindow,
             ...(subPrice === undefined ? {} : { price: subPrice }),
           },
           tools: new ToolRegistry(readOnlyTools(this.codeIndex)),
@@ -334,6 +368,19 @@ export class Runtime {
         }),
       );
     }
+  }
+
+  /** The main model spec, as the session records it. */
+  get modelId(): string {
+    return this.currentModelId;
+  }
+
+  get limits(): RunLimits {
+    return this.currentLimits;
+  }
+
+  get price(): Price | undefined {
+    return this.currentPrice;
   }
 
   /** The main model client, loaded on first use (N3). */
@@ -687,6 +734,135 @@ export class Runtime {
   /** Start a new session at the next turn. The old one stays on disk. */
   newSession(): void {
     this.current = undefined;
+  }
+
+  /** The sessions of this project for /sessions (0.6), newest first, at most `max`. */
+  async listSessions(max = 20): Promise<{ sessions: SessionSummary[]; total: number }> {
+    const all = await this.store.list();
+    const sessions: SessionSummary[] = [];
+    for (const { id, updated } of all.slice(0, max)) {
+      const records = await this.store.read(id).catch(() => undefined);
+      if (records !== undefined) sessions.push(summariseSession(id, updated, records));
+    }
+    return { sessions, total: all.length };
+  }
+
+  /**
+   * Continue another session of this project in the chat (0.6, /sessions <n|id>), as --resume
+   * does. `ref` is a number from the /sessions list or a session id (or its unique start).
+   */
+  async switchSession(ref: string): Promise<{ ok: boolean; text: string }> {
+    const all = await this.store.list();
+    const id = /^\d+$/.test(ref)
+      ? all[Number(ref) - 1]?.id
+      : (all.find((s) => s.id === ref) ?? onlyOne(all.filter((s) => s.id.startsWith(ref))))?.id;
+    if (id === undefined) {
+      return { ok: false, text: `There is no session "${ref}" in this project. Type /sessions.` };
+    }
+    if (id === this.current?.id) return { ok: true, text: `Session ${id} is already open.` };
+    try {
+      this.current = await resumeSession({
+        store: this.store,
+        root: this.root,
+        sessionId: id,
+        start: this.startFields(),
+      });
+    } catch (error) {
+      return { ok: false, text: (error as Error).message };
+    }
+    // Notes and approvals for the old session do not carry over; the process-wide ones do.
+    this.pendingNotes.length = 0;
+    const s = this.current;
+    return {
+      ok: true,
+      text: `Continuing session ${id} (${s.messages.length} messages, ${Math.round((s.contextTokens / this.currentLimits.contextWindow) * 100)}% of the context window). Read files again before you edit them.`,
+    };
+  }
+
+  /** The records of the current session, for /export (0.6). Redacted as on disk. */
+  async sessionRecords(): Promise<SessionRecord[] | undefined> {
+    return this.current === undefined ? undefined : this.store.read(this.current.id);
+  }
+
+  /**
+   * The models for /models (0.6): the known Claude models, then the user's from
+   * ~/.garuda/models.json. The main model is in the list, also when it is in neither.
+   */
+  modelList(): { spec: string; info: ModelInfo }[] {
+    const out: { spec: string; info: ModelInfo }[] = knownModels().map((m) => ({
+      spec: m.id,
+      info: m.info,
+    }));
+    for (const spec of this.modelChoices?.configured ?? []) {
+      if (out.some((m) => m.spec === spec)) continue;
+      try {
+        out.push({ spec, info: this.modelChoices?.resolve(spec).info ?? lookupModel(spec) });
+      } catch {
+        // A spec with an unknown provider: /models cannot use it, so it is not in the list.
+      }
+    }
+    if (!out.some((m) => m.spec === this.currentModelId)) {
+      out.unshift({
+        spec: this.currentModelId,
+        info: {
+          contextWindow: this.currentLimits.contextWindow,
+          ...(this.currentPrice === undefined ? {} : { price: this.currentPrice }),
+        },
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Switch the main model for the next turns of this chat (0.6, /models <n|spec|alias>). The
+   * session records the change; new chats start with -m or GARUDA_MODEL again. Explore keeps the
+   * start model. The prompt cache of the old model does not carry over.
+   */
+  async setModel(ref: string): Promise<{ ok: boolean; text: string }> {
+    const choices = this.modelChoices;
+    if (choices === undefined) return { ok: false, text: "This Garuda cannot switch models." };
+    const spec = /^\d+$/.test(ref)
+      ? this.modelList()[Number(ref) - 1]?.spec
+      : (aliasModel(ref) ?? ref);
+    if (spec === undefined) {
+      return { ok: false, text: `There is no model ${ref} in the list. Type /models.` };
+    }
+    if (spec === this.currentModelId) return { ok: true, text: `${spec} is already the model.` };
+    let resolved: ReturnType<typeof choices.resolve>;
+    let client: ModelClient;
+    try {
+      resolved = choices.resolve(spec);
+      client = await resolved.model();
+    } catch (error) {
+      return { ok: false, text: `Cannot use ${spec}: ${(error as Error).message}` };
+    }
+    this.model = client;
+    this.currentModelId = resolved.spec;
+    this.currentPrice = this.settings.price ?? resolved.info.price;
+    this.currentLimits = {
+      ...this.currentLimits,
+      contextWindow: this.settings.contextWindow ?? resolved.info.contextWindow,
+    };
+    this.maxTokens = resolved.maxTokens;
+    const session = this.current;
+    session?.journal?.write({ type: "model", sessionId: session.id, ...this.startFields() });
+    const lines = [
+      `The model is now ${resolved.spec} (${modelFacts(this.currentLimits.contextWindow, this.currentPrice)}). The next turn uses it; the prompt cache starts again.`,
+    ];
+    if (
+      session !== undefined &&
+      session.contextTokens > this.currentLimits.contextWindow * COMPACTION_DEFAULTS.threshold
+    ) {
+      lines.push(
+        "The conversation is too large for this model's context window: Garuda compacts it before the next request.",
+      );
+    }
+    if (this.currentPrice === undefined) {
+      lines.push(
+        `Garuda has no price for ${resolved.spec}. Set "price" for it in ~/.garuda/models.json to see cost.`,
+      );
+    }
+    return { ok: true, text: lines.join("\n") };
   }
 
   /** Run one turn: the user's prompt, then the loop until it stops. */
@@ -1087,4 +1263,23 @@ export class Runtime {
       limits: this.limits,
     };
   }
+}
+
+function onlyOne<T>(items: readonly T[]): T | undefined {
+  return items.length === 1 ? items[0] : undefined;
+}
+
+/** "1.0M context, $4/$20 per M tokens" for /models. */
+export function modelFacts(contextWindow: number, price: Price | undefined): string {
+  const window =
+    contextWindow >= 1_000_000
+      ? `${(contextWindow / 1_000_000).toFixed(1)}M`
+      : `${Math.round(contextWindow / 1_000)}k`;
+  const cost =
+    price === undefined
+      ? "price unknown"
+      : price.input === 0 && price.output === 0
+        ? "free"
+        : `$${price.input}/$${price.output} per M tokens`;
+  return `${window} context, ${cost}`;
 }

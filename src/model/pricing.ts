@@ -52,6 +52,11 @@ export function aliasModel(alias: string): string | undefined {
   return KNOWN.find(([prefix]) => prefix.startsWith(`claude-${alias}-`))?.[0];
 }
 
+/** The Claude models that Garuda knows, newest first (for /models, 0.6). */
+export function knownModels(): { id: string; info: ModelInfo }[] {
+  return KNOWN.map(([id, info]) => ({ id, info }));
+}
+
 export function lookupModel(modelId: string): ModelInfo {
   let best: { prefix: string; info: ModelInfo } | undefined;
   for (const [prefix, info] of KNOWN) {

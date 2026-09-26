@@ -32,7 +32,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 
 | Type | Fields |
 | --- | --- |
-| `start`, `resume` | sessionId, root, version, model, executor, isolation, limits (maxSteps, tokenBudget, contextWindow) |
+| `start`, `resume`, `model` | sessionId, root, version, model, executor, isolation, limits (maxSteps, tokenBudget, contextWindow). `model` (0.6): `/models` switched the model; resume and replay treat it like `resume`. |
 | `user` | message |
 | `assistant` | step, response, costUsd? |
 | `tool_results` | message, `calls` (per call: toolUseId, name, durationMs, executor and isolation for commands, `subagent` report for explore calls), `synthetic` for closed open calls |
@@ -50,6 +50,7 @@ interface SessionStore {
   openChild(sessionId, childId): Journal;   // a subagent run, kept with its parent (0.3)
   read(sessionId): Promise<SessionRecord[]>;
   latest(): Promise<string | undefined>;
+  list(): Promise<{ id; updated: Date }[]>;   // newest first (0.6, /sessions)
 }
 ```
 
@@ -59,6 +60,10 @@ interface SessionStore {
 one `appendFileSync`, so a crash loses at most the line in progress. Every string passes the
 `Redactor` first. Ids: `YYYYMMDD-HHMMSS-xxxx`. `MemoryJournal` serves tests. A shared store (for example
 Redis) can implement the same interface later.
+
+`list.ts` (0.6): `summariseSession(id, updated, records)` gives one `/sessions` row: the first line of the
+first prompt (60 characters), the number of prompts, the model of the last `start`/`resume`/`model` record,
+and the cost from `rebuildState`.
 
 ## Redaction (`redact.ts`)
 
@@ -91,4 +96,5 @@ before it edits it.
 
 ## Tests
 
-`test/sessions.test.ts` (journal, redaction, resume, replay), `test/m4.acceptance.test.ts`.
+`test/sessions.test.ts` (journal, redaction, resume, replay), `test/m4.acceptance.test.ts`,
+`test/sessionCommands.test.ts` (0.6: `/sessions`, `/models`, `/export`).

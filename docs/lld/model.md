@@ -151,6 +151,7 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
   to `claude-opus-5`). Unknown models get a 200k window and no price (cost shows as unknown).
 - Settings override: `model.price` (USD per million tokens: input, output, cacheRead, cacheWrite) and
   `model.contextWindow`.
+- `knownModels()` (0.6): the table, newest first, for `/models`.
 - `costOf(usage, price)`, `totalTokens(usage)`, `contextSize(usage)` (input + cache read + cache write +
   output of the last response: the size of the context now).
 

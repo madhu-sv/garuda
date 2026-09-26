@@ -24,6 +24,8 @@ export interface SessionStore {
   read(sessionId: string): Promise<SessionRecord[]>;
   /** The most recently written session, or undefined. */
   latest(): Promise<string | undefined>;
+  /** The sessions of this project, newest first (0.6, /sessions). */
+  list(): Promise<{ id: string; updated: Date }[]>;
 }
 
 export const SESSIONS_DIR = join(".garuda", "sessions");
@@ -74,18 +76,22 @@ export class FileSessionStore implements SessionStore {
   }
 
   async latest(): Promise<string | undefined> {
+    return (await this.list())[0]?.id;
+  }
+
+  async list(): Promise<{ id: string; updated: Date }[]> {
     let names: string[];
     try {
       names = (await readdir(this.dir)).filter((name) => name.endsWith(".jsonl"));
     } catch {
-      return undefined;
+      return [];
     }
-    let best: { id: string; mtime: number } | undefined;
+    const out: { id: string; updated: Date }[] = [];
     for (const name of names) {
-      const mtime = (await stat(join(this.dir, name))).mtimeMs;
-      if (best === undefined || mtime > best.mtime) best = { id: basename(name, ".jsonl"), mtime };
+      const info = await stat(join(this.dir, name)).catch(() => undefined);
+      if (info?.isFile()) out.push({ id: basename(name, ".jsonl"), updated: info.mtime });
     }
-    return best?.id;
+    return out.sort((a, b) => b.updated.getTime() - a.updated.getTime());
   }
 }
 

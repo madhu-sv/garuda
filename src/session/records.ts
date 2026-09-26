@@ -18,7 +18,8 @@ interface Base {
 }
 
 export interface StartRecord extends Base {
-  type: "start" | "resume";
+  /** "model" (0.6): the user switched the model with /models; the next turns use it. */
+  type: "start" | "resume" | "model";
   sessionId: string;
   root: string;
   version: string;
