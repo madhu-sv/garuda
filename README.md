@@ -325,7 +325,7 @@ Garuda runs commands in an OS sandbox: Seatbelt (`sandbox-exec`) on macOS, bubbl
 In the sandbox, a command:
 
 - can read every file, except secrets in your home folder (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`,
-  `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains and more);
+  `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains, Garuda's and Claude Code's tokens and more);
 - can write only in the working root, the temp folders and package caches (`~/.cache`, `~/.npm`, pnpm,
   and for a Java or Python project `~/.m2/repository`, `~/.gradle/caches` and similar);
 - cannot write `.git/hooks`, `.git/config` or `.garuda/` in the root, because those run or apply later

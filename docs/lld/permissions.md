@@ -143,7 +143,7 @@ grep never searches them; the code index never indexes them.
 | --- | --- |
 | Writable | the root, `os.tmpdir()` and `/tmp` (real paths), `~/.cache`, `~/.npm`, `~/.local/share/pnpm`, `~/Library/Caches`, `~/Library/pnpm`, plus `sandbox.writePaths`, plus the caches of the detected language profiles (for example `~/.m2/repository`) |
 | Read-only inside the root | `.git/hooks`, `.git/config`, `.garuda` (they run or apply later, outside the sandbox) |
-| Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, plus `sandbox.denyRead` |
+| Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, `~/.garuda/mcp-auth.json`, `~/.claude.json`, `~/.claude/.credentials.json` (0.5: tokens of Garuda and Claude Code; the rest of `~/.garuda` and `~/.claude` stays readable, for skills), plus `sandbox.denyRead` |
 
 `~/` means the home folder; other relative paths start at the root.
 

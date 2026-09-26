@@ -35,6 +35,16 @@ describe("sandbox paths", () => {
     expect(p.denyWritePaths).toEqual(["/repo/.git/hooks", "/repo/.git/config", "/repo/.garuda"]);
     expect(p.denyReadPaths).toContain("/home/u/.ssh");
     expect(p.denyReadPaths).toContain("/home/u/.aws");
+    // Tokens of Garuda and Claude Code (0.5); skills in ~/.garuda and ~/.claude stay readable.
+    expect(p.denyReadPaths).toEqual(
+      expect.arrayContaining([
+        "/home/u/.garuda/mcp-auth.json",
+        "/home/u/.claude.json",
+        "/home/u/.claude/.credentials.json",
+      ]),
+    );
+    expect(p.denyReadPaths).not.toContain("/home/u/.garuda");
+    expect(p.denyReadPaths).not.toContain("/home/u/.claude");
   });
 
   it("adds paths from settings: ~/ is the home folder, relative paths start at the root", () => {
@@ -213,6 +223,19 @@ describe.runIf(osExecutor !== undefined)("OS sandbox on this machine", () => {
   it("cannot read denied paths", async () => {
     const r = await executor.run(`cat "${secret}"`, sandboxed());
     expect(r.stdout.text).not.toContain("top secret");
+  });
+
+  it("a denied file hides only that file: the rest of its folder stays readable (0.5)", async () => {
+    // Like ~/.garuda: mcp-auth.json is hidden, skills/ is not.
+    const folder = join(base, "dot-garuda");
+    mkdirSync(join(folder, "skills"), { recursive: true });
+    writeFileSync(join(folder, "mcp-auth.json"), "token-123\n");
+    writeFileSync(join(folder, "skills", "SKILL.md"), "skill text\n");
+    const policy = sandboxed({ denyReadPaths: [join(folder, "mcp-auth.json")] });
+    const hidden = await executor.run(`cat "${folder}/mcp-auth.json"`, policy);
+    expect(hidden.stdout.text).not.toContain("token-123");
+    const open = await executor.run(`cat "${folder}/skills/SKILL.md"`, policy);
+    expect(open.stdout.text).toContain("skill text");
   });
 
   it("has no network", async () => {
