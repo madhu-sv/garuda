@@ -87,7 +87,10 @@ commander uses `enablePositionalOptions()`, so options after `eval` belong to `e
 
 - Model text: stdout, as it streams. Everything else: stderr, on a new line.
 - Tool lines: `● name summary` and `⎿ result summary` (`summariseCall`, `summariseResult`). For MCP
-  results the summary skips the `<mcp_result …>` line.
+  results the summary skips the `<mcp_result …>` line. Since 0.5 the web and extension tools get short
+  summaries instead of their markers: `web_search` → `5 results`; `web_fetch` → `<page title> · 12,400
+  characters` (or the part read); `skill` → `loaded <name>` or `read <file>`; `agent` → `answer (N line(s)) ·
+  <name>: N steps · Xk tokens`.
 - Colors only when stderr is a TTY and `NO_COLOR` is not set.
 
 Retry notices: a `model_retry` event prints "The connection to the model broke (terminated). Retrying

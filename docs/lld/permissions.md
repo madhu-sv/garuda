@@ -99,6 +99,9 @@ contain `-`.
 | command | `*` matches any text. The command is split at `;`, `&&`, `\|\|`, `\|` and `$(…)`. An allow rule must match every part; a deny rule needs one part (or the whole command). | `bash(pnpm test*)`, `bash(rm -rf*)` |
 | url | A host; `*.example.com` matches subdomains only. | `web_fetch(docs.python.org)` |
 | input (web_search, 0.5) | Only the bare tool rule: it allows every search. | `web_search` |
+
+A tool's `CallInfo` may carry a `title` (0.5): the engine passes it to the approver as the question's header
+(web_search: "web_search wants to search the web:").
 | input | Only bare tool rules match. | `mcp__github__get_issue`, `mcp__github__*` |
 
 ## Settings (`settings.ts`)

@@ -163,6 +163,33 @@ export function summariseResult(call: ToolUseBlock, outcome: ToolOutcome): strin
       return first;
     case "todo_write":
       return /\((\d+ of \d+ done)\)/.exec(first)?.[1] ?? first;
+    case "web_search": {
+      const count = outcome.content.split("\n").filter((l) => /^\d+\. /.test(l)).length;
+      return count === 0 ? "no results" : `${count} result${count === 1 ? "" : "s"}`;
+    }
+    case "web_fetch": {
+      // "<web_result url=… title="T">" then "[characters a–b of n]".
+      const title = / title="([^"]*)"/.exec(first)?.[1];
+      const range = /^\[characters (\d+)–(\d+) of (\d+)\]$/m.exec(outcome.content);
+      const size =
+        range === null
+          ? `${lines} line(s)`
+          : range[1] === "0" && range[2] === range[3]
+            ? `${Number(range[3]).toLocaleString("en")} characters`
+            : `characters ${range[1]}–${range[2]} of ${Number(range[3]).toLocaleString("en")}`;
+      return title === undefined ? size : `${cut(title, 80)} · ${size}`;
+    }
+    case "skill": {
+      const file = / path="([^"]*)"/.exec(first)?.[1];
+      const name = / name="([^"]*)"/.exec(first)?.[1] ?? / skill="([^"]*)"/.exec(first)?.[1];
+      return file === undefined ? `loaded ${name ?? "the skill"}` : `read ${file}`;
+    }
+    case "agent": {
+      // The answer's size and the run's trailer: "[agent reviewer: 4 steps · 9.1k tokens]".
+      const trailer = /^\[agent (.*)\]$/m.exec(outcome.content)?.[1];
+      const answerLines = outcome.content.split("\n[agent ")[0]?.trim().split("\n").length ?? 0;
+      return `answer (${answerLines} line(s))${trailer === undefined ? "" : ` · ${trailer}`}`;
+    }
     case "explore": {
       // The answer's size and the run's trailer: "[explore: 7 steps · 12.3k tokens]".
       const trailer = /^\[explore: (.*)\]$/m.exec(outcome.content)?.[1];

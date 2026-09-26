@@ -124,7 +124,8 @@ Only the user configures search: `~/.garuda/search.json`, or a key in the enviro
 Only when a backend is set and `web.enabled` is not false. Input: `query` (2–400 characters), `max_results`
 (1–10). Not read-only: the query leaves the machine.
 
-- Approval: the target is `input` with the query; the preview shows the query and the backend. "Yes, for
+- Approval: the target is `input` with the query; the header is "web_search wants to search the web:"
+  (`CallInfo.title`), and the preview shows the query and the backend. "Yes, for
   this session" allows all later searches in the session; the rule `web_search` in `permissions.allow`
   allows them for good. Plan mode allows a search only with that rule (it never asks), like web_fetch.
 - A query with a run of 40 or more letters, digits or `+/_=-` is refused before the question: it could be a

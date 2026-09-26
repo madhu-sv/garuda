@@ -66,6 +66,7 @@ export function createWebSearchTool(options: WebSearchOptions): Tool<Input, stri
       }
       return {
         target: { kind: "input", json: JSON.stringify({ query }) },
+        title: "web_search wants to search the web:",
         preview: `  search: ${cleanText(query)}\n  via ${via}`,
       };
     },

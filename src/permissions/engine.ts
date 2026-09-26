@@ -129,6 +129,7 @@ export class PermissionEngine implements PermissionGate {
         target: asked,
         preview: info?.preview ?? describeTarget(asked),
         isolation: this.isolation,
+        ...(info?.title === undefined ? {} : { title: info.title }),
       },
       signal,
     );

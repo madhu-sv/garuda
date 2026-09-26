@@ -36,6 +36,8 @@ export interface CallInfo {
   target: CallTarget;
   /** What the user sees before approval: a diff or the command (F18). */
   preview?: string;
+  /** The question's header, when the default for the target kind does not fit (0.5, web_search). */
+  title?: string;
 }
 
 export interface PermissionRequest {

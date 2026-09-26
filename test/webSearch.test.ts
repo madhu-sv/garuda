@@ -298,3 +298,53 @@ describe("web search in the runtime (0.5)", () => {
     expect(off.runtime.toolNames()).not.toContain("web_search");
   });
 });
+
+describe("web tools in the terminal (0.5)", () => {
+  const call = (name: string) => ({ type: "tool_use" as const, id: "x", name, input: {} });
+  const ok = (content: string) => ({ content, isError: false });
+
+  it("short result lines instead of the raw markers", async () => {
+    const { summariseResult } = await import("../src/cli/renderer.js");
+    const found = resultsText("q", [
+      { title: "A", url: "https://a.dev", snippet: "a" },
+      { title: "B", url: "https://b.dev", snippet: "b" },
+    ]);
+    expect(summariseResult(call("web_search"), ok(found))).toBe("2 results");
+    expect(summariseResult(call("web_search"), ok(resultsText("q", [])))).toBe("no results");
+    const page =
+      '<web_result url="https://vitest.dev/blog/vitest-4" type="text/html" title="Vitest 4.0 is out! | Vitest">\n[characters 0–12400 of 12400]\ntext\n</web_result>';
+    expect(summariseResult(call("web_fetch"), ok(page))).toBe(
+      "Vitest 4.0 is out! | Vitest · 12,400 characters",
+    );
+    const part =
+      '<web_result url="https://x.dev" type="text/plain">\n[characters 30000–60000 of 90000]\n';
+    expect(summariseResult(call("web_fetch"), ok(part))).toBe("characters 30000–60000 of 90,000");
+    expect(
+      summariseResult(call("skill"), ok('<skill name="pdf" folder="f">\nbody\n</skill>')),
+    ).toBe("loaded pdf");
+    expect(
+      summariseResult(call("skill"), ok('<skill_file skill="pdf" path="references/a.md">\nx')),
+    ).toBe("read references/a.md");
+    expect(
+      summariseResult(
+        call("agent"),
+        ok("Line 1\nLine 2\n\n[agent fixer: 3 steps · 1.2k tokens]\n[calls: none]"),
+      ),
+    ).toBe("answer (2 line(s)) · fixer: 3 steps · 1.2k tokens");
+  });
+
+  it("the search question has its own header", async () => {
+    const { header } = await import("../src/cli/approver.js");
+    const tool = createWebSearchTool({ config: BRAVE, fetch: fakeFetch({}).fn });
+    const info = await tool.describe?.({ query: "vitest 4" }, toolContext("/tmp"));
+    expect(info?.title).toBe("web_search wants to search the web:");
+    const text = header({
+      tool: "web_search",
+      target: info?.target ?? { kind: "input", json: "{}" },
+      preview: "",
+      isolation: "none",
+      ...(info?.title === undefined ? {} : { title: info.title }),
+    });
+    expect(text).toContain("web_search wants to search the web:");
+  });
+});
