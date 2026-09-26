@@ -28,13 +28,20 @@ export async function runRepl(
   sessionPath: (id: string) => string,
   exitNow: () => never,
   io: ReplIO = { input: process.stdin, output: process.stderr },
+  /** A first line to run, as if typed (garuda init runs "/init"). */
+  firstInput?: string,
 ): Promise<void> {
   const history: string[] = [];
   const ask = lineSource(io);
   let lastInterrupt = 0;
+  let first = firstInput;
 
   for (;;) {
-    const input = await ask(runtime.mode === "plan" ? "plan› " : "› ", history);
+    const input: Input =
+      first !== undefined
+        ? { kind: "line", text: first }
+        : await ask(runtime.mode === "plan" ? "plan› " : "› ", history);
+    first = undefined;
     if (input.kind === "eof") return;
     if (input.kind === "interrupt") {
       if (Date.now() - lastInterrupt < 2_000) return;

@@ -16,6 +16,7 @@ export const BUILTIN_COMMANDS: readonly string[] = [
   "plan",
   "build",
   "new",
+  "init",
   "undo",
   "redo",
   "exit",

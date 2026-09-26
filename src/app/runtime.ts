@@ -519,6 +519,28 @@ export class Runtime {
     return this.mcp?.status() ?? [];
   }
 
+  /**
+   * /init (0.5): migrate other agents' files, offer git init, and give the prompt of the init turn.
+   * The files it writes are new only; the turn's own writes go through the normal approvals.
+   */
+  async init(signal: AbortSignal): Promise<{ report: string[]; prompt: string }> {
+    const { runInit } = await import("../init/run.js");
+    const result = await runInit({
+      root: this.root,
+      home: this.commandsHome,
+      approver: this.approver,
+      executor: this.executor,
+      signal,
+    });
+    const report = [...result.report];
+    if (this.selectedMode === "plan") {
+      report.push(
+        "Plan mode is on: the init turn can only read and plan. /build lets it write AGENTS.md.",
+      );
+    }
+    return { report, prompt: result.prompt };
+  }
+
   /** /mcp logout (0.4): forget the OAuth tokens of a remote server. Returns how many entries went. */
   async mcpLogout(server: string): Promise<number> {
     if (this.mcp !== undefined) return this.mcp.logout(server);

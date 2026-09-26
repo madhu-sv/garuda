@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.4.0. This document shows how the parts work together. The component documents in
+Version 0.5.0-dev. This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -207,6 +207,13 @@ Before each turn, the runtime takes a snapshot of the files in a git store of Ga
 (`~/.garuda/snapshots`) and writes a `snapshot` record. `/undo` asks, restores the files to the last
 snapshot and cuts the turn out of the messages (`undo` record); `/redo` does the reverse. Details:
 [lld/undo.md](lld/undo.md).
+
+### Init (0.5)
+
+`garuda init` starts the chat with `/init` as the first line. `/init` reads other agents' files (no
+model), shows a preview and writes new files only after one yes; it offers `git init`; then it runs an
+init turn whose prompt depends on the folder: read the code and write `AGENTS.md`, or ask what to build.
+Details: [lld/init.md](lld/init.md).
 
 ## 8. Context management
 

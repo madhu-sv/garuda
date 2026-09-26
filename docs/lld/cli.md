@@ -9,7 +9,7 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 
 | File | Role |
 | --- | --- |
-| `index.ts` | Entry point (commander). Modes: chat, `-p`, stdin task, `--resume`, `--replay`, `eval`. |
+| `index.ts` | Entry point (commander). Modes: chat, `-p`, stdin task, `--resume`, `--replay`, `eval`, `init` (the chat with `/init` as the first line, `firstInput`). With no first line, the banner gets `initTip` (see [init.md](init.md)). |
 | `turn.ts` | `runTurnInTerminal`: one turn with Ctrl-C handling, usage line and stop message. |
 | `repl.ts` | Plain chat (readline). Used for pipes, `GARUDA_PLAIN=1`, and the single binary. |
 | `renderer.ts` | `Renderer` interface and `PlainRenderer`: model text to stdout, activity to stderr. |
@@ -70,7 +70,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /new /exit]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /new /exit]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
@@ -125,6 +125,9 @@ interface ChatState {
   <server>` removes a remote server's tokens. See [mcp.md](mcp.md).
 - **Undo (0.4):** `/undo` and `/redo` ask first (the turn, the files, the conversation), then restore. See
   [undo.md](undo.md).
+- **Init (0.5):** `/init` runs `Runtime.init` (migration and git init, with questions), prints the
+  report and returns the init turn's prompt. `garuda init` queues `/init` with `store.enqueue` (the plain
+  REPL takes it as its first line). See [init.md](init.md).
 - **LSP (0.4):** `--lsp` turns diagnostics on for the run; `/lsp` shows the state, and
   `/lsp install <language>` runs the managed install. See [lsp.md](lsp.md).
 - **Queue:** Enter while busy appends to `queue`; `nextInput()` takes from the queue first. Esc clears it.

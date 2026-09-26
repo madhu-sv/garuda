@@ -152,6 +152,11 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     }
   }
 
+  /** Queue a line to run next, as if typed (garuda init). */
+  enqueue(text: string): void {
+    this.update({ queue: [...this.state.queue, text] });
+  }
+
   /** Esc: drop queued lines. */
   clearQueue(): void {
     if (this.state.queue.length > 0) this.update({ queue: [] });

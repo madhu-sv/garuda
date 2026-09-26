@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.4.0.
+Garuda is a terminal coding agent. This is version 0.5.0-dev.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -16,6 +16,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.2: OS sandbox, Ink chat, MCP client (stdio), web_fetch, hooks | Done |
 | 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
 | 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo, remote MCP with OAuth | Done |
+| 0.5: `garuda init` (AGENTS.md, migrate from other agents) | In progress |
 
 ## Use
 
@@ -84,7 +85,8 @@ Set the context window, price and output limit per model, and add providers, in 
 `garuda` with no task starts a chat. Each line is one task; the conversation carries over.
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
-  (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers), `/exit`.
+  (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
+  `/init` (set up this folder, see below), `/exit`.
 - Ctrl-C during a task stops the task and kills its commands. The chat goes on.
   A second Ctrl-C during the task exits Garuda at once.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
@@ -101,6 +103,24 @@ Set the context window, price and output limit per model, and add providers, in 
 - `garuda --resume` continues the latest session in chat mode.
 
 Model text goes to stdout; tool activity and notes go to stderr. So `garuda -p "…" > answer.md` keeps only the answer.
+
+## Init: set up a folder
+
+`garuda init` (or `/init` in the chat) sets up the current folder:
+
+1. It reads the files of other coding agents: Claude Code, OpenCode, Codex, Gemini CLI, Tabnine, Cursor
+   and Copilot. It shows what goes where (MCP servers, slash commands, permission rules), then asks once.
+   It writes **new files only**: an existing `mcp.json`, `settings.json` or command file is never changed.
+   It adds Garuda's local folders to `.gitignore`. Secret values (tokens, keys) are never copied; they
+   become `${NAME}`, so set them in your environment.
+2. If the folder is not a git repository, it offers `git init`.
+3. In a code project, the model reads the code and writes or improves `AGENTS.md` (build and test
+   commands, structure, conventions). It also reads other agents' instruction files (`GEMINI.md`,
+   `.cursorrules`, `.github/copilot-instructions.md` …) and carries over what applies. In an empty folder,
+   it asks what you want to build first.
+
+When a folder has no `AGENTS.md`, or has another agent's files, the chat start shows a hint to type `/init`.
+Imported project servers and commands still ask for consent the first time. Details: [docs/lld/init.md](docs/lld/init.md).
 
 ## Custom slash commands
 

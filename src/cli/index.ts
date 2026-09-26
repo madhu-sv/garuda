@@ -24,6 +24,7 @@ import { runTurnInTerminal } from "./turn.js";
  *   garuda --replay <id|file>   replay a session with no API calls
  *   garuda eval                 run the eval tasks (N5)
  *   garuda lsp [install <lang>] language servers for diagnostics (0.4)
+ *   garuda init                 set up this folder, then chat (0.5): same as /init
  */
 
 interface Options {
@@ -34,6 +35,8 @@ interface Options {
   subagentModel?: string;
   resume?: string | true;
   replay?: string;
+  /** A first chat line, as if typed: `garuda init` runs "/init". */
+  firstInput?: string;
 }
 
 async function main(): Promise<void> {
@@ -86,6 +89,16 @@ async function main(): Promise<void> {
         model: options.model ?? process.env.GARUDA_MODEL,
         subagentModel: options.subagentModel ?? process.env.GARUDA_SUBAGENT_MODEL,
       });
+    });
+
+  program
+    .command("init")
+    .description(
+      "set up this folder (AGENTS.md; commands, MCP servers and rules from Claude Code, OpenCode, Codex, Gemini CLI, Tabnine, Cursor, Copilot), then chat",
+    )
+    .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
+    .action(async (options: { model?: string }) => {
+      process.exitCode = await start({ ...options, firstInput: "/init" }, program);
     });
 
   const lsp = program
@@ -215,19 +228,40 @@ async function start(options: Options, program: Command): Promise<number> {
     extras: runtime.extras(),
     ink: ink !== undefined,
   };
-  const startBanner = banner(bannerInfo, {
+  let startBanner = banner(bannerInfo, {
     columns: process.stdout.columns || 80,
     color: colorLevel(process.stdout),
   });
+  if (options.firstInput === undefined) {
+    const { initTip } = await import("../init/detect.js");
+    const tip = initTip(root);
+    if (tip !== undefined) startBanner += `\n${tip}`;
+  }
   const sessionPath = (id: string) => join(store.dir, `${id}.jsonl`);
   if (ink !== undefined) {
     const setEventTarget = (target: Renderer) => {
       events = target;
     };
-    await ink.runInkChat(runtime, approver, setEventTarget, startBanner, sessionPath, exitNow);
+    await ink.runInkChat(
+      runtime,
+      approver,
+      setEventTarget,
+      startBanner,
+      sessionPath,
+      exitNow,
+      options.firstInput,
+    );
   } else {
     process.stderr.write(`${startBanner}\n`);
-    await runRepl(runtime, terminalApprover, renderer, sessionPath, exitNow);
+    await runRepl(
+      runtime,
+      terminalApprover,
+      renderer,
+      sessionPath,
+      exitNow,
+      undefined,
+      options.firstInput,
+    );
   }
   await runtime.close();
   const id = runtime.session?.id;

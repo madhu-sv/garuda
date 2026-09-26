@@ -32,6 +32,7 @@ export const HELP = [
   "  /build     build mode: change files and run commands (the default)",
   "  /undo      take back the last turn: its file changes and its messages",
   "  /redo      bring back the last undone turn",
+  "  /init      set up this folder: AGENTS.md, and files from other agents (Claude Code, OpenCode …)",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -89,6 +90,10 @@ export async function runCommand(
   } else if (command === "/undo" || command === "/redo") {
     const signal = new AbortController().signal;
     renderer.info(await (command === "/undo" ? runtime.undo(signal) : runtime.redo(signal)));
+  } else if (command === "/init") {
+    const { report, prompt } = await runtime.init(new AbortController().signal);
+    if (report.length > 0) renderer.info(report.join("\n"));
+    return { prompt };
   } else if (command === "/new") {
     runtime.newSession();
     renderer.info("The next task starts a new session.");

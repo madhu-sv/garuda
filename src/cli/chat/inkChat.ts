@@ -19,9 +19,12 @@ export async function runInkChat(
   banner: string,
   sessionPath: (id: string) => string,
   exitNow: () => never,
+  /** A first line to run, as if typed (garuda init runs "/init"). */
+  firstInput?: string,
 ): Promise<void> {
   const store = new ChatStore(statusOf(runtime));
   store.print(banner);
+  if (firstInput !== undefined) store.enqueue(firstInput);
   approver.current = store;
   setEventTarget(store);
   const ink = render(createElement(App, { store }), { exitOnCtrlC: false });
