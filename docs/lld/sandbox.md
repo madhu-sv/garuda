@@ -6,6 +6,10 @@ Start every process that Garuda runs: bash commands, hooks, MCP servers (N8). Ap
 root, the environment allowlist, the timeout, the output cap, and — with an OS sandbox — the file and
 network rules. No other folder may import `child_process`.
 
+One exception to the Executor (0.6): `terminal.ts` `runInTerminal(argv)` runs the user's own editor
+(Ctrl-G, `/editor`) with the real terminal (`spawnSync`, `stdio: "inherit"`), because an editor needs the
+terminal and the Executor captures output. Only the chat calls it, on a key the user pressed; no tool can.
+
 ## Interface (`types.ts`)
 
 ```ts

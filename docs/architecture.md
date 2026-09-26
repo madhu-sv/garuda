@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.5.0. This document describes the parts of Garuda, their dependencies, the trust
+Version 0.6.0-dev. This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -31,7 +31,7 @@ flowchart LR
 | N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0). |
 | N5 | Measured quality | `garuda eval` runs fixed tasks in scratch folders and reports pass rate, steps, tokens and cost. |
 | N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). |
-| N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. |
+| N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. The user's own editor (Ctrl-G, 0.6) runs on the real terminal through `src/sandbox/terminal.ts`, never through a tool. |
 
 Other constraints: a single binary is possible (Node SEA), so Garuda uses no native add-ons; grep is
 written in TypeScript; the code index uses TypeScript 6 (the last compiler written in JavaScript).

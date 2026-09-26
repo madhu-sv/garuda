@@ -23,6 +23,11 @@ export async function runChat(
     if (input === undefined) return;
     const text = input.trim();
     let prompt = text;
+    // Ctrl-G's command form (0.6): the edited text comes back into the input line, not sent.
+    if (text === "/editor") {
+      store.openEditor();
+      continue;
+    }
     if (text.startsWith("/")) {
       store.echo(text);
       const result = await runCommand(text, { runtime, renderer: store, sessionPath });

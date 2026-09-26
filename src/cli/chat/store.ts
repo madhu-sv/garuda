@@ -80,6 +80,10 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   private answer: ((choice: ApprovalChoice) => void) | undefined;
   private lastOutput: { title: string; text: string } | undefined;
   private interruptAt = 0;
+  /** A stop of the running turn was asked (Esc or Ctrl-C): Esc does not ask again. */
+  private stopping = false;
+  /** Ctrl-G and /editor (0.6): the chat sets it; it edits the text in the user's editor. */
+  externalEdit: ((text: string) => { text?: string; problem?: string }) | undefined;
   private readonly paint: Paint;
   private readonly now: () => number;
 
@@ -163,11 +167,37 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   }
 
   /**
+   * Esc (0.6). During a turn: drop queued lines and stop the turn, like the first Ctrl-C. Esc never
+   * exits Garuda: a second Esc while the turn stops does nothing.
+   */
+  stopTurn(): void {
+    this.clearQueue();
+    if (!this.state.busy || this.stopping) return;
+    this.stopping = true;
+    this.onInterrupt();
+  }
+
+  /** Ctrl-G or /editor (0.6): edit the input line in $VISUAL or $EDITOR. The text is not sent. */
+  openEditor(): void {
+    if (this.externalEdit === undefined) {
+      this.warn("The external editor works only in the full chat on a terminal.");
+      return;
+    }
+    const result = this.externalEdit(this.state.editor.text);
+    if (result.problem !== undefined) this.warn(result.problem);
+    if (result.text !== undefined) {
+      this.editLine({ type: "clear" });
+      this.editLine({ type: "insert", text: result.text });
+    }
+  }
+
+  /**
    * Ctrl-C. During a turn: stop it (a second Ctrl-C exits, see runTurnInTerminal).
    * At the prompt: clear the line, or exit on a second Ctrl-C within 2 s.
    */
   interrupt(): void {
     if (this.state.busy) {
+      this.stopping = true;
       this.onInterrupt();
       return;
     }
@@ -209,11 +239,13 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   /** Start a turn. `show: false` when the line is already on screen (a custom command). */
   begin(prompt: string, show = true): void {
     if (show) this.add({ kind: "user", text: prompt });
+    this.stopping = false;
     this.update({ busy: true });
   }
 
   end(status: Partial<Status>): void {
     this.flushText();
+    this.stopping = false;
     this.update({ busy: false, running: [], status: { ...this.state.status, ...status } });
   }
 

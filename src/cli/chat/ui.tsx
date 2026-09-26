@@ -123,8 +123,8 @@ function Footer({ state }: { state: ChatState }) {
   if (contextPercent !== undefined) parts.push(`context ${contextPercent}%`);
   if (costUsd !== undefined) parts.push(`$${costUsd.toFixed(costUsd < 0.01 ? 4 : 2)}`);
   const keys = state.busy
-    ? "Ctrl-C stop · Esc clear queue · Ctrl-O output"
-    : "Ctrl-O output · /help";
+    ? "Esc stop · Ctrl-O output"
+    : "\\+Enter new line · Ctrl-G editor · /help";
   return (
     <Text>
       {mode === "plan" ? (
@@ -194,6 +194,7 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
   if (key.ctrl) {
     const actions: Record<string, () => void> = {
       o: () => store.showLastOutput(),
+      g: () => store.openEditor(),
       a: () => store.editLine({ type: "home" }),
       e: () => store.editLine({ type: "end" }),
       u: () => store.editLine({ type: "killToStart" }),
@@ -205,8 +206,19 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     actions[input]?.();
     return;
   }
-  if (key.return) store.submitLine();
-  else if (key.escape) store.clearQueue();
+  if (key.return) {
+    // A new line instead of sending: Alt+Enter, or "\" at the end of the text before the cursor.
+    const before = state.editor.text.slice(0, state.editor.cursor);
+    if (key.meta) store.editLine({ type: "insert", text: "\n" });
+    else if (before.endsWith("\\")) {
+      store.editLine({ type: "backspace" });
+      store.editLine({ type: "insert", text: "\n" });
+    } else store.submitLine();
+  } else if (key.escape) {
+    // Esc stops a running turn (and drops queued lines); it never exits Garuda.
+    if (state.busy) store.stopTurn();
+    else store.clearQueue();
+  }
   // Many terminals send Backspace as DEL, which Ink reports as `delete`.
   else if (key.backspace || key.delete) store.editLine({ type: "backspace" });
   else if (key.leftArrow) store.editLine({ type: key.meta ? "wordLeft" : "left" });

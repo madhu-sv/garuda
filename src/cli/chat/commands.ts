@@ -34,6 +34,7 @@ export const HELP = [
   "  /undo      take back the last turn: its file changes and its messages",
   "  /redo      bring back the last undone turn",
   "  /init      set up this folder: AGENTS.md, and files from other agents (Claude Code, OpenCode …)",
+  "  /editor    write the next prompt in $VISUAL or $EDITOR (also Ctrl-G)",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -96,6 +97,9 @@ export async function runCommand(
     const { report, prompt } = await runtime.init(new AbortController().signal);
     if (report.length > 0) renderer.info(report.join("\n"));
     return { prompt };
+  } else if (command === "/editor") {
+    // The Ink chat handles /editor before this; the plain chat has no input line to fill.
+    renderer.info("The external editor works in the full chat: Ctrl-G or /editor.");
   } else if (command === "/new") {
     runtime.newSession();
     renderer.info("The next task starts a new session.");

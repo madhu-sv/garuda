@@ -174,7 +174,17 @@ interface ChatState {
   REPL takes it as its first line). See [init.md](init.md).
 - **LSP (0.4):** `--lsp` turns diagnostics on for the run; `/lsp` shows the state, and
   `/lsp install <language>` runs the managed install. See [lsp.md](lsp.md).
-- **Queue:** Enter while busy appends to `queue`; `nextInput()` takes from the queue first. Esc clears it.
+- **Queue:** Enter while busy appends to `queue`; `nextInput()` takes from the queue first.
+- **Esc (0.6):** busy → `stopTurn()`: drop the queue and call `onInterrupt` once per turn (a `stopping` flag,
+  also set by Ctrl-C, reset by `begin`/`end`), so Esc never reaches the second-stop exit. Idle → drop the queue.
+- **New lines (0.6):** Enter with `meta` (Alt/Option+Enter) inserts `\n`; Enter after a `\` at the cursor
+  replaces the backslash with `\n`; else Enter submits. The footer shows `\+Enter new line · Ctrl-G editor`.
+- **External editor (0.6, `externalEditor.ts`):** Ctrl-G or `/editor` (the controller handles it before
+  `runCommand`) calls `store.openEditor()`. `inkChat` sets `store.externalEdit`: raw mode off, stdin paused,
+  `editInEditor(text)` (a 0600 temp file, `$VISUAL`/`$EDITOR`/`vi` as argv with quotes, `runInTerminal` from
+  `src/sandbox/terminal.ts` with the real terminal, trailing new lines dropped, the temp folder removed),
+  then raw mode on and `ink.clear()`. The text replaces the input line; it is not sent. A failed editor
+  gives a warning and keeps the line. The plain REPL joins lines that end with `\` (prompt `… `).
 - **Type-ahead at start:** keys typed before raw mode arrive as one chunk with `\n` (cooked mode);
   `typeAhead` treats each line end as Enter. Bracketed paste (`usePaste`) inserts text and never submits.
 - **Ctrl-C:** busy → `onInterrupt`; idle with text → clear the line; idle and empty → exit on a second

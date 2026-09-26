@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.5.0.
+Garuda is a terminal coding agent. This is version 0.6.0-dev.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -17,6 +17,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.3: open models (OpenAI-compatible), Java and Python profiles and evals, explore subagent (opt-in), stream retries | Done |
 | 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo, remote MCP with OAuth | Done |
 | 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output (Claude Code format), skills, custom agents, web search | Done |
+| 0.6: chat UX (Esc, multi-line, $EDITOR; @file, !cmd, completion; sessions and models in the chat; notifications, /diff), Claude's built-in search | In progress |
 
 ## Use
 
@@ -98,14 +99,18 @@ Set the context window, price and output limit per model, and add providers, in 
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
   (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
-  `/init` (set up this folder, see below), `/exit`. Your custom commands and skills run with `/name`.
-- Ctrl-C during a task stops the task and kills its commands. The chat goes on.
-  A second Ctrl-C during the task exits Garuda at once.
+  `/init` (set up this folder, see below), `/editor`, `/exit`. Your custom commands and skills run with `/name`.
+- Esc or Ctrl-C during a task stops the task and kills its commands (Esc also drops queued lines). The
+  chat goes on. A second Ctrl-C during the task exits Garuda at once; Esc never exits.
+- New lines: end the line with `\` and press Enter, or press Alt+Enter (Option+Enter on a Mac with
+  "Use Option as Meta"). Pasted text keeps its new lines and is never sent by itself.
+- Ctrl-G (or `/editor`) opens the prompt in `$VISUAL` or `$EDITOR` (default `vi`). The saved text comes
+  back into the input line; press Enter to send it. The plain chat also joins lines that end with `\`.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
 - On a terminal, the chat uses Ink (0.2): model text streams, and each finished paragraph gets
   basic markdown styles. A spinner shows running tools. The footer shows the model, the sandbox,
   the context use and the cost.
-- Type-ahead: type during a task and press Enter to queue the next task. Esc clears the queue.
+- Type-ahead: type during a task and press Enter to queue the next task.
   Keys typed before the chat is ready are kept too.
 - Ctrl-O prints the full output of the last tool call. ↑ and ↓ browse earlier inputs.
 - Approvals show the full diff or command in the scrollback. Answer with ↑↓ and Enter, or

@@ -50,9 +50,16 @@ export async function runRepl(
       continue;
     }
 
-    const text = input.text.trim();
+    // A line that ends with a backslash goes on on the next line (0.6), as in a shell.
+    let raw = input.text;
+    while (raw.endsWith("\\")) {
+      const more = await ask("… ", []);
+      if (more.kind !== "line") break;
+      raw = `${raw.slice(0, -1)}\n${more.text}`;
+    }
+    const text = raw.trim();
     if (text === "") continue;
-    history.unshift(input.text);
+    history.unshift(raw);
 
     let prompt = text;
     if (text.startsWith("/")) {

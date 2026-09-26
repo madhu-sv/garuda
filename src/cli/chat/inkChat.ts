@@ -4,6 +4,7 @@ import type { Runtime } from "../../app/runtime.js";
 import type { SwitchApprover } from "../approver.js";
 import type { Renderer } from "../renderer.js";
 import { runChat, statusOf } from "./controller.js";
+import { editInEditor } from "./externalEditor.js";
 import { ChatStore } from "./store.js";
 import { App } from "./ui.js";
 
@@ -28,6 +29,20 @@ export async function runInkChat(
   approver.current = store;
   setEventTarget(store);
   const ink = render(createElement(App, { store }), { exitOnCtrlC: false });
+  // Ctrl-G and /editor (0.6): give the terminal to the editor, then take it back.
+  store.externalEdit = (text) => {
+    const stdin = process.stdin;
+    const raw = stdin.isTTY === true && stdin.isRaw;
+    if (raw) stdin.setRawMode(false);
+    stdin.pause();
+    try {
+      return editInEditor(text);
+    } finally {
+      if (raw) stdin.setRawMode(true);
+      stdin.resume();
+      ink.clear();
+    }
+  };
   const exitClean = (): never => {
     ink.unmount();
     return exitNow();
