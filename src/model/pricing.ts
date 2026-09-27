@@ -70,6 +70,16 @@ export function lookupModel(modelId: string): ModelInfo {
 /** Claude's web search (0.6): USD per search ($10 per 1,000), on top of the tokens. */
 export const WEB_SEARCH_USD = 0.01;
 
+/** The Batch API price (0.7): half of every token price, cache reads and writes too. */
+export function batchPrice(price: Price): Price {
+  return {
+    input: price.input / 2,
+    output: price.output / 2,
+    cacheRead: price.cacheRead / 2,
+    cacheWrite: price.cacheWrite / 2,
+  };
+}
+
 /** Cost of one response in USD, server web searches included. */
 export function costOf(usage: Usage, price: Price): number {
   return (

@@ -231,3 +231,94 @@ function fromWireUsage(usage: Anthropic.Messages.Usage): Usage {
     ...(searches > 0 ? { webSearches: searches } : {}),
   };
 }
+
+export interface AnthropicBatchClientOptions extends AnthropicClientOptions {
+  /** Waits between status checks, in ms; the last one repeats. Default: 5 s, 10 s, 20 s, then 30 s. */
+  pollMs?: readonly number[];
+}
+
+/** The Batch API's default waits between status checks. */
+export const BATCH_POLL_MS: readonly number[] = [5_000, 10_000, 20_000, 30_000];
+
+/**
+ * The Anthropic Message Batches API as a model client (0.7): each request goes out as a batch of
+ * one, at 50% of the token price. The client waits until the batch ends (usually minutes, at most
+ * 24 hours), then gives the result as one response. No streaming: the text comes all at once.
+ * An abort cancels the batch. A result that failed with an overload or an API error is thrown as
+ * a transient error, so the loop sends the request again.
+ */
+export class AnthropicBatchClient implements ModelClient {
+  readonly serverTools = ["web_search"] as const;
+  private readonly client: Anthropic;
+  private readonly model: string;
+  private readonly pollMs: readonly number[];
+
+  constructor(options: AnthropicBatchClientOptions) {
+    this.model = options.model;
+    this.pollMs = options.pollMs ?? BATCH_POLL_MS;
+    this.client =
+      options.client ??
+      new Anthropic(options.apiKey === undefined ? {} : { apiKey: options.apiKey });
+  }
+
+  async *stream(request: ModelRequest, options?: StreamOptions): AsyncIterable<ModelEvent> {
+    const signal = options?.signal;
+    const params = toWireParams(
+      this.model,
+      request,
+    ) as Anthropic.Messages.MessageCreateParamsNonStreaming;
+    const batch = await this.client.messages.batches.create(
+      { requests: [{ custom_id: "garuda", params }] },
+      signal === undefined ? {} : { signal },
+    );
+    try {
+      for (let i = 0; ; i++) {
+        await wait(this.pollMs[Math.min(i, this.pollMs.length - 1)] ?? 30_000, signal);
+        const state = await this.client.messages.batches.retrieve(batch.id);
+        if (state.processing_status === "ended") break;
+      }
+    } catch (error) {
+      // An abort (Ctrl-C, a finish-by time): stop the batch, so it costs nothing more.
+      await this.client.messages.batches.cancel(batch.id).catch(() => undefined);
+      throw error;
+    }
+    const results = await this.client.messages.batches.results(batch.id);
+    for await (const item of results) {
+      if (item.custom_id !== "garuda") continue;
+      const result = item.result;
+      if (result.type === "succeeded") {
+        const response = fromWireMessage(result.message);
+        const text = response.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+        if (text !== "") yield { type: "text_delta", text };
+        yield { type: "response", response };
+        return;
+      }
+      if (result.type === "errored") {
+        const detail = result.error.error;
+        throw Object.assign(new Error(`Batch request failed: ${detail.message}`), {
+          error: result.error,
+        });
+      }
+      throw new Error(`The batch request was ${result.type}.`);
+    }
+    throw new Error("The batch ended without a result.");
+  }
+}
+
+function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}

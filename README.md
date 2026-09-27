@@ -291,7 +291,14 @@ garuda eval -s hard --repeat 3 --index lookup  # the same, with find_symbol and 
 garuda eval -s java                        # 5 Maven projects with JUnit 5
 garuda eval -s python                      # 5 pytest projects
 garuda eval -s hard --repeat 3 --subagents on   # A/B: the same, with the explore subagent
+garuda eval --parallel 4                   # 4 tasks at the same time
+garuda eval --batch on                     # A/B: model calls through the Batch API (half price, slow)
 ```
+
+`--batch on` (0.7, Anthropic models) sends every model call as a batch of one: half the token price,
+but each step waits until its batch ends (usually minutes). It runs all tasks at the same time (up to 20;
+`--parallel` changes it) and gives each task 12 hours. The report shows the share of tokens from the
+prompt cache and the wall time, to compare with `--batch off`.
 
 The Java and Python suites need a toolchain. `garuda eval` checks it before the first model call and
 says what is missing:

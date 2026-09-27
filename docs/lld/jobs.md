@@ -125,7 +125,8 @@ offers it (`createJob` needs the `launchd` option), so no other caller and no te
 
 ## Later (0.7 plan)
 
-The Batch API as the model backend with a finish-by time, measured with `garuda eval --batch` first.
+The Batch API as the model backend with a finish-by time (default 07:00), after the measurement with
+`garuda eval --batch on` (see [evals.md](evals.md)).
 
 ## Tests
 

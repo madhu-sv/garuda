@@ -77,6 +77,7 @@ environment list.
 garuda eval [-m model] [-s basic|hard|java|python|all] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
+            [--batch on|off] [--parallel n]
 garuda eval --prepare java|python
 ```
 
@@ -89,11 +90,18 @@ Output: a live line per tool call (and per model retry), a table (PASS/FAIL/ERR,
 time, stop reason), totals, a mean per task for `--repeat`, and `report.json`. Exit code 0 when all pass,
 2 otherwise.
 
+`--parallel n` (0.7) runs n tasks at the same time (a small pool; the results keep the task order).
+`--batch on` (0.7, Anthropic models only) makes each task's model client the `AnthropicBatchClient`: every
+model call is a batch of one at half price (`batchPrice`), and the step waits until the batch ends. It
+sets `--parallel` to all tasks (up to 20) and the task time limit to 12 hours. The totals line adds the
+share of tokens read from the prompt cache (batch caching is best effort), and the report the wall time;
+`report.json` records `batch`, `parallel` and `wallMs`, and each result its `cacheReadTokens`.
+
 Error runs: a run that throws (stop reason `error`, for example an API connection that broke even after
 the loop's retries) says nothing about the agent. The report marks it `ERR`, leaves it out of the pass
 count and the per-task means, and names the number in the totals line (`17/17 passed · 1 error run(s)
 not counted`). Its tokens and cost still count in the totals. A task that runs longer than 10 minutes is
-a failure with the stop reason `timeout`, not an error.
+a failure with the stop reason `timeout`, not an error (12 hours with `--batch on`).
 
 ## Method
 

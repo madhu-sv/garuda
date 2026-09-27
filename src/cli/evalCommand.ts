@@ -8,6 +8,7 @@ import {
   type CodeIndexMode,
   DEFAULT_CODE_INDEX_MODE,
 } from "../knowledge/mode.js";
+import { batchPrice } from "../model/pricing.js";
 import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
 import { createExecutor, EXECUTOR_NAMES, type ExecutorName } from "../sandbox/index.js";
 import { newSessionId } from "../session/store.js";
@@ -34,7 +35,14 @@ export interface EvalCommandOptions {
   todo?: string;
   /** --lsp on|off: language server errors in edit results (0.4). */
   lsp?: string;
+  /** --batch on|off: model calls through the Batch API (0.7, Anthropic only). */
+  batch?: string;
+  /** --parallel <n>: tasks at the same time. Default 1; with --batch on, all tasks (up to 20). */
+  parallel?: number;
 }
+
+/** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
+export const BATCH_TASK_TIMEOUT_MS = 12 * 60 * 60_000;
 
 /** `garuda eval` (N5). Results go to .garuda/evals/<run-id>/ in the current folder. */
 export async function runEvalCommand(options: EvalCommandOptions): Promise<number> {
@@ -91,6 +99,16 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const lspMode = options.lsp ?? "off";
   if (lspMode !== "on" && lspMode !== "off") {
     process.stderr.write(`Unknown lsp mode ${options.lsp}. Use: on, off.\n`);
+    return 1;
+  }
+  const batchMode = options.batch ?? "off";
+  if (batchMode !== "on" && batchMode !== "off") {
+    process.stderr.write(`Unknown batch mode ${options.batch}. Use: on, off.\n`);
+    return 1;
+  }
+  const createBatch = resolved.createBatch;
+  if (batchMode === "on" && createBatch === undefined) {
+    process.stderr.write(`--batch on needs an Anthropic model; ${resolved.spec} is not one.\n`);
     return 1;
   }
   let sub: ResolvedModel | undefined;
@@ -162,18 +180,35 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     executor.isolation === "none"
       ? "commands run on this machine with no sandbox"
       : `commands run in the ${executor.name} sandbox`;
+  const parallel = Math.max(
+    1,
+    options.parallel ?? (batchMode === "on" ? Math.min(tasks.length, 20) : 1),
+  );
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
+  if (batchMode === "on") {
+    process.stderr.write(
+      "Batch API: each model call waits for its batch (minutes, sometimes more) at half the token price.\n\n",
+    );
+  }
+  const started = Date.now();
+  const batchInfo =
+    resolved.info.price === undefined
+      ? resolved.info
+      : { ...resolved.info, price: batchPrice(resolved.info.price) };
   const results = await runEvals(
     tasks,
     {
       modelId: resolved.spec,
-      model: () => resolved.create(),
-      modelInfo: resolved.info,
+      model: () =>
+        batchMode === "on" && createBatch !== undefined ? createBatch() : resolved.create(),
+      modelInfo: batchMode === "on" ? batchInfo : resolved.info,
+      parallel,
+      ...(batchMode === "on" ? { taskTimeoutMs: BATCH_TASK_TIMEOUT_MS } : {}),
       ...(resolved.maxTokens === undefined ? {} : { maxTokens: resolved.maxTokens }),
       outDir,
       ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
@@ -200,10 +235,11 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       ),
   );
 
-  const report = formatReport(results);
+  const wallMs = Date.now() - started;
+  const report = `${formatReport(results)}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, executor: executor.name, results }, null, 2)}\n`,
+    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, batch: batchMode, parallel, wallMs, executor: executor.name, results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

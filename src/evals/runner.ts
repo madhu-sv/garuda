@@ -61,6 +61,10 @@ export interface EvalOptions {
   lsp?: boolean;
   /** The explore subagent's model. Default: the main model. */
   subagentModel?: RuntimeOptions["subagentModel"];
+  /** Tasks that run at the same time (0.7). Default: 1. */
+  parallel?: number;
+  /** Time limit per task. Default: EVAL_TASK_TIMEOUT_MS (the Batch API needs much more). */
+  taskTimeoutMs?: number;
 }
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
@@ -112,7 +116,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     durationMs: 0,
   };
 
-  const timeout = AbortSignal.timeout(EVAL_TASK_TIMEOUT_MS);
+  const limitMs = options.taskTimeoutMs ?? EVAL_TASK_TIMEOUT_MS;
+  const timeout = AbortSignal.timeout(limitMs);
   try {
     const run = await runtime.runTurn(task.prompt, timeout);
     result.stopReason = run.stopReason;
@@ -122,7 +127,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     if (timeout.aborted) {
       // Too slow is the agent's failure, not an error of the run.
       result.stopReason = "timeout";
-      result.reason = `The task took longer than ${EVAL_TASK_TIMEOUT_MS / 60_000} minutes.`;
+      result.reason = `The task took longer than ${limitMs / 60_000} minutes.`;
     } else {
       result.reason = `The run failed: ${(error as Error).message}`;
     }
@@ -135,6 +140,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   if (session !== undefined) {
     result.tokens = totalTokens(session.usage);
     result.costUsd = session.costUsd;
+    result.cacheReadTokens = session.usage.cacheReadTokens;
     if (options.outDir !== undefined) {
       mkdirSync(options.outDir, { recursive: true });
       // With --repeat, later runs of a task get -2, -3, … in the file name.
@@ -165,12 +171,18 @@ export async function runEvals(
   options: EvalOptions,
   onResult?: (result: EvalResult) => void,
 ): Promise<EvalResult[]> {
-  const results: EvalResult[] = [];
-  for (const task of tasks) {
-    const result = await runEvalTask(task, options);
-    results.push(result);
-    onResult?.(result);
-  }
+  // A small pool: `parallel` tasks at a time; the results keep the task order.
+  const results: EvalResult[] = new Array(tasks.length);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < tasks.length; i = next++) {
+      const result = await runEvalTask(tasks[i] as EvalTask, options);
+      results[i] = result;
+      onResult?.(result);
+    }
+  };
+  const width = Math.max(1, Math.min(options.parallel ?? 1, tasks.length));
+  await Promise.all(Array.from({ length: width }, worker));
   return results;
 }
 
@@ -234,7 +246,11 @@ export function formatReport(results: readonly EvalResult[]): string {
     : "unknown";
   const steps = results.reduce((s, r) => s + r.steps, 0);
   const counted = `${passed}/${results.length - errors} passed${errors > 0 ? ` · ${errors} error run(s) not counted` : ""}`;
-  const lines = [...rows, "", `${counted} · ${steps} steps · cost ${cost}`];
+  const tokens = results.reduce((s, r) => s + r.tokens, 0);
+  const cached = results.reduce((s, r) => s + (r.cacheReadTokens ?? 0), 0);
+  const share =
+    tokens === 0 ? "" : ` · ${Math.round((cached / tokens) * 100)}% of tokens from the cache`;
+  const lines = [...rows, "", `${counted} · ${steps} steps · cost ${cost}${share}`];
   const ids = [...new Set(results.map((r) => r.id))];
   // With --repeat, one run says little: show the mean per task.
   if (ids.length < results.length) lines.push("", "Mean per task:", ...meanRows(results, ids));

@@ -38,5 +38,7 @@ export interface EvalResult {
   tokens: number;
   costUsd: number | undefined;
   durationMs: number;
+  /** Tokens read from the prompt cache (0.7: to compare the Batch API's cache hits). */
+  cacheReadTokens?: number;
   sessionFile?: string;
 }

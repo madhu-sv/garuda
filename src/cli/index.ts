@@ -104,6 +104,15 @@ async function main(): Promise<void> {
     .option("--todo <mode>", "the todo_write tool: off (default) or on, for A/B runs")
     .option("--lsp <mode>", "language server errors in edit results: off (default) or on")
     .option(
+      "--batch <mode>",
+      "model calls through the Batch API (half price, slow): off (default) or on",
+    )
+    .option(
+      "--parallel <n>",
+      "tasks at the same time; default 1, with --batch on all (up to 20)",
+      (v) => Number.parseInt(v, 10),
+    )
+    .option(
       "--prepare <toolchain>",
       "java: download Maven plugins and JUnit once; python: check pytest",
     )

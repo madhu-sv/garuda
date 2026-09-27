@@ -52,6 +52,17 @@ The loop, the session and the tools use only these types.
   `server_tool_use`, `web_search_tool_result` and text citations map to Garuda's blocks and back unchanged;
   `pause_turn` and `usage.server_tool_use` map too. Other block types (thinking) are not requested.
 
+### Batch API (`AnthropicBatchClient`, 0.7)
+
+The same mapping as the streaming client; each `stream()` call sends one request as a batch
+(`messages.batches.create`, `custom_id: "garuda"`), checks its status (5 s, 10 s, 20 s, then every 30 s),
+and reads the result when the batch has ended. It yields the whole text as one `text_delta`, then the
+response. A `succeeded` result maps like a normal message. An `errored` result throws an error that
+carries the API error, so an overload or API error is transient and the loop sends the request again;
+`canceled` and `expired` are not transient. An abort cancels the batch. `ResolvedModel.createBatch()` exists
+only for the Anthropic provider; `batchPrice(price)` halves every token price. Used by `garuda eval --batch
+on` (0.7); scheduled jobs come after the measurement.
+
 ### Prompt caching (N2)
 
 Three cache breakpoints (`cache_control: ephemeral`):
