@@ -139,6 +139,9 @@ Set the context window, price and output limit per model, and add providers, in 
   `"notifications": { "channel": "off", "afterSeconds": 30 }` in `.garuda/settings.json`, changes it.
   In iTerm2 the notification needs "Send escape sequence-generated alerts" (Settings › Profiles › Terminal),
   which is on by default.
+  In iTerm2, Ghostty, WezTerm and the VS Code terminal, the full chat turns on focus reporting: while
+  Garuda's window has focus, no notification goes out. In other terminals, in tmux and in the plain chat,
+  every notification goes.
 - Files are written atomically (a temporary file, then a rename), so an exit never leaves half a file.
 - `garuda --resume` continues the latest session in chat mode.
 

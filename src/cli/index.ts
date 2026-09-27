@@ -15,6 +15,7 @@ import { loadSearchConfig } from "../web/search.js";
 import { SwitchApprover, TerminalApprover } from "./approver.js";
 import { banner, colorLevel } from "./banner.js";
 import { describeError } from "./errors.js";
+import { FOCUS_REPORTING_OFF, FocusTracker, reportsFocus } from "./focus.js";
 import { JsonOutput, OUTPUT_FORMATS, type OutputFormat } from "./jsonOutput.js";
 import { Notifier, pickChannel } from "./notify.js";
 import { PlainRenderer, type Renderer } from "./renderer.js";
@@ -352,11 +353,17 @@ async function start(options: Options, program: Command): Promise<number> {
   const sessionPath = (id: string) => join(store.dir, `${id}.jsonl`);
   // Notifications (0.6): only for a chat on a terminal; escape codes go to the terminal itself.
   const notify = runtime.notificationSettings;
+  const channel = pickChannel(notify?.channel);
+  // Focus reporting: in the Ink chat, nothing goes out while the user looks at Garuda's window.
+  const focus =
+    ink !== undefined && channel !== "off" && reportsFocus() ? new FocusTracker() : undefined;
+  if (focus !== undefined) process.on("exit", () => process.stdout.write(FOCUS_REPORTING_OFF));
   const notifier = process.stdout.isTTY
     ? new Notifier(
-        pickChannel(notify?.channel),
+        channel,
         (bytes) => process.stdout.write(bytes),
         notify?.afterSeconds,
+        () => focus?.focused,
       )
     : undefined;
   if (notifier !== undefined) approver.onAsk = (request) => notifier.approval(request);
@@ -373,6 +380,7 @@ async function start(options: Options, program: Command): Promise<number> {
       exitNow,
       options.firstInput,
       notifier,
+      focus,
     );
   } else {
     process.stderr.write(`${startBanner}\n`);

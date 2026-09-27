@@ -12,6 +12,7 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 | `index.ts` | Entry point (commander). Modes: chat, `-p`, stdin task, `--resume`, `--replay`, `eval`, `init` (the chat with `/init` as the first line, `firstInput`). With no first line, the banner gets `initTip` (see [init.md](init.md)). |
 | `turn.ts` | `runTurnInTerminal`: one turn with Ctrl-C handling, usage line and stop message; an optional `TurnWatcher` (0.6) is told when it starts and ends. |
 | `notify.ts` | Notifications (0.6): `pickChannel`, `notificationBytes`, `Notifier`. See below. |
+| `focus.ts` | Terminal focus (0.6): `reportsFocus`, `FocusTracker`, `focusEvent`, the mode 1004 codes. See below. |
 | `repl.ts` | Plain chat (readline). Used for pipes, `GARUDA_PLAIN=1`, and the single binary. |
 | `renderer.ts` | `Renderer` interface and `PlainRenderer`: model text to stdout, activity to stderr. |
 | `approver.ts` | `TerminalApprover` (inquirer select), `SwitchApprover` (with `onAsk`, 0.6), shared `header`, `colorPreview` and `colorDiff`. |
@@ -94,6 +95,14 @@ commander uses `enablePositionalOptions()`, so options after `eval` belong to `e
 - `Notifier` is a `TurnWatcher`. `approval(request)` notifies only while a turn runs (a question after
   `/undo` comes when the user is there). `turnEnded` notifies when the turn took at least `afterSeconds`
   (default 10) and the user did not stop it: done, stopped (the stop reason) or failed.
+- Focus (`focus.ts`): in the Ink chat, when `TERM_PROGRAM` is `iTerm.app`, `ghostty`, `WezTerm` or `vscode`
+  (not in tmux or screen) and the channel is not `off`, `runInkChat` writes `ESC [?1004h` after the first
+  render. The terminal then sends `ESC [I` / `ESC [O` when the window gets or loses focus. Ink gives each as
+  one input (`[I`, `[O`); `onKey` sends it to `store.onFocus` (a `FocusTracker`) and never to the input line.
+  The tracker starts as focused. The `Notifier` sends nothing while `isFocused()` is true; unknown
+  (`undefined`) means send. Before `$EDITOR` and at exit (also `process.on("exit")`) Garuda writes
+  `ESC [?1004l`; after the editor it turns reporting on again and counts the window as focused. The plain
+  chat does not use focus: it reads the keyboard only at its prompt, so it would see a change too late.
 - `index.ts` makes the notifier only for a chat with stdout on a terminal: `approver.onAsk` calls
   `approval`, and `runInkChat`/`runRepl` pass it to `runTurnInTerminal`. `-p` and JSON output never notify.
 
@@ -234,6 +243,7 @@ interface ChatState {
 ## Tests
 
 `test/notifyDiff.test.ts` (0.6: notification channel, bytes, rules and wiring; `/diff`),
+`test/focus.test.tsx` (0.6: focus codes, terminals, a quiet notifier while focused, the codes in real Ink input),
 `test/chat.test.tsx` (markdown, editor, store, type-ahead, Ink integration with `ink-testing-library`),
 `test/m5.acceptance.test.ts` (plain chat and `-p`), `test/cli.test.ts`. The cloud workspace also
 drives the Ink chat in a real pseudo-terminal for smoke tests.

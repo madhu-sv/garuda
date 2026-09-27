@@ -282,6 +282,9 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     this.add({ kind: "user", text: prompt });
   }
 
+  /** The terminal window got (true) or lost (false) focus (0.6). The Ink chat sets it. */
+  onFocus: (focused: boolean) => void = () => {};
+
   /** Keep a long text for Ctrl-O, as for a tool call (0.6: /diff). */
   keepOutput(title: string, text: string): void {
     this.lastOutput = { title, text };

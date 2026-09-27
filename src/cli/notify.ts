@@ -53,6 +53,11 @@ export class Notifier implements TurnWatcher {
     readonly channel: NotifyChannel,
     private readonly write: (bytes: string) => void,
     readonly afterSeconds: number = DEFAULT_AFTER_SECONDS,
+    /**
+     * True when the user looks at Garuda's window (focus reporting in the Ink chat). Then nothing
+     * goes out. `undefined`: not known, so every notification goes.
+     */
+    private readonly isFocused: () => boolean | undefined = () => undefined,
   ) {}
 
   /** An approval or a consent question waits for the user. */
@@ -85,6 +90,7 @@ export class Notifier implements TurnWatcher {
   }
 
   private send(text: string): void {
+    if (this.isFocused() === true) return;
     const bytes = notificationBytes(this.channel, text);
     if (bytes !== "") this.write(bytes);
   }

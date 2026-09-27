@@ -1,5 +1,6 @@
 import { Box, Static, Text, useInput, usePaste } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { focusEvent } from "../focus.js";
 import type { ChatState, ChatStore, Item } from "./store.js";
 
 /**
@@ -175,6 +176,12 @@ export interface Key {
 
 /** Keys to store actions. Exported for tests. */
 export function onKey(store: ChatStore, state: ChatState, input: string, key: Key): void {
+  // Focus reporting (0.6): the terminal tells when its window gets or loses focus. Never text.
+  const focus = focusEvent(input);
+  if (focus !== undefined && !key.ctrl && !key.meta) {
+    store.onFocus(focus);
+    return;
+  }
   if (key.ctrl && input === "c") {
     store.interrupt();
     return;
