@@ -1,3 +1,4 @@
+import { hasServerBlocks, serverPairText, withoutServerBlocks } from "../model/serverTools.js";
 import type {
   ContentBlock,
   Message,
@@ -146,6 +147,15 @@ export function trimOldToolOutputs(
 ): { messages: Message[]; savedChars: number } {
   let savedChars = 0;
   const out = messages.map((message, index): Message => {
+    // Old server searches (0.6): their encrypted results become a short text of titles and URLs.
+    if (index < end && message.role === "assistant" && hasServerBlocks(message.content)) {
+      const content = withoutServerBlocks(message.content);
+      savedChars += Math.max(
+        0,
+        JSON.stringify(message.content).length - JSON.stringify(content).length,
+      );
+      return { ...message, content };
+    }
     if (index >= end || message.role !== "user") return message;
     const content = message.content.map((block): ContentBlock => {
       if (block.type !== "tool_result" || block.content.length <= TRIM_OVER_CHARS) return block;
@@ -204,6 +214,10 @@ export function transcript(messages: readonly Message[]): string {
         lines.push(`${message.role === "user" ? "User" : "Agent"}: ${block.text}`);
       } else if (block.type === "tool_use") {
         lines.push(`Agent called ${block.name} ${JSON.stringify(block.input)}`);
+      } else if (block.type === "server_tool_use") {
+        lines.push(`Agent called ${block.name} (server) ${JSON.stringify(block.input)}`);
+      } else if (block.type === "server_tool_result") {
+        lines.push(serverPairText(undefined, block));
       } else {
         const text =
           block.content.length > 2_000 ? `${block.content.slice(0, 2_000)} …` : block.content;
@@ -231,8 +245,9 @@ function charCount(messages: readonly Message[]): number {
   for (const message of messages) {
     for (const block of message.content) {
       if (block.type === "text") chars += block.text.length;
-      else if (block.type === "tool_use")
+      else if (block.type === "tool_use" || block.type === "server_tool_use")
         chars += JSON.stringify(block.input).length + block.name.length;
+      else if (block.type === "server_tool_result") chars += JSON.stringify(block.wire).length;
       else chars += block.content.length;
     }
   }

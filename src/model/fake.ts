@@ -1,8 +1,10 @@
 import type {
+  AssistantBlock,
   ModelClient,
   ModelEvent,
   ModelRequest,
   ModelResponse,
+  ServerToolSpec,
   StopReason,
   StreamOptions,
   TextBlock,
@@ -29,10 +31,13 @@ export class ScriptExhaustedError extends Error {
  */
 export class FakeModelClient implements ModelClient {
   readonly requests: ModelRequest[] = [];
+  /** Server tools the fake accepts, like a Claude model (0.6). Default: none. */
+  readonly serverTools?: readonly ServerToolSpec["type"][];
   private readonly steps: ScriptStep[];
 
-  constructor(steps: ScriptStep[]) {
+  constructor(steps: ScriptStep[], options: { serverTools?: ServerToolSpec["type"][] } = {}) {
     this.steps = [...steps];
+    if (options.serverTools !== undefined) this.serverTools = options.serverTools;
   }
 
   get remaining(): number {
@@ -74,7 +79,7 @@ export function toolUse(name: string, input: unknown, id?: string): ToolUseBlock
 }
 
 export function reply(
-  content: Array<TextBlock | ToolUseBlock>,
+  content: AssistantBlock[],
   stopReason?: StopReason,
   usage: Usage = FAKE_USAGE,
 ): ModelResponse {

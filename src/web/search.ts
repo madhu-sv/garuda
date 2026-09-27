@@ -13,6 +13,14 @@ import { isLoopbackHost } from "../net/address.js";
  *   { "provider": "brave" }                                   key in BRAVE_API_KEY
  *   { "provider": "tavily", "apiKeyEnv": "MY_TAVILY_KEY" }    another variable
  *   { "provider": "searxng", "url": "http://localhost:8888" } your own SearXNG (JSON format on)
+ *
+ * Claude's own web search (0.6) runs on Anthropic's servers, inside the model reply, only with a
+ * Claude model. A "claude" section turns it on; the chat asks once per session before it is used.
+ * The provider above (or a key in the environment) is the fallback: for other models, or when the
+ * user says no.
+ *
+ *   { "claude": { "maxUses": 5 } }                            Claude's search; Tavily from the env
+ *   { "provider": "brave", "claude": { "blockedDomains": ["example.com"] } }
  */
 
 export const SEARCH_FILE = join(".garuda", "search.json");
@@ -23,8 +31,31 @@ export const MAX_RESULTS = 10;
 
 export type SearchProvider = "brave" | "tavily" | "searxng";
 
+/** Searches per model request for Claude's search, by default. */
+export const DEFAULT_CLAUDE_MAX_USES = 5;
+
+const domains = z.array(
+  z
+    .string()
+    .min(1)
+    .regex(/^[^\s:/][^\s:]*$/, "a bare domain, with an optional path (no scheme)"),
+);
+
+const claudeSchema = z
+  .strictObject({
+    /** Searches per model request, 1–20. Default 5. */
+    maxUses: z.number().int().min(1).max(20).optional(),
+    allowedDomains: domains.optional(),
+    blockedDomains: domains.optional(),
+  })
+  .refine((c) => c.allowedDomains === undefined || c.blockedDomains === undefined, {
+    message: "use allowedDomains or blockedDomains, not both",
+  });
+
 const fileSchema = z.strictObject({
-  provider: z.enum(["brave", "tavily", "searxng"]),
+  provider: z.enum(["brave", "tavily", "searxng"]).optional(),
+  /** Claude's own web search (0.6). */
+  claude: claudeSchema.optional(),
   /** SearXNG only: the server's base URL. */
   url: z.string().optional(),
   /** The environment variable with the key. Default: BRAVE_API_KEY or TAVILY_API_KEY. */
@@ -43,6 +74,13 @@ export interface SearchConfig {
   /** The key, from the environment (Brave, Tavily). */
   apiKey?: string;
   maxResults: number;
+}
+
+/** Claude's own web search (0.6): a server tool of the Anthropic API. */
+export interface ClaudeSearchConfig {
+  maxUses: number;
+  allowedDomains?: string[];
+  blockedDomains?: string[];
 }
 
 export interface SearchResult {
@@ -70,7 +108,7 @@ export function providerLabel(config: SearchConfig): string {
 export async function loadSearchConfig(
   home: string = homedir(),
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ config?: SearchConfig; problem?: string }> {
+): Promise<{ config?: SearchConfig; claude?: ClaudeSearchConfig; problem?: string }> {
   const file = join(home, SEARCH_FILE);
   let text: string | undefined;
   try {
@@ -80,11 +118,7 @@ export async function loadSearchConfig(
       return { problem: `${file}: ${(error as Error).message}` };
     }
   }
-  if (text === undefined) {
-    if (env.BRAVE_API_KEY) return { config: brave(env.BRAVE_API_KEY, DEFAULT_RESULTS) };
-    if (env.TAVILY_API_KEY) return { config: tavily(env.TAVILY_API_KEY, DEFAULT_RESULTS) };
-    return {};
-  }
+  if (text === undefined) return fromEnv(env, DEFAULT_RESULTS);
   let parsed: z.infer<typeof fileSchema>;
   try {
     const result = fileSchema.safeParse(JSON.parse(text));
@@ -94,6 +128,43 @@ export async function loadSearchConfig(
     return { problem: `${file}: invalid JSON: ${(error as Error).message}` };
   }
   const max = parsed.maxResults ?? DEFAULT_RESULTS;
+  const claude: { claude?: ClaudeSearchConfig } =
+    parsed.claude === undefined
+      ? {}
+      : {
+          claude: {
+            maxUses: parsed.claude.maxUses ?? DEFAULT_CLAUDE_MAX_USES,
+            ...(parsed.claude.allowedDomains === undefined
+              ? {}
+              : { allowedDomains: parsed.claude.allowedDomains }),
+            ...(parsed.claude.blockedDomains === undefined
+              ? {}
+              : { blockedDomains: parsed.claude.blockedDomains }),
+          },
+        };
+  if (parsed.provider === undefined) {
+    if (parsed.claude === undefined) {
+      return { problem: `${file}: name a "provider", or add a "claude" section.` };
+    }
+    // The fallback comes from a key in the environment, if there is one.
+    return { ...fromEnv(env, max), ...claude };
+  }
+  const client = clientConfig(file, { ...parsed, provider: parsed.provider }, env, max);
+  return "problem" in client ? { ...client, ...claude } : { config: client.config, ...claude };
+}
+
+function fromEnv(env: NodeJS.ProcessEnv, max: number): { config?: SearchConfig } {
+  if (env.BRAVE_API_KEY) return { config: brave(env.BRAVE_API_KEY, max) };
+  if (env.TAVILY_API_KEY) return { config: tavily(env.TAVILY_API_KEY, max) };
+  return {};
+}
+
+function clientConfig(
+  file: string,
+  parsed: z.infer<typeof fileSchema> & { provider: SearchProvider },
+  env: NodeJS.ProcessEnv,
+  max: number,
+): { config: SearchConfig } | { problem: string } {
   if (parsed.provider === "searxng") {
     if (parsed.url === undefined) return { problem: `${file}: "searxng" needs a "url".` };
     const endpoint = searxngEndpoint(parsed.url);

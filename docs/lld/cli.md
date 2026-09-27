@@ -105,6 +105,8 @@ commander uses `enablePositionalOptions()`, so options after `eval` belong to `e
   summaries instead of their markers: `web_search` → `5 results`; `web_fetch` → `<page title> · 12,400
   characters` (or the part read); `skill` → `loaded <name>` or `read <file>`; `agent` → `answer (N line(s)) ·
   <name>: N steps · Xk tokens`.
+- Claude's web search (0.6, `server_tool` event): `● web_search (Claude) <query>` and `⎿ 5 results` (or the
+  error code), from `serverToolText`; the Ink chat keeps the page list for Ctrl-O (`serverToolOutput`).
 - Colors only when stderr is a TTY and `NO_COLOR` is not set.
 
 Retry notices: a `model_retry` event prints "The connection to the model broke (terminated). Retrying

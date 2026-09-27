@@ -550,6 +550,27 @@ format). Keys come only from environment variables; a project cannot configure s
 - Results are titles, URLs and short texts, marked as untrusted. The model reads pages with `web_fetch`.
 - `"web": { "enabled": false }` removes both web tools. Details: [docs/lld/web.md](docs/lld/web.md).
 
+### Claude's web search (0.6)
+
+With a Claude model, the model can use Claude's own search tool, which runs on Anthropic's servers. Turn it
+on with a `claude` section in `~/.garuda/search.json`:
+
+```json
+{ "claude": { "maxUses": 5 } }
+{ "provider": "tavily", "claude": { "blockedDomains": ["example.com"] } }
+```
+
+- The search runs inside the model's reply, so Garuda cannot ask before each query. It asks once per
+  session instead, before the first turn: "Allow Claude's web search in this session?".
+- It costs $10 per 1,000 searches, on top of the tokens. The usage line and `/usage` include it.
+- `maxUses` (1–20, default 5) caps the searches per model request. `allowedDomains` or `blockedDomains`
+  (not both) limit the sites.
+- Your other backend (`provider`, or a key in the environment) is the fallback: for a model that is not a
+  Claude model (for example after `/models`), or when you say No. Without one, No means no web search.
+- Custom agents whose tools allow `WebSearch` (or `web_search`) get it too, in the same session.
+- The chat shows each search: `● web_search (Claude) <query>` and the number of results; Ctrl-O lists
+  the pages.
+
 ## Hooks
 
 Hooks are your own commands that run around the agent's tool calls (0.2).

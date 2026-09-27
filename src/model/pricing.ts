@@ -67,14 +67,18 @@ export function lookupModel(modelId: string): ModelInfo {
   return best?.info ?? { contextWindow: DEFAULT_CONTEXT_WINDOW };
 }
 
-/** Cost of one response in USD. */
+/** Claude's web search (0.6): USD per search ($10 per 1,000), on top of the tokens. */
+export const WEB_SEARCH_USD = 0.01;
+
+/** Cost of one response in USD, server web searches included. */
 export function costOf(usage: Usage, price: Price): number {
   return (
     (usage.inputTokens * price.input +
       usage.outputTokens * price.output +
       usage.cacheReadTokens * price.cacheRead +
       usage.cacheWriteTokens * price.cacheWrite) /
-    M
+      M +
+    (usage.webSearches ?? 0) * WEB_SEARCH_USD
   );
 }
 

@@ -2,7 +2,14 @@ import type { AgentEvent } from "../../loop/runAgent.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../../permissions/types.js";
 import { colorPreview, header } from "../approver.js";
 import type { Renderer } from "../renderer.js";
-import { retryText, summariseCall, summariseResult, todoLines } from "../renderer.js";
+import {
+  retryText,
+  serverToolOutput,
+  serverToolText,
+  summariseCall,
+  summariseResult,
+  todoLines,
+} from "../renderer.js";
 import type { Interruptible } from "../turn.js";
 import { type EditAction, type EditorState, edit, emptyEditor, submit } from "./lineEditor.js";
 import { ansi, type Paint, renderMarkdown, takeBlocks } from "./markdown.js";
@@ -349,6 +356,17 @@ export class ChatStore implements Renderer, Approver, Interruptible {
       case "notice":
         this.info(event.text);
         return;
+      case "server_tool": {
+        this.flushText();
+        const { call, result } = serverToolText(event);
+        const failed = event.result?.error !== undefined;
+        this.add({
+          kind: "tool",
+          text: `${this.paint("cyan", "●")} ${this.paint("bold", call)}\n  ${this.paint("dim", "⎿")} ${this.paint(failed ? "red" : "dim", result)}`,
+        });
+        this.lastOutput = { title: call, text: serverToolOutput(event) };
+        return;
+      }
     }
   }
 

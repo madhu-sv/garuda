@@ -76,6 +76,9 @@ The model may see a secret, but Garuda never writes it to disk. The `Redactor` r
    tokens, Google API keys, JWTs.
 3. Assignments such as `password = "…"`, `api_key: …`: the name stays, the value goes.
 
+The Redactor leaves `encrypted_content` and `encrypted_index` alone (0.6): they are ciphertext from Claude's
+web search and must go back unchanged.
+
 ## Resume (`resume.ts`)
 
 `rebuildState(records)` replays the records into messages, usage, cost and context size (compaction

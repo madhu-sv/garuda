@@ -1,6 +1,6 @@
 import { modelFacts, type Runtime } from "../../app/runtime.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
-import { totalTokens } from "../../model/pricing.js";
+import { totalTokens, WEB_SEARCH_USD } from "../../model/pricing.js";
 import {
   findReferencesTool,
   findSymbolText,
@@ -400,6 +400,11 @@ export function usageSummary(runtime: Runtime): string {
     `Session ${session.id}: ${formatTokens(totalTokens(u))} tokens, ${cost}`,
     `  input ${formatTokens(u.inputTokens)}, cache read ${formatTokens(u.cacheReadTokens)}, cache write ${formatTokens(u.cacheWriteTokens)}, output ${formatTokens(u.outputTokens)}`,
     `  context ${formatTokens(session.contextTokens)} of ${formatTokens(runtime.limits.contextWindow)}`,
+    ...(u.webSearches === undefined
+      ? []
+      : [
+          `  Claude web searches: ${u.webSearches} ($${(u.webSearches * WEB_SEARCH_USD).toFixed(2)})`,
+        ]),
   ].join("\n");
 }
 

@@ -7,6 +7,9 @@ import {
   type ModelClient,
   type ModelRequest,
   type ModelResponse,
+  type ServerToolResultBlock,
+  type ServerToolSpec,
+  type ServerToolUseBlock,
   type StopReason,
   type ToolResultBlock,
   type ToolUseBlock,
@@ -48,7 +51,12 @@ export type AgentEvent =
   | { type: "step_end"; step: number; usage: Usage; response: ModelResponse }
   | { type: "compaction"; result: CompactionResult }
   /** A line for the user from the runtime, not the model (0.6: attached @files). */
-  | { type: "notice"; text: string };
+  | { type: "notice"; text: string }
+  /**
+   * A tool call that the provider ran (0.6: Claude's web search), with its result when the
+   * response has it (a search deferred by `tool_use` has none yet).
+   */
+  | { type: "server_tool"; call: ServerToolUseBlock; result?: ServerToolResultBlock };
 
 export interface AgentDeps {
   model: ModelClient;
@@ -77,6 +85,19 @@ export interface AgentDeps {
   onEvent?: (event: AgentEvent) => void;
   /** Waits before each retry of a broken model stream. Default: 1 s, then 4 s. */
   retryDelaysMs?: readonly number[];
+  /**
+   * Tools that the provider runs (0.6: Claude's web search). Sent only when the model client
+   * lists them in `serverTools`.
+   */
+  serverTools?: readonly ServerToolSpec[];
+}
+
+/** The server tools of `deps` that this model client can run. */
+export function usableServerTools(
+  model: ModelClient,
+  specs: readonly ServerToolSpec[] | undefined,
+): ServerToolSpec[] {
+  return (specs ?? []).filter((spec) => model.serverTools?.includes(spec.type) === true);
 }
 
 export type AgentStopReason =
@@ -114,7 +135,9 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   const price = deps.price;
   const cost = (r: ModelResponse) => (price === undefined ? undefined : costOf(r.usage, price));
   // Compute the tool list once, so every request in the run sends the same bytes (N2).
-  const tools = deps.tools.specs();
+  const serverTools = usableServerTools(deps.model, deps.serverTools);
+  // A server tool replaces a client tool of the same name (0.6: Claude's web_search over Tavily's).
+  const tools = deps.tools.specs().filter((t) => !serverTools.some((s) => s.type === t.name));
   const recent: string[] = [];
   let usage = ZERO_USAGE;
   let steps = 0;
@@ -153,6 +176,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       system: deps.system,
       messages: session.messages,
       tools,
+      ...(serverTools.length === 0 ? {} : { serverTools }),
       maxTokens: deps.maxTokens ?? DEFAULT_MAX_TOKENS,
     };
     const started = performance.now();
@@ -169,8 +193,18 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
     usage = addUsage(usage, response.usage);
     addAssistantResponse(session, response, steps, cost(response));
     emit({ type: "step_end", step: steps, usage: response.usage, response });
+    for (const call of response.content) {
+      if (call.type !== "server_tool_use") continue;
+      const result = response.content.find(
+        (b): b is ServerToolResultBlock =>
+          b.type === "server_tool_result" && b.toolUseId === call.id,
+      );
+      emit({ type: "server_tool", call, ...(result === undefined ? {} : { result }) });
+    }
 
     const calls = response.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
+    // A long server tool call paused (0.6): send the conversation again, and the model goes on.
+    if (calls.length === 0 && response.stopReason === "pause_turn") continue;
     if (calls.length === 0) return finish(finalReason(response));
 
     const context: ToolContext = {

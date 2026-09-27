@@ -233,7 +233,9 @@ does not change; stdout holds only JSON. Details: [lld/cli.md](lld/cli.md).
 
 `web_search` is a normal tool. It calls the user's backend (Brave, Tavily or SearXNG, configured only in
 the home folder), after a question that shows the query. Results come back as untrusted text; the model
-reads pages with `web_fetch`. Details: [lld/web.md](lld/web.md).
+reads pages with `web_fetch`. Claude's own search (0.6) is a server tool: the Anthropic adapter sends it,
+the API runs it inside the reply, and its blocks go back unchanged; the chat asks once per session, and
+the other backend is the fallback. Details: [lld/web.md](lld/web.md).
 
 ### Init (0.5)
 

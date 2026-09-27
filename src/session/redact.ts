@@ -21,6 +21,12 @@ const PATTERNS: readonly RegExp[] = [
 const ASSIGNMENT =
   /\b([A-Za-z0-9_]*(?:api[_-]?key|secret|token|password|passwd)[A-Za-z0-9_]*)(["']?\s*[:=]\s*["']?)([^\s"'`,;]{8,})/gi;
 
+/**
+ * Opaque values from the provider (0.6: Claude's web search). They must go back to the API
+ * unchanged, and they are ciphertext, so a pattern match in them is chance, not a secret.
+ */
+const OPAQUE_KEYS = new Set(["encrypted_content", "encrypted_index"]);
+
 const SECRET_ENV_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)/i;
 
 export class Redactor {
@@ -50,7 +56,12 @@ export class Redactor {
     if (typeof value === "string") return this.text(value);
     if (Array.isArray(value)) return value.map((item) => this.walk(item));
     if (value !== null && typeof value === "object") {
-      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, this.walk(v)]));
+      return Object.fromEntries(
+        Object.entries(value).map(([k, v]) => [
+          k,
+          OPAQUE_KEYS.has(k) && typeof v === "string" ? v : this.walk(v),
+        ]),
+      );
     }
     return value;
   }

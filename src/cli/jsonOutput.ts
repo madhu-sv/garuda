@@ -219,11 +219,19 @@ export function assistantLine(response: ModelResponse, model: string): Line {
       type: "message",
       role: "assistant",
       model,
-      content: response.content.map((block) =>
-        block.type === "text"
-          ? { type: "text", text: block.text }
-          : { type: "tool_use", id: block.id, name: block.name, input: block.input },
-      ),
+      content: response.content.map((block) => {
+        switch (block.type) {
+          case "text":
+            return block.citations === undefined
+              ? { type: "text", text: block.text }
+              : { type: "text", text: block.text, citations: block.citations };
+          case "tool_use":
+            return { type: "tool_use", id: block.id, name: block.name, input: block.input };
+          // Server tool blocks (0.6) as the API gave them, as Claude Code shows them.
+          default:
+            return block.wire;
+        }
+      }),
       stop_reason: response.stopReason,
       stop_sequence: null,
       usage: apiUsage(response.usage),
@@ -238,6 +246,9 @@ function apiUsage(u: Usage): Line {
     cache_creation_input_tokens: u.cacheWriteTokens,
     cache_read_input_tokens: u.cacheReadTokens,
     output_tokens: u.outputTokens,
+    ...(u.webSearches === undefined
+      ? {}
+      : { server_tool_use: { web_search_requests: u.webSearches, web_fetch_requests: 0 } }),
   };
 }
 
@@ -305,7 +316,7 @@ export function resultLine(
         outputTokens: usage.outputTokens,
         cacheReadInputTokens: usage.cacheReadTokens,
         cacheCreationInputTokens: usage.cacheWriteTokens,
-        webSearchRequests: 0,
+        webSearchRequests: usage.webSearches ?? 0,
         costUSD: info.runCostUsd ?? 0,
         contextWindow: info.contextWindow,
         maxOutputTokens: info.maxOutputTokens,

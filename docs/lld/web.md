@@ -14,6 +14,7 @@ server-side request forgery (SSRF) and data leaks through URLs.
 | `tools/webFetch.ts` | The `web_fetch` tool: approval target, paging, cache, output. |
 | `web/search.ts` | Web search (0.5): `loadSearchConfig`, `search` (Brave, Tavily, SearXNG), `parseResults`. |
 | `tools/webSearch.ts` | The `web_search` tool: approval, the secret check, `resultsText`. |
+| `model/serverTools.ts` | Claude's web search (0.6): neutral text for server search blocks (`serverCallText`, `serverResultSummary`, `withoutServerBlocks`). |
 
 ## URL check (`checkUrl`)
 
@@ -135,11 +136,49 @@ Only when a backend is set and `web.enabled` is not false. Input: `query` (2–4
   `</web_result>` and "Read a page with web_fetch before you rely on it."
 - The system prompt gets two lines: results are untrusted; no code, secrets or file contents in queries.
 
-The Anthropic server-side search tool (Claude models only) is planned as a second backend in a later patch.
+### Claude's web search (0.6)
+
+Claude's search tool runs on Anthropic's servers, inside the model's reply. It is a second backend, only
+for Claude models.
+
+- **Config.** A `claude` section in `~/.garuda/search.json` (user only): `maxUses` (1–20, default 5),
+  `allowedDomains` or `blockedDomains` (bare domains, optional path, not both). `provider` becomes
+  optional: without it, the fallback comes from `BRAVE_API_KEY`/`TAVILY_API_KEY`. A broken fallback gives
+  a warning and keeps Claude's search. `loadSearchConfig` returns `{ config?, claude?, problem? }`.
+- **Consent.** Garuda cannot ask per query. `Runtime.claudeSearchTools()` asks once per session, before the
+  first turn whose model can run it: "Allow Claude's web search in this session?" (choices: Yes, for this
+  session / No, not in this session; the preview shows the limit, the price and what No means). The answer
+  holds until `/new` or `/sessions <n>`. Models that cannot run it (`ModelClient.serverTools`) never ask.
+- **Request.** `ModelRequest.serverTools: [{ type: "web_search", maxUses, allowedDomains?, blockedDomains? }]`.
+  The Anthropic adapter sends `web_search_20250305` after the client tools (the cache mark moves to it).
+  Dynamic filtering (20260209+, with code execution) waits for an A/B eval. A server tool replaces the client
+  tool of the same name in that request (`runAgent`), so the model sees one `web_search`.
+- **Response.** `server_tool_use` → `ServerToolUseBlock`; `web_search_tool_result` → `ServerToolResultBlock`
+  (titles, URLs, page age, or an error code). Both keep the API block in `wire` and go back to the API
+  exactly as they came (the results hold `encrypted_content`). Text citations stay on the text block
+  (`citations`) and go back too. `usage.server_tool_use.web_search_requests` → `Usage.webSearches`;
+  `costOf` adds $0.01 per search.
+- **pause_turn.** A long search can pause the turn: the loop sends the conversation again (the paused
+  assistant message last), and the model goes on. It counts as a step.
+- **Elsewhere.** The loop emits a `server_tool` event (chat: `● web_search (Claude) <query>` and
+  `⎿ 5 results`; Ctrl-O lists the pages). Compaction turns old searches into text (titles and URLs) and drops
+  their citations; other providers (after `/models`) get the same text. The Redactor leaves
+  `encrypted_content` and `encrypted_index` alone (ciphertext); a stored block that redaction changed
+  anyway becomes text on resume, so the API does not refuse it. JSON output shows the API blocks and
+  `server_tool_use` usage, as Claude Code does; `/export` lists each search with its pages.
+- **Agents.** A custom agent whose tools allow `web_search` (Claude Code name `WebSearch`) gets the server
+  tool when Claude's search is on for the session and the agent's model can run it; the consent lists it
+  as `web_search (Claude)`. Explore does not.
+
+Garuda does not check the query before the search (it cannot see it in time); the prompt line says to
+keep code and secrets out of queries, and the user agrees to that trade at the session question.
 
 ## Tests
 
-`test/webSearch.test.ts`: the config (environment keys, the file, keys only from the environment, SearXNG
+`test/claudeSearch.test.ts` (0.6): the adapter (tool definition, blocks in and out unchanged, citations,
+errors, pause_turn, search count), cost, the loop (replacing the client tool, pause_turn, events), compaction,
+other providers, redaction and resume, JSON output, `/export`, the config, the session question, agents,
+`/usage`. `test/webSearch.test.ts`: the config (environment keys, the file, keys only from the environment, SearXNG
 URL rules, bad JSON); each backend's request and parsing with a fake fetch; error messages; the size limit;
 the output (tags, entities, markers, snippet cap); the secret check; the runtime (the question with the
 query, a session answer, a No sends nothing, plan mode with and without the rule, `web.enabled: false`).

@@ -1,6 +1,9 @@
 import { contextSize } from "../model/pricing.js";
-import { addUsage, type Message, ZERO_USAGE } from "../model/types.js";
+import { hasServerBlocks, withoutServerBlocks } from "../model/serverTools.js";
+import type { Message } from "../model/types.js";
+import { addUsage, ZERO_USAGE } from "../model/types.js";
 import type { SessionRecord, StartRecord } from "./records.js";
+import { REDACTED } from "./redact.js";
 import { closeOpenToolCalls, createSession, type Session } from "./session.js";
 import type { SessionStore } from "./store.js";
 import {
@@ -116,7 +119,7 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
 
   const journal = options.store.open(id);
   const session = createSession(options.root, id, journal);
-  session.messages = state.messages;
+  session.messages = state.messages.map(repairServerBlocks);
   session.usage = state.usage;
   session.costUsd = state.costUsd;
   session.contextTokens = state.contextTokens;
@@ -124,4 +127,15 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
   journal.write({ type: "resume", sessionId: id, ...options.start });
   closeOpenToolCalls(session);
   return session;
+}
+
+/**
+ * Server search blocks must go back to the API unchanged (0.6). When redaction changed one on disk
+ * (a secret in a query or a cited text), the API would refuse it: such a message keeps the titles
+ * and URLs as plain text instead.
+ */
+function repairServerBlocks(message: Message): Message {
+  if (message.role !== "assistant" || !hasServerBlocks(message.content)) return message;
+  if (!JSON.stringify(message.content).includes(REDACTED)) return message;
+  return { ...message, content: withoutServerBlocks(message.content) };
 }

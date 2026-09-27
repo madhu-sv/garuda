@@ -1,10 +1,17 @@
 import type { KnowledgeIndex } from "../knowledge/index.js";
-import { type AgentEvent, type AgentStopReason, runAgent } from "../loop/runAgent.js";
+import {
+  type AgentEvent,
+  type AgentStopReason,
+  runAgent,
+  usableServerTools,
+} from "../loop/runAgent.js";
 import { costOf, type Price } from "../model/pricing.js";
+import { serverCallText } from "../model/serverTools.js";
 import {
   addUsage,
   type ModelClient,
   type ModelResponse,
+  type ServerToolSpec,
   type TextBlock,
   type ToolUseBlock,
   type Usage,
@@ -56,6 +63,8 @@ export interface ChildRun {
   journal?: Journal;
   /** Executor name and isolation, for the child's start record. */
   executorInfo?: { name: string; isolation: string };
+  /** Tools the provider runs (0.6: Claude's web search), when the child's model can. */
+  serverTools?: readonly ServerToolSpec[];
 }
 
 export interface ChildResult {
@@ -86,8 +95,11 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
   const model = await run.model.client();
   const calls: string[] = [];
   const onEvent = (event: AgentEvent) => {
-    if (event.type !== "tool_call") return;
-    const line = describeCall(event.call);
+    if (event.type !== "tool_call" && event.type !== "server_tool") return;
+    const line =
+      event.type === "tool_call"
+        ? describeCall(event.call)
+        : `${event.call.name} (Claude) ${serverCallText(event.call)}`;
     calls.push(line);
     context.progress?.(`step ${calls.length} · ${line}`);
   };
@@ -99,6 +111,7 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
     ...(run.knowledge === undefined ? {} : { knowledge: run.knowledge }),
     ...(run.hooks === undefined ? {} : { hooks: run.hooks }),
     ...(run.executor === undefined ? {} : { executor: run.executor }),
+    ...(run.serverTools === undefined ? {} : { serverTools: run.serverTools }),
     maxSteps: limits.maxSteps,
     tokenBudget: limits.tokenBudget,
     maxTokens: run.maxTokens,
@@ -176,8 +189,15 @@ async function callOnce(
 ): Promise<ModelResponse> {
   let response: ModelResponse | undefined;
   // The same tool list as before: the API needs it when the history holds tool calls (N2 too).
+  const serverTools = usableServerTools(model, run.serverTools);
   for await (const event of model.stream(
-    { system: run.system, messages, tools: run.tools.specs(), maxTokens: run.maxTokens },
+    {
+      system: run.system,
+      messages,
+      tools: run.tools.specs().filter((t) => !serverTools.some((s) => s.type === t.name)),
+      ...(serverTools.length === 0 ? {} : { serverTools }),
+      maxTokens: run.maxTokens,
+    },
     { signal },
   )) {
     if (event.type === "response") response = event.response;

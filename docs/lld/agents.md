@@ -133,7 +133,7 @@ files may not be symbolic links.
 | --- | --- |
 | `name` | Required. Letters, digits, `-`, `_` (up to 64; no `:`). |
 | `description` | Required. When to use the agent; the main model sees it. Cut at 1 024 characters. |
-| `tools` | A list (`Read, Grep` or a YAML list). Claude Code names map to Garuda's (`Read` → read_file, `Edit`/`MultiEdit` → edit_file, `Write` → write_file, `Bash` → bash, `Grep`, `Glob`, `WebFetch`, `Skill`, `TodoWrite`); Garuda names and MCP patterns (`mcp__server`, `mcp__server__tool`, `mcp__*`) work too. A part in brackets (`Bash(git *)`) is left out with a notice: Garuda's rules decide. **Omitted: read-only tools only** (read_file, glob, grep, the code index tools, skill). |
+| `tools` | A list (`Read, Grep` or a YAML list). Claude Code names map to Garuda's (`Read` → read_file, `Edit`/`MultiEdit` → edit_file, `Write` → write_file, `Bash` → bash, `Grep`, `Glob`, `WebFetch`, `WebSearch` (0.6), `Skill`, `TodoWrite`); Garuda names and MCP patterns (`mcp__server`, `mcp__server__tool`, `mcp__*`) work too. A part in brackets (`Bash(git *)`) is left out with a notice: Garuda's rules decide. **Omitted: read-only tools only** (read_file, glob, grep, the code index tools, skill). |
 | `disallowedTools` | Removed from the list. |
 | `model` | User agents only: `inherit`, `haiku`/`sonnet`/`opus`/`fable` (the newest known id of that family, when the main model is a Claude model), or a model id that goes through the same providers as `-m` (`~/.garuda/models.json`). A project file cannot pick a model (cost, provider): notice, then the default. Default: `--subagent-model`, else the main model. |
 | `maxTurns` | Model calls per run (up to 100). Default: `subagents.maxSteps` (20). |
@@ -157,7 +157,10 @@ A call:
    and then the agent's instructions; the same permission engine (plan mode holds), hooks and executor
    (bash in the sandbox); limits from `subagents` or `maxTurns`; the child journal
    `.garuda/sessions/<id>/agent-<name>-<call id>.jsonl`.
-4. Returns the answer (cut at 20 000 characters) with `[agent <name>: N steps · Xk tokens]` and
+4. With Claude's web search on for the session (0.6) and `web_search` in the agent's tools, the child
+   gets the server tool (`ChildRun.serverTools`) when its model can run it; the consent shows it as
+   `web_search (Claude)`, and each search is a `[calls: web_search (Claude) <query>]` entry.
+5. Returns the answer (cut at 20 000 characters) with `[agent <name>: N steps · Xk tokens]` and
    `[calls: …]`. The usage counts for the session, like explore.
 
 The tool is read-only for the permission engine (it changes nothing itself; each child call is checked).

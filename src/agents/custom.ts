@@ -72,6 +72,7 @@ const CLAUDE_TOOLS: Record<string, string[]> = {
   Write: ["write_file"],
   Bash: ["bash"],
   WebFetch: ["web_fetch"],
+  WebSearch: ["web_search"],
   Skill: ["skill"],
   TodoWrite: ["todo_write"],
 };
@@ -88,6 +89,7 @@ export const AGENT_TOOL_NAMES = new Set([
   "write_file",
   "bash",
   "web_fetch",
+  "web_search",
   "remember",
   "skill",
   "todo_write",

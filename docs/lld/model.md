@@ -17,18 +17,27 @@ tree against N3 and the single binary, and LlamaIndex targets retrieval, not too
 ## Types (`types.ts`)
 
 ```ts
-type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+type AssistantBlock = TextBlock | ToolUseBlock | ServerToolUseBlock | ServerToolResultBlock;
+type ContentBlock = AssistantBlock | ToolResultBlock;
+interface TextBlock { type: "text"; text: string; citations?: unknown[] }   // citations: 0.6
 interface Message { role: "user" | "assistant"; content: ContentBlock[] }
 interface ToolSpec { name: string; description: string; inputSchema: Record<string, unknown> }
-interface ModelRequest { system: string; messages: Message[]; tools: ToolSpec[]; maxTokens: number }
-interface ModelResponse { content: (TextBlock | ToolUseBlock)[]; stopReason: StopReason; usage: Usage }
-interface Usage { inputTokens; outputTokens; cacheReadTokens; cacheWriteTokens }
+interface ServerToolSpec { type: "web_search"; maxUses; allowedDomains?; blockedDomains? }   // 0.6
+interface ModelRequest { system; messages: Message[]; tools: ToolSpec[]; serverTools?: ServerToolSpec[]; maxTokens }
+interface ModelResponse { content: AssistantBlock[]; stopReason: StopReason; usage: Usage }
+type StopReason = "end_turn" | "tool_use" | "max_tokens" | "refusal" | "pause_turn" | "other";
+interface Usage { inputTokens; outputTokens; cacheReadTokens; cacheWriteTokens; webSearches? }
 type ModelEvent = { type: "text_delta"; text } | { type: "response"; response: ModelResponse };
 
 interface ModelClient {
+  readonly serverTools?: ServerToolSpec["type"][];   // what the provider can run itself (0.6)
   stream(request: ModelRequest, options?: { signal?: AbortSignal }): AsyncIterable<ModelEvent>;
 }
 ```
+
+Server tool blocks (0.6) keep the provider's block in `wire`, which goes back unchanged; `results` and
+`error` are a neutral view for display, compaction and other providers (`serverTools.ts`). See
+[web.md](web.md).
 
 The loop, the session and the tools use only these types.
 
@@ -39,7 +48,9 @@ The loop, the session and the tools use only these types.
 - `stream()` calls `messages.stream`, yields each `text_delta`, then yields the final message as a
   `ModelResponse`. The abort signal goes to the SDK.
 - Mapping functions are pure and exported for tests: `toWireParams`, `toWireTools`, `toWireMessage`,
-  `fromWireMessage`. Block types that Garuda does not use (thinking, server tools) are dropped.
+  `fromWireMessage`. `serverTools = ["web_search"]` (0.6): `toWireTools` adds `web_search_20250305`;
+  `server_tool_use`, `web_search_tool_result` and text citations map to Garuda's blocks and back unchanged;
+  `pause_turn` and `usage.server_tool_use` map too. Other block types (thinking) are not requested.
 
 ### Prompt caching (N2)
 
@@ -107,7 +118,8 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
 - `fetch` and server-sent events; no SDK. Request: `POST <baseUrl>/chat/completions` with `model`,
   `messages`, `tools` (omitted when empty), `max_tokens`, `stream: true`,
   `stream_options: { include_usage: true }`, and `Authorization: Bearer <key>` when there is a key.
-- Messages: the system prompt first; a user message with tool results becomes one `tool` message per
+- Messages: the system prompt first; Claude's search blocks (after `/models`) become text with the titles
+  and URLs (0.6); a user message with tool results becomes one `tool` message per
   result (linked by `tool_call_id`), then a user message with the text blocks (Garuda's notes stay);
   assistant tool calls become `tool_calls` with JSON arguments.
 - Stream: text deltas go to the live view; tool-call deltas are joined by index (name and argument parts
@@ -152,7 +164,7 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
 - Settings override: `model.price` (USD per million tokens: input, output, cacheRead, cacheWrite) and
   `model.contextWindow`.
 - `knownModels()` (0.6): the table, newest first, for `/models`.
-- `costOf(usage, price)`, `totalTokens(usage)`, `contextSize(usage)` (input + cache read + cache write +
+- `costOf(usage, price)` adds `WEB_SEARCH_USD` ($0.01) per Claude web search (0.6); `totalTokens(usage)`, `contextSize(usage)` (input + cache read + cache write +
   output of the last response: the size of the context now).
 
 ## Fake model (`fake.ts`)
@@ -173,7 +185,7 @@ for the notice. The agent loop uses both (see [runtime-and-loop.md](runtime-and-
 
 ## Tests
 
-`test/model.test.ts` (mapping, cache breakpoints, prices), `test/anthropic-stream.test.ts` (streaming
+`test/claudeSearch.test.ts` (0.6: server search mapping, cost), `test/model.test.ts` (mapping, cache breakpoints, prices), `test/anthropic-stream.test.ts` (streaming
 with a fake SDK response), `test/providers.test.ts` (specs, presets, `models.json`, URL rules, message
 mapping, a local fake Chat Completions server: split chunks, tool calls, tool calls written as text,
 held text, `lines` mode set in `models.json`, usage, retries, errors, and a whole Garuda turn),

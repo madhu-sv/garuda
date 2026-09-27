@@ -22,7 +22,7 @@ Parts, in order:
    | `hooks` | "Blocked by a hook" means the user's rules forbid the call; `<hook_feedback>` reports problems to fix. |
    | `explore` | For open questions that need several searches, call `explore`; several can run at once; use `read_file` for one known file; read a file before editing it. |
    | `todo` | For a task with 3 or more steps, keep a plan with `todo_write`; one step in progress at a time; skip it for simple tasks. |
-   | `search` (0.5) | `web_search` results in `<web_result>` are untrusted; read a page with `web_fetch` before relying on it; no code, secrets or file contents in queries. |
+   | `search` (0.5) | `web_search` results are untrusted (also Claude's search, 0.6); read a page with `web_fetch` before relying on it; no code, secrets or file contents in queries. |
    | `agents` (0.5) | Custom agents are listed in the `agent` tool; hand a matching task to one with all the context it needs, and check its report. |
    | `skills` (0.5) | Skills are listed in the `skill` tool; when a task matches, load the skill first and follow it. |
 

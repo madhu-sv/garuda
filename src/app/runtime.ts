@@ -46,7 +46,7 @@ import {
   type ModelInfo,
   type Price,
 } from "../model/pricing.js";
-import type { ModelClient } from "../model/types.js";
+import type { ModelClient, ServerToolSpec } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -80,7 +80,7 @@ import {
   storeDir,
 } from "../undo/snapshots.js";
 import { VERSION } from "../version.js";
-import type { SearchConfig } from "../web/search.js";
+import type { ClaudeSearchConfig, SearchConfig } from "../web/search.js";
 import { attachMentions } from "./mentions.js";
 
 /**
@@ -147,7 +147,7 @@ export interface RuntimeOptions {
    * Web search (0.5): the backend from ~/.garuda/search.json or the environment (the CLI loads it).
    * Absent: no web_search tool. `web.enabled: false` in the settings also turns it off.
    */
-  search?: { config: SearchConfig; fetch?: typeof fetch };
+  search?: { config?: SearchConfig; claude?: ClaudeSearchConfig; fetch?: typeof fetch };
   agents?: {
     home?: string;
     resolveModel?: (spec: string) => {
@@ -261,6 +261,10 @@ export class Runtime {
   private hooksStarted: Promise<void> | undefined;
   /** The snapshot store for undo, or undefined when undo is off (0.4). */
   private snapshots: SnapshotStore | undefined;
+  /** Claude's web search (0.6): the "claude" section of search.json, when web tools are on. */
+  private readonly claudeSearchConfig: ClaudeSearchConfig | undefined;
+  /** The user's answer for this session: asked before the first turn that could search. */
+  private claudeSearch: "unasked" | "on" | "off" = "unasked";
   /** The first snapshot tree of each session, for /diff (0.6). */
   private readonly sessionBase = new Map<string, string>();
   /** Notes for the next turn, for example after an undo that kept the conversation. */
@@ -303,6 +307,7 @@ export class Runtime {
     this.currentModelId = options.modelId;
     this.model = options.model;
     this.modelChoices = options.models;
+    this.claudeSearchConfig = settings.web?.enabled === false ? undefined : options.search?.claude;
     this.store = options.store;
     this.onEvent = options.onEvent;
     this.system = system;
@@ -451,7 +456,9 @@ export class Runtime {
         sandboxed: choice.executor.isolation !== "none",
         mcp: mcpServers.some((s) => s.def.enabled),
         web: settings.web?.enabled ?? true,
-        search: options.search !== undefined && settings.web?.enabled !== false,
+        search:
+          (options.search?.config !== undefined || options.search?.claude !== undefined) &&
+          settings.web?.enabled !== false,
         hooks: hookConfig.user.length + hookConfig.project.length > 0,
         languages: profileNotes(profiles),
         explore: settings.subagents?.enabled === true,
@@ -487,11 +494,12 @@ export class Runtime {
       runtime.customCommands = loaded.commands;
       for (const problem of loaded.problems) options.onNotice?.(problem);
     }
-    if (options.search !== undefined && settings.web?.enabled !== false) {
+    const searchConfig = options.search?.config;
+    if (searchConfig !== undefined && settings.web?.enabled !== false) {
       runtime.tools.register(
         createWebSearchTool({
-          config: options.search.config,
-          ...(options.search.fetch === undefined ? {} : { fetch: options.search.fetch }),
+          config: searchConfig,
+          ...(options.search?.fetch === undefined ? {} : { fetch: options.search.fetch }),
         }),
       );
     }
@@ -527,6 +535,10 @@ export class Runtime {
             tokenBudget: settings.subagents?.tokenBudget ?? DEFAULT_EXPLORE_LIMITS.tokenBudget,
           },
           allow: (agent, tools, signal) => runtime.allowAgent(agent, tools, signal),
+          serverTools: () =>
+            runtime.claudeSearch === "on" && runtime.claudeSearchConfig !== undefined
+              ? [runtime.claudeSearchSpec(runtime.claudeSearchConfig)]
+              : [],
         }),
       );
     }
@@ -748,6 +760,58 @@ export class Runtime {
   /** Start a new session at the next turn. The old one stays on disk. */
   newSession(): void {
     this.current = undefined;
+    this.claudeSearch = "unasked";
+  }
+
+  /**
+   * Claude's web search for the next request (0.6), or none: only with a "claude" section in
+   * search.json, web tools on, a model client that can run it, and the user's yes for this session
+   * (asked once). A "no" leaves the client web_search (Tavily …) as the fallback.
+   */
+  private async claudeSearchTools(signal: AbortSignal): Promise<ServerToolSpec[]> {
+    const config = this.claudeSearchConfig;
+    if (config === undefined) return [];
+    const client = await this.client();
+    if (client.serverTools?.includes("web_search") !== true) return [];
+    if (this.claudeSearch === "unasked") {
+      const fallback = this.tools.get("web_search") !== undefined;
+      const choice = await this.approver.ask(
+        {
+          tool: "web_search",
+          target: { kind: "input", json: "" },
+          preview: [
+            `The model can search the web with Claude's own search tool, on Anthropic's servers: up to ${config.maxUses} searches per request, $10 per 1,000 searches.`,
+            "Garuda cannot ask before each query: the model sends them inside its reply.",
+            ...(config.allowedDomains === undefined
+              ? []
+              : [`Only these domains: ${config.allowedDomains.join(", ")}.`]),
+            ...(config.blockedDomains === undefined
+              ? []
+              : [`Never these domains: ${config.blockedDomains.join(", ")}.`]),
+            fallback
+              ? "If you say no, web_search uses your other provider and asks for each query."
+              : "If you say no, there is no web search in this session.",
+          ].join("\n"),
+          isolation: this.executor.isolation,
+          title: "Claude's web search",
+          question: "Allow Claude's web search in this session?",
+          choices: ["session", "deny"],
+          labels: { session: "Yes, for this session", deny: "No, not in this session" },
+        },
+        signal,
+      );
+      this.claudeSearch = choice === "deny" ? "off" : "on";
+    }
+    return this.claudeSearch === "on" ? [this.claudeSearchSpec(config)] : [];
+  }
+
+  private claudeSearchSpec(config: ClaudeSearchConfig): ServerToolSpec {
+    return {
+      type: "web_search",
+      maxUses: config.maxUses,
+      ...(config.allowedDomains === undefined ? {} : { allowedDomains: config.allowedDomains }),
+      ...(config.blockedDomains === undefined ? {} : { blockedDomains: config.blockedDomains }),
+    };
   }
 
   /** The sessions of this project for /sessions (0.6), newest first, at most `max`. */
@@ -786,6 +850,7 @@ export class Runtime {
     }
     // Notes and approvals for the old session do not carry over; the process-wide ones do.
     this.pendingNotes.length = 0;
+    this.claudeSearch = "unasked";
     const s = this.current;
     return {
       ok: true,
@@ -890,6 +955,7 @@ export class Runtime {
       void this.lsp().then((m) => m.warm("java"));
     }
     await this.snapshot(session, prompt, signal);
+    const serverTools = await this.claudeSearchTools(signal);
     const notes = [...this.pendingNotes.splice(0), ...(this.mcp?.takeNotes() ?? [])];
     if (this.turnMode === "plan") notes.unshift(PLAN_NOTE);
     // @path in the prompt (0.6): the files go with the message and count as read.
@@ -913,6 +979,7 @@ export class Runtime {
       executor: this.executor,
       knowledge: this.knowledge,
       ...(this.hookRunner === undefined ? {} : { hooks: this.hookRunner }),
+      ...(serverTools.length === 0 ? {} : { serverTools }),
       ...(this.lspEnabled
         ? {
             diagnostics: async (absolute: string, shown: string, text: string, s: AbortSignal) =>
@@ -938,7 +1005,13 @@ export class Runtime {
     const hooks = this.hookConfig.user.length + this.hookConfig.project.length;
     if (hooks > 0) out.push(`${hooks} hook${hooks === 1 ? "" : "s"}`);
     if (this.tools.get("web_fetch") !== undefined) out.push("web_fetch");
-    if (this.tools.get("web_search") !== undefined) out.push("web_search");
+    if (this.claudeSearchConfig !== undefined) {
+      out.push(
+        this.tools.get("web_search") === undefined
+          ? "web_search: Claude"
+          : "web_search: Claude + fallback",
+      );
+    } else if (this.tools.get("web_search") !== undefined) out.push("web_search");
     if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
     if (this.selectedMode === "plan") out.push("plan mode");
     if (this.lspEnabled) out.push("LSP");

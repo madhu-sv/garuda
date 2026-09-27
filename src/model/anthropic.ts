@@ -1,18 +1,22 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
+  AssistantBlock,
   ContentBlock,
   Message,
   ModelClient,
   ModelEvent,
   ModelRequest,
   ModelResponse,
+  ServerToolResultBlock,
+  ServerToolSpec,
   StopReason,
   StreamOptions,
-  TextBlock,
   ToolSpec,
-  ToolUseBlock,
   Usage,
 } from "./types.js";
+
+/** The web search tool version (0.6). Dynamic filtering (20260209+) waits for an A/B eval. */
+export const WEB_SEARCH_TOOL = "web_search_20250305";
 
 export interface AnthropicClientOptions {
   model: string;
@@ -26,6 +30,8 @@ export interface AnthropicClientOptions {
  * It marks the system prompt, the tool list and the end of the conversation for prompt caching (N2).
  */
 export class AnthropicClient implements ModelClient {
+  /** Claude's web search runs on Anthropic's servers (0.6). */
+  readonly serverTools = ["web_search"] as const;
   private readonly client: Anthropic;
   private readonly model: string;
 
@@ -72,21 +78,39 @@ export function toWireParams(
     const block = blocks[blocks.length - 1];
     if (block !== undefined) block.cache_control = { type: "ephemeral" };
   }
-  if (request.tools.length > 0) params.tools = toWireTools(request.tools);
+  const tools = toWireTools(request.tools, request.serverTools ?? []);
+  if (tools.length > 0) params.tools = tools;
   return params;
 }
 
-export function toWireTools(tools: readonly ToolSpec[]): Anthropic.Messages.ToolUnion[] {
-  return tools.map((tool, index): Anthropic.Messages.Tool => {
-    const wire: Anthropic.Messages.Tool = {
-      name: tool.name,
-      description: tool.description,
-      input_schema: { ...tool.inputSchema, type: "object" },
-    };
-    // One cache breakpoint after the last tool caches the whole tool list.
-    if (index === tools.length - 1) wire.cache_control = { type: "ephemeral" };
-    return wire;
-  });
+export function toWireTools(
+  tools: readonly ToolSpec[],
+  serverTools: readonly ServerToolSpec[] = [],
+): Anthropic.Messages.ToolUnion[] {
+  const out: Anthropic.Messages.ToolUnion[] = [
+    ...tools.map(
+      (tool): Anthropic.Messages.Tool => ({
+        name: tool.name,
+        description: tool.description,
+        input_schema: { ...tool.inputSchema, type: "object" },
+      }),
+    ),
+    ...serverTools.map(
+      (spec): Anthropic.Messages.WebSearchTool20250305 => ({
+        type: WEB_SEARCH_TOOL,
+        name: "web_search",
+        max_uses: spec.maxUses,
+        ...(spec.allowedDomains === undefined ? {} : { allowed_domains: [...spec.allowedDomains] }),
+        ...(spec.blockedDomains === undefined ? {} : { blocked_domains: [...spec.blockedDomains] }),
+      }),
+    ),
+  ];
+  // One cache breakpoint after the last tool caches the whole tool list.
+  const last = out.at(-1) as
+    | { cache_control?: Anthropic.Messages.CacheControlEphemeral }
+    | undefined;
+  if (last !== undefined) last.cache_control = { type: "ephemeral" };
+  return out;
 }
 
 export function toWireMessage(message: Message): Anthropic.Messages.MessageParam {
@@ -96,7 +120,17 @@ export function toWireMessage(message: Message): Anthropic.Messages.MessageParam
 function toWireBlock(block: ContentBlock): Anthropic.Messages.ContentBlockParam {
   switch (block.type) {
     case "text":
-      return { type: "text", text: block.text };
+      return block.citations === undefined
+        ? { type: "text", text: block.text }
+        : {
+            type: "text",
+            text: block.text,
+            citations: structuredClone(block.citations) as Anthropic.Messages.TextCitationParam[],
+          };
+    // Server tool blocks go back exactly as they came (the results hold encrypted content).
+    case "server_tool_use":
+    case "server_tool_result":
+      return structuredClone(block.wire) as Anthropic.Messages.ContentBlockParam;
     case "tool_use":
       return { type: "tool_use", id: block.id, name: block.name, input: block.input };
     case "tool_result":
@@ -110,18 +144,61 @@ function toWireBlock(block: ContentBlock): Anthropic.Messages.ContentBlockParam 
 }
 
 export function fromWireMessage(message: Anthropic.Messages.Message): ModelResponse {
-  const content: Array<TextBlock | ToolUseBlock> = [];
+  const content: AssistantBlock[] = [];
   for (const block of message.content) {
-    if (block.type === "text") content.push({ type: "text", text: block.text });
-    else if (block.type === "tool_use") {
+    if (block.type === "text") {
+      const citations = block.citations ?? [];
+      content.push(
+        citations.length === 0
+          ? { type: "text", text: block.text }
+          : { type: "text", text: block.text, citations: structuredClone(citations) },
+      );
+    } else if (block.type === "tool_use") {
       content.push({ type: "tool_use", id: block.id, name: block.name, input: block.input });
+    } else if (block.type === "server_tool_use") {
+      content.push({
+        type: "server_tool_use",
+        id: block.id,
+        name: block.name,
+        input: block.input,
+        wire: structuredClone(block),
+      });
+    } else if (block.type === "web_search_tool_result") {
+      content.push(webSearchResult(block));
     }
-    // 0.1 ignores other block types (thinking, server tools).
+    // Other block types (thinking, other server tools) are not requested, so they do not come.
   }
   return {
     content,
     stopReason: fromWireStopReason(message.stop_reason),
     usage: fromWireUsage(message.usage),
+  };
+}
+
+function webSearchResult(
+  block: Anthropic.Messages.WebSearchToolResultBlock,
+): ServerToolResultBlock {
+  const wire = structuredClone(block);
+  if (!Array.isArray(block.content)) {
+    return {
+      type: "server_tool_result",
+      toolUseId: block.tool_use_id,
+      name: "web_search",
+      results: [],
+      error: block.content.error_code,
+      wire,
+    };
+  }
+  return {
+    type: "server_tool_result",
+    toolUseId: block.tool_use_id,
+    name: "web_search",
+    results: block.content.map((r) => ({
+      title: r.title,
+      url: r.url,
+      ...(r.page_age === null || r.page_age === undefined ? {} : { age: r.page_age }),
+    })),
+    wire,
   };
 }
 
@@ -137,16 +214,20 @@ function fromWireStopReason(reason: Anthropic.Messages.StopReason | null): StopR
       return "max_tokens";
     case "refusal":
       return "refusal";
+    case "pause_turn":
+      return "pause_turn";
     default:
       return "other";
   }
 }
 
 function fromWireUsage(usage: Anthropic.Messages.Usage): Usage {
+  const searches = usage.server_tool_use?.web_search_requests ?? 0;
   return {
     inputTokens: usage.input_tokens,
     outputTokens: usage.output_tokens,
     cacheReadTokens: usage.cache_read_input_tokens ?? 0,
     cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+    ...(searches > 0 ? { webSearches: searches } : {}),
   };
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { KnowledgeIndex } from "../knowledge/index.js";
 import { DEFAULT_MAX_TOKENS } from "../loop/runAgent.js";
+import type { ServerToolSpec } from "../model/types.js";
 import type { PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
 import type { SubagentReport } from "../session/records.js";
@@ -37,6 +38,11 @@ export interface AgentToolOptions {
   limits: ChildLimits;
   /** Asks for a project agent the first time. True when the user allows it. */
   allow(agent: CustomAgent, tools: readonly string[], signal: AbortSignal): Promise<boolean>;
+  /**
+   * Claude's web search for this session (0.6), or none. An agent whose tools allow web_search
+   * gets it when its model can run it; it then replaces the client web_search.
+   */
+  serverTools?: () => readonly ServerToolSpec[];
 }
 
 const inputSchema = z.strictObject({
@@ -68,6 +74,16 @@ export function agentTools(agent: CustomAgent, registry: ToolRegistry): string[]
     .filter((name) => !NEVER.has(name))
     .filter((name) => wanted.some((entry) => toolMatches(name, entry)))
     .filter((name) => !agent.disallowed.some((entry) => toolMatches(name, entry)));
+}
+
+/** True when the agent's tool list allows this tool name and does not disallow it. */
+export function agentWants(agent: CustomAgent, name: string): boolean {
+  const wanted = agent.tools ?? READ_ONLY_AGENT_TOOLS;
+  return (
+    !NEVER.has(name) &&
+    wanted.some((entry) => toolMatches(name, entry)) &&
+    !agent.disallowed.some((entry) => toolMatches(name, entry))
+  );
 }
 
 /** True when the agent may change things: any tool outside the read-only set. */
@@ -122,7 +138,14 @@ export function createAgentTool(options: AgentToolOptions): Tool<AgentInput, Age
       }
       const registry = options.mainTools();
       const names = agentTools(agent, registry);
-      if (!(await options.allow(agent, names, context.signal))) {
+      const serverTools = (options.serverTools?.() ?? []).filter((spec) =>
+        agentWants(agent, spec.type),
+      );
+      const shown = [
+        ...names.filter((n) => !serverTools.some((s) => s.type === n)),
+        ...serverTools.map((s) => `${s.type} (Claude)`),
+      ];
+      if (!(await options.allow(agent, shown, context.signal))) {
         return {
           agent: agent.name,
           answer: "",
@@ -150,6 +173,7 @@ export function createAgentTool(options: AgentToolOptions): Tool<AgentInput, Age
           maxTokens: DEFAULT_MAX_TOKENS,
           executor: options.executor,
           executorInfo: { name: options.executor.name, isolation: options.executor.isolation },
+          ...(serverTools.length === 0 ? {} : { serverTools }),
           ...(options.knowledge === undefined ? {} : { knowledge: options.knowledge }),
           ...(hooks === undefined ? {} : { hooks }),
           ...(journal === undefined ? {} : { journal }),

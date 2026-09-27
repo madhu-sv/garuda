@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { serverCallText, serverResultSummary } from "../model/serverTools.js";
 import type { ToolUseBlock } from "../model/types.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
 import type { SessionRecord } from "../session/records.js";
@@ -50,6 +51,18 @@ export function sessionMarkdown(records: readonly SessionRecord[], sessionId: st
         for (const block of record.response.content) {
           if (block.type === "text" && block.text.trim() !== "") out.push(block.text.trim(), "");
           if (block.type === "tool_use") calls.set(block.id, block);
+          // Claude's web search (0.6): one line per search, with the pages as links.
+          if (block.type === "server_tool_result") {
+            const call = record.response.content.find(
+              (b) => b.type === "server_tool_use" && b.id === block.toolUseId,
+            );
+            const query = call?.type === "server_tool_use" ? ` ${serverCallText(call)}` : "";
+            out.push(
+              `- ${code(`${block.name} (Claude)${query}`)} → ${serverResultSummary(block)}`,
+              ...block.results.map((r) => `  - [${r.title.replace(/[[\]]/g, "")}](${r.url})`),
+              "",
+            );
+          }
         }
         break;
       case "tool_results": {

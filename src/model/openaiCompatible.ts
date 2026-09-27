@@ -1,3 +1,4 @@
+import { withoutServerBlocks } from "./serverTools.js";
 import { extractTextToolCalls, StreamHold, type TextToolCallMode } from "./textToolCalls.js";
 import type {
   ContentBlock,
@@ -194,7 +195,8 @@ export function toWireMessages(system: string, messages: readonly Message[]): Wi
   const out: WireMessage[] = [{ role: "system", content: system }];
   for (const message of messages) {
     if (message.role === "assistant") {
-      const text = message.content
+      // Claude's web search blocks (after /models) become text: titles and URLs (0.6).
+      const text = withoutServerBlocks(message.content)
         .filter((b): b is TextBlock => b.type === "text")
         .map((b) => b.text)
         .join("");

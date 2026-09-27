@@ -1,5 +1,6 @@
 import { styleText } from "node:util";
 import type { AgentEvent } from "../loop/runAgent.js";
+import { serverCallText, serverResultSummary } from "../model/serverTools.js";
 import type { ToolUseBlock } from "../model/types.js";
 import type { ToolOutcome } from "../tools/types.js";
 
@@ -71,6 +72,14 @@ export class PlainRenderer implements Renderer {
       case "notice":
         this.info(event.text);
         return;
+      case "server_tool": {
+        const { call, result } = serverToolText(event);
+        this.line(`${this.paint("cyan", "●")} ${this.paint("bold", call)}`);
+        this.line(
+          `  ${this.paint("dim", "⎿")} ${this.paint(event.result?.error === undefined ? "dim" : "red", result)}`,
+        );
+        return;
+      }
       case "step_end":
       // Live status lines need a live view; plain output stays one line per call.
       case "tool_progress":
@@ -113,6 +122,26 @@ export function todoLines(call: ToolUseBlock, outcome: ToolOutcome): string[] {
     .map((line) => /^(\[[x> ]\]) (.*)$/.exec(line))
     .filter((m): m is RegExpExecArray => m !== null)
     .map((m) => `${marks[m[1] ?? ""] ?? "○"} ${m[2] ?? ""}`);
+}
+
+/** Two short lines for a server tool call (0.6): `web_search (Claude) "query"`, `5 results`. */
+export function serverToolText(event: Extract<AgentEvent, { type: "server_tool" }>): {
+  call: string;
+  result: string;
+} {
+  return {
+    call: `${event.call.name} (Claude) ${cut(serverCallText(event.call), 100)}`,
+    result: serverResultSummary(event.result),
+  };
+}
+
+/** The pages a server search found, for Ctrl-O. */
+export function serverToolOutput(event: Extract<AgentEvent, { type: "server_tool" }>): string {
+  const result = event.result;
+  if (result === undefined || result.results.length === 0) return serverResultSummary(result);
+  return result.results
+    .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}${r.age === undefined ? "" : ` (${r.age})`}`)
+    .join("\n");
 }
 
 /** The notice for a retry of a broken model stream. */

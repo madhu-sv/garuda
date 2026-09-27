@@ -196,7 +196,15 @@ async function start(options: Options, program: Command): Promise<number> {
     undo: {},
     // Skills from ~/.garuda/skills, ~/.claude/skills and the project (0.5).
     skills: {},
-    ...(searchConfig.config === undefined ? {} : { search: { config: searchConfig.config } }),
+    // Web search (0.5) and Claude's own search (0.6): only the user's search.json and environment.
+    ...(searchConfig.config === undefined && searchConfig.claude === undefined
+      ? {}
+      : {
+          search: {
+            ...(searchConfig.config === undefined ? {} : { config: searchConfig.config }),
+            ...(searchConfig.claude === undefined ? {} : { claude: searchConfig.claude }),
+          },
+        }),
     // Custom agents from ~/.garuda/agents, ~/.claude/agents and the project (0.5). A model id in a
     // user agent file goes through the same providers as -m (only ~/.garuda/models.json).
     agents: {
@@ -231,8 +239,13 @@ async function start(options: Options, program: Command): Promise<number> {
   };
 
   if (runtime.executorNotice !== undefined) renderer.warn(runtime.executorNotice);
-  if (searchConfig.problem !== undefined)
-    renderer.warn(`Web search is off: ${searchConfig.problem}`);
+  if (searchConfig.problem !== undefined) {
+    renderer.warn(
+      searchConfig.claude === undefined
+        ? `Web search is off: ${searchConfig.problem}`
+        : `The fallback web search is off (Claude's search still works): ${searchConfig.problem}`,
+    );
+  }
   const session = runtime.session;
   if (session !== undefined) {
     renderer.info(
