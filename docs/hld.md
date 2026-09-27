@@ -68,6 +68,11 @@ sequenceDiagram
 A stream that breaks in the middle (a closed connection, an overload) is sent again up to 2 times, with a
 notice; the session keeps only the complete response.
 
+Before the loop (0.6), the runtime attaches the files of `@path` mentions to the prompt (they count as
+read), adds the pending notes (for example the output of a `!command`), and decides whether Claude's web
+search goes into the requests (it asks once per session). A server search runs inside the model reply;
+a reply that stops with `pause_turn` goes straight into the next step.
+
 Stop reasons: `done`, `max_steps` (default 50), `token_budget` (default 20 M), `repeated_calls` (3
 identical calls in a row), `max_tokens`, `refusal`. Ctrl-C aborts the turn and kills its commands; a
 second Ctrl-C exits Garuda.
@@ -208,6 +213,17 @@ Before each turn, the runtime takes a snapshot of the files in a git store of Ga
 snapshot and cuts the turn out of the messages (`undo` record); `/redo` does the reverse. Details:
 [lld/undo.md](lld/undo.md).
 
+`/diff` (0.6) compares the first snapshot of the session (or the last turn's, `/diff last`) with the files
+now.
+
+### Sessions, models and export in the chat (0.6)
+
+`/sessions` lists the project's sessions from `SessionStore.list()`; `/sessions <n|id>` resumes one in the
+same process. `/models` lists the known and configured models; `/models <ref>` switches the main model for
+the next turns (`modelId`, window, price and client change together; a `model` record keeps it).
+`/export` writes the session records as Markdown. Details: [lld/cli.md](lld/cli.md),
+[lld/runtime-and-loop.md](lld/runtime-and-loop.md).
+
 ### Custom agents (0.5)
 
 When agent files exist, the runtime registers the `agent` tool. A call runs a child session (shared with
@@ -260,7 +276,7 @@ Details: [lld/init.md](lld/init.md).
 | MCP servers (stdio) | `~/.garuda/mcp.json`, `.garuda/mcp.json` | Tools named `mcp__<server>__<tool>`. |
 | Hooks | `~/.garuda/hooks.json`, `.garuda/hooks.json` | Checks before calls, feedback after calls. |
 | Web fetch | `.garuda/settings.json` (`web`) | The `web_fetch` tool. |
-| Web search (0.5) | `~/.garuda/search.json` or `BRAVE_API_KEY` / `TAVILY_API_KEY` (user only) | The `web_search` tool. |
+| Web search (0.5) | `~/.garuda/search.json` or `BRAVE_API_KEY` / `TAVILY_API_KEY` (user only) | The `web_search` tool; with a `claude` section, Claude's search (0.6). |
 | Skills (0.5) | `~/.garuda/skills`, `~/.claude/skills`, `.garuda/skills`, `.claude/skills` | The `skill` tool and `/name`. |
 | Custom agents (0.5) | `~/.garuda/agents`, `~/.claude/agents`, `.garuda/agents`, `.claude/agents` | The `agent` tool and `/agents`. |
 | Custom slash commands (0.4) | `~/.garuda/commands`, `.garuda/commands` | `/name` prompts. |
@@ -277,12 +293,17 @@ Ctrl-C target of a turn, so the logic is testable without a terminal. Finished l
 the terminal scrollback; the live area holds only the open text block, running tools, the approval
 choice, the queue, the input line and a footer. See [cli.md](lld/cli.md).
 
+Input (0.6): Esc stops a task; `\` + Enter or Alt+Enter make a new line; Ctrl-G or `/editor` opens
+`$EDITOR`; `@path` attaches a file; `!command` runs a command as the bash tool would; Tab completes commands
+and paths. A `Notifier` sends a desktop notification (OSC 9) or the bell when an approval waits or a long
+task ends, and stays quiet while the window has focus (terminal focus reporting).
+
 Custom slash commands (0.4) are Markdown prompts in `~/.garuda/commands` and `.garuda/commands`. A project
 command shows its text and asks the first time, like project hooks. See [commands.md](lld/commands.md).
 
 ## 11. Quality
 
-- 245 unit and acceptance tests, all with the fake model.
+- About 520 unit and acceptance tests, all with the fake model.
 - Contract tests run every executor (host, Seatbelt, bubblewrap) through the same suite.
 - Architecture tests enforce the dependency rules.
 - Evals: a basic suite (10 tasks), a hard suite (6 tasks on a generated repo of about 107 files), and

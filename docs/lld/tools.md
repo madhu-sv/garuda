@@ -66,7 +66,7 @@ treats it as read-only.
 | `repo_map` | yes | – | Code index: exports and imports per file; a folder summary above 30 files. `all` only. |
 | `web_fetch` | no | URL | See [web.md](web.md). Present unless `web.enabled` is false. |
 | `explore` | yes | – | A read-only subagent answers one question about the code. See [agents.md](agents.md). Only with `subagents.enabled: true` (off by default). |
-| `web_search` | no | input | The user's search backend (0.5). Each search asks, unless allowed for the session or by the rule `web_search`. See [web.md](web.md). Only when a backend is set. |
+| `web_search` | no | input | The user's search backend (0.5). Each search asks, unless allowed for the session or by the rule `web_search`. See [web.md](web.md). Only when a backend is set. Claude's search (0.6) is not a Garuda tool: the model client sends it as a server tool, and it replaces this tool in the request. |
 | `skill` | yes | – | Loads a skill's instructions or one of its files (0.5). See [skills.md](skills.md). Only when skills exist. |
 | `agent` | yes (`runsAlone` when an agent may write) | – | Hands a task to a custom agent (0.5). See [agents.md](agents.md). Only when agent files exist. |
 | `mcp__<server>__<tool>` | no | input | See [mcp.md](mcp.md). |

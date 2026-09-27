@@ -99,14 +99,14 @@ flowchart TB
 
 | Component | Folder | Responsibility |
 | --- | --- | --- |
-| CLI | `src/cli/` | Parse the command line; run one task (`-p`), a chat (plain or Ink), `--resume`, `--replay` or `eval`. Ask the user for approvals. Show events. |
+| CLI | `src/cli/` | Parse the command line; run one task (`-p`), a chat (plain or Ink), `--resume`, `--replay` or `eval`. Ask the user for approvals. Show events. Chat input (0.6): Esc, multi-line, `$EDITOR`, `@path`, `!command`, Tab completion; `/sessions`, `/models`, `/export`, `/diff`; notifications that respect the window focus. |
 | Runtime | `src/app/` | Build everything one Garuda process needs from settings: executor, permission engine, tools, system prompt, session, MCP servers, hooks. Run one turn; attach `@path` files to the prompt (0.6); run the user's `!command`; switch the session or the model from the chat (0.6). |
 | Agent loop | `src/loop/` | Call the model, run the tool calls, repeat until the model stops or a limit hits. Replay a recorded session. |
-| Model | `src/model/` | The `ModelClient` interface, providers and model specs, the Anthropic and OpenAI-compatible adapters, the fake model, prices and context windows. |
+| Model | `src/model/` | The `ModelClient` interface, providers and model specs, the Anthropic and OpenAI-compatible adapters, the fake model, prices and context windows. Server tools (0.6): Claude's web search runs inside the reply; its blocks go back unchanged. |
 | Tools | `src/tools/` | The tool interface, the registry (validation, hooks, permission check, run), and the built-in tools. |
 | Permissions | `src/permissions/` | Decide per call: allow, deny or ask. Rules, settings, path guard, sensitive files, sandbox paths. |
 | Sandbox | `src/sandbox/` | The `Executor`: run a command or start a long-running process, on the host or in an OS sandbox. |
-| Session | `src/session/` | The conversation in memory, the JSONL journal, resume, redaction, read tracking. |
+| Session | `src/session/` | The conversation in memory, the JSONL journal, resume, redaction, read tracking, the session list (0.6). |
 | Context | `src/context/` | System prompt, instruction files (`AGENTS.md`, `CLAUDE.md`, `GARUDA.md`), project memory, compaction. |
 | Commands | `src/commands/` | Custom slash commands: load, expand, consent for project commands. |
 | Agents | `src/agents/` | Child runs: the explore subagent (0.3) and custom agents (0.5, Claude Code's format, the `agent` tool). |
@@ -116,7 +116,7 @@ flowchart TB
 | LSP | `src/lsp/` | Language servers in the sandbox: find, install, start; errors of a changed file after an edit. |
 | Knowledge | `src/knowledge/` | Local code index: symbols, references, a code graph. No model call. |
 | MCP | `src/mcp/` | Start local MCP servers in the sandbox, connect to remote ones (Streamable HTTP, OAuth), consent and pinning, tool adapters, text cleaning. |
-| Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown; web search through the user's backend (0.5). |
+| Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown; web search through the user's backend (0.5); the config of Claude's search (0.6). |
 | Net | `src/net/` | Address checks (public, loopback) shared by web fetch and model providers. |
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
 | Subagents | `src/agents/` | The explore tool: a child agent loop with read-only tools, its own session and limits, that answers one question. |
@@ -188,6 +188,8 @@ flowchart LR
 | Remote MCP sign-in | Token theft, a forged callback, a malicious sign-in page. | PKCE (SDK); `state` checked on the callback; only https sign-in pages; tokens only in `~/.garuda/mcp-auth.json` (0600), never in session files; the callback server listens on 127.0.0.1 only, for one answer. |
 | MCP server / web page → model | Hidden instructions, terminal escape codes, fake markers. | Clean text, cap its size, wrap it in `<mcp_result>` / `<web_result>`, neutralize Garuda's own markers, mark it as untrusted in the prompt. |
 | web_search → search backend | The query carries code or secrets out; a project sends queries to its own server. | Only the user configures search (`~/.garuda/search.json`, environment keys); each search shows the query and asks (or a session answer or rule); queries with long tokens are refused; results are cleaned and marked untrusted. Claude's search (0.6) runs inside the model reply: one question per session, a per-request cap, optional domain lists; its queries cannot be checked first. |
+| User input → model (0.6) | `@path` sends a secret file; `!command` escapes the rules. | `@path` has the rules of read_file: only files in the root, no sensitive or binary files, size and count limits. `!command` runs as a bash call: the same permission engine, deny rules, hooks and sandbox; its output goes to the model as a note, with Garuda's markers neutralized. |
+| Garuda → terminal (0.6) | Text in a notification ends the escape code and injects terminal commands. | Control characters in the text become spaces; at most 120 characters; only fixed Garuda texts and tool names or commands go into it. |
 | web_fetch → network | Server-side request forgery; data leaks through URLs. | Only public addresses, checked on the resolved IP and pinned; each redirect hop checked; new hosts ask; unusual URLs always ask. |
 | Garuda → disk | Secrets in session logs. | Redactor on every journal line; files 0600. |
 | Model text → tool call | A small model's text (or file text it repeats) is read as a tool call. | Default: only when the whole reply is calls to tools of this request. A user can allow calls on their own lines for one model (`"textToolCalls": "lines"` in `~/.garuda/models.json`; never from project settings). A call in the middle of a sentence never runs. The call then passes the same input check, hooks and permissions. |
@@ -199,8 +201,9 @@ All state is in files. There is no server and no database.
 
 | File | Owner | Content |
 | --- | --- | --- |
-| `<root>/.garuda/sessions/<id>.jsonl` | Garuda | One record per line: start, user, assistant, tool results, compaction, end. 0600, redacted. |
-| `<root>/.garuda/settings.json` | Project | Executor, permission rules, env allowlist, limits, model price, code index mode, web settings. |
+| `<root>/.garuda/sessions/<id>.jsonl` | Garuda | One record per line: start, resume, model (0.6), user, assistant, tool results, compaction, snapshot, undo, redo, end. 0600, redacted. |
+| `<root>/garuda-<id>.md` | User | `/export` (0.6): the conversation as Markdown, redacted. Never overwritten. |
+| `<root>/.garuda/settings.json` | Project | Executor, permission rules, env allowlist, limits, model price, code index mode, web settings, feature switches (undo, lsp, todo, skills, agents, subagents), notifications (0.6). |
 | `<root>/.garuda/memory.md` | Project | Facts saved by the `remember` tool. Loaded into the next session. |
 | `<root>/.garuda/mcp.json`, `hooks.json` | Project | Project MCP servers and hooks. Need consent. |
 | `<root>/.garuda/index/code-graph.json` | Garuda | Code graph cache for the code index. |
@@ -210,7 +213,7 @@ All state is in files. There is no server and no database.
 | `~/.garuda/agents/`, `~/.claude/agents/`, `<root>/.garuda/agents/`, `<root>/.claude/agents/` | User, project | Custom agents: Markdown files in Claude Code's format (0.5). |
 | `~/.garuda/mcp.json`, `hooks.json` | User | Trusted MCP servers and hooks. |
 | `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers, hooks, slash commands, skills and agents; tool-list hashes. 0600. |
-| `~/.garuda/search.json` | User | The web search backend (Brave, Tavily, SearXNG); keys come from environment variables. |
+| `~/.garuda/search.json` | User | The web search backend (Brave, Tavily, SearXNG); keys come from environment variables. A `claude` section turns on Claude's search (0.6). |
 | `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. |
 | `~/.garuda/mcp-auth.json` | Garuda | OAuth clients and tokens of remote MCP servers. 0600. |
 | `~/.garuda/snapshots/<hash of root>/` | Garuda | Undo snapshots: a git folder per project (0700). |
@@ -245,3 +248,6 @@ All state is in files. There is no server and no database.
 | JSON output | `-p --output-format json\|stream-json` with Claude Code's field names; stdout only JSON | Scripts and CI written for `claude -p` work with Garuda. The mapping lives in one file of the CLI; the loop only adds the full response to `step_end` and the model time to the result. |
 | Broken model streams | The loop retries a transient failure twice (1 s, 4 s) | The SDKs retry only before a stream starts; 4 of 54 eval runs lost the connection in the middle. |
 | Build caches in the sandbox | Only cache subfolders (`~/.m2/repository`, `~/.gradle/caches` …) are writable | Settings files and init scripts run later outside the sandbox; they stay read-only. |
+| Claude's web search (0.6) | One question per session; the other backend as the fallback | The search runs inside the model reply, so a question per query is not possible; the user decides once, with the price and the limits in view. |
+| Model switch (0.6) | `/models` changes the main model for this chat only, with a `model` record | A new chat starts from `-m` or `GARUDA_MODEL`, so a switch never changes later runs by surprise. |
+| Notifications (0.6) | On by default (OSC 9 or the bell); quiet while the window has focus | The user can work elsewhere during long tasks; focus reporting keeps them quiet when the user is watching. |
