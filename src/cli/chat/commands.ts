@@ -28,7 +28,7 @@ export const HELP = [
   "  /export    write this conversation as Markdown; /export <file>",
   "  /diff      file changes in this session; /diff last (last turn); /diff [last] <path>",
   "  /schedule  make the last plan a job that runs later: /schedule [HH:MM], then garuda run <id>",
-  "  /jobs      the scheduled jobs of this project; /jobs <id> shows one and its report",
+  "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel <id>",
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /refs X    every use of symbol X (code index, no model call)",
   "  /map [dir] what each JS/TS file exports and imports",
@@ -272,6 +272,11 @@ async function diffCommand(
 /** /jobs [id] (0.7): the list, or one job with its report. */
 async function jobsCommand(runtime: Runtime, renderer: Renderer, id: string): Promise<void> {
   const { listJobs, loadJob, JOBS_DIR } = await import("../../jobs/job.js");
+  const cancel = /^cancel\s+(\S+)$/.exec(id);
+  if (cancel !== null) {
+    renderer.info(await runtime.cancelJob(cancel[1] as string));
+    return;
+  }
   if (id !== "") {
     try {
       const job = await loadJob(runtime.root, id);

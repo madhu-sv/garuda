@@ -1,8 +1,9 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Runtime } from "../app/runtime.js";
-import { JobGitError } from "../jobs/git.js";
+import { hostCommand, JobGitError } from "../jobs/git.js";
 import { JOBS_DIR, type Job, type JobResult, loadJob, saveJob } from "../jobs/job.js";
+import { type AgentEnv, defaultAgentEnv, removeAgent } from "../jobs/launchd.js";
 import { jobReport } from "../jobs/text.js";
 import { commitJob, jobChanges, prepareWorktree } from "../jobs/worktree.js";
 import { totalTokens } from "../model/pricing.js";
@@ -36,6 +37,29 @@ export async function prepareJob(
   at: string | undefined,
   renderer: Renderer,
   git: Executor = createExecutor("host").executor,
+  launchd: LaunchdRun = {},
+): Promise<PreparedJob | number> {
+  const prepared = await prepare(mainRoot, id, at, renderer, git);
+  // A start from the agent that does not run (done, running, broken): the agent goes anyway.
+  if (typeof prepared === "number" && launchd.fromLaunchd === true) {
+    const job = await loadJob(mainRoot, id).catch(() => undefined);
+    if (job !== undefined) await removeAgent(git, job, launchd.env ?? defaultAgentEnv());
+  }
+  return prepared;
+}
+
+/** `garuda run --from-launchd` (0.7): the agent started this run; it removes the agent at the end. */
+export interface LaunchdRun {
+  fromLaunchd?: boolean;
+  env?: AgentEnv;
+}
+
+async function prepare(
+  mainRoot: string,
+  id: string,
+  at: string | undefined,
+  renderer: Renderer,
+  git: Executor,
 ): Promise<PreparedJob | number> {
   let job: Job;
   try {
@@ -132,8 +156,11 @@ export async function finishJob(
   runtime: Runtime,
   renderer: Renderer,
   git: Executor = createExecutor("host").executor,
+  launchd: LaunchdRun = {},
 ): Promise<void> {
   const { job } = prepared;
+  const hadAgent = job.launchd !== undefined || launchd.fromLaunchd === true;
+  delete job.launchd;
   const result: JobResult = {
     stopReason: outcome.kind === "done" ? outcome.result.stopReason : outcome.kind,
     steps: outcome.kind === "done" ? outcome.result.steps : 0,
@@ -167,14 +194,31 @@ export async function finishJob(
   const file = join(job.root, JOBS_DIR, `${job.id}.md`);
   await writeFile(file, `${report}\n`, { mode: 0o600 });
   renderer.info(`\n${report}\n\nReport: ${file}`);
+  const note = `Garuda: job ${job.id} ${job.status} (${result.files.length} file(s) changed)`;
   if (process.stdout.isTTY) {
     process.stdout.write(
-      notificationBytes(
-        pickChannel(runtime.notificationSettings?.channel),
-        `Garuda: job ${job.id} ${job.status} (${result.files.length} file(s) changed)`,
-      ),
+      notificationBytes(pickChannel(runtime.notificationSettings?.channel), note),
+    );
+  } else if (launchd.fromLaunchd === true && process.platform === "darwin") {
+    // No terminal: a macOS notification. The text goes as an argument, never as script text.
+    await hostCommand(
+      git,
+      job.root,
+      [
+        "osascript",
+        "-e",
+        "on run argv",
+        "-e",
+        'display notification (item 1 of argv) with title "Garuda"',
+        "-e",
+        "end run",
+        note,
+      ],
+      { check: false },
     );
   }
+  // Last: when this run came from the agent, unloading it ends this process.
+  if (hadAgent) await removeAgent(git, job, launchd.env ?? defaultAgentEnv());
 }
 
 function lastAnswer(runtime: Runtime): string {

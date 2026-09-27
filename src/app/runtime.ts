@@ -1044,6 +1044,35 @@ export class Runtime {
     return { ok: created.ok, text: created.text };
   }
 
+  /**
+   * /jobs cancel <id> (0.7): a scheduled job does not run: its launchd agent goes, and its status
+   * becomes "stopped". A job that ran keeps its status and report.
+   */
+  async cancelJob(
+    id: string,
+    /** For tests: the agent's home and the executor for launchctl. */
+    agent: { env?: import("../jobs/launchd.js").AgentEnv; executor?: Executor } = {},
+  ): Promise<string> {
+    const { loadJob, saveJob } = await import("../jobs/job.js");
+    const { defaultAgentEnv, removeAgent } = await import("../jobs/launchd.js");
+    let job: Awaited<ReturnType<typeof loadJob>>;
+    try {
+      job = await loadJob(this.root, id);
+    } catch (error) {
+      return (error as Error).message;
+    }
+    if (job.status !== "scheduled")
+      return `Job ${id} is ${job.status}: there is nothing to cancel.`;
+    const hadAgent = job.launchd !== undefined;
+    if (hadAgent) {
+      await removeAgent(agent.executor ?? this.executor, job, agent.env ?? defaultAgentEnv());
+    }
+    delete job.launchd;
+    job.status = "stopped";
+    await saveJob(job);
+    return `Job ${id} is cancelled${hadAgent ? " and its launchd agent is removed" : ""}. \`garuda run ${id}\` can still run it.`;
+  }
+
   /** What this session adds to the base tools, for the start banner. Counts configured items. */
   extras(): string[] {
     // The build tools first: they say what kind of project this is.

@@ -18,6 +18,7 @@ import { finishJob, msUntil, prepareJob } from "../src/cli/jobCommand.js";
 import { createJob } from "../src/jobs/create.js";
 import { git } from "../src/jobs/git.js";
 import { loadJob, planPermissions, planTitle, saveJob } from "../src/jobs/job.js";
+import { agentPath, agentPlist, nextTime } from "../src/jobs/launchd.js";
 import { jobBase, worktreeDir } from "../src/jobs/worktree.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
@@ -26,6 +27,7 @@ import { parseRule } from "../src/permissions/rules.js";
 import { parseSettings } from "../src/permissions/settings.js";
 import type { CallTarget } from "../src/permissions/types.js";
 import { HostExecutor } from "../src/sandbox/host.js";
+import type { Executor } from "../src/sandbox/types.js";
 import { FileSessionStore } from "../src/session/store.js";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "garuda-jobs-")));
@@ -336,5 +338,138 @@ describe("scheduled jobs: create, run, report (0.7)", () => {
     // A hand-edited file with a bad rule is refused when loaded.
     await saveJob({ ...created.job, allow: ["edit_file(("] });
     await expect(loadJob(root, created.job.id)).rejects.toThrow();
+  });
+});
+
+/** The host for git; launchctl and osascript are only recorded. */
+function recording(): { executor: Executor; commands: string[] } {
+  const commands: string[] = [];
+  const executor = Object.create(host) as Executor;
+  executor.run = async (command, policy, options) => {
+    if (/^(launchctl|osascript) /.test(command)) {
+      commands.push(command);
+      const out = { text: "", truncated: false, totalBytes: 0 };
+      return {
+        exitCode: 0,
+        signal: null,
+        stdout: out,
+        stderr: out,
+        timedOut: false,
+        aborted: false,
+        durationMs: 0,
+      };
+    }
+    return host.run(command, policy, options);
+  };
+  return { executor, commands };
+}
+
+describe("scheduled jobs: launchd (0.7)", () => {
+  const env = (home: string) => ({
+    home,
+    uid: 501,
+    shell: "/bin/zsh",
+    node: "/opt/homebrew/bin/node",
+    script: "/Users/me/dev/garuda/dist/cli/index.js",
+  });
+
+  it("the agent: login shell under caffeinate, the job's date and time, the log, escaped XML", () => {
+    const job = {
+      id: "20260927-2300-ab12",
+      root: "/Users/me/dev/a&b project",
+      at: "01:00",
+    } as Parameters<typeof agentPlist>[0];
+    const when = nextTime("01:00", new Date(2026, 8, 27, 23, 0));
+    expect(when.getDate()).toBe(28);
+    const plist = agentPlist(job, env("/Users/me"), when);
+    expect(plist).toContain("<string>dev.garuda.job.20260927-2300-ab12</string>");
+    expect(plist).toContain(
+      "<string>/usr/bin/caffeinate</string>\n      <string>-i</string>\n      <string>/bin/zsh</string>\n      <string>-lic</string>",
+    );
+    expect(plist).toContain(
+      "<string>cd '/Users/me/dev/a&amp;b project' &amp;&amp; exec /opt/homebrew/bin/node /Users/me/dev/garuda/dist/cli/index.js run 20260927-2300-ab12 --from-launchd</string>",
+    );
+    expect(plist).toMatch(
+      /<key>Month<\/key><integer>9<\/integer>\n.*<key>Day<\/key><integer>28<\/integer>\n.*<key>Hour<\/key><integer>1<\/integer>\n.*<key>Minute<\/key><integer>0<\/integer>/,
+    );
+    expect(plist).toContain("<key>RunAtLoad</key><false/>");
+    expect(plist).toContain(
+      "<key>StandardOutPath</key><string>/Users/me/dev/a&amp;b project/.garuda/jobs/20260927-2300-ab12.log</string>",
+    );
+    // The single binary: no script after it.
+    const sea = agentPlist(
+      job,
+      { ...env("/Users/me"), node: "/usr/local/bin/garuda", script: "/usr/local/bin/garuda" },
+      when,
+    );
+    expect(sea).toContain("exec /usr/local/bin/garuda run 20260927-2300-ab12");
+  });
+
+  it("/schedule HH:MM on macOS offers the agent; yes installs it, /jobs cancel removes it", async () => {
+    const { root, home } = await repo();
+    const { executor, commands } = recording();
+    const approver = new AutoApprover("once");
+    const created = await createJob({
+      root,
+      executor: new SandboxedHost(),
+      approver,
+      plan: { request: "Fix the add bug", plan: PLAN, sessionId: "s1" },
+      modelId: "m",
+      at: "01:00",
+      home,
+      now: new Date(2026, 8, 27, 23, 0),
+      signal: signal(),
+      launchd: { platform: "darwin", env: env(home), executor },
+    });
+    if (!created.ok) throw new Error(created.text);
+    const id = created.job.id;
+    expect(approver.requests[1]).toMatchObject({
+      title: "Run the job at 01:00 with launchd?",
+      choices: ["once", "deny"],
+    });
+    expect(approver.requests[1]?.preview).toContain("/bin/zsh -lic");
+    expect(created.text).toContain("launchd starts it at 01:00 on Mon Sep 28 2026");
+    const plist = agentPath(home, id);
+    expect(readFileSync(plist, "utf8")).toContain(`run ${id} --from-launchd`);
+    expect(commands).toEqual([
+      `launchctl bootout gui/501/dev.garuda.job.${id}`,
+      `launchctl bootstrap gui/501 ${plist}`,
+    ]);
+    expect((await loadJob(root, id)).launchd?.label).toBe(`dev.garuda.job.${id}`);
+
+    // No on Linux, or No to the second question: the terminal command instead.
+    const linux = await createJob({
+      root,
+      executor: new SandboxedHost(),
+      approver: new AutoApprover("once"),
+      plan: { request: "x", plan: PLAN, sessionId: "s1" },
+      modelId: "m",
+      at: "02:00",
+      home,
+      signal: signal(),
+      launchd: { platform: "linux", env: env(home), executor },
+    });
+    expect(linux.text).toMatch(/garuda run \S+ --at 02:00/);
+
+    // /jobs cancel: the agent goes, the job is stopped.
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake",
+      model: async () => new FakeModelClient([]),
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host" }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    commands.length = 0;
+    expect(await runtime.cancelJob(id, { env: env(home), executor })).toMatch(
+      /is cancelled and its launchd agent is removed/,
+    );
+    expect(existsSync(plist)).toBe(false);
+    expect(commands).toEqual([`launchctl bootout gui/501/dev.garuda.job.${id}`]);
+    expect((await loadJob(root, id)).status).toBe("stopped");
+    expect(await runtime.cancelJob(id)).toMatch(/is stopped: there is nothing to cancel/);
   });
 });

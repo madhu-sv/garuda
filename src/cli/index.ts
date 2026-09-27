@@ -54,6 +54,8 @@ interface Options {
   /** `garuda run <job>` (0.7): the job id, and the time to wait for. */
   job?: string;
   at?: string;
+  /** The launchd agent started this run (0.7): remove the agent at the end. */
+  fromLaunchd?: boolean;
 }
 
 async function main(): Promise<void> {
@@ -132,9 +134,12 @@ async function main(): Promise<void> {
     .argument("<job-id>", "the job id, from /schedule or /jobs")
     .option("--at <HH:MM>", "wait until this local time first (keep the terminal open)")
     .option("-m, --model <id>", "model id; default: the job's model")
-    .action(async (job: string, options: { at?: string; model?: string }) => {
-      process.exitCode = await start({ ...options, job }, program);
-    });
+    .addOption(new Option("--from-launchd").hideHelp())
+    .action(
+      async (job: string, options: { at?: string; model?: string; fromLaunchd?: boolean }) => {
+        process.exitCode = await start({ ...options, job }, program);
+      },
+    );
 
   const lsp = program
     .command("lsp")
@@ -164,7 +169,14 @@ async function start(options: Options, program: Command): Promise<number> {
   let job: import("./jobCommand.js").PreparedJob | undefined;
   if (options.job !== undefined) {
     const { prepareJob } = await import("./jobCommand.js");
-    const prepared = await prepareJob(mainRoot, options.job, options.at, new PlainRenderer());
+    const prepared = await prepareJob(
+      mainRoot,
+      options.job,
+      options.at,
+      new PlainRenderer(),
+      undefined,
+      { fromLaunchd: options.fromLaunchd === true },
+    );
     if (typeof prepared === "number") return prepared;
     job = prepared;
   }
@@ -291,6 +303,10 @@ async function start(options: Options, program: Command): Promise<number> {
     const { saveJob } = await import("../jobs/job.js");
     job.job.status = "failed";
     await saveJob(job.job);
+    if (options.fromLaunchd === true || job.job.launchd !== undefined) {
+      const { removeAgent, defaultAgentEnv } = await import("../jobs/launchd.js");
+      await removeAgent(runtime.executor, job.job, defaultAgentEnv());
+    }
     return 1;
   }
   if (searchConfig.problem !== undefined) {
@@ -379,7 +395,9 @@ async function start(options: Options, program: Command): Promise<number> {
     finish(outcome);
     if (job !== undefined) {
       const { finishJob } = await import("./jobCommand.js");
-      await finishJob(job, outcome, runtime, renderer);
+      await finishJob(job, outcome, runtime, renderer, undefined, {
+        fromLaunchd: options.fromLaunchd === true,
+      });
     }
     if (outcome.kind === "interrupted") return 130;
     if (outcome.kind === "error") return 1;

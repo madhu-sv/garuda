@@ -36,7 +36,8 @@ sequenceDiagram
 | `jobs/job.ts` | The job format (Zod), `newJobId`, `saveJob` (temp file + rename, 0600), `loadJob` (checks the file and every rule again), `listJobs`, `planPermissions`, `planTitle`. |
 | `jobs/create.ts` | `createJob`: the checks, the question, the job file. `Runtime.scheduleJob` calls it. |
 | `jobs/worktree.ts` | `jobBase`, `linkCandidates`, `worktreeDir`, `prepareWorktree`, `commitJob`, `jobChanges`. |
-| `jobs/git.ts` | `git(executor, cwd, args)`: through the Executor (N8), outside the sandbox, with the user's git config but `core.hooksPath=/dev/null`. |
+| `jobs/git.ts` | `git(executor, cwd, args)` and `hostCommand` (launchctl, osascript): through the Executor (N8), outside the sandbox; git with the user's config but `core.hooksPath=/dev/null`. |
+| `jobs/launchd.ts` | The launchd agent (macOS): `agentPlist`, `installAgent`, `removeAgent`, `nextTime`, `defaultAgentEnv`. |
 | `jobs/text.ts` | `jobPrompt` (the task for the unattended run) and `jobReport` (Markdown). |
 | `cli/jobCommand.ts` | `prepareJob` (load, `--at` wait, worktree, settings, status running) and `finishJob` (commit, result, report, notification), `msUntil`. |
 
@@ -92,6 +93,27 @@ checks it again (schema, id, root, rules).
    (`diff --name-status` and `--numstat` from the base), the result in the job file, the report in
    `.garuda/jobs/<id>.md`, and a notification (OSC 9 or the bell) when stdout is a terminal.
 
+## launchd (macOS)
+
+`/schedule HH:MM` on macOS asks a second question: "Run the job at 01:00 with launchd?". Yes:
+
+- `~/Library/LaunchAgents/dev.garuda.job.<id>.plist`: `ProgramArguments` =
+  `/usr/bin/caffeinate -i <login shell> -lic "cd <root> && exec <node> <garuda script> run <id> --from-launchd"`
+  (the single binary has no script). The login shell (`$SHELL` if zsh or bash, else `/bin/zsh`) with `-lic`
+  reads `.zprofile` and `.zshrc`, so the API keys and `GARUDA_MODEL` come from the user's setup; no key
+  is written to a file. `caffeinate -i` stops idle sleep while the job runs.
+- `StartCalendarInterval` with Month, Day, Hour and Minute of the next HH:MM: it fires once. If the Mac
+  sleeps then, launchd starts the job at the next wake. `RunAtLoad` false. Output goes to
+  `.garuda/jobs/<id>.log`.
+- `launchctl bootout` (an earlier agent, errors ignored), then `launchctl bootstrap gui/<uid> <plist>`.
+  The job file keeps `launchd: { label, plist, when }`.
+- The run removes the agent at its very end, after the report and a macOS notification (`osascript`, the
+  text as an argument, never as script text): delete the plist, then `launchctl bootout`, which also ends
+  the run's own process. A run from the agent that does not start (done, running, broken file) removes the
+  agent too, and so does a manual `garuda run` of a job that has one.
+- `/jobs cancel <id>`: removes the agent and sets `stopped`; `garuda run <id>` can still run it.
+- Waking the Mac at a set time needs `sudo pmset schedule wake "<date>"`; Garuda never runs sudo.
+
 ## Safety
 
 - The user approves the list once, with the rules in view; nothing else can be approved later.
@@ -102,12 +124,12 @@ checks it again (schema, id, root, rules).
 
 ## Later (0.7 plan)
 
-A launchd agent so a closed terminal works too; the Batch API as the model backend with a finish-by time,
-measured with `garuda eval --batch` first.
+The Batch API as the model backend with a finish-by time, measured with `garuda eval --batch` first.
 
 ## Tests
 
 `test/jobs.test.ts`: the permissions block; the unattended engine; `msUntil`; `createJob` (the file, the
 question, No, a dirty checkout's base, no git, no sandbox); a whole run in the worktree with a fake model
 (an approved edit on the branch, a denied write in the report, links and sessions not committed, the
-checkout unchanged, a done job not run again); `/schedule` and `/jobs` in the chat.
+checkout unchanged, a done job not run again); `/schedule` and `/jobs` in the chat; the launchd plist, the
+second question, install and `/jobs cancel` (launchctl recorded, not run).

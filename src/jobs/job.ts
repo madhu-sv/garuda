@@ -64,6 +64,8 @@ const jobSchema = z.object({
   maxSteps: z.number().int().min(1).max(1_000),
   /** Ignored folders of the checkout (node_modules, .venv) that the worktree links to. */
   links: z.array(z.string()),
+  /** The launchd agent that starts the job (macOS), while it is installed. */
+  launchd: z.object({ label: z.string(), plist: z.string(), when: z.string() }).optional(),
   status: z.enum(JOB_STATUSES),
   startedAt: z.string().optional(),
   endedAt: z.string().optional(),

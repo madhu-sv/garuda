@@ -3,6 +3,7 @@ import type { Executor } from "../sandbox/types.js";
 import { JobGitError } from "./git.js";
 import {
   DEFAULT_JOB_MAX_STEPS,
+  JOBS_DIR,
   type Job,
   jobPath,
   newJobId,
@@ -10,6 +11,14 @@ import {
   planTitle,
   saveJob,
 } from "./job.js";
+import {
+  type AgentEnv,
+  agentLabel,
+  agentPath,
+  defaultAgentEnv,
+  installAgent,
+  nextTime,
+} from "./launchd.js";
 import { jobPrompt } from "./text.js";
 import { jobBase, linkCandidates, worktreeDir } from "./worktree.js";
 
@@ -33,6 +42,11 @@ export interface CreateJobOptions {
   home?: string;
   now?: Date;
   signal: AbortSignal;
+  /**
+   * macOS with a time: offer a launchd agent (0.7). `platform`, `env` and `executor` are for tests;
+   * the default is this process's platform, `defaultAgentEnv()` and the job's executor.
+   */
+  launchd?: { platform?: NodeJS.Platform; env?: AgentEnv; executor?: Executor };
 }
 
 /**
@@ -112,19 +126,64 @@ export async function createJob(
   );
   if (choice === "deny") return { ok: false, text: "No job was created." };
   await saveJob(job);
+  const lines = [
+    `Created job ${id}: ${jobPath(options.root, id)}`,
+    'You can edit its approval list ("allow") in that file before the run.',
+  ];
+  const platform = options.launchd?.platform ?? process.platform;
+  if (options.at !== undefined && platform === "darwin") {
+    const agent = await offerAgent(job, options);
+    if (agent !== undefined) return { ok: true, job, text: [...lines, agent].join("\n") };
+  }
   const run = `garuda run ${id}${options.at === undefined ? "" : ` --at ${options.at}`}`;
-  return {
-    ok: true,
-    job,
-    text: [
-      `Created job ${id}: ${jobPath(options.root, id)}`,
-      'You can edit its approval list ("allow") in that file before the run.',
-      `Run it in a terminal in this folder: ${run}`,
-      options.at === undefined
-        ? ""
-        : "The terminal waits until then; keep the Mac awake and on power.",
-    ]
-      .filter((l) => l !== "")
-      .join("\n"),
-  };
+  lines.push(`Run it in a terminal in this folder: ${run}`);
+  if (options.at !== undefined) {
+    lines.push("The terminal waits until then; keep the Mac awake and on power.");
+  }
+  return { ok: true, job, text: lines.join("\n") };
+}
+
+/** The second question on macOS: start the job with launchd. The text for the user; undefined = No. */
+async function offerAgent(job: Job, options: CreateJobOptions): Promise<string | undefined> {
+  const env = options.launchd?.env ?? defaultAgentEnv();
+  const at = job.at as string;
+  const when = nextTime(at, options.now);
+  const day = when.toDateString();
+  const choice = await options.approver.ask(
+    {
+      tool: "schedule",
+      target: { kind: "input", json: "{}" },
+      preview: [
+        `launchd starts the job at ${at} on ${day}, also when no terminal is open.`,
+        `It runs through your login shell (${env.shell} -lic), so your shell setup gives it the API keys; no key is written to a file.`,
+        "caffeinate keeps the Mac from idle sleep while the job runs. If the Mac sleeps at that time, the job starts at the next wake.",
+        `The agent: ${agentPath(env.home, job.id)}. Log: ${JOBS_DIR}/${job.id}.log.`,
+        `/jobs cancel ${job.id} removes it; the job removes it after it runs.`,
+      ].join("\n"),
+      isolation: options.executor.isolation,
+      title: `Run the job at ${at} with launchd?`,
+      question: "Add the launchd agent?",
+      choices: ["once", "deny"],
+      labels: { once: "Yes, add the agent", deny: "No, I will run it myself" },
+    },
+    options.signal,
+  );
+  if (choice === "deny") return undefined;
+  try {
+    const installed = await installAgent(
+      options.launchd?.executor ?? options.executor,
+      job,
+      env,
+      options.now,
+    );
+    job.launchd = {
+      label: agentLabel(job.id),
+      plist: installed.plist,
+      when: installed.when.toISOString(),
+    };
+    await saveJob(job);
+    return `launchd starts it at ${at} on ${day}. Keep the Mac on power. Log: ${JOBS_DIR}/${job.id}.log. Cancel: /jobs cancel ${job.id}.`;
+  } catch (error) {
+    return `The launchd agent failed (${(error as Error).message}). Run it in a terminal instead: garuda run ${job.id} --at ${at}`;
+  }
 }

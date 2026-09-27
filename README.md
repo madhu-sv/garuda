@@ -596,6 +596,11 @@ A plan can run later, with nobody at the keyboard: for example overnight.
   `.garuda/jobs/<id>.md`, also shown by `/jobs <id>`. Review with `git diff`, then `git merge
   garuda/job-<id>`, and remove the worktree.
 - `/jobs` lists the jobs. Keep the Mac awake and on power while the terminal waits.
+- On macOS, `/schedule HH:MM` offers a launchd agent: the job then starts at that time also with no
+  terminal open. It runs through your login shell (so your `.zshrc` gives it the API keys) under
+  `caffeinate`, logs to `.garuda/jobs/<id>.log`, and sends a macOS notification at the end. If the Mac
+  sleeps at that time, the job starts at the next wake (`sudo pmset schedule wake "<date>"` can wake it).
+  `/jobs cancel <id>` removes the agent.
 
 ## Hooks
 
