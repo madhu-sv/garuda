@@ -1039,6 +1039,8 @@ export class Runtime {
       plan,
       modelId: this.modelId,
       ...(at === undefined ? {} : { at }),
+      // The chat offers a launchd agent on macOS (a second question).
+      launchd: {},
       signal,
     });
     return { ok: created.ok, text: created.text };

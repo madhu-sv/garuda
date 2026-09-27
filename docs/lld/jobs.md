@@ -95,7 +95,8 @@ checks it again (schema, id, root, rules).
 
 ## launchd (macOS)
 
-`/schedule HH:MM` on macOS asks a second question: "Run the job at 01:00 with launchd?". Yes:
+`/schedule HH:MM` on macOS asks a second question: "Run the job at 01:00 with launchd?". Only the chat
+offers it (`createJob` needs the `launchd` option), so no other caller and no test installs an agent. Yes:
 
 - `~/Library/LaunchAgents/dev.garuda.job.<id>.plist`: `ProgramArguments` =
   `/usr/bin/caffeinate -i <login shell> -lic "cd <root> && exec <node> <garuda script> run <id> --from-launchd"`

@@ -43,8 +43,10 @@ export interface CreateJobOptions {
   now?: Date;
   signal: AbortSignal;
   /**
-   * macOS with a time: offer a launchd agent (0.7). `platform`, `env` and `executor` are for tests;
-   * the default is this process's platform, `defaultAgentEnv()` and the job's executor.
+   * macOS with a time: offer a launchd agent (0.7). Only when the caller passes this option (the
+   * chat does), so no other caller, and no test, installs an agent on the machine by accident.
+   * `platform`, `env` and `executor` are for tests; the default is this process's platform,
+   * `defaultAgentEnv()` and the job's executor.
    */
   launchd?: { platform?: NodeJS.Platform; env?: AgentEnv; executor?: Executor };
 }
@@ -131,7 +133,7 @@ export async function createJob(
     'You can edit its approval list ("allow") in that file before the run.',
   ];
   const platform = options.launchd?.platform ?? process.platform;
-  if (options.at !== undefined && platform === "darwin") {
+  if (options.launchd !== undefined && options.at !== undefined && platform === "darwin") {
     const agent = await offerAgent(job, options);
     if (agent !== undefined) return { ok: true, job, text: [...lines, agent].join("\n") };
   }

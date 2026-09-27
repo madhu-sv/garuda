@@ -172,6 +172,8 @@ describe("scheduled jobs: create, run, report (0.7)", () => {
     expect(approver.requests[0]?.preview).toContain("  edit_file(src/math.js)");
     expect(approver.requests[0]?.preview).toContain("Not rules, left out:\n  not a rule (");
     expect(created.text).toContain(`garuda run ${job.id} --at 01:00`);
+    // No launchd option: no second question and no agent, also on macOS.
+    expect(approver.requests).toHaveLength(1);
   });
 
   it("a dirty checkout: the base is one plain commit on HEAD with the uncommitted changes", async () => {
