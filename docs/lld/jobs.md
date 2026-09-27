@@ -1,0 +1,113 @@
+# Scheduled jobs (`src/jobs/`, `src/cli/jobCommand.ts`, 0.7)
+
+## Purpose
+
+Build a finished plan later, with nobody at the keyboard: overnight, for example. The user approves once,
+when the job is made; the run then asks nothing. The job works on its own branch in its own worktree, so
+the user's checkout never changes, and a report says what happened.
+
+## Flow
+
+```mermaid
+sequenceDiagram
+  participant U as User (chat)
+  participant RT as Runtime
+  participant J as .garuda/jobs/<id>.json
+  participant R as garuda run <id>
+  participant W as worktree (garuda/job-<id>)
+  U->>RT: plan-mode turn ends (done): lastPlan
+  U->>RT: /schedule [HH:MM]
+  RT->>RT: base commit, ```permissions rules, links
+  RT->>U: one question (the rules, the base, the branch)
+  RT->>J: job (status scheduled)
+  U->>R: garuda run <id> [--at 01:00]
+  R->>R: wait until HH:MM (optional)
+  R->>W: git worktree add -b garuda/job-<id> <base>; link node_modules …
+  R->>R: Runtime in the worktree: job rules, unattended engine, approver "deny"
+  R->>R: one turn (the job prompt)
+  R->>W: commit (no hooks; no links, no Garuda files)
+  R->>J: result, status; <id>.md report; notification
+```
+
+## Files
+
+| File | Role |
+| --- | --- |
+| `jobs/job.ts` | The job format (Zod), `newJobId`, `saveJob` (temp file + rename, 0600), `loadJob` (checks the file and every rule again), `listJobs`, `planPermissions`, `planTitle`. |
+| `jobs/create.ts` | `createJob`: the checks, the question, the job file. `Runtime.scheduleJob` calls it. |
+| `jobs/worktree.ts` | `jobBase`, `linkCandidates`, `worktreeDir`, `prepareWorktree`, `commitJob`, `jobChanges`. |
+| `jobs/git.ts` | `git(executor, cwd, args)`: through the Executor (N8), outside the sandbox, with the user's git config but `core.hooksPath=/dev/null`. |
+| `jobs/text.ts` | `jobPrompt` (the task for the unattended run) and `jobReport` (Markdown). |
+| `cli/jobCommand.ts` | `prepareJob` (load, `--at` wait, worktree, settings, status running) and `finishJob` (commit, result, report, notification), `msUntil`. |
+
+## The job file
+
+`<root>/.garuda/jobs/<id>.json` (id `YYYYMMDD-HHMM-xxxx`). The user may edit it before the run; `loadJob`
+checks it again (schema, id, root, rules).
+
+| Field | Meaning |
+| --- | --- |
+| `title`, `prompt`, `planSession` | The request's first line; the task (request + plan + the rules of an unattended run); the plan's session. |
+| `root`, `base`, `branch`, `worktree` | The checkout; the start commit; `garuda/job-<id>`; `~/.garuda/worktrees/<project>-<hash>/<id>`. |
+| `model` | The chat's model at scheduling time; `garuda run -m` overrides it. |
+| `allow` | Permission rules for this job only, in the settings format. |
+| `onUnapproved` | `deny-and-continue` (the only mode in 0.7). |
+| `at`, `maxSteps`, `links` | The time given to `/schedule`; the step limit (100); linked ignored folders. |
+| `status`, `startedAt`, `endedAt`, `result` | `scheduled` → `running` → `done`, `stopped` (Ctrl-C) or `failed`; the result: stop reason, steps, tokens, cost, time, session, commit, files with line counts, denied calls, the agent's last answer. |
+
+## Making a job (`/schedule [HH:MM]`)
+
+- Needs a finished plan: `Runtime.runTurn` keeps the last assistant text of a plan-mode turn that ended
+  `done`, with its prompt and session (`lastPlan`).
+- `PLAN_NOTE` asks each plan to end with a ```` ```permissions ```` block: one rule per line for what the
+  build needs beyond the sandbox (`edit_file(path)`, `write_file(path)`, globs; `bash(command)` for the
+  network; `web_fetch(host)`). `planPermissions` keeps the lines that parse; the others are shown as "Not
+  rules, left out".
+- Refused without an OS sandbox (every command would ask) and without a git repository with a commit.
+- The base (`jobBase`): HEAD; with uncommitted changes of tracked files, one plain commit on HEAD that holds
+  them (`git stash create`, then `commit-tree` on its tree: the branch history stays linear, and the user's
+  stash list and checkout do not change). Untracked files are counted (not Garuda's own) and named in the
+  question.
+- Links: `node_modules`, `.venv`, `venv` when they exist in the checkout.
+- One question shows the title, model, base, branch, links and the rules; "Yes" writes the file and prints
+  `garuda run <id> [--at HH:MM]`.
+
+## Running a job (`garuda run <id> [--at HH:MM] [-m model]`)
+
+1. `prepareJob`: load; refuse `running` (a crash leaves it; the message says how to reset) and `done`.
+   `--at` waits until the next HH:MM in local time (Ctrl-C cancels; the job stays scheduled).
+2. The worktree: `git worktree add -b <branch> <worktree> <base>` (or the existing branch after an earlier
+   run); symlinks for the links.
+3. Settings: the worktree's `.garuda/settings.json`, plus the job's rules in `allow`, `maxSteps`, and the
+   links' real paths as sandbox write paths (tool caches).
+4. The CLI builds the runtime as for `-p`, with root = the worktree, the session store of the checkout (the
+   session file stays out of the branch), the approver `AutoApprover("deny")` (consents for project MCP
+   servers, hooks, skills, agents and Claude's search all get "no"), no undo snapshots (the branch is the
+   safety net), and `unattended` for the engine. Without an OS sandbox the run stops (status `failed`).
+5. One turn with the job prompt. The engine allows reads, commands in the sandbox and the job's rules; a
+   call that would ask is denied with `JOB_DENIAL` ("not in the approved list … continue without it … list
+   it") and recorded.
+6. `finishJob`: `git add -A` without `.garuda/sessions|index|evals|jobs` and the links, a commit with no
+   hooks (`Garuda job <id>: <title>`, plus the stop reason when it did not end `done`), the changed files
+   (`diff --name-status` and `--numstat` from the base), the result in the job file, the report in
+   `.garuda/jobs/<id>.md`, and a notification (OSC 9 or the bell) when stdout is a terminal.
+
+## Safety
+
+- The user approves the list once, with the rules in view; nothing else can be approved later.
+- Deny rules, sensitive files and `.git/` writes still win over the job's rules (the engine's order holds).
+- The job never touches the user's checkout, index or stash; its commit runs no repository hooks (a cloned
+  repo's hook would run outside the sandbox).
+- Commands run only in the OS sandbox; there is no host fallback for jobs.
+
+## Later (0.7 plan)
+
+A launchd agent so a closed terminal works too; the Batch API as the model backend with a finish-by time,
+measured with `garuda eval --batch` first.
+
+## Tests
+
+`test/jobs.test.ts`: the permissions block; the unattended engine; `msUntil`; `createJob` (the file, the
+question, No, a dirty checkout's base, no git, no sandbox); a whole run in the worktree with a fake model
+(an approved edit on the branch, a denied write in the report, links and sessions not committed, the
+checkout unchanged, a done job not run again); `/schedule` and `/jobs` in the chat.

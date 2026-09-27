@@ -27,6 +27,8 @@ export const HELP = [
   "  /models    the models; /models <n|id|opus|sonnet|haiku> switches for this chat",
   "  /export    write this conversation as Markdown; /export <file>",
   "  /diff      file changes in this session; /diff last (last turn); /diff [last] <path>",
+  "  /schedule  make the last plan a job that runs later: /schedule [HH:MM], then garuda run <id>",
+  "  /jobs      the scheduled jobs of this project; /jobs <id> shows one and its report",
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /refs X    every use of symbol X (code index, no model call)",
   "  /map [dir] what each JS/TS file exports and imports",
@@ -88,6 +90,16 @@ export async function runCommand(
     }
   } else if (command === "/diff") {
     await diffCommand(runtime, renderer, text.slice(command.length).trim(), output);
+  } else if (command === "/schedule") {
+    const at = text.slice(command.length).trim();
+    const result = await runtime.scheduleJob(
+      at === "" ? undefined : at,
+      new AbortController().signal,
+    );
+    if (result.ok) renderer.info(result.text);
+    else renderer.warn(result.text);
+  } else if (command === "/jobs") {
+    await jobsCommand(runtime, renderer, text.slice(command.length).trim());
   } else if (command === "/export") {
     await exportCommand(runtime, renderer, text.slice(command.length).trim());
   } else if (command === "/where" || command === "/refs" || command === "/map") {
@@ -254,6 +266,43 @@ async function diffCommand(
       ...(cut ? [`… ${lines.length - DIFF_LINES} more lines. ${more}`] : []),
     ].join("\n"),
     cut ? { title: `diff ${since}${where}`, text: colorDiff(result.patch) } : undefined,
+  );
+}
+
+/** /jobs [id] (0.7): the list, or one job with its report. */
+async function jobsCommand(runtime: Runtime, renderer: Renderer, id: string): Promise<void> {
+  const { listJobs, loadJob, JOBS_DIR } = await import("../../jobs/job.js");
+  if (id !== "") {
+    try {
+      const job = await loadJob(runtime.root, id);
+      const { jobReport } = await import("../../jobs/text.js");
+      renderer.info(jobReport(job));
+    } catch (error) {
+      renderer.warn((error as Error).message);
+    }
+    return;
+  }
+  const jobs = await listJobs(runtime.root);
+  if (jobs.length === 0) {
+    renderer.info("No jobs in this project. Make a plan (/plan), then /schedule.");
+    return;
+  }
+  renderer.info(
+    [
+      `Jobs (${JOBS_DIR}), newest first:`,
+      ...jobs.map((j) => {
+        const r = j.result;
+        const facts = [
+          j.status,
+          ...(j.at === undefined || j.status !== "scheduled" ? [] : [`at ${j.at}`]),
+          ...(r === undefined ? [] : [`${r.files.length} file(s)`]),
+          ...(r?.costUsd === undefined ? [] : [`$${r.costUsd.toFixed(2)}`]),
+          ...(r === undefined || r.denied.length === 0 ? [] : [`${r.denied.length} denied`]),
+        ].join(" · ");
+        return `  ${j.id}  ${j.title}\n    ${facts}`;
+      }),
+      "Details: /jobs <id>. Run one: garuda run <id> [--at HH:MM].",
+    ].join("\n"),
   );
 }
 

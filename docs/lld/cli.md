@@ -17,6 +17,7 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 | `renderer.ts` | `Renderer` interface and `PlainRenderer`: model text to stdout, activity to stderr. |
 | `approver.ts` | `TerminalApprover` (inquirer select), `SwitchApprover` (with `onAsk`, 0.6), shared `header`, `colorPreview` and `colorDiff`. |
 | `report.ts` | Usage line and stop messages. |
+| `jobCommand.ts` | `garuda run <job> [--at HH:MM]` (0.7): `prepareJob` and `finishJob`; `start()` builds the runtime in the worktree. See [jobs.md](jobs.md). |
 | `jsonOutput.ts` | `-p --output-format json\|stream-json` (0.5): `JsonOutput` (a `Renderer`) and the pure `initLine`, `assistantLine`, `resultLine`. See below. |
 | `banner.ts` | The chat start banner: GARUDA wordmark (saffron-to-gold gradient on true-color terminals), a card with version, model, sandbox, folder and extras (the detected build tools first, for example `Java (Maven)`), and a tips line. The card only below 60 columns; no colors with `NO_COLOR` or a pipe. Not shown for `-p`. |
 | `errors.ts` | `describeError`: the error chain as one message. |
@@ -139,7 +140,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /diff /exit; /name: skill or command]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /diff /schedule /jobs /exit; /name: skill or command]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```

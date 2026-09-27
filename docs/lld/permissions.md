@@ -49,6 +49,10 @@ Order of checks — the first match decides:
 
 ### Plan mode (0.4)
 
+Unattended (0.7, scheduled jobs): with the option `unattended: { reason, onDeny }`, step 7 never asks: the
+call is denied (`by: "unattended"`) with the reason (`JOB_DENIAL`), and `onDeny` records it for the job
+report. The job's rules come in `settings.allow`. See [jobs.md](jobs.md).
+
 The engine gets the mode of the current turn (`mode: () => AgentMode`). In plan mode a call that is not
 read-only is decided by `planDecision`, and the user is never asked:
 

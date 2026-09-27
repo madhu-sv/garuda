@@ -41,7 +41,16 @@ export interface PermissionEngineOptions {
   access?: ProfileAccess;
   /** The mode of the current turn (0.4). Default: build. */
   mode?: () => AgentMode;
+  /**
+   * A run with nobody to ask (0.7: a scheduled job). A call that would ask is denied with this
+   * reason instead, and `onDeny` records it for the job report.
+   */
+  unattended?: { reason: string; onDeny?: (tool: string, target: CallTarget) => void };
 }
+
+/** What the model reads when a job denies a call that its approval list does not cover (0.7). */
+export const JOB_DENIAL =
+  "This call is not in the approved list of this scheduled job, and nobody can approve it now. Do not retry it. Continue without it if you can, and list it in your final answer as work left for the user.";
 
 /** What the model reads when plan mode blocks a call. */
 export const PLAN_MODE_DENIAL =
@@ -56,7 +65,7 @@ export const PLAN_MODE_DENIAL =
  *   4. Read-only tool                                → allow (F17)
  *   5. A command in the OS sandbox                   → allow (0.2)
  *   6. An allow rule or a session rule matches       → allow
- *   7. Otherwise ask the user: once, session, deny   (F18)
+ *   7. Otherwise ask the user: once, session, deny   (F18); a job (0.7) denies instead
  */
 export class PermissionEngine implements PermissionGate {
   private readonly root: string;
@@ -65,6 +74,7 @@ export class PermissionEngine implements PermissionGate {
   private readonly isolation: Isolation;
   private readonly access: ProfileAccess;
   private readonly mode: () => AgentMode;
+  private readonly unattended: PermissionEngineOptions["unattended"];
   private readonly sessionRules: Rule[] = [];
 
   constructor(options: PermissionEngineOptions) {
@@ -74,6 +84,7 @@ export class PermissionEngine implements PermissionGate {
     this.isolation = options.isolation ?? "none";
     this.access = options.access ?? { writePaths: [], envAllow: [] };
     this.mode = options.mode ?? (() => "build");
+    this.unattended = options.unattended;
   }
 
   async check(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision> {
@@ -123,6 +134,10 @@ export class PermissionEngine implements PermissionGate {
     }
 
     const asked: CallTarget = target ?? { kind: "input", json: "{}" };
+    if (this.unattended !== undefined) {
+      this.unattended.onDeny?.(tool, asked);
+      return { allowed: false, by: "unattended", reason: this.unattended.reason };
+    }
     const choice = await this.approver.ask(
       {
         tool,

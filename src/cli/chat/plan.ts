@@ -18,7 +18,8 @@ export async function planHandoff(
   const request: ApprovalRequest = {
     tool: "plan",
     target: { kind: "input", json: "{}" },
-    preview: "Build mode can change files and run commands, with the usual approvals and sandbox.",
+    preview:
+      "Build mode can change files and run commands, with the usual approvals and sandbox. To build it later, unattended, choose No and type /schedule.",
     isolation: runtime.executor.isolation,
     title: "The plan is ready.",
     question: "Build this plan?",

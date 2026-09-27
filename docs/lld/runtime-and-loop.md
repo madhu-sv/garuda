@@ -25,6 +25,7 @@ imports the CLI.
 | `skills` | `{ home? }` (0.5): skills from `~/.garuda/skills`, `~/.claude/skills` and the project. Absent: no skills (tests, evals). The CLI passes it; `skills.enabled: false` in settings wins. See [skills.md](skills.md). |
 | `agents` | `{ home?, resolveModel? }` (0.5): custom agents from the four agent folders; `resolveModel` turns a model id of a user agent into a client (the CLI passes its provider lookup). Absent: no agents. `agents.enabled: false` wins. See [agents.md](agents.md). |
 | `search` | `{ config?, claude?, fetch? }` (0.5; `claude` 0.6): the web search backend and Claude's search, as the CLI loaded them from `~/.garuda/search.json` or the environment. Absent: no `web_search`. `web.enabled: false` wins. See [web.md](web.md). |
+| `unattended` | `{ reason, onDeny? }` (0.7): a scheduled job; the permission engine denies instead of asking. See [jobs.md](jobs.md). |
 | `models` | `{ resolve, configured? }` (0.6): for `/models`; `resolve` turns a spec into `{ spec, model, info, maxTokens? }` (the CLI passes its provider lookup), `configured` lists the specs of `~/.garuda/models.json`. Absent: `/models` lists but cannot switch. |
 | `undo` | `{ home? }` (0.4): snapshots before each turn in `~/.garuda/snapshots`. Absent: no snapshots. The CLI passes it; `undo.enabled: false` in settings wins. See [undo.md](undo.md). |
 | `lsp` | `{ enabled?, home?, path?, firstTimeoutMs?, timeoutMs? }` (0.4). `enabled` overrides `lsp.enabled` from settings (`--lsp`, evals); `home` holds `~/.garuda/lsp.json` and the managed servers; `path` is the PATH to search. See [lsp.md](lsp.md). |
@@ -58,7 +59,7 @@ imports the CLI.
    outside-root paths are skipped with a reason; at most 10 attachments and 150 000 characters. A `notice`
    event tells the user what was attached.
 5. `addUserMessage(session, prompt, notes, attachments)`: in plan mode the first note is `PLAN_NOTE` (what plan mode
-   allows, and to end with a numbered plan), then the pending notes (undo, `!command` output) and the MCP
+   allows, and to end with a numbered plan and, since 0.7, a `permissions` block for `/schedule`), then the pending notes (undo, `!command` output) and the MCP
    notes; the attachments follow as plain text blocks. The system prompt is the same in both
    modes, so the prompt cache stays valid (N2).
 6. Load the model if it is still a factory (`client()`), then
@@ -81,6 +82,8 @@ Sessions and models in the chat (0.6):
 - `sessionRecords()`: the current session's records, for `/export`.
 - `modelList()`: `knownModels()` from `pricing.ts`, then the specs of `~/.garuda/models.json` that resolve
   (option `models.configured`); the main model is always in the list.
+- `lastPlan` and `scheduleJob(at, signal)` (0.7): the last plan-mode turn that ended `done` (its prompt, its
+  last answer, the session); `/schedule` makes a job of it with `jobs/create.ts` (loaded with `import()`).
 - `diff(scope, path, signal)`: `/diff` from the undo snapshots (see [undo.md](undo.md)).
 - `notificationSettings`: the `notifications` setting, for the CLI's notifier.
 - `setModel(ref)`: a number, an alias (`aliasModel`) or a spec. `options.models.resolve(spec)` gives the

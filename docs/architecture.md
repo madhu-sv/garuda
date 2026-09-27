@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.6.0. This document describes the parts of Garuda, their dependencies, the trust
+Version 0.7.0-dev. This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -121,6 +121,7 @@ flowchart TB
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
 | Subagents | `src/agents/` | The explore tool: a child agent loop with read-only tools, its own session and limits, that answers one question. |
 | Language profiles | `src/lang/` | Find the build tool from marker files (Maven, Gradle, Python): test commands, prompt notes, package caches for the sandbox. |
+| Jobs | `src/jobs/` | Scheduled jobs (0.7): the job file, the base commit and worktree on a job branch, the commit and the report. `garuda run` in the CLI runs a job with its approval list and an engine that denies instead of asking. |
 | Evals | `src/evals/` | Eval tasks (Node, Java, Python), the generated "shopkit" repository, toolchain checks, the runner and the report. |
 
 ## 4. Dependency rules
@@ -190,6 +191,7 @@ flowchart LR
 | web_search → search backend | The query carries code or secrets out; a project sends queries to its own server. | Only the user configures search (`~/.garuda/search.json`, environment keys); each search shows the query and asks (or a session answer or rule); queries with long tokens are refused; results are cleaned and marked untrusted. Claude's search (0.6) runs inside the model reply: one question per session, a per-request cap, optional domain lists; its queries cannot be checked first. |
 | User input → model (0.6) | `@path` sends a secret file; `!command` escapes the rules. | `@path` has the rules of read_file: only files in the root, no sensitive or binary files, size and count limits. `!command` runs as a bash call: the same permission engine, deny rules, hooks and sandbox; its output goes to the model as a note, with Garuda's markers neutralized. |
 | Garuda → terminal (0.6) | Text in a notification ends the escape code and injects terminal commands. | Control characters in the text become spaces; at most 120 characters; only fixed Garuda texts and tool names or commands go into it. |
+| Scheduled job → project (0.7) | An unattended run does more than the user meant, or a cloned repo's git hook runs outside the sandbox. | One question with the approval list when the job is made; at run time any other call is denied, never asked; only in the OS sandbox; the job works in its own worktree and branch; its commit runs no hooks. |
 | web_fetch → network | Server-side request forgery; data leaks through URLs. | Only public addresses, checked on the resolved IP and pinned; each redirect hop checked; new hosts ask; unusual URLs always ask. |
 | Garuda → disk | Secrets in session logs. | Redactor on every journal line; files 0600. |
 | Model text → tool call | A small model's text (or file text it repeats) is read as a tool call. | Default: only when the whole reply is calls to tools of this request. A user can allow calls on their own lines for one model (`"textToolCalls": "lines"` in `~/.garuda/models.json`; never from project settings). A call in the middle of a sentence never runs. The call then passes the same input check, hooks and permissions. |
@@ -202,6 +204,8 @@ All state is in files. There is no server and no database.
 | File | Owner | Content |
 | --- | --- | --- |
 | `<root>/.garuda/sessions/<id>.jsonl` | Garuda | One record per line: start, resume, model (0.6), user, assistant, tool results, compaction, snapshot, undo, redo, end. 0600, redacted. |
+| `<root>/.garuda/jobs/<id>.json`, `<id>.md` | Garuda, user | A scheduled job (0.7): the plan, the approval list, status and result (the user may edit it before the run); the report. |
+| `~/.garuda/worktrees/<project>-<hash>/<id>/` | Garuda | The worktree of a job, on its branch `garuda/job-<id>`. |
 | `<root>/garuda-<id>.md` | User | `/export` (0.6): the conversation as Markdown, redacted. Never overwritten. |
 | `<root>/.garuda/settings.json` | Project | Executor, permission rules, env allowlist, limits, model price, code index mode, web settings, feature switches (undo, lsp, todo, skills, agents, subagents), notifications (0.6). |
 | `<root>/.garuda/memory.md` | Project | Facts saved by the `remember` tool. Loaded into the next session. |
@@ -251,3 +255,4 @@ All state is in files. There is no server and no database.
 | Claude's web search (0.6) | One question per session; the other backend as the fallback | The search runs inside the model reply, so a question per query is not possible; the user decides once, with the price and the limits in view. |
 | Model switch (0.6) | `/models` changes the main model for this chat only, with a `model` record | A new chat starts from `-m` or `GARUDA_MODEL`, so a switch never changes later runs by surprise. |
 | Notifications (0.6) | On by default (OSC 9 or the bell); quiet while the window has focus | The user can work elsewhere during long tasks; focus reporting keeps them quiet when the user is watching. |
+| Scheduled jobs (0.7) | One approval list per job, deny-and-continue, a worktree on a job branch, `garuda run --at` first | Nobody can answer at night: the user decides once with the list in view; a denied call does not waste the night; the checkout stays free for the user; launchd and the Batch API come as separate steps. |

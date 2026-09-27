@@ -16,6 +16,7 @@ import { COMPACTION_DEFAULTS } from "../context/compact.js";
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
 import { HOOKS_FILE, type Hook, hooksHash, loadHooks } from "../hooks/config.js";
 import { HookRunner, hooksConsent } from "../hooks/runner.js";
+import type { PlanForJob } from "../jobs/create.js";
 import { KnowledgeIndex } from "../knowledge/index.js";
 import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
 import {
@@ -46,11 +47,11 @@ import {
   type ModelInfo,
   type Price,
 } from "../model/pricing.js";
-import type { ModelClient, ServerToolSpec } from "../model/types.js";
+import type { Message, ModelClient, ServerToolSpec } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
-import type { AgentMode, Approver } from "../permissions/types.js";
+import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
 import { FileTracker } from "../session/fileTracker.js";
@@ -88,7 +89,7 @@ import { attachMentions } from "./mentions.js";
  * (N2); the permission engine and the sandbox enforce the mode, this note explains it.
  */
 export const PLAN_NOTE =
-  "Plan mode is on. Investigate and write a plan; do not change anything. File edits, file writes and remember are blocked, and bash runs in a sandbox that cannot write the project (temp folders only), so read-only commands and tests that write nothing in the project still work. End with a numbered plan: the files to change, the change in each, and how to test it.";
+  "Plan mode is on. Investigate and write a plan; do not change anything. File edits, file writes and remember are blocked, and bash runs in a sandbox that cannot write the project (temp folders only), so read-only commands and tests that write nothing in the project still work. End with a numbered plan: the files to change, the change in each, and how to test it. Then add a ```permissions block with one rule per line for the calls the build needs beyond the sandbox: edit_file(path) and write_file(path) for each file to change or create (globs such as src/** are fine), bash(command) for commands that need the network, and web_fetch(host) for pages. Commands that stay in the project (tests, builds) need no line.";
 
 /** What a line that starts with "/" means, when it is not a built-in command. */
 export type CommandResolution =
@@ -170,6 +171,11 @@ export interface RuntimeOptions {
     };
     configured?: readonly string[];
   };
+  /**
+   * A scheduled job (0.7): nobody can answer. A call that would ask is denied with `reason`;
+   * `onDeny` records it for the report. The job's approval list comes in `settings.allow`.
+   */
+  unattended?: { reason: string; onDeny?: (tool: string, target: CallTarget) => void };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
   profiles?: LanguageProfile[];
   /**
@@ -265,6 +271,8 @@ export class Runtime {
   private readonly claudeSearchConfig: ClaudeSearchConfig | undefined;
   /** The user's answer for this session: asked before the first turn that could search. */
   private claudeSearch: "unasked" | "on" | "off" = "unasked";
+  /** The last finished plan (0.7, /schedule). */
+  private plan: PlanForJob | undefined;
   /** The first snapshot tree of each session, for /diff (0.6). */
   private readonly sessionBase = new Map<string, string>();
   /** Notes for the next turn, for example after an undo that kept the conversation. */
@@ -338,6 +346,7 @@ export class Runtime {
       isolation: this.executor.isolation,
       access: profileAccess(profiles),
       mode: () => this.turnMode,
+      ...(options.unattended === undefined ? {} : { unattended: options.unattended }),
     });
     this.exploreModel = undefined;
     // Off by default: an A/B eval (hard suite, 3 runs per arm) showed no gain in steps or cost.
@@ -971,7 +980,7 @@ export class Runtime {
       notes,
       mentions.attachments.map((a) => a.text),
     );
-    return runAgent(session, {
+    const result = await runAgent(session, {
       model: await this.client(),
       tools: this.tools,
       system: this.system,
@@ -994,6 +1003,45 @@ export class Runtime {
       ...(this.onEvent === undefined ? {} : { onEvent: this.onEvent }),
       signal,
     });
+    // A finished plan (0.7): /schedule turns it into a job.
+    if (this.turnMode === "plan" && result.stopReason === "done") {
+      const plan = lastAssistantText(session.messages);
+      if (plan !== "") this.plan = { request: prompt, plan, sessionId: session.id };
+    }
+    return result;
+  }
+
+  /** The last finished plan of this process, for /schedule (0.7). */
+  get lastPlan(): PlanForJob | undefined {
+    return this.plan;
+  }
+
+  /**
+   * /schedule [HH:MM] (0.7): the last plan becomes a job with its own approval list (from the
+   * plan's permissions block). It asks once; `garuda run <id>` runs it.
+   */
+  async scheduleJob(
+    at: string | undefined,
+    signal: AbortSignal,
+  ): Promise<{ ok: boolean; text: string }> {
+    const plan = this.plan;
+    if (plan === undefined) {
+      return {
+        ok: false,
+        text: "There is no finished plan in this chat. Make one in plan mode (/plan), then type /schedule.",
+      };
+    }
+    const { createJob } = await import("../jobs/create.js");
+    const created = await createJob({
+      root: this.root,
+      executor: this.executor,
+      approver: this.approver,
+      plan,
+      modelId: this.modelId,
+      ...(at === undefined ? {} : { at }),
+      signal,
+    });
+    return { ok: created.ok, text: created.text };
   }
 
   /** What this session adds to the base tools, for the start banner. Counts configured items. */
@@ -1428,4 +1476,18 @@ export function modelFacts(contextWindow: number, price: Price | undefined): str
         ? "free"
         : `$${price.input}/$${price.output} per M tokens`;
   return `${window} context, ${cost}`;
+}
+
+/** The text of the last assistant message that has text: the plan of a plan-mode turn. */
+function lastAssistantText(messages: readonly Message[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== "assistant") continue;
+    const text = message.content
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("")
+      .trim();
+    if (text !== "") return text;
+  }
+  return "";
 }

@@ -7,6 +7,9 @@ import { BUILTIN_COMMANDS } from "../commands/builtins.js";
 import { replaySession } from "../loop/replay.js";
 import { DEFAULT_MAX_TOKENS } from "../loop/runAgent.js";
 import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
+import { AutoApprover } from "../permissions/autoApprover.js";
+import { JOB_DENIAL } from "../permissions/engine.js";
+import type { CallTarget } from "../permissions/types.js";
 import { FileSessionStore, parseRecords } from "../session/store.js";
 import { defaultTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
@@ -33,6 +36,7 @@ import { runTurnInTerminal, type TurnOutcome } from "./turn.js";
  *   garuda eval                 run the eval tasks (N5)
  *   garuda lsp [install <lang>] language servers for diagnostics (0.4)
  *   garuda init                 set up this folder, then chat (0.5): same as /init
+ *   garuda run <job> [--at HH:MM]  run a scheduled job, unattended (0.7)
  */
 
 interface Options {
@@ -47,6 +51,9 @@ interface Options {
   firstInput?: string;
   outputFormat?: OutputFormat;
   verbose?: boolean;
+  /** `garuda run <job>` (0.7): the job id, and the time to wait for. */
+  job?: string;
+  at?: string;
 }
 
 async function main(): Promise<void> {
@@ -117,6 +124,18 @@ async function main(): Promise<void> {
       process.exitCode = await start({ ...options, firstInput: "/init" }, program);
     });
 
+  program
+    .command("run")
+    .description(
+      "run a scheduled job (made with /schedule) in its own worktree, with its approval list and nobody to ask",
+    )
+    .argument("<job-id>", "the job id, from /schedule or /jobs")
+    .option("--at <HH:MM>", "wait until this local time first (keep the terminal open)")
+    .option("-m, --model <id>", "model id; default: the job's model")
+    .action(async (job: string, options: { at?: string; model?: string }) => {
+      process.exitCode = await start({ ...options, job }, program);
+    });
+
   const lsp = program
     .command("lsp")
     .description("show the language servers for diagnostics (TS/JS, Python, Java)")
@@ -137,20 +156,31 @@ async function main(): Promise<void> {
 }
 
 async function start(options: Options, program: Command): Promise<number> {
-  const root = realpathSync(process.cwd());
-  const store = new FileSessionStore(root);
+  const mainRoot = realpathSync(process.cwd());
+  const store = new FileSessionStore(mainRoot);
   if (options.replay !== undefined) return replay(options.replay, store);
 
+  // A scheduled job (0.7): the runtime works in the job's worktree; the session stays in this project.
+  let job: import("./jobCommand.js").PreparedJob | undefined;
+  if (options.job !== undefined) {
+    const { prepareJob } = await import("./jobCommand.js");
+    const prepared = await prepareJob(mainRoot, options.job, options.at, new PlainRenderer());
+    if (typeof prepared === "number") return prepared;
+    job = prepared;
+  }
+  const root = job?.root ?? mainRoot;
+
   // A task on stdin works like -p: echo "task" | garuda
-  let prompt = options.prompt;
-  if (prompt === undefined && !process.stdin.isTTY) prompt = readFileSync(0, "utf8").trim();
+  let prompt = job?.job.prompt ?? options.prompt;
+  if (prompt === undefined && !process.stdin.isTTY && job === undefined)
+    prompt = readFileSync(0, "utf8").trim();
   if (prompt === "") program.error("The task is empty.");
   const format = options.outputFormat ?? "text";
   if (format !== "text" && prompt === undefined) {
     program.error(`--output-format ${format} needs a task: use -p "task" or give it on stdin.`);
   }
 
-  const spec = options.model ?? process.env.GARUDA_MODEL;
+  const spec = options.model ?? job?.job.model ?? process.env.GARUDA_MODEL;
   if (!spec) program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
   // Providers come only from the user's own ~/.garuda/models.json (never from the project).
   const models = await loadModelsConfig();
@@ -177,7 +207,10 @@ async function start(options: Options, program: Command): Promise<number> {
 
   const renderer = new PlainRenderer();
   const terminalApprover = new TerminalApprover();
-  const approver = new SwitchApprover(terminalApprover);
+  // A job has nobody to ask: every question (consents, approvals) gets "no".
+  const approver = new SwitchApprover(
+    job === undefined ? terminalApprover : new AutoApprover("deny"),
+  );
   // Agent events go to the plain renderer, or to the Ink chat once it starts.
   let events: Renderer = renderer;
   const runtime = await Runtime.create({
@@ -191,10 +224,20 @@ async function start(options: Options, program: Command): Promise<number> {
       : { subagentModel: { spec: sub.spec, model: () => sub.create(), info: sub.info } }),
     approver,
     store,
+    ...(job === undefined
+      ? {}
+      : {
+          settings: job.settings,
+          unattended: {
+            reason: JOB_DENIAL,
+            onDeny: (tool: string, target: CallTarget) => recordJobDenial(job, tool, target),
+          },
+        }),
     ...(options.plan === true ? { mode: "plan" as const } : {}),
     ...(options.lsp === true ? { lsp: { enabled: true } } : {}),
-    // Undo snapshots are on for the chat and for -p (a later chat can undo the task).
-    undo: {},
+    // Undo snapshots are on for the chat and for -p (a later chat can undo the task). A job has its
+    // own branch instead.
+    ...(job === undefined ? { undo: {} } : {}),
     // Skills from ~/.garuda/skills, ~/.claude/skills and the project (0.5).
     skills: {},
     // Web search (0.5) and Claude's own search (0.6): only the user's search.json and environment.
@@ -240,6 +283,16 @@ async function start(options: Options, program: Command): Promise<number> {
   };
 
   if (runtime.executorNotice !== undefined) renderer.warn(runtime.executorNotice);
+  if (job !== undefined && runtime.executor.isolation === "none") {
+    renderer.error(
+      "A job needs the OS sandbox (Seatbelt or bubblewrap): without it, every command would need an approval, and nobody is there to give it.",
+    );
+    await runtime.close();
+    const { saveJob } = await import("../jobs/job.js");
+    job.job.status = "failed";
+    await saveJob(job.job);
+    return 1;
+  }
   if (searchConfig.problem !== undefined) {
     renderer.warn(
       searchConfig.claude === undefined
@@ -324,6 +377,10 @@ async function start(options: Options, program: Command): Promise<number> {
     );
     await runtime.close();
     finish(outcome);
+    if (job !== undefined) {
+      const { finishJob } = await import("./jobCommand.js");
+      await finishJob(job, outcome, runtime, renderer);
+    }
     if (outcome.kind === "interrupted") return 130;
     if (outcome.kind === "error") return 1;
     return outcome.result.stopReason === "done" ? 0 : 2;
@@ -448,3 +505,20 @@ main().catch((error: unknown) => {
   process.stderr.write(`Error: ${describeError(error)}\n`);
   process.exitCode = 1;
 });
+
+/** The engine's record of a call that a job denied (0.7), for the report. */
+function recordJobDenial(
+  job: import("./jobCommand.js").PreparedJob,
+  tool: string,
+  target: CallTarget,
+): void {
+  const shown =
+    target.kind === "path"
+      ? target.path
+      : target.kind === "command"
+        ? (target.command.split("\n")[0] ?? "")
+        : target.kind === "url"
+          ? target.host
+          : target.json.slice(0, 200);
+  job.denied.push({ tool, target: shown });
+}

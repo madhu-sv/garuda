@@ -48,7 +48,7 @@ export interface PermissionRequest {
 
 export type PermissionDecision =
   | { allowed: true; by: "read_only" | "sandbox" | "rule" | "session" | "user" }
-  | { allowed: false; by: "rule" | "sensitive" | "user"; reason: string };
+  | { allowed: false; by: "rule" | "sensitive" | "user" | "unattended"; reason: string };
 
 /** The permission check as the tools see it. The PermissionEngine implements it. */
 export interface PermissionGate {

@@ -32,6 +32,7 @@ Low-level design documents:
 | Init and migration | `src/init/` | [init.md](lld/init.md) |
 | Skills | `src/skills/` | [skills.md](lld/skills.md) |
 | Evals | `src/evals/` | [evals.md](lld/evals.md) |
+| Scheduled jobs (0.7) | `src/jobs/`, `src/cli/jobCommand.ts` | [jobs.md](lld/jobs.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
-The code, the tests and the commits use the same IDs. The documents describe version 0.6.0.
+The code, the tests and the commits use the same IDs. The documents describe version 0.7.0-dev.

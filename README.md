@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.6.0.
+Garuda is a terminal coding agent. This is version 0.7.0-dev.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -18,6 +18,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.4: AGENTS.md/CLAUDE.md, custom slash commands, plan mode, todo tool (opt-in), LSP diagnostics (opt-in), undo, remote MCP with OAuth | Done |
 | 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output (Claude Code format), skills, custom agents, web search | Done |
 | 0.6: chat UX (Esc, multi-line, $EDITOR; @file, !cmd, completion; sessions and models in the chat; focus-aware notifications, /diff), Claude's web search | Done |
+| 0.7: scheduled jobs (plan now, build later with an approval list, own branch), launchd, Batch API | In progress |
 
 ## Use
 
@@ -99,7 +100,8 @@ Set the context window, price and output limit per model, and add providers, in 
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
   (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
-  `/init` (set up this folder, see below), `/editor`, `/diff` (see Undo), `/exit`. Your custom commands and
+  `/init` (set up this folder, see below), `/editor`, `/diff` (see Undo), `/schedule` and `/jobs` (see
+  Scheduled jobs), `/exit`. Your custom commands and
   skills run with `/name`.
 - `/sessions` lists this project's sessions (newest first: time, first prompt, turns, cost, model).
   `/sessions <number or id>` continues one in the chat, as `--resume` does. Read tracking starts again.
@@ -573,6 +575,27 @@ on with a `claude` section in `~/.garuda/search.json`:
 - Custom agents whose tools allow `WebSearch` (or `web_search`) get it too, in the same session.
 - The chat shows each search: `● web_search (Claude) <query>` and the number of results; Ctrl-O lists
   the pages.
+
+## Scheduled jobs (0.7)
+
+A plan can run later, with nobody at the keyboard: for example overnight.
+
+1. Make a plan in plan mode (`/plan`, then your task). Each plan now ends with a `permissions` block: the
+   file edits and network commands the build needs.
+2. At "Build this plan?", choose "No, keep planning", and type `/schedule 01:00` (the time is optional).
+   Garuda shows the approval list, where the job starts (your last commit, plus your uncommitted changes
+   of tracked files) and its branch, and asks once.
+3. In a terminal in the project folder: `garuda run <job-id> --at 01:00`. It waits, then builds the plan in
+   its own worktree on the branch `garuda/job-<id>`. Your checkout does not change.
+
+- The job asks nothing. Reads, commands in the sandbox and the calls in its list are allowed; any other call
+  is denied, and the job goes on and reports it. You can edit the list (`"allow"`) in
+  `.garuda/jobs/<id>.json` before the run.
+- A job needs git and the OS sandbox. `node_modules` and `.venv` are linked from your checkout.
+- At the end Garuda commits the changes on the job branch (no git hooks run) and writes a report:
+  `.garuda/jobs/<id>.md`, also shown by `/jobs <id>`. Review with `git diff`, then `git merge
+  garuda/job-<id>`, and remove the worktree.
+- `/jobs` lists the jobs. Keep the Mac awake and on power while the terminal waits.
 
 ## Hooks
 

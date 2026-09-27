@@ -10,6 +10,8 @@ export const BUILTIN_COMMANDS: readonly string[] = [
   "models",
   "export",
   "diff",
+  "schedule",
+  "jobs",
   "where",
   "refs",
   "map",
