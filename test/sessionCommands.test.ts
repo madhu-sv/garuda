@@ -440,3 +440,27 @@ describe("/plan <task> and /build <task> (0.8)", () => {
     expect(runtime.mode).toBe("build");
   });
 });
+
+describe("a stopped turn (0.9)", () => {
+  it("the next message tells the model that the user stopped the previous task", async () => {
+    const model = new FakeModelClient([
+      reply([text("Working on it.")]),
+      (request) => {
+        const last = JSON.stringify(request.messages.at(-1));
+        expect(last).toContain('The user stopped the previous task (\\"carry out the plan\\")');
+        expect(last).toContain("explain src/math.js");
+        return reply([text("It exports add.")]);
+      },
+      (request) => {
+        expect(JSON.stringify(request.messages.at(-1))).not.toContain("stopped the previous task");
+        return reply([text("Fine.")]);
+      },
+    ]);
+    const runtime = await runtimeFor(project(), model);
+    await runtime.runTurn("carry out the plan", signal());
+    runtime.recordStop("interrupted");
+    await runtime.runTurn("explain src/math.js", signal());
+    await runtime.runTurn("thanks", signal());
+    expect(model.remaining).toBe(0);
+  });
+});

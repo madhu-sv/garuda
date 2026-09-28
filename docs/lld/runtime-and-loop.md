@@ -59,7 +59,7 @@ imports the CLI.
    outside-root paths are skipped with a reason; at most 10 attachments and 150 000 characters. A `notice`
    event tells the user what was attached.
 5. `addUserMessage(session, prompt, notes, attachments)`: in plan mode the first note is `PLAN_NOTE` (what plan mode
-   allows, and to end with a numbered plan and, since 0.7, a `permissions` block for `/schedule`), then the pending notes (undo, `!command` output) and the MCP
+   allows, and to end with a numbered plan and, since 0.7, a `permissions` block for `/schedule`), then the pending notes (undo, `!command` output, 0.9: a stopped turn from `recordStop("interrupted")`) and the MCP
    notes; the attachments follow as plain text blocks. The system prompt is the same in both
    modes, so the prompt cache stays valid (N2).
 6. Load the model if it is still a factory (`client()`), then

@@ -311,6 +311,8 @@ export class Runtime {
   private readonly sessionBase = new Map<string, string>();
   /** Notes for the next turn, for example after an undo that kept the conversation. */
   private readonly pendingNotes: string[] = [];
+  /** The prompt of the turn that runs or ran last (0.9: the note after a stopped turn). */
+  private lastPrompt: string | undefined;
   /** LSP diagnostics after edits are on (0.4). */
   readonly lspEnabled: boolean;
   private readonly lspOptions: NonNullable<RuntimeOptions["lsp"]>;
@@ -1084,6 +1086,7 @@ export class Runtime {
 
   /** Run one turn: the user's prompt, then the loop until it stops. */
   async runTurn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
+    this.lastPrompt = prompt;
     await this.startHooks(signal);
     await this.startMcp(signal);
     const session = this.ensureSession();
@@ -1824,6 +1827,14 @@ export class Runtime {
   /** Record a turn that ended with no result: Ctrl-C ("interrupted") or an error. */
   recordStop(reason: "interrupted" | "error"): void {
     this.current?.journal?.write({ type: "end", stopReason: reason, steps: 0 });
+    // Live test (0.9): after Ctrl-C the model went on with the stopped task at the next message.
+    if (reason === "interrupted" && this.lastPrompt !== undefined) {
+      const task =
+        this.lastPrompt.length > 200 ? `${this.lastPrompt.slice(0, 199)}…` : this.lastPrompt;
+      this.pendingNotes.push(
+        `The user stopped the previous task ("${task}") before it finished. Do not go on with it unless the user asks; work on the new message. Files may have changed in part: read them again before you edit them.`,
+      );
+    }
   }
 
   private ensureSession(): Session {
