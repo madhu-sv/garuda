@@ -26,6 +26,7 @@ export const HELP = [
   "  /sessions  this project's sessions; /sessions <n|id> continues one",
   "  /models    the models; /models <n|id|opus|sonnet|haiku> switches for this chat",
   "  /export    write this conversation as Markdown; /export <file>",
+  "  /compact   summarise the older turns now; /compact <what to keep>",
   "  /diff      file changes in this session; /diff last (last turn); /diff [last] <path>",
   "  /schedule  make the last plan a job that runs later: /schedule [HH:MM], then garuda run <id>",
   "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel <id>",
@@ -56,6 +57,8 @@ export interface CommandContext {
    * Default: renderer.info.
    */
   output?: (text: string, full?: { title: string; text: string }) => void;
+  /** Stops a command that calls the model (0.8: /compact). Default: a signal that never fires. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -64,7 +67,7 @@ export interface CommandContext {
  */
 export async function runCommand(
   text: string,
-  { runtime, renderer, sessionPath, output }: CommandContext,
+  { runtime, renderer, sessionPath, output, signal }: CommandContext,
 ): Promise<"exit" | "done" | { prompt: string }> {
   const command = text.split(/\s+/)[0];
   if (command === "/exit" || command === "/quit") return "exit";
@@ -88,6 +91,13 @@ export async function runCommand(
       if (result.ok) renderer.info(result.text);
       else renderer.warn(result.text);
     }
+  } else if (command === "/compact") {
+    await compactCommand(
+      runtime,
+      renderer,
+      text.slice(command.length).trim(),
+      signal ?? new AbortController().signal,
+    );
   } else if (command === "/diff") {
     await diffCommand(runtime, renderer, text.slice(command.length).trim(), output);
   } else if (command === "/schedule") {
@@ -479,4 +489,38 @@ function mcpSummary(runtime: Runtime): string {
       return `${s.name} [${s.source}] ${s.state}${note} · ${s.tools} tool(s) · ${box} · ${net}`;
     })
     .join("\n");
+}
+
+/** /compact [focus] (0.8). */
+async function compactCommand(
+  runtime: Runtime,
+  renderer: Renderer,
+  focus: string,
+  signal: AbortSignal,
+): Promise<void> {
+  if (runtime.session === undefined) {
+    renderer.info("No session yet: there is nothing to compact.");
+    return;
+  }
+  let result: Awaited<ReturnType<Runtime["compact"]>>;
+  try {
+    result = await runtime.compact(focus, signal);
+  } catch (error) {
+    renderer.warn(
+      signal.aborted
+        ? "Compaction stopped. The conversation did not change."
+        : `Compaction failed, and the conversation did not change: ${(error as Error).message}`,
+    );
+    return;
+  }
+  if (result === undefined) {
+    renderer.info(
+      "Too little to compact: the last 4 steps always stay in full. Auto-compaction still runs when the context gets full.",
+    );
+    return;
+  }
+  const cost = result.costUsd === undefined ? "" : ` · $${result.costUsd.toFixed(4)}`;
+  renderer.info(
+    `Context compacted: ${formatTokens(result.beforeTokens)} → about ${formatTokens(result.afterTokens)} tokens${cost}. The last 4 steps stay in full; /usage shows the session totals.`,
+  );
 }

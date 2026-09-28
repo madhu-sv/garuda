@@ -12,7 +12,7 @@ import {
   loadCommands,
   parseCommandLine,
 } from "../commands/custom.js";
-import { COMPACTION_DEFAULTS } from "../context/compact.js";
+import { COMPACTION_DEFAULTS, type CompactionResult, compactNow } from "../context/compact.js";
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
 import { HOOKS_FILE, type Hook, hooksHash, loadHooks } from "../hooks/config.js";
 import { HookRunner, hooksConsent } from "../hooks/runner.js";
@@ -46,6 +46,7 @@ import {
   lookupModel,
   type ModelInfo,
   type Price,
+  responseCost,
 } from "../model/pricing.js";
 import type { Message, ModelClient, ServerToolSpec } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
@@ -1390,6 +1391,35 @@ export class Runtime {
       this.snapshots = undefined;
       this.onNotice?.(`Undo is off for this session: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * /compact [focus] (0.8): summarise the older turns now; the last steps stay in full. Undefined
+   * when there is no session or too little to compact.
+   */
+  async compact(
+    focus: string | undefined,
+    signal: AbortSignal,
+  ): Promise<(CompactionResult & { costUsd?: number }) | undefined> {
+    const session = this.current;
+    if (session === undefined) return undefined;
+    const model = await this.client();
+    const price = this.currentPrice;
+    let costUsd: number | undefined;
+    const result = await compactNow(
+      session,
+      model,
+      {
+        ...(focus === undefined || focus === "" ? {} : { focus }),
+        costOf: (response) => {
+          costUsd = price === undefined ? undefined : responseCost(response, price);
+          return costUsd;
+        },
+      },
+      signal,
+    );
+    if (result === undefined) return undefined;
+    return costUsd === undefined ? result : { ...result, costUsd };
   }
 
   /**

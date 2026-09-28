@@ -9,6 +9,7 @@ export const BUILTIN_COMMANDS: readonly string[] = [
   "sessions",
   "models",
   "export",
+  "compact",
   "diff",
   "schedule",
   "jobs",

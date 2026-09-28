@@ -42,16 +42,31 @@ export async function runChat(
       continue;
     }
     if (text.startsWith("/")) {
-      store.echo(text);
-      const result = await runCommand(text, {
-        runtime,
-        renderer: store,
-        sessionPath,
-        output: (shown, full) => {
-          store.print(shown);
-          if (full !== undefined) store.keepOutput(full.title, full.text);
-        },
-      });
+      // /compact (0.8) calls the model: busy while it runs, and Esc or Ctrl-C stops it.
+      const slow = /^\/compact(\s|$)/.test(text);
+      const controller = new AbortController();
+      if (slow) {
+        store.begin(text);
+        store.onInterrupt = () => controller.abort();
+      } else store.echo(text);
+      let result: Awaited<ReturnType<typeof runCommand>>;
+      try {
+        result = await runCommand(text, {
+          runtime,
+          renderer: store,
+          sessionPath,
+          output: (shown, full) => {
+            store.print(shown);
+            if (full !== undefined) store.keepOutput(full.title, full.text);
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        if (slow) {
+          store.onInterrupt = () => {};
+          store.end(statusOf(runtime));
+        }
+      }
       store.refreshStatus(statusOf(runtime));
       if (result === "exit") return;
       if (result === "done") continue;

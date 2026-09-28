@@ -80,6 +80,8 @@ Sessions and models in the chat (0.6):
 - `switchSession(ref)`: `resumeSession` for a number from the list, an id, or the unique start of an id;
   it writes a `resume` record, drops the pending notes, and says how full the context is.
 - `sessionRecords()`: the current session's records, for `/export`.
+- `compact(focus, signal)` (0.8): `compactNow` on the current session with the main model and its price;
+  the result has the tokens before and after and the summary's cost.
 - `modelList()`: `knownModels()` from `pricing.ts`, then the specs of `~/.garuda/models.json` that resolve
   (option `models.configured`); the main model is always in the list.
 - `lastPlan` and `scheduleJob(at, signal)` (0.7): the last plan-mode turn that ended `done` (its prompt, its

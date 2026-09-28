@@ -287,3 +287,70 @@ describe("/export (0.6)", () => {
     expect(BUILTIN_COMMANDS).toEqual(expect.arrayContaining(["sessions", "models", "export"]));
   });
 });
+
+describe("/compact (0.8)", () => {
+  it("summarises the older turns now, with the focus text, and keeps the last 4 steps", async () => {
+    const root = project();
+    const answers = [1, 2, 3, 4, 5].map((i) => reply([text(`Answer ${i}.`)]));
+    let summaryRequest = "";
+    const model = new FakeModelClient([
+      ...answers,
+      (request) => {
+        summaryRequest = JSON.stringify(request.messages);
+        expect(request.tools).toEqual([]);
+        return reply([text("The user asked five things.")]);
+      },
+    ]);
+    const runtime = await runtimeFor(root, model);
+    for (const i of [1, 2, 3, 4, 5]) await runtime.runTurn(`task ${i}`, signal());
+    const { run, said } = chat(runtime);
+
+    await run("/compact keep the API decisions");
+    expect(summaryRequest).toContain("keep, above all: keep the API decisions");
+    expect(summaryRequest).toContain("task 1");
+    expect(said().at(-1)).toMatch(/^Context compacted: .* → about .* tokens · \$\d+\.\d{4}\./);
+    const messages = runtime.session?.messages ?? [];
+    expect(JSON.stringify(messages[0])).toContain("The user asked five things.");
+    expect(messages.filter((m) => m.role === "assistant")).toHaveLength(4);
+    expect(JSON.stringify(messages)).not.toContain("Answer 1.");
+    expect(model.remaining).toBe(0);
+
+    // The journal has the compaction: a resume sees the compacted conversation.
+    const records = await new FileSessionStore(root).read(runtime.session?.id as string);
+    expect(rebuildState(records).messages).toHaveLength(messages.length);
+  });
+
+  it("too little to compact, no session, and a stop that changes nothing", async () => {
+    const root = project();
+    const model = new FakeModelClient([reply([text("One.")])]);
+    const runtime = await runtimeFor(root, model);
+    const { run, said } = chat(runtime);
+    await run("/compact");
+    expect(said().at(-1)).toBe("No session yet: there is nothing to compact.");
+    await runtime.runTurn("one task", signal());
+    await run("/compact");
+    expect(said().at(-1)).toMatch(/^Too little to compact: the last 4 steps always stay in full\./);
+
+    const five = new FakeModelClient([1, 2, 3, 4, 5].map((i) => reply([text(`A${i}`)])));
+    const other = await runtimeFor(project(), five);
+    for (const i of [1, 2, 3, 4, 5]) await other.runTurn(`t${i}`, signal());
+    const before = JSON.stringify(other.session?.messages);
+    const stop = new AbortController();
+    stop.abort();
+    const store = new ChatStore({ model: "m", sandbox: "none" }, { paint: noColor });
+    await runCommand("/compact", {
+      runtime: other,
+      renderer: store,
+      sessionPath: (id) => id,
+      signal: stop.signal,
+    });
+    expect(store.getState().items.at(-1)?.text).toBe(
+      "Compaction stopped. The conversation did not change.",
+    );
+    expect(JSON.stringify(other.session?.messages)).toBe(before);
+  });
+
+  it("is a built-in command with a help line", () => {
+    expect(BUILTIN_COMMANDS).toContain("compact");
+  });
+});

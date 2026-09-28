@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.7.0. This document shows how the parts work together. The component documents in
+Version 0.8.0-dev. This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -222,7 +222,8 @@ now.
 `/sessions` lists the project's sessions from `SessionStore.list()`; `/sessions <n|id>` resumes one in the
 same process. `/models` lists the known and configured models; `/models <ref>` switches the main model for
 the next turns (`modelId`, window, price and client change together; a `model` record keeps it).
-`/export` writes the session records as Markdown. Details: [lld/cli.md](lld/cli.md),
+`/export` writes the session records as Markdown. `/compact [focus]` (0.8) summarises the older turns at
+once, with the automatic compaction's summary step. Details: [lld/cli.md](lld/cli.md),
 [lld/runtime-and-loop.md](lld/runtime-and-loop.md).
 
 ### Scheduled jobs (0.7)

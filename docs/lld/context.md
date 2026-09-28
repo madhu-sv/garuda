@@ -78,6 +78,15 @@ The summary prompt keeps: the user's requests (quoted), decisions, facts with pa
 changes, commands and results, open problems and next steps. It drops greetings, repeated output and
 file contents that can be read again.
 
+### `/compact [focus]` (0.8)
+
+`compactNow(session, model, {keepSteps, focus, costOf}, signal)` runs stage 1 on the older part and then
+stage 2 at once, whatever the size, through the same `summaryStage` as the automatic path. The optional
+focus text goes into the summary request ("The user asks the summary to keep, above all: …"). It returns
+undefined when there are not more than `keepSteps` (4) assistant turns. A stop (Esc, Ctrl-C) or a failed
+summary leaves the conversation as it was: the messages change only after the summary arrives.
+
 ## Tests
 
-`test/compact.test.ts`, `test/m4.acceptance.test.ts`.
+`test/compact.test.ts`, `test/m4.acceptance.test.ts`; `/compact` in `test/sessionCommands.test.ts` and
+`test/chat.test.tsx` (Esc).

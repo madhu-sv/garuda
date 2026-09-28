@@ -140,7 +140,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /diff /schedule /jobs /exit; /name: skill or command]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /compact /diff /schedule /jobs /exit; /name: skill or command]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
@@ -227,7 +227,9 @@ interface ChatState {
   each; the open one is marked); `/sessions <n|id>` calls `runtime.switchSession(ref)` (a number from the
   list, an id, or the unique start of one). `/models` prints `modelsText(runtime)` from `runtime.modelList()`
   (● marks the current model; `modelFacts` gives "1.0M context, $4/$20 per M tokens"); `/models <ref>` calls
-  `runtime.setModel(ref)`. The footer shows the new model after the command. `/export [file]` loads
+  `runtime.setModel(ref)`. The footer shows the new model after the command. `/compact [focus]` (0.8)
+  calls `runtime.compact(focus, signal)`; the Ink chat shows it as busy (`store.begin`), and Esc or Ctrl-C
+  aborts the summary request through `CommandContext.signal`. `/export [file]` loads
   `src/cli/export.ts` with `import()`: `sessionMarkdown(records, id)` builds the Markdown from the session
   records (so it is redacted; notes and file text are left out, but each attachment and `!command` gets a
   line; undo, redo, compaction, a model change and a stopped turn get an italic line), and `writeExport`

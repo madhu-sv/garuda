@@ -75,9 +75,49 @@ export async function compactIfNeeded(
   }
 
   // Stage 2: summary of everything before the split.
+  return summaryStage(session, model, trimmed, split, before, options.costOf, signal);
+}
+
+/**
+ * `/compact [focus]` (0.8): summarise the older turns now, whatever the size. The last `keepSteps`
+ * steps stay in full. The focus text tells the summary what to keep. Undefined: too little to
+ * compact.
+ */
+export async function compactNow(
+  session: Session,
+  model: ModelClient,
+  options: { keepSteps?: number; focus?: string; costOf?: CompactionOptions["costOf"] },
+  signal: AbortSignal,
+): Promise<CompactionResult | undefined> {
+  const keepSteps = options.keepSteps ?? COMPACTION_DEFAULTS.keepSteps;
+  const split = splitIndex(session.messages, keepSteps);
+  if (split <= 0) return undefined;
+  const { messages: trimmed } = trimOldToolOutputs(session.messages, split);
+  return summaryStage(
+    session,
+    model,
+    trimmed,
+    split,
+    session.contextTokens,
+    options.costOf,
+    signal,
+    options.focus,
+  );
+}
+
+async function summaryStage(
+  session: Session,
+  model: ModelClient,
+  trimmed: Message[],
+  split: number,
+  before: number,
+  costOf: CompactionOptions["costOf"],
+  signal: AbortSignal,
+  focus?: string,
+): Promise<CompactionResult> {
   const older = trimmed.slice(0, split);
   const recent = trimmed.slice(split);
-  const summary = await summarise(model, older, signal);
+  const summary = await summarise(model, older, signal, focus);
   const summaryText = summary.content
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -99,7 +139,7 @@ export async function compactIfNeeded(
     ],
   };
   const messages = [opening, ...recent];
-  const costUsd = options.costOf?.(summary);
+  const costUsd = costOf?.(summary);
   addCost(session, summary.usage, costUsd);
   const afterTokens = Math.ceil(charCount(messages) / CHARS_PER_TOKEN);
   return apply(session, { stage: "summary", beforeTokens: before, afterTokens }, messages, {
@@ -180,7 +220,12 @@ async function summarise(
   model: ModelClient,
   messages: readonly Message[],
   signal: AbortSignal,
+  focus?: string,
 ): Promise<ModelResponse> {
+  const ask =
+    focus === undefined || focus.trim() === ""
+      ? "Summarise this part of the session."
+      : `Summarise this part of the session. The user asks the summary to keep, above all: ${focus.trim()}`;
   const request = {
     system: SUMMARY_SYSTEM,
     messages: [
@@ -189,7 +234,7 @@ async function summarise(
         content: [
           {
             type: "text" as const,
-            text: `Summarise this part of the session.\n\n<session>\n${transcript(messages)}\n</session>`,
+            text: `${ask}\n\n<session>\n${transcript(messages)}\n</session>`,
           },
         ],
       },

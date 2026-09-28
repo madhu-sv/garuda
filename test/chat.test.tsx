@@ -9,8 +9,10 @@ import { edit, emptyEditor, submit } from "../src/cli/chat/lineEditor.js";
 import { noColor, renderMarkdown, takeBlocks } from "../src/cli/chat/markdown.js";
 import { ChatStore } from "../src/cli/chat/store.js";
 import { App, typeAhead } from "../src/cli/chat/ui.js";
+import { SUMMARY_SYSTEM } from "../src/context/compact.js";
 import type { AgentEvent } from "../src/loop/runAgent.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
+import type { ModelClient } from "../src/model/types.js";
 import { parseSettings } from "../src/permissions/settings.js";
 import type { ApprovalRequest } from "../src/permissions/types.js";
 import { FileSessionStore } from "../src/session/store.js";
@@ -203,6 +205,58 @@ describe("Ink chat", () => {
     expect(all).toContain("There is one file: src/a.js.");
     expect(all).toMatch(/\[done · 2 step\(s\)/);
     await until(() => (ui.lastFrame() ?? "").includes("context"));
+
+    for (const ch of "/exit") ui.stdin.write(ch);
+    await until(() => (ui.lastFrame() ?? "").includes("/exit"));
+    ui.stdin.write("\r");
+    await done;
+    ui.unmount();
+  });
+  it("/compact is busy while the model summarises, and Esc stops it (0.8)", async () => {
+    const fake = new FakeModelClient([1, 2, 3, 4, 5].map((i) => reply([text(`A${i}`)])));
+    let summaryAsked = false;
+    // The summary request waits until Esc aborts it.
+    const model: ModelClient = {
+      async *stream(request, options) {
+        if (request.system !== SUMMARY_SYSTEM) {
+          yield* fake.stream(request, options);
+          return;
+        }
+        summaryAsked = true;
+        await new Promise((_, reject) =>
+          options?.signal?.addEventListener("abort", () => reject(options.signal?.reason)),
+        );
+      },
+    };
+    const store = newStore();
+    const runtime = await Runtime.create({
+      root,
+      modelId: "claude-sonnet-5",
+      model: async () => model,
+      approver: store,
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host" }),
+      onEvent: (e) => store.event(e),
+    });
+    for (const i of [1, 2, 3, 4, 5]) await runtime.runTurn(`t${i}`, new AbortController().signal);
+    const before = JSON.stringify(runtime.session?.messages);
+    const ui = render(<App store={store} />);
+    const done = runChat(
+      runtime,
+      store,
+      (id) => id,
+      () => {
+        throw new Error("exit");
+      },
+    );
+    for (const ch of "/compact") ui.stdin.write(ch);
+    await until(() => (ui.lastFrame() ?? "").includes("/compact"));
+    ui.stdin.write("\r");
+    await until(() => summaryAsked && store.getState().busy);
+    ui.stdin.write("\u001b");
+    await until(() => !store.getState().busy);
+    expect(texts(store).at(-1)).toBe("Compaction stopped. The conversation did not change.");
+    expect(JSON.stringify(runtime.session?.messages)).toBe(before);
 
     for (const ch of "/exit") ui.stdin.write(ch);
     await until(() => (ui.lastFrame() ?? "").includes("/exit"));

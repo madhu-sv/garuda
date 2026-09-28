@@ -100,4 +100,4 @@ before it edits it.
 ## Tests
 
 `test/sessions.test.ts` (journal, redaction, resume, replay), `test/m4.acceptance.test.ts`,
-`test/sessionCommands.test.ts` (0.6: `/sessions`, `/models`, `/export`).
+`test/sessionCommands.test.ts` (0.6: `/sessions`, `/models`, `/export`; 0.8: `/compact`).

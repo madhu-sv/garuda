@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.7.0.
+Garuda is a terminal coding agent. This is version 0.8.0-dev.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -19,7 +19,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.5: `garuda init` (AGENTS.md, migrate from other agents), JSON output (Claude Code format), skills, custom agents, web search | Done |
 | 0.6: chat UX (Esc, multi-line, $EDITOR; @file, !cmd, completion; sessions and models in the chat; focus-aware notifications, /diff), Claude's web search | Done |
 | 0.7: scheduled jobs (plan now, build later with an approval list, own branch), launchd, Batch API (step limit, finish-by time) | Done |
-| 0.8: chat UX from the second OpenCode comparison (`/compact`, argument completion, fuzzy @, session rename and delete) | Planned |
+| 0.8: chat UX from the second OpenCode comparison (`/compact`, argument completion, fuzzy @, session rename and delete) | In progress |
 
 ## Use
 
@@ -101,7 +101,7 @@ Set the context window, price and output limit per model, and add providers, in 
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
   (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
-  `/init` (set up this folder, see below), `/editor`, `/diff` (see Undo), `/schedule` and `/jobs` (see
+  `/init` (set up this folder, see below), `/editor`, `/compact`, `/diff` (see Undo), `/schedule` and `/jobs` (see
   Scheduled jobs), `/exit`. Your custom commands and
   skills run with `/name`.
 - `/sessions` lists this project's sessions (newest first: time, first prompt, turns, cost, model).
@@ -113,6 +113,10 @@ Set the context window, price and output limit per model, and add providers, in 
 - `/export [file]` writes the conversation as Markdown in the working folder (default
   `garuda-<session id>.md`): prompts and answers in full, one line per tool call. It comes from the session
   file, so secrets are redacted. It never overwrites a file and never writes outside the folder.
+- `/compact [what to keep]` summarises the older turns now, to free context before a new part of the
+  work. The last 4 steps stay in full. The optional text tells the summary what to keep, for example
+  `/compact keep the API decisions`. Esc stops it; the conversation then stays as it was. Garuda still
+  compacts on its own when the context gets full.
 - Esc or Ctrl-C during a task stops the task and kills its commands (Esc also drops queued lines). The
   chat goes on. A second Ctrl-C during the task exits Garuda at once; Esc never exits.
 - New lines: end the line with `\` and press Enter, or press Alt+Enter (Option+Enter on a Mac with
