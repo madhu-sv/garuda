@@ -73,9 +73,11 @@ export function toWireParams(
   const last = params.messages.at(-1);
   if (last !== undefined && Array.isArray(last.content) && last.content.length > 0) {
     const blocks = last.content as Array<{
+      type: string;
       cache_control?: Anthropic.Messages.CacheControlEphemeral;
     }>;
-    const block = blocks[blocks.length - 1];
+    // Thinking blocks take no cache mark (0.9): the mark goes on the last other block.
+    const block = blocks.findLast((b) => b.type !== "thinking" && b.type !== "redacted_thinking");
     if (block !== undefined) block.cache_control = { type: "ephemeral" };
   }
   const tools = toWireTools(request.tools, request.serverTools ?? []);
@@ -127,9 +129,11 @@ function toWireBlock(block: ContentBlock): Anthropic.Messages.ContentBlockParam 
             text: block.text,
             citations: structuredClone(block.citations) as Anthropic.Messages.TextCitationParam[],
           };
-    // Server tool blocks go back exactly as they came (the results hold encrypted content).
+    // Server tool blocks go back exactly as they came (the results hold encrypted content), and so
+    // do thinking blocks (0.9: the signature checks them).
     case "server_tool_use":
     case "server_tool_result":
+    case "thinking":
       return structuredClone(block.wire) as Anthropic.Messages.ContentBlockParam;
     case "tool_use":
       return { type: "tool_use", id: block.id, name: block.name, input: block.input };
@@ -165,8 +169,12 @@ export function fromWireMessage(message: Anthropic.Messages.Message): ModelRespo
       });
     } else if (block.type === "web_search_tool_result") {
       content.push(webSearchResult(block));
+    } else if (block.type === "thinking") {
+      content.push({ type: "thinking", text: block.thinking, wire: structuredClone(block) });
+    } else if (block.type === "redacted_thinking") {
+      content.push({ type: "thinking", text: "", wire: structuredClone(block) });
     }
-    // Other block types (thinking, other server tools) are not requested, so they do not come.
+    // Other block types (other server tools) are not requested, so they do not come.
   }
   return {
     content,

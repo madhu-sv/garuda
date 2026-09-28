@@ -17,7 +17,8 @@ tree against N3 and the single binary, and LlamaIndex targets retrieval, not too
 ## Types (`types.ts`)
 
 ```ts
-type AssistantBlock = TextBlock | ToolUseBlock | ServerToolUseBlock | ServerToolResultBlock;
+type AssistantBlock = TextBlock | ToolUseBlock | ServerToolUseBlock | ServerToolResultBlock | ThinkingBlock;
+interface ThinkingBlock { type: "thinking"; text: string; wire: unknown }   // 0.9
 type ContentBlock = AssistantBlock | ToolResultBlock;
 interface TextBlock { type: "text"; text: string; citations?: unknown[] }   // citations: 0.6
 interface Message { role: "user" | "assistant"; content: ContentBlock[] }
@@ -39,6 +40,17 @@ Server tool blocks (0.6) keep the provider's block in `wire`, which goes back un
 `error` are a neutral view for display, compaction and other providers (`serverTools.ts`). See
 [web.md](web.md).
 
+Thinking blocks (0.9) work the same way. Claude Opus 5.5, Opus 5, Sonnet 5, Fable 5 and 5.1 and Mythos 5
+and 5.1 always think (the API refuses `thinking: disabled`), and by default they return the thinking
+as an empty text with an encrypted `signature`. The API asks for every thinking block back, unchanged,
+within a tool-use turn; without them the model loses its earlier reasoning between steps. Garuda
+before 0.9 dropped them. Now `ThinkingBlock.wire` holds the `thinking` or `redacted_thinking` block and
+goes back byte for byte; `text` is the readable thinking (empty when omitted or redacted). They are left
+out (`thinking.ts`, `withoutThinking`) only where they cannot go back unchanged: after `/models` (a
+signature belongs to its model), on a resume with another model, and when redaction changed one on
+disk. The compaction summary, `/export` and the OpenAI-compatible adapter ignore them. The setting
+`thinking.keepBlocks: false` (and `garuda eval --keep-thinking off`) drops them as before, for A/B runs.
+
 The loop, the session and the tools use only these types.
 
 ## Anthropic adapter (`anthropic.ts`)
@@ -50,7 +62,8 @@ The loop, the session and the tools use only these types.
 - Mapping functions are pure and exported for tests: `toWireParams`, `toWireTools`, `toWireMessage`,
   `fromWireMessage`. `serverTools = ["web_search"]` (0.6): `toWireTools` adds `web_search_20250305`;
   `server_tool_use`, `web_search_tool_result` and text citations map to Garuda's blocks and back unchanged;
-  `pause_turn` and `usage.server_tool_use` map too. Other block types (thinking) are not requested.
+  `pause_turn` and `usage.server_tool_use` map too. `thinking` and `redacted_thinking` (0.9) map to
+  `ThinkingBlock` and back unchanged.
 
 ### Batch API (`AnthropicBatchClient`, 0.7)
 
@@ -83,6 +96,7 @@ Three cache breakpoints (`cache_control: ephemeral`):
 1. On the system prompt.
 2. On the last tool definition: the whole tool list is cached.
 3. On the last block of the last message: the conversation so far is cached; the next request reads it.
+   A thinking block takes no mark (0.9): the mark goes on the last other block.
 
 This works because the system prompt and the tool list stay the same bytes for a whole session:
 the registry sorts tools by name, the loop computes specs once per run, and new facts from `remember`
@@ -209,7 +223,8 @@ for the notice. The agent loop uses both (see [runtime-and-loop.md](runtime-and-
 
 ## Tests
 
-`test/claudeSearch.test.ts` (0.6: server search mapping, cost), `test/model.test.ts` (mapping, cache breakpoints, prices), `test/anthropic-stream.test.ts` (streaming
+`test/claudeSearch.test.ts` (0.6: server search mapping, cost), `test/thinking.test.ts` (0.9: mapping,
+the loop with and without `keepThinking`, redaction, resume, `/models`), `test/model.test.ts` (mapping, cache breakpoints, prices), `test/anthropic-stream.test.ts` (streaming
 with a fake SDK response), `test/providers.test.ts` (specs, presets, `models.json`, URL rules, message
 mapping, a local fake Chat Completions server: split chunks, tool calls, tool calls written as text,
 held text, `lines` mode set in `models.json`, usage, retries, errors, and a whole Garuda turn),

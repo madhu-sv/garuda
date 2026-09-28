@@ -67,6 +67,7 @@ if saved > 0 and estimate <= window * target: apply(trim)
 summary = model(SUMMARY_SYSTEM, transcript(older messages))
 messages = [user: marker + first user request + summary, ...recent]
 estimate = before - (chars before - chars after) / 4   # 0.8: the system prompt and tools stay counted
+# thinking blocks (0.9) count by their wire size, and the summary request leaves them out
 apply(summary)                              # cost of the summary is added to the session
 ```
 

@@ -309,6 +309,7 @@ garuda eval -s python                      # 5 pytest projects
 garuda eval -s hard --repeat 3 --subagents on   # A/B: the same, with the explore subagent
 garuda eval --parallel 4                   # 4 tasks at the same time
 garuda eval --batch on                     # A/B: model calls through the Batch API (half price, slow)
+garuda eval -s hard --keep-thinking off    # A/B: drop Claude's thinking blocks, as before 0.9
 ```
 
 `--batch on` (0.7, Anthropic models) sends every model call as a batch of one: half the token price,

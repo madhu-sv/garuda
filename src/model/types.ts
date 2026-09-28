@@ -52,7 +52,24 @@ export interface ServerToolResultBlock {
   wire: unknown;
 }
 
-export type AssistantBlock = TextBlock | ToolUseBlock | ServerToolUseBlock | ServerToolResultBlock;
+/**
+ * The model's thinking (0.9), from Claude models that think. `wire` is the provider's block (a
+ * `thinking` block with its signature, or a `redacted_thinking` block): it goes back unchanged, as
+ * the API requires within a tool-use turn. `text` is the readable thinking; empty when the model
+ * omits it (the default for Claude 4.7 and later) or the block is redacted.
+ */
+export interface ThinkingBlock {
+  type: "thinking";
+  text: string;
+  wire: unknown;
+}
+
+export type AssistantBlock =
+  | TextBlock
+  | ToolUseBlock
+  | ServerToolUseBlock
+  | ServerToolResultBlock
+  | ThinkingBlock;
 
 export type ContentBlock = AssistantBlock | ToolResultBlock;
 

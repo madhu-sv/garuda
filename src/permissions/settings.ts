@@ -86,6 +86,11 @@ const schema = z.strictObject({
     .optional(),
   /** Language server diagnostics after edits (0.4). enabled: default false. */
   lsp: z.strictObject({ enabled: z.boolean().optional() }).optional(),
+  /**
+   * Claude's thinking (0.9). keepBlocks: send thinking blocks back (default true, as the API asks);
+   * false is for A/B runs only.
+   */
+  thinking: z.strictObject({ keepBlocks: z.boolean().optional() }).optional(),
   /** The explore subagent (0.3). enabled: default false. Limits per explore run. */
   subagents: z
     .strictObject({
@@ -130,6 +135,7 @@ export interface Settings {
   skills?: { enabled: boolean };
   agents?: { enabled: boolean };
   notifications?: { channel?: NotifyChoice; afterSeconds?: number };
+  thinking?: { keepBlocks?: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
@@ -153,6 +159,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     skills,
     agents,
     notifications,
+    thinking,
   } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
@@ -190,6 +197,9 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(undo?.enabled === undefined ? {} : { undo: { enabled: undo.enabled } }),
     ...(skills?.enabled === undefined ? {} : { skills: { enabled: skills.enabled } }),
     ...(agents?.enabled === undefined ? {} : { agents: { enabled: agents.enabled } }),
+    ...(thinking?.keepBlocks === undefined
+      ? {}
+      : { thinking: { keepBlocks: thinking.keepBlocks } }),
     ...(notifications === undefined
       ? {}
       : {

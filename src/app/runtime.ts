@@ -48,6 +48,7 @@ import {
   type Price,
   responseCost,
 } from "../model/pricing.js";
+import { withoutThinking } from "../model/thinking.js";
 import type { Message, ModelClient, ServerToolSpec } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
@@ -990,6 +991,8 @@ export class Runtime {
     };
     this.maxTokens = resolved.maxTokens;
     const session = this.current;
+    // Thinking signatures belong to the model that wrote them (0.9): the new model starts without.
+    if (session !== undefined) session.messages = withoutThinking(session.messages);
     session?.journal?.write({ type: "model", sessionId: session.id, ...this.startFields() });
     const lines = [
       `The model is now ${resolved.spec} (${modelFacts(this.currentLimits.contextWindow, this.currentPrice)}). The next turn uses it; the prompt cache starts again.`,
@@ -1058,6 +1061,7 @@ export class Runtime {
       contextWindow: this.limits.contextWindow,
       ...(this.price === undefined ? {} : { price: this.price }),
       ...(this.onEvent === undefined ? {} : { onEvent: this.onEvent }),
+      ...(this.settings.thinking?.keepBlocks === false ? { keepThinking: false } : {}),
       signal,
     });
     // A finished plan (0.7): /schedule turns it into a job.

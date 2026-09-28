@@ -269,6 +269,8 @@ export function transcript(messages: readonly Message[]): string {
         lines.push(`Agent called ${block.name} (server) ${JSON.stringify(block.input)}`);
       } else if (block.type === "server_tool_result") {
         lines.push(serverPairText(undefined, block));
+      } else if (block.type === "thinking") {
+        // The summary keeps what the agent did and found; its thinking stays out (0.9).
       } else {
         const text =
           block.content.length > 2_000 ? `${block.content.slice(0, 2_000)} …` : block.content;
@@ -298,7 +300,8 @@ function charCount(messages: readonly Message[]): number {
       if (block.type === "text") chars += block.text.length;
       else if (block.type === "tool_use" || block.type === "server_tool_use")
         chars += JSON.stringify(block.input).length + block.name.length;
-      else if (block.type === "server_tool_result") chars += JSON.stringify(block.wire).length;
+      else if (block.type === "server_tool_result" || block.type === "thinking")
+        chars += JSON.stringify(block.wire).length;
       else chars += block.content.length;
     }
   }

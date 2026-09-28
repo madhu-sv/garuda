@@ -80,7 +80,10 @@ The model may see a secret, but Garuda never writes it to disk. The `Redactor` r
 3. Assignments such as `password = "…"`, `api_key: …`: the name stays, the value goes.
 
 The Redactor leaves `encrypted_content` and `encrypted_index` alone (0.6): they are ciphertext from Claude's
-web search and must go back unchanged.
+web search and must go back unchanged. Since 0.9 it also leaves thinking `signature` values and the `data`
+of `redacted_thinking` blocks alone. The readable thinking text is redacted as usual; a block that
+changed that way is left out on resume (`repairThinking`), because its signature would no longer match.
+A resume with another model than the session's last one leaves all thinking out.
 
 ## Resume (`resume.ts`)
 

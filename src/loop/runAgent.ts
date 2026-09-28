@@ -90,6 +90,11 @@ export interface AgentDeps {
    * lists them in `serverTools`.
    */
   serverTools?: readonly ServerToolSpec[];
+  /**
+   * Keep Claude's thinking blocks in the conversation (0.9, default true): the API asks for them
+   * back within a tool-use turn. False drops them, as Garuda did before 0.9 (for A/B runs).
+   */
+  keepThinking?: boolean;
 }
 
 /** The server tools of `deps` that this model client can run. */
@@ -180,7 +185,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       maxTokens: deps.maxTokens ?? DEFAULT_MAX_TOKENS,
     };
     const started = performance.now();
-    const response = await callModelWithRetry(
+    const received = await callModelWithRetry(
       deps.model,
       request,
       signal,
@@ -189,6 +194,10 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
     ).finally(() => {
       apiMs += performance.now() - started;
     });
+    const response =
+      deps.keepThinking === false
+        ? { ...received, content: received.content.filter((b) => b.type !== "thinking") }
+        : received;
     modelStopReason = response.stopReason;
     usage = addUsage(usage, response.usage);
     addAssistantResponse(session, response, steps, cost(response));

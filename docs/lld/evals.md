@@ -77,6 +77,7 @@ environment list.
 garuda eval [-m model] [-s basic|hard|java|python|all] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
+            [--keep-thinking on|off]
             [--batch on|off] [--parallel n]
 garuda eval --prepare java|python
 ```
@@ -89,6 +90,9 @@ can be measured on the same tasks.
 Output: a live line per tool call (and per model retry), a table (PASS/FAIL/ERR, steps, tokens, cost,
 time, stop reason), totals, a mean per task for `--repeat`, and `report.json`. Exit code 0 when all pass,
 2 otherwise.
+
+`--keep-thinking off` (0.9) drops Claude's thinking blocks as Garuda did before 0.9, to measure the
+change (default on, as in the product; `report.json` records `keepThinking`).
 
 `--parallel n` (0.7) runs n tasks at the same time (a small pool; the results keep the task order).
 `--batch on` (0.7, Anthropic models only) makes each task's model client the `AnthropicBatchClient`: every

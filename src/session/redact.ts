@@ -25,7 +25,8 @@ const ASSIGNMENT =
  * Opaque values from the provider (0.6: Claude's web search). They must go back to the API
  * unchanged, and they are ciphertext, so a pattern match in them is chance, not a secret.
  */
-const OPAQUE_KEYS = new Set(["encrypted_content", "encrypted_index"]);
+/** Opaque provider values that must stay byte for byte: encrypted search results, thinking signatures. */
+const OPAQUE_KEYS = new Set(["encrypted_content", "encrypted_index", "signature"]);
 
 const SECRET_ENV_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)/i;
 
@@ -56,10 +57,14 @@ export class Redactor {
     if (typeof value === "string") return this.text(value);
     if (Array.isArray(value)) return value.map((item) => this.walk(item));
     if (value !== null && typeof value === "object") {
+      // A redacted_thinking block's `data` is encrypted too (0.9); other `data` keys are redacted.
+      const redactedThinking = (value as { type?: unknown }).type === "redacted_thinking";
       return Object.fromEntries(
         Object.entries(value).map(([k, v]) => [
           k,
-          OPAQUE_KEYS.has(k) && typeof v === "string" ? v : this.walk(v),
+          (OPAQUE_KEYS.has(k) || (redactedThinking && k === "data")) && typeof v === "string"
+            ? v
+            : this.walk(v),
         ]),
       );
     }

@@ -59,6 +59,8 @@ export interface EvalOptions {
   todo?: boolean;
   /** Language server errors in edit results (0.4). Default: off, as in the product. */
   lsp?: boolean;
+  /** Keep Claude's thinking blocks (0.9). Default: on, as in the product. */
+  keepThinking?: boolean;
   /** The explore subagent's model. Default: the main model. */
   subagentModel?: RuntimeOptions["subagentModel"];
   /** Tasks that run at the same time (0.7). Default: 1. */
@@ -83,6 +85,9 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
     ...(options.subagents === undefined ? {} : { subagents: { enabled: options.subagents } }),
     ...(options.todo === undefined ? {} : { todo: { enabled: options.todo } }),
+    ...(options.keepThinking === undefined
+      ? {}
+      : { thinking: { keepBlocks: options.keepThinking } }),
   });
   const store = new FileSessionStore(root);
   const runtime = await Runtime.create({

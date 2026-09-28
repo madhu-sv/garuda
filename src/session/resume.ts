@@ -1,5 +1,6 @@
 import { contextSize } from "../model/pricing.js";
 import { hasServerBlocks, withoutServerBlocks } from "../model/serverTools.js";
+import { withoutThinking } from "../model/thinking.js";
 import type { Message } from "../model/types.js";
 import { addUsage, ZERO_USAGE } from "../model/types.js";
 import type { SessionRecord, StartRecord } from "./records.js";
@@ -120,7 +121,12 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
 
   const journal = options.store.open(id);
   const session = createSession(options.root, id, journal);
-  session.messages = state.messages.map(repairServerBlocks);
+  const messages = state.messages.map(repairServerBlocks).map(repairThinking);
+  // Another model than the session's last one (0.9): thinking signatures do not carry over.
+  session.messages =
+    state.start !== undefined && state.start.model !== options.start.model
+      ? withoutThinking(messages)
+      : messages;
   session.usage = state.usage;
   session.costUsd = state.costUsd;
   session.contextTokens = state.contextTokens;
@@ -135,6 +141,21 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
  * (a secret in a query or a cited text), the API would refuse it: such a message keeps the titles
  * and URLs as plain text instead.
  */
+/** A thinking block that redaction changed on disk cannot go back (0.9): it is left out. */
+function repairThinking(message: Message): Message {
+  if (message.role !== "assistant") return message;
+  const broken = message.content.some(
+    (b) => b.type === "thinking" && JSON.stringify(b.wire).includes(REDACTED),
+  );
+  if (!broken) return message;
+  return {
+    ...message,
+    content: message.content.filter(
+      (b) => b.type !== "thinking" || !JSON.stringify(b.wire).includes(REDACTED),
+    ),
+  };
+}
+
 function repairServerBlocks(message: Message): Message {
   if (message.role !== "assistant" || !hasServerBlocks(message.content)) return message;
   if (!JSON.stringify(message.content).includes(REDACTED)) return message;

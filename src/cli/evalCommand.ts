@@ -34,6 +34,8 @@ export interface EvalCommandOptions {
   todo?: string;
   /** --lsp on|off: language server errors in edit results (0.4). */
   lsp?: string;
+  /** --keep-thinking on|off: send Claude's thinking blocks back (0.9). */
+  keepThinking?: string;
   /** --batch on|off: model calls through the Batch API (0.7, Anthropic only). */
   batch?: string;
   /** --parallel <n>: tasks at the same time. Default 1; with --batch on, all tasks (up to 20). */
@@ -93,6 +95,11 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const todoMode = options.todo ?? "off";
   if (todoMode !== "on" && todoMode !== "off") {
     process.stderr.write(`Unknown todo mode ${options.todo}. Use: on, off.\n`);
+    return 1;
+  }
+  const thinkingMode = options.keepThinking ?? "on";
+  if (thinkingMode !== "on" && thinkingMode !== "off") {
+    process.stderr.write(`Unknown keep-thinking mode ${options.keepThinking}. Use: on, off.\n`);
     return 1;
   }
   const lspMode = options.lsp ?? "off";
@@ -186,7 +193,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   if (batchMode === "on") {
@@ -212,6 +219,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       subagents: subagentsMode === "on",
       todo: todoMode === "on",
       lsp: lspMode === "on",
+      keepThinking: thinkingMode === "on",
       ...(sub === undefined
         ? {}
         : { subagentModel: { spec: sub.spec, model: () => sub.create(), info: sub.info } }),
@@ -235,7 +243,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = `${formatReport(results)}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, batch: batchMode, parallel, wallMs, executor: executor.name, results }, null, 2)}\n`,
+    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, batch: batchMode, parallel, wallMs, executor: executor.name, results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;
