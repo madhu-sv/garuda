@@ -193,6 +193,8 @@ export class CommandArgs {
         return first === "logout" && second === undefined
           ? this.runtime.mcpStatus().map((s) => ({ value: s.name }))
           : [];
+      case "details":
+        return first === undefined ? words("on", "off") : [];
       case "lsp":
         if (first === undefined) return words("install");
         return first === "install" && second === undefined ? words(...LSP_LANGUAGES) : [];

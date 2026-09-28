@@ -140,7 +140,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /compact /diff /schedule /jobs /exit; /name: skill or command]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /compact /details /diff /schedule /jobs /exit; /name: skill or command]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
@@ -219,6 +219,9 @@ interface ChatState {
   only after a `.`). One match completes (a command gets a space, a folder keeps its `/`); several complete
   their common start and are listed (at most 30). Ink: `store.completeLine()` (Shift+Tab stays plan mode);
   the REPL: readline's `completer`.
+- **Details (0.9):** `Renderer.details` (the Ink store and `PlainRenderer`; default true). `/details [on|off]`
+  flips or sets it. Off: a `tool_result` or `server_tool` event adds only the call line, unless the call
+  failed; todo lines stay. Items already drawn do not change (`<Static>`). Ctrl-O keeps the last output.
 - **Arguments (0.8):** after `/command ` the word at the cursor completes from `sources.args(command,
   before)`. `CommandArgs` (controller.ts, both chats) gives: `/models` aliases and model specs; `/sessions`
   `rename`, `delete` and session ids (then ids after rename or delete); `/jobs` `cancel` and job ids; `/diff

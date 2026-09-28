@@ -13,6 +13,11 @@ export interface Renderer {
   info(text: string): void;
   warn(text: string): void;
   error(text: string): void;
+  /**
+   * /details (0.9): false hides the result line under each tool call, unless the call failed.
+   * Absent: the renderer always shows them.
+   */
+  details?: boolean;
 }
 
 type Style = Parameters<typeof styleText>[0];
@@ -32,6 +37,8 @@ export class PlainRenderer implements Renderer {
   private readonly color: boolean;
   /** True when the last text did not end with a new line. */
   private openLine = false;
+  /** /details (0.9): show the result line of each tool call. */
+  details = true;
 
   constructor(
     streams: Streams = { out: process.stdout, err: process.stderr },
@@ -55,9 +62,11 @@ export class PlainRenderer implements Renderer {
         return;
       case "tool_result": {
         const text = summariseResult(event.call, event.outcome);
-        this.line(
-          `  ${this.paint("dim", "⎿")} ${event.outcome.isError ? this.paint("red", text) : this.paint("dim", text)}`,
-        );
+        if (this.details || event.outcome.isError) {
+          this.line(
+            `  ${this.paint("dim", "⎿")} ${event.outcome.isError ? this.paint("red", text) : this.paint("dim", text)}`,
+          );
+        }
         for (const line of todoLines(event.call, event.outcome)) this.line(`    ${line}`);
         return;
       }
@@ -74,10 +83,11 @@ export class PlainRenderer implements Renderer {
         return;
       case "server_tool": {
         const { call, result } = serverToolText(event);
+        const failed = event.result?.error !== undefined;
         this.line(`${this.paint("cyan", "●")} ${this.paint("bold", call)}`);
-        this.line(
-          `  ${this.paint("dim", "⎿")} ${this.paint(event.result?.error === undefined ? "dim" : "red", result)}`,
-        );
+        if (this.details || failed) {
+          this.line(`  ${this.paint("dim", "⎿")} ${this.paint(failed ? "red" : "dim", result)}`);
+        }
         return;
       }
       case "step_end":

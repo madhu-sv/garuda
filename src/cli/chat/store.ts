@@ -342,7 +342,8 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         const line = `${this.paint("cyan", "●")} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`;
         const result = `  ${this.paint("dim", "⎿")} ${event.outcome.isError ? this.paint("red", summary) : this.paint("dim", summary)}`;
         const todos = todoLines(event.call, event.outcome).map((l) => `    ${l}`);
-        this.add({ kind: "tool", text: [line, result, ...todos].join("\n") });
+        const shown = this.details || event.outcome.isError ? [result] : [];
+        this.add({ kind: "tool", text: [line, ...shown, ...todos].join("\n") });
         this.lastOutput = {
           title: `${event.call.name} ${summariseCall(event.call)}`,
           text: event.outcome.content,
@@ -365,15 +366,22 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         this.flushText();
         const { call, result } = serverToolText(event);
         const failed = event.result?.error !== undefined;
+        const head = `${this.paint("cyan", "●")} ${this.paint("bold", call)}`;
         this.add({
           kind: "tool",
-          text: `${this.paint("cyan", "●")} ${this.paint("bold", call)}\n  ${this.paint("dim", "⎿")} ${this.paint(failed ? "red" : "dim", result)}`,
+          text:
+            this.details || failed
+              ? `${head}\n  ${this.paint("dim", "⎿")} ${this.paint(failed ? "red" : "dim", result)}`
+              : head,
         });
         this.lastOutput = { title: call, text: serverToolOutput(event) };
         return;
       }
     }
   }
+
+  /** /details (0.9): show the result line of each tool call (errors always show). */
+  details = true;
 
   info(text: string): void {
     this.note("info", text);

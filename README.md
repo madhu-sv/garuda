@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.8.0.
+Garuda is a terminal coding agent. This is version 0.9.0-dev.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -20,7 +20,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.6: chat UX (Esc, multi-line, $EDITOR; @file, !cmd, completion; sessions and models in the chat; focus-aware notifications, /diff), Claude's web search | Done |
 | 0.7: scheduled jobs (plan now, build later with an approval list, own branch), launchd, Batch API (step limit, finish-by time) | Done |
 | 0.8: chat UX from the second OpenCode comparison (`/compact`, argument completion, fuzzy @, session rename and delete, `/plan <task>`) | Done |
-| 0.9: `/details` and `/thinking` toggles, command palette | Planned |
+| 0.9: `/details` and `/thinking` toggles, command palette | In progress |
 
 ## Use
 
@@ -102,7 +102,7 @@ Set the context window, price and output limit per model, and add providers, in 
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
   (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
-  `/init` (set up this folder, see below), `/editor`, `/compact`, `/diff` (see Undo), `/schedule` and `/jobs` (see
+  `/init` (set up this folder, see below), `/editor`, `/compact`, `/details`, `/diff` (see Undo), `/schedule` and `/jobs` (see
   Scheduled jobs), `/exit`. Your custom commands and
   skills run with `/name`.
 - `/sessions` lists this project's sessions (newest first: time, first prompt, turns, cost, model).
@@ -120,6 +120,9 @@ Set the context window, price and output limit per model, and add providers, in 
   work. The last 4 steps stay in full. The optional text tells the summary what to keep, for example
   `/compact keep the API decisions`. Esc stops it; the conversation then stays as it was. Garuda still
   compacts on its own when the context gets full.
+- `/details` hides the result line under each tool call (`⎿ 12 line(s)`), so a turn shows one line per
+  call. A failed call still shows its result, and Ctrl-O still shows the last output in full. `/details`
+  again, or `/details on`, shows them. It applies to new lines only.
 - Esc or Ctrl-C during a task stops the task and kills its commands (Esc also drops queued lines). The
   chat goes on. A second Ctrl-C during the task exits Garuda at once; Esc never exits.
 - New lines: end the line with `\` and press Enter, or press Alt+Enter (Option+Enter on a Mac with

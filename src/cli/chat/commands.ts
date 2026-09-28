@@ -44,6 +44,7 @@ export const HELP = [
   "  /redo      bring back the last undone turn",
   "  /init      set up this folder: AGENTS.md, and files from other agents (Claude Code, OpenCode …)",
   "  /editor    write the next prompt in $VISUAL or $EDITOR (also Ctrl-G)",
+  "  /details   show or hide the result line under each tool call; /details on|off",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -80,6 +81,8 @@ export async function runCommand(
     // "/plan <task>" (0.8): switch, then run the task in the new mode.
     const task = text.slice(command.length).trim();
     if (task !== "") return { prompt: task };
+  } else if (command === "/details") {
+    detailsCommand(renderer, text.slice(command.length).trim());
   } else if (command === "/usage") renderer.info(usageSummary(runtime));
   else if (command === "/session") {
     const id = runtime.session?.id;
@@ -555,5 +558,24 @@ async function compactCommand(
   const cost = result.costUsd === undefined ? "" : ` · $${result.costUsd.toFixed(4)}`;
   renderer.info(
     `Context compacted: ${formatTokens(result.beforeTokens)} → about ${formatTokens(result.afterTokens)} tokens${cost}. The last 4 steps stay in full; /usage shows the session totals.`,
+  );
+}
+
+/** /details [on|off] (0.9): toggle the result lines under tool calls. */
+function detailsCommand(renderer: Renderer, arg: string): void {
+  if (renderer.details === undefined) {
+    renderer.info("This view always shows the details.");
+    return;
+  }
+  if (arg !== "" && arg !== "on" && arg !== "off") {
+    renderer.warn("Use: /details, /details on or /details off.");
+    return;
+  }
+  const on = arg === "" ? !renderer.details : arg === "on";
+  renderer.details = on;
+  renderer.info(
+    on
+      ? "Details on: each tool call shows its result line."
+      : "Details off: tool calls show one line; a failed call still shows its result. In the full chat, Ctrl-O shows the last output in full. /details turns them on again.",
   );
 }
