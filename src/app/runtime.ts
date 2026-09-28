@@ -1038,6 +1038,8 @@ export class Runtime {
       approver: this.approver,
       plan,
       modelId: this.modelId,
+      // Claude models (no provider prefix, or "anthropic/") can use the Batch API.
+      batchCapable: !this.modelId.includes("/") || this.modelId.startsWith("anthropic/"),
       ...(at === undefined ? {} : { at }),
       // The chat offers a launchd agent on macOS (a second question).
       launchd: {},

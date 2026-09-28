@@ -5,7 +5,7 @@ import { EVAL_TASKS } from "../src/evals/tasks.js";
 import { AnthropicBatchClient } from "../src/model/anthropic.js";
 import { isTransientModelError } from "../src/model/errors.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
-import { batchPrice, costOf } from "../src/model/pricing.js";
+import { costOf, responseCost } from "../src/model/pricing.js";
 import { resolveModel } from "../src/model/providers.js";
 import type { ModelEvent } from "../src/model/types.js";
 
@@ -89,6 +89,7 @@ describe("the Batch API client (0.7)", () => {
           content: [{ type: "text", text: "Hello from the batch." }],
           stopReason: "end_turn",
           usage: { inputTokens: 100, outputTokens: 10, cacheReadTokens: 80, cacheWriteTokens: 0 },
+          priceFactor: 0.5,
         },
       },
     ]);
@@ -140,14 +141,18 @@ describe("the Batch API client (0.7)", () => {
 
   it("half price for every token kind; only Anthropic models have a batch client", () => {
     const price = { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 };
-    expect(batchPrice(price)).toEqual({ input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 });
     const usage = {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
+      cacheReadTokens: 1_000_000,
+      cacheWriteTokens: 1_000_000,
+      webSearches: 2,
     };
-    expect(costOf(usage, batchPrice(price))).toBe(costOf(usage, price) / 2);
+    // Tokens at half price; searches at full price.
+    expect(costOf(usage, price, 0.5)).toBeCloseTo((2 + 10 + 0.2 + 2.5) / 2 + 0.02);
+    expect(
+      responseCost({ content: [], stopReason: "end_turn", usage, priceFactor: 0.5 }, price),
+    ).toBeCloseTo(costOf(usage, price, 0.5));
     expect(resolveModel("claude-sonnet-5").createBatch).toBeTypeOf("function");
     expect(resolveModel("ollama/qwen3-coder").createBatch).toBeUndefined();
   });
@@ -190,5 +195,79 @@ describe("eval: tasks at the same time (0.7)", () => {
     expect(results.every((r) => r.passed)).toBe(true);
     expect(most).toBe(3);
     expect(results[0]?.cacheReadTokens).toBe(0);
+  });
+});
+
+describe("the finish-by switch for jobs (0.7)", () => {
+  /** A client that answers after `ms`, or fails with the abort reason. */
+  const slow = (ms: number, answer: string) => ({
+    calls: 0,
+    async *stream(_request: unknown, options?: { signal?: AbortSignal }) {
+      this.calls++;
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(resolve, ms);
+        options?.signal?.addEventListener("abort", () => {
+          clearTimeout(t);
+          reject(options.signal?.reason);
+        });
+      });
+      yield { type: "response" as const, response: reply([text(answer)]) };
+    },
+  });
+  const textOf = (events: ModelEvent[]) =>
+    events.flatMap((e) =>
+      e.type === "response" ? e.response.content.map((b) => (b.type === "text" ? b.text : "")) : [],
+    );
+
+  it("uses the batch client before the switch time, then the normal API for good", async () => {
+    const { DeadlineClient } = await import("../src/model/deadline.js");
+    const batch = slow(10, "batch");
+    const normal = slow(0, "normal");
+    const client = new DeadlineClient(
+      batch as never,
+      async () => normal as never,
+      new Date(Date.now() + 80),
+    );
+    expect(textOf(await collect(client.stream(request)))).toEqual(["batch"]);
+    // This batch would take longer than the time left: it is cancelled and sent to the normal API.
+    const late = new DeadlineClient(
+      slow(1_000, "batch") as never,
+      async () => normal as never,
+      new Date(Date.now() + 30),
+    );
+    expect(textOf(await collect(late.stream(request)))).toEqual(["normal"]);
+    expect(late.calls.switchedAt).toBeInstanceOf(Date);
+    expect(textOf(await collect(late.stream(request)))).toEqual(["normal"]);
+    expect(late.calls).toMatchObject({ primary: 0, fallback: 2 });
+    // After the switch time, straight to the normal API.
+    const past = new DeadlineClient(
+      batch as never,
+      async () => normal as never,
+      new Date(Date.now() - 1),
+    );
+    expect(textOf(await collect(past.stream(request)))).toEqual(["normal"]);
+  });
+
+  it("the user's abort is not a switch", async () => {
+    const { DeadlineClient } = await import("../src/model/deadline.js");
+    const normal = slow(0, "normal");
+    const client = new DeadlineClient(
+      slow(1_000, "batch") as never,
+      async () => normal as never,
+      new Date(Date.now() + 60_000),
+    );
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new Error("Ctrl-C")), 20);
+    const error = await collect(client.stream(request, { signal: controller.signal })).catch(
+      (e: unknown) => e,
+    );
+    expect((error as Error).message).toBe("Ctrl-C");
+    expect(normal.calls).toBe(0);
+  });
+
+  it("switchTime is 15 minutes before the finish-by time", async () => {
+    const { switchTime } = await import("../src/jobs/create.js");
+    expect(switchTime("07:00")).toBe("06:45");
+    expect(switchTime("00:10")).toBe("23:55");
   });
 });

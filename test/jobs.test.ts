@@ -174,6 +174,36 @@ describe("scheduled jobs: create, run, report (0.7)", () => {
     expect(created.text).toContain(`garuda run ${job.id} --at 01:00`);
     // No launchd option: no second question and no agent, also on macOS.
     expect(approver.requests).toHaveLength(1);
+    expect(job.batch).toBeUndefined();
+
+    // A Claude model: a second question about the Batch API; yes sets it with the finish-by time.
+    const asked = new AutoApprover("once");
+    const batched = await createJob({ ...options, approver: asked, batchCapable: true });
+    if (!batched.ok) throw new Error(batched.text);
+    expect(asked.requests[1]).toMatchObject({ title: "Use the Batch API for this job?" });
+    expect(asked.requests[1]?.preview).toContain(
+      "At 06:45 (15 minutes before the finish-by time 07:00)",
+    );
+    expect(await loadJob(root, batched.job.id)).toMatchObject({ batch: true, finishBy: "07:00" });
+    const { jobReport } = await import("../src/jobs/text.js");
+    expect(
+      jobReport({
+        ...batched.job,
+        status: "done",
+        result: {
+          stopReason: "done",
+          steps: 3,
+          tokens: 1000,
+          durationMs: 1000,
+          files: [],
+          denied: [],
+          answer: "",
+          modelCalls: { batch: 2, normal: 1, switchedAt: "2026-09-28T05:45:00.000Z" },
+        },
+      }),
+    ).toContain(
+      "- Model calls: 2 through the Batch API, 1 normal (switched at 2026-09-28T05:45:00.000Z)",
+    );
   });
 
   it("a dirty checkout: the base is one plain commit on HEAD with the uncommitted changes", async () => {

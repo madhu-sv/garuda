@@ -8,7 +8,6 @@ import {
   type CodeIndexMode,
   DEFAULT_CODE_INDEX_MODE,
 } from "../knowledge/mode.js";
-import { batchPrice } from "../model/pricing.js";
 import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
 import { createExecutor, EXECUTOR_NAMES, type ExecutorName } from "../sandbox/index.js";
 import { newSessionId } from "../session/store.js";
@@ -196,17 +195,14 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     );
   }
   const started = Date.now();
-  const batchInfo =
-    resolved.info.price === undefined
-      ? resolved.info
-      : { ...resolved.info, price: batchPrice(resolved.info.price) };
   const results = await runEvals(
     tasks,
     {
       modelId: resolved.spec,
       model: () =>
         batchMode === "on" && createBatch !== undefined ? createBatch() : resolved.create(),
-      modelInfo: batchMode === "on" ? batchInfo : resolved.info,
+      // Batch responses carry their own price factor (half): the price stays the model's.
+      modelInfo: resolved.info,
       parallel,
       ...(batchMode === "on" ? { taskTimeoutMs: BATCH_TASK_TIMEOUT_MS } : {}),
       ...(resolved.maxTokens === undefined ? {} : { maxTokens: resolved.maxTokens }),

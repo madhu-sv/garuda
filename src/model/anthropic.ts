@@ -287,7 +287,8 @@ export class AnthropicBatchClient implements ModelClient {
       if (item.custom_id !== "garuda") continue;
       const result = item.result;
       if (result.type === "succeeded") {
-        const response = fromWireMessage(result.message);
+        // The Batch API costs half of the token price.
+        const response = { ...fromWireMessage(result.message), priceFactor: 0.5 };
         const text = response.content.map((b) => (b.type === "text" ? b.text : "")).join("");
         if (text !== "") yield { type: "text_delta", text };
         yield { type: "response", response };

@@ -237,7 +237,10 @@ async function start(options: Options, program: Command): Promise<number> {
   const runtime = await Runtime.create({
     root,
     modelId,
-    model: () => resolved.create(),
+    model:
+      job?.job.batch === true && resolved.createBatch !== undefined
+        ? () => jobBatchClient(job as NonNullable<typeof job>, resolved, renderer)
+        : () => resolved.create(),
     modelInfo: resolved.info,
     ...(resolved.maxTokens === undefined ? {} : { maxTokens: resolved.maxTokens }),
     ...(sub === undefined
@@ -548,4 +551,26 @@ function recordJobDenial(
           ? target.host
           : target.json.slice(0, 200);
   job.denied.push({ tool, target: shown });
+}
+
+/**
+ * A job on the Batch API (0.7): the batch client until 15 minutes before the finish-by time, then the
+ * normal API. The client is kept on the job, so the report can count the requests of each.
+ */
+async function jobBatchClient(
+  job: import("./jobCommand.js").PreparedJob,
+  resolved: ResolvedModel,
+  renderer: Renderer,
+): Promise<import("../model/types.js").ModelClient> {
+  const { DeadlineClient } = await import("../model/deadline.js");
+  const { nextTime } = await import("../jobs/launchd.js");
+  const { DEFAULT_FINISH_BY, SWITCH_BEFORE_MS, switchTime } = await import("../jobs/create.js");
+  const finishBy = job.job.finishBy ?? DEFAULT_FINISH_BY;
+  const switchAt = new Date(nextTime(finishBy).getTime() - SWITCH_BEFORE_MS);
+  const batch = await (resolved.createBatch as NonNullable<ResolvedModel["createBatch"]>)();
+  job.deadline = new DeadlineClient(batch, () => resolved.create(), switchAt);
+  renderer.info(
+    `Batch API (half price, minutes per step) until ${switchTime(finishBy)}; then the normal API.`,
+  );
+  return job.deadline;
 }

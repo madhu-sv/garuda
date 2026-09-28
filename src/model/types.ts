@@ -110,6 +110,8 @@ export interface ModelResponse {
   content: AssistantBlock[];
   stopReason: StopReason;
   usage: Usage;
+  /** The share of the token price that this response costs (0.7: 0.5 through the Batch API). */
+  priceFactor?: number;
 }
 
 /** Events that a model client streams while it generates one response. */

@@ -1,4 +1,4 @@
-import type { Usage } from "./types.js";
+import type { ModelResponse, Usage } from "./types.js";
 
 /** USD per million tokens. `cacheWrite` is the 5-minute cache write price. */
 export interface Price {
@@ -70,26 +70,25 @@ export function lookupModel(modelId: string): ModelInfo {
 /** Claude's web search (0.6): USD per search ($10 per 1,000), on top of the tokens. */
 export const WEB_SEARCH_USD = 0.01;
 
-/** The Batch API price (0.7): half of every token price, cache reads and writes too. */
-export function batchPrice(price: Price): Price {
-  return {
-    input: price.input / 2,
-    output: price.output / 2,
-    cacheRead: price.cacheRead / 2,
-    cacheWrite: price.cacheWrite / 2,
-  };
-}
-
-/** Cost of one response in USD, server web searches included. */
-export function costOf(usage: Usage, price: Price): number {
+/**
+ * Cost in USD, server web searches included. `factor` scales the token price (0.5 for the Batch
+ * API); searches cost the same either way.
+ */
+export function costOf(usage: Usage, price: Price, factor = 1): number {
   return (
-    (usage.inputTokens * price.input +
+    ((usage.inputTokens * price.input +
       usage.outputTokens * price.output +
       usage.cacheReadTokens * price.cacheRead +
       usage.cacheWriteTokens * price.cacheWrite) /
-      M +
+      M) *
+      factor +
     (usage.webSearches ?? 0) * WEB_SEARCH_USD
   );
+}
+
+/** The cost of one model response: its tokens at its own price factor (0.7). */
+export function responseCost(response: ModelResponse, price: Price): number {
+  return costOf(response.usage, price, response.priceFactor ?? 1);
 }
 
 /** All tokens that one response processed. The token budget (F6) counts these. */

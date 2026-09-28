@@ -35,6 +35,10 @@ const resultSchema = z.object({
   denied: z.array(z.object({ tool: z.string(), target: z.string() })),
   answer: z.string(),
   error: z.string().optional(),
+  /** With the Batch API: requests per API, and when the job switched to the normal API. */
+  modelCalls: z
+    .object({ batch: z.number(), normal: z.number(), switchedAt: z.string().optional() })
+    .optional(),
 });
 
 const jobSchema = z.object({
@@ -62,6 +66,12 @@ const jobSchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .optional(),
   maxSteps: z.number().int().min(1).max(1_000),
+  /** The Batch API (0.7): half price, minutes per step; the normal API from 15 min before finishBy. */
+  batch: z.boolean().optional(),
+  finishBy: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional(),
   /** Ignored folders of the checkout (node_modules, .venv) that the worktree links to. */
   links: z.array(z.string()),
   /** The launchd agent that starts the job (macOS), while it is installed. */

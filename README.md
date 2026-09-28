@@ -608,6 +608,9 @@ A plan can run later, with nobody at the keyboard: for example overnight.
   `caffeinate`, logs to `.garuda/jobs/<id>.log`, and sends a macOS notification at the end. If the Mac
   sleeps at that time, the job starts at the next wake (`sudo pmset schedule wake "<date>"` can wake it).
   `/jobs cancel <id>` removes the agent.
+- With a Claude model, `/schedule` also asks whether the job should use the Batch API: half the token
+  price, but each step waits for its batch (about 3 minutes in our measurement). 15 minutes before the
+  finish-by time (`"finishBy": "07:00"` in the job file) a job that still runs goes on with the normal API.
 
 ## Hooks
 

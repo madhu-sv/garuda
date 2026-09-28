@@ -115,6 +115,15 @@ offers it (`createJob` needs the `launchd` option), so no other caller and no te
 - `/jobs cancel <id>`: removes the agent and sets `stopped`; `garuda run <id>` can still run it.
 - Waking the Mac at a set time needs `sudo pmset schedule wake "<date>"`; Garuda never runs sudo.
 
+## The Batch API (0.7)
+
+For a Claude model, `/schedule` asks "Use the Batch API for this job?" (preview: half price, about 3
+minutes per step, the switch time). Yes sets `batch: true` and `finishBy: "07:00"` in the job file (the user
+may change `finishBy`). At run time the CLI builds a `DeadlineClient`: the Batch API until 15 minutes before
+the next `finishBy`, then the normal API for the rest of the job (a waiting batch is cancelled). The result
+keeps `modelCalls: { batch, normal, switchedAt? }`, and the report shows them. Costs are exact per
+response: batch responses at half the token price.
+
 ## Safety
 
 - The user approves the list once, with the rules in view; nothing else can be approved later.
@@ -125,8 +134,8 @@ offers it (`createJob` needs the `launchd` option), so no other caller and no te
 
 ## Later (0.7 plan)
 
-The Batch API as the model backend with a finish-by time (default 07:00), after the measurement with
-`garuda eval --batch on` (see [evals.md](evals.md)).
+Measure the Batch API on longer jobs (the hard suite with `--batch on`), and a per-step timeout if batch
+waits vary a lot.
 
 ## Tests
 

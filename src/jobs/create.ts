@@ -22,6 +22,18 @@ import {
 import { jobPrompt } from "./text.js";
 import { jobBase, linkCandidates, worktreeDir } from "./worktree.js";
 
+/** A job on the Batch API must end by this local time; 15 minutes before, it uses the normal API. */
+export const DEFAULT_FINISH_BY = "07:00";
+/** How long before the finish-by time a batch job switches to the normal API. */
+export const SWITCH_BEFORE_MS = 15 * 60_000;
+
+/** "06:45" for "07:00". */
+export function switchTime(finishBy: string): string {
+  const [h, m] = finishBy.split(":").map(Number) as [number, number];
+  const minutes = (h * 60 + m - SWITCH_BEFORE_MS / 60_000 + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
 export interface PlanForJob {
   /** The user's request that led to the plan. */
   request: string;
@@ -36,6 +48,8 @@ export interface CreateJobOptions {
   approver: Approver;
   plan: PlanForJob;
   modelId: string;
+  /** The model can use the Batch API (an Anthropic model): ask whether the job should (0.7). */
+  batchCapable?: boolean;
   maxSteps?: number;
   /** "01:00" for `garuda run --at`. */
   at?: string;
@@ -127,6 +141,28 @@ export async function createJob(
     options.signal,
   );
   if (choice === "deny") return { ok: false, text: "No job was created." };
+  if (options.batchCapable === true) {
+    const batch = await options.approver.ask(
+      {
+        tool: "schedule",
+        target: { kind: "input", json: "{}" },
+        preview: [
+          "Half the token price. Each step waits for its batch: about 3 minutes in Garuda's measurement, so a 40-step job takes about 2 hours.",
+          `At ${switchTime(DEFAULT_FINISH_BY)} (15 minutes before the finish-by time ${DEFAULT_FINISH_BY}), a job that still runs goes on with the normal API. You can change "finishBy" in the job file.`,
+        ].join("\n"),
+        isolation: options.executor.isolation,
+        title: "Use the Batch API for this job?",
+        question: "Use the Batch API?",
+        choices: ["once", "deny"],
+        labels: { once: "Yes, half price, slower", deny: "No, the normal API" },
+      },
+      options.signal,
+    );
+    if (batch !== "deny") {
+      job.batch = true;
+      job.finishBy = DEFAULT_FINISH_BY;
+    }
+  }
   await saveJob(job);
   const lines = [
     `Created job ${id}: ${jobPath(options.root, id)}`,

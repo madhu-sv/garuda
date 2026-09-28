@@ -30,12 +30,19 @@ export function jobReport(job: Job): string {
     `- Base: ${job.base.slice(0, 12)}`,
     `- Approved: ${job.allow.length === 0 ? "nothing beyond the sandbox" : job.allow.join(", ")}`,
   );
+  if (job.batch === true) lines.push(`- Batch API: yes, finish by ${job.finishBy ?? "07:00"}`);
   if (job.startedAt !== undefined) lines.push(`- Started: ${job.startedAt}`);
   if (r === undefined) return lines.join("\n");
   lines.push(
     `- Steps: ${r.steps} · tokens: ${Math.round(r.tokens / 100) / 10}k · cost: ${cost(r.costUsd)} · time: ${Math.round(r.durationMs / 1000)} s`,
   );
   if (r.sessionId !== undefined) lines.push(`- Session: ${r.sessionId}`);
+  if (r.modelCalls !== undefined) {
+    const m = r.modelCalls;
+    lines.push(
+      `- Model calls: ${m.batch} through the Batch API, ${m.normal} normal${m.switchedAt === undefined ? "" : ` (switched at ${m.switchedAt})`}`,
+    );
+  }
   if (r.error !== undefined) lines.push(`- Error: ${r.error}`);
   lines.push("", "## Files");
   if (r.files.length === 0) lines.push("", "No file changed.");

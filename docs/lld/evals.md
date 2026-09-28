@@ -92,7 +92,8 @@ time, stop reason), totals, a mean per task for `--repeat`, and `report.json`. E
 
 `--parallel n` (0.7) runs n tasks at the same time (a small pool; the results keep the task order).
 `--batch on` (0.7, Anthropic models only) makes each task's model client the `AnthropicBatchClient`: every
-model call is a batch of one at half price (`batchPrice`), and the step waits until the batch ends. It
+model call is a batch of one at half price (each response carries `priceFactor: 0.5`), and the step waits
+until the batch ends. It
 sets `--parallel` to all tasks (up to 20) and the task time limit to 12 hours. The totals line adds the
 share of tokens read from the prompt cache (batch caching is best effort), and the report the wall time;
 `report.json` records `batch`, `parallel` and `wallMs`, and each result its `cacheReadTokens`.

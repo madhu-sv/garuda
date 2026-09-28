@@ -6,6 +6,7 @@ import { JOBS_DIR, type Job, type JobResult, loadJob, saveJob } from "../jobs/jo
 import { type AgentEnv, defaultAgentEnv, removeAgent } from "../jobs/launchd.js";
 import { jobReport } from "../jobs/text.js";
 import { commitJob, jobChanges, prepareWorktree } from "../jobs/worktree.js";
+import type { DeadlineClient } from "../model/deadline.js";
 import { totalTokens } from "../model/pricing.js";
 import { parseRule } from "../permissions/rules.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -28,6 +29,8 @@ export interface PreparedJob {
   settings: Settings;
   denied: { tool: string; target: string }[];
   startedAt: number;
+  /** With the Batch API: the client that counts batch and normal requests (0.7). */
+  deadline?: DeadlineClient;
 }
 
 /** Load the job, wait for --at, make its worktree, and build its settings. A number = exit code. */
@@ -171,6 +174,17 @@ export async function finishJob(
     files: [],
     denied: prepared.denied,
     answer: lastAnswer(runtime),
+    ...(prepared.deadline === undefined
+      ? {}
+      : {
+          modelCalls: {
+            batch: prepared.deadline.calls.primary,
+            normal: prepared.deadline.calls.fallback,
+            ...(prepared.deadline.calls.switchedAt === undefined
+              ? {}
+              : { switchedAt: prepared.deadline.calls.switchedAt.toISOString() }),
+          },
+        }),
     ...(outcome.kind === "error" ? { error: outcome.message } : {}),
   };
   try {

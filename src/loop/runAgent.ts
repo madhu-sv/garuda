@@ -1,7 +1,7 @@
 import { type CompactionResult, compactIfNeeded } from "../context/compact.js";
 import type { KnowledgeIndex } from "../knowledge/index.js";
 import { errorReason, isTransientModelError } from "../model/errors.js";
-import { costOf, type Price, totalTokens } from "../model/pricing.js";
+import { type Price, responseCost, totalTokens } from "../model/pricing.js";
 import {
   addUsage,
   type ModelClient,
@@ -133,7 +133,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   const signal = deps.signal ?? new AbortController().signal;
   const emit = deps.onEvent ?? (() => {});
   const price = deps.price;
-  const cost = (r: ModelResponse) => (price === undefined ? undefined : costOf(r.usage, price));
+  const cost = (r: ModelResponse) => (price === undefined ? undefined : responseCost(r, price));
   // Compute the tool list once, so every request in the run sends the same bytes (N2).
   const serverTools = usableServerTools(deps.model, deps.serverTools);
   // A server tool replaces a client tool of the same name (0.6: Claude's web_search over Tavily's).

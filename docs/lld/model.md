@@ -60,8 +60,15 @@ and reads the result when the batch has ended. It yields the whole text as one `
 response. A `succeeded` result maps like a normal message. An `errored` result throws an error that
 carries the API error, so an overload or API error is transient and the loop sends the request again;
 `canceled` and `expired` are not transient. An abort cancels the batch. `ResolvedModel.createBatch()` exists
-only for the Anthropic provider; `batchPrice(price)` halves every token price. Used by `garuda eval --batch
-on` (0.7); scheduled jobs come after the measurement.
+only for the Anthropic provider. Each batch response carries `priceFactor: 0.5`; `responseCost` (the loop,
+compaction, child runs) prices tokens at that factor and web searches at full price.
+
+Measured (basic suite, claude-sonnet-5, 10 tasks at a time, one run each): normal API $0.217, 78% of tokens
+from the cache, 23 s; Batch API $0.100, 81%, 33 min (about 3 minutes per step).
+
+`DeadlineClient` (`deadline.ts`) wraps a slow, cheap client and a fast one: requests go to the first until a
+switch time; a request still waiting then is cancelled and sent to the second, and so are all later ones.
+The user's abort is never a switch. Scheduled jobs on the Batch API use it (see [jobs.md](jobs.md)).
 
 ### Prompt caching (N2)
 

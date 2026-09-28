@@ -5,7 +5,7 @@ import {
   runAgent,
   usableServerTools,
 } from "../loop/runAgent.js";
-import { costOf, type Price } from "../model/pricing.js";
+import { type Price, responseCost } from "../model/pricing.js";
 import { serverCallText } from "../model/serverTools.js";
 import {
   addUsage,
@@ -136,13 +136,14 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
       session,
       response,
       steps,
-      price === undefined ? undefined : costOf(response.usage, price),
+      price === undefined ? undefined : responseCost(response, price),
     );
     answer = textOf(response.content) || answer;
     journal?.write({ type: "end", stopReason: "wrap_up", steps });
   }
 
-  const costUsd = run.model.price === undefined ? undefined : costOf(usage, run.model.price);
+  // The session adds each response at its own price (the Batch API costs half).
+  const costUsd = run.model.price === undefined ? undefined : session.costUsd;
   return {
     answer: answer.trim(),
     calls,
