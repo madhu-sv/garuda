@@ -168,8 +168,9 @@ const MAX_FUZZY = 10;
 
 /**
  * Fuzzy file search (0.8): the files whose path holds the query's characters in order (case does not
- * matter), best first. Matches in the file name, runs of characters and starts of words (after /, -,
- * _, .) score higher; shorter paths win a tie.
+ * matter), best first. Per character: 1, plus 5 in a run and 3 at a word start (after /, -, _, .),
+ * minus the gap since the last character (at most 10). A query that fits in the file name gets 20,
+ * and 8 more when it starts the name; longer names lose a little. Shorter paths win a tie.
  */
 export function fuzzyFiles(query: string, files: readonly string[], max: number): string[] {
   const q = query.toLowerCase();
@@ -191,25 +192,28 @@ function fuzzyScore(query: string, file: string): number | undefined {
   const nameStart = path.lastIndexOf("/") + 1;
   // Try the file name first: a query that fits in it is the best kind of match.
   const inName = match(query, path, nameStart);
-  if (inName !== undefined) return inName + 20;
-  return match(query, path, 0);
+  if (inName !== undefined) {
+    const startsName = path[nameStart] === query[0] ? 8 : 0;
+    return inName.score + 20 + startsName - (path.length - nameStart) / 10;
+  }
+  return match(query, path, 0)?.score;
 }
 
-function match(query: string, path: string, from: number): number | undefined {
+function match(query: string, path: string, from: number): { score: number } | undefined {
   let score = 0;
   let at = from;
-  let last = -2;
+  let last = -1;
   for (const ch of query) {
     const i = path.indexOf(ch, at);
     if (i === -1) return undefined;
     score += 1;
-    if (i === last + 1) score += 5;
+    if (last >= 0) score += i === last + 1 ? 5 : -Math.min(i - last - 1, 10);
     const prev = path[i - 1];
     if (i === 0 || prev === "/" || prev === "-" || prev === "_" || prev === ".") score += 3;
     last = i;
     at = i + 1;
   }
-  return score;
+  return { score };
 }
 
 /** Folders the file walk skips (0.8): tools' output and caches, not the user's code. */

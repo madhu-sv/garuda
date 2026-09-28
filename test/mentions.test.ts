@@ -348,6 +348,17 @@ describe("fuzzy @ search (0.8)", () => {
     expect(fuzzyFiles("t", files, 2)).toHaveLength(2);
   });
 
+  it("a short file name that the query starts beats a long name with the letters spread (live test)", () => {
+    const live = [
+      "patches/0045-mcp-keep-the-OAuth-discovery-state-SEP-2352.patch",
+      "patches/0058-fix-chat-start-tips-name-the-new-keys-Enter-typed-fa.patch",
+      "patches/0037-0.4-plan-mode.patch",
+      "test/math.test.js",
+      "src/math.js",
+    ];
+    expect(fuzzyFiles("mth", live, 2)).toEqual(["src/math.js", "test/math.test.js"]);
+  });
+
   it("only when the prefix finds nothing: one match completes, several are listed", () => {
     const s = {
       commands: [],
