@@ -28,7 +28,7 @@ flowchart LR
 | N1 | Provider-neutral model access | The loop sees only the `ModelClient` interface. `anthropic.ts` (the only module with the Anthropic SDK) and `openaiCompatible.ts` (plain fetch) are the adapters. |
 | N2 | Prompt caching | The system prompt and the tool list stay the same bytes for a whole session. Cache breakpoints on the system prompt, the last tool and the last message. |
 | N3 | Start in less than 1 s | Heavy modules load with `import()` on first use: the SDK, inquirer, Ink and React, TypeScript 6, the MCP SDK, the HTML converter. `--version` takes about 240 ms. |
-| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0). |
+| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0). |
 | N5 | Measured quality | `garuda eval` runs fixed tasks in scratch folders and reports pass rate, steps, tokens and cost. |
 | N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). |
 | N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. The user's own editor (Ctrl-G, 0.6) runs on the real terminal through `src/sandbox/terminal.ts`, never through a tool. |
@@ -102,7 +102,7 @@ flowchart TB
 | CLI | `src/cli/` | Parse the command line; run one task (`-p`), a chat (plain or Ink), `--resume`, `--replay` or `eval`. Ask the user for approvals. Show events. Chat input (0.6): Esc, multi-line, `$EDITOR`, `@path`, `!command`, Tab completion; `/sessions`, `/models`, `/export`, `/diff`; notifications that respect the window focus. |
 | Runtime | `src/app/` | Build everything one Garuda process needs from settings: executor, permission engine, tools, system prompt, session, MCP servers, hooks. Run one turn; attach `@path` files to the prompt (0.6); run the user's `!command`; switch the session or the model from the chat (0.6). |
 | Agent loop | `src/loop/` | Call the model, run the tool calls, repeat until the model stops or a limit hits. Replay a recorded session. |
-| Model | `src/model/` | The `ModelClient` interface, providers and model specs, the Anthropic and OpenAI-compatible adapters, the fake model, prices and context windows. Server tools (0.6): Claude's web search runs inside the reply; its blocks go back unchanged. |
+| Model | `src/model/` | The `ModelClient` interface, providers and model specs, the Anthropic and OpenAI-compatible adapters, the fake model, prices and context windows. Server tools (0.6): Claude's web search runs inside the reply; its blocks go back unchanged. The Batch API (0.7): a batch-of-one client at half the token price, and the `DeadlineClient` that moves a job to the normal API at its switch time or after a slow step. |
 | Tools | `src/tools/` | The tool interface, the registry (validation, hooks, permission check, run), and the built-in tools. |
 | Permissions | `src/permissions/` | Decide per call: allow, deny or ask. Rules, settings, path guard, sensitive files, sandbox paths. |
 | Sandbox | `src/sandbox/` | The `Executor`: run a command or start a long-running process, on the host or in an OS sandbox. |
@@ -121,7 +121,7 @@ flowchart TB
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
 | Subagents | `src/agents/` | The explore tool: a child agent loop with read-only tools, its own session and limits, that answers one question. |
 | Language profiles | `src/lang/` | Find the build tool from marker files (Maven, Gradle, Python): test commands, prompt notes, package caches for the sandbox. |
-| Jobs | `src/jobs/` | Scheduled jobs (0.7): the job file, the base commit and worktree on a job branch, the commit and the report. `garuda run` in the CLI runs a job with its approval list and an engine that denies instead of asking. |
+| Jobs | `src/jobs/` | Scheduled jobs (0.7): the job file, the base commit and worktree on a job branch, the commit and the report. `garuda run` in the CLI runs a job with its approval list and an engine that denies instead of asking. The launchd agent (macOS) starts a job with nobody at the terminal; a job may use the Batch API until its finish-by time. |
 | Evals | `src/evals/` | Eval tasks (Node, Java, Python), the generated "shopkit" repository, toolchain checks, the runner and the report. |
 
 ## 4. Dependency rules
@@ -257,3 +257,4 @@ All state is in files. There is no server and no database.
 | Model switch (0.6) | `/models` changes the main model for this chat only, with a `model` record | A new chat starts from `-m` or `GARUDA_MODEL`, so a switch never changes later runs by surprise. |
 | Notifications (0.6) | On by default (OSC 9 or the bell); quiet while the window has focus | The user can work elsewhere during long tasks; focus reporting keeps them quiet when the user is watching. |
 | Scheduled jobs (0.7) | One approval list per job, deny-and-continue, a worktree on a job branch, `garuda run --at` first | Nobody can answer at night: the user decides once with the list in view; a denied call does not waste the night; the checkout stays free for the user; launchd and the Batch API come as separate steps. |
+| Batch API for jobs (0.7) | Offered for Claude models (default yes), a 20-minute limit per step, the normal API from 15 minutes before the finish-by time (07:00) | Measured on the basic suite: half the cost, but the wait per step varied from about 3 minutes to hours. The step limit and the switch time bound the wait; only slow steps pay full price. |

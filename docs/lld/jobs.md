@@ -138,10 +138,10 @@ response: batch responses at half the token price.
   repo's hook would run outside the sandbox).
 - Commands run only in the OS sandbox; there is no host fallback for jobs.
 
-## Later (0.7 plan)
+## Later
 
-Measure the Batch API on longer jobs (the hard suite with `--batch on`), and a per-step timeout if batch
-waits vary a lot.
+Measure the Batch API on longer jobs (the hard suite with `--batch on`). Measure how often a step hits the
+step limit (`modelCalls.slow` in the job results) before a change of the default.
 
 ## Tests
 
@@ -150,3 +150,7 @@ question, No, a dirty checkout's base, no git, no sandbox); a whole run in the w
 (an approved edit on the branch, a denied write in the report, links and sessions not committed, the
 checkout unchanged, a done job not run again); `/schedule` and `/jobs` in the chat; the launchd plist, the
 second question, install and `/jobs cancel` (launchctl recorded, not run).
+
+`test/batch.test.ts`: the batch client (a batch of one, overloaded and expired results, an abort cancels the
+batch, half prices); eval tasks at the same time; the `DeadlineClient` (the switch time, an abort is not a
+switch, a slow step and the retry at the next step); the batch id, the wait lines and a failed status check.

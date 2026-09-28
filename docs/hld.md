@@ -12,8 +12,8 @@ Version 0.7.0-dev. This document shows how the parts work together. The componen
 | `garuda -p "task"`, `echo task \| garuda` | One task, then exit. | Model text on stdout, activity on stderr. Exit code 0 (done), 1 (error), 2 (a limit stopped the run) or 130 (Ctrl-C). |
 | `garuda --resume [id]` | Continue the latest or a given session. | Chat or one task. |
 | `garuda --replay <id\|file>` | Play a session back with recorded results. No API calls. | "matches" or a list of differences. |
-| `garuda eval` | Run eval tasks in scratch folders. | A table and `report.json`. |
-| `garuda run <job> [--at HH:MM]` | Run a scheduled job (0.7): its plan, unattended, in its own worktree and branch. | The run's lines, then the job report (also in `.garuda/jobs/<id>.md`). |
+| `garuda eval` | Run eval tasks in scratch folders; `--parallel n`, `--batch on` (0.7) for the Batch API. | A table and `report.json`. |
+| `garuda run <job> [--at HH:MM] [-m model]` | Run a scheduled job (0.7): its plan, unattended, in its own worktree and branch. | The run's lines, then the job report (also in `.garuda/jobs/<id>.md`). |
 | `garuda eval -s java` / `--prepare java` | Check the toolchain, then run the Java (or Python) suite; `--prepare` fills `~/.m2` once. | A hint when a toolchain is missing; otherwise the same report. |
 
 ## 2. Start of a process
@@ -230,7 +230,11 @@ the next turns (`modelId`, window, price and client change together; a `model` r
 `/schedule` turns the last finished plan into a job file with its own approval list (from the plan's
 `permissions` block), after one question. `garuda run <id>` builds it later in a git worktree on the
 branch `garuda/job-<id>`: the permission engine allows the list and denies (never asks) everything else,
-then Garuda commits the changes on the branch and writes a report. Details: [lld/jobs.md](lld/jobs.md).
+then Garuda commits the changes on the branch and writes a report. On macOS, `/schedule HH:MM` can add a
+launchd agent that starts the run with nobody at the terminal and removes itself after it. With a Claude
+model, a job can use the Batch API at half price: a step that waits more than its limit (20 minutes) runs on
+the normal API, and from 15 minutes before the finish-by time (07:00) the whole job does. Details:
+[lld/jobs.md](lld/jobs.md).
 
 ### Custom agents (0.5)
 
@@ -311,7 +315,7 @@ command shows its text and asks the first time, like project hooks. See [command
 
 ## 11. Quality
 
-- About 520 unit and acceptance tests, all with the fake model.
+- About 540 unit and acceptance tests, all with the fake model.
 - Contract tests run every executor (host, Seatbelt, bubblewrap) through the same suite.
 - Architecture tests enforce the dependency rules.
 - Evals: a basic suite (10 tasks), a hard suite (6 tasks on a generated repo of about 107 files), and
