@@ -1,9 +1,11 @@
 import type { Runtime } from "../../app/runtime.js";
 import { BUILTIN_COMMANDS } from "../../commands/builtins.js";
+import { listJobs } from "../../jobs/job.js";
+import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import type { Notifier } from "../notify.js";
 import { runTurnInTerminal } from "../turn.js";
 import { runCommand } from "./commands.js";
-import { complete, rootLister } from "./complete.js";
+import { type ArgChoice, complete, rootLister } from "./complete.js";
 import { BUILD_PROMPT, planHandoff } from "./plan.js";
 import type { ChatStore, Status } from "./store.js";
 
@@ -24,9 +26,15 @@ export async function runChat(
     return statusOf(runtime);
   };
   const list = rootLister(runtime.root);
+  const args = new CommandArgs(runtime);
   store.completer = (text, cursor) =>
-    complete(text, cursor, { commands: commandNames(runtime), list });
+    complete(text, cursor, {
+      commands: commandNames(runtime),
+      list,
+      args: (command, before) => args.choices(command, before),
+    });
   for (;;) {
+    void args.refresh();
     const input = await store.nextInput();
     if (input === undefined) return;
     const text = input.trim();
@@ -135,4 +143,59 @@ export function statusOf(runtime: Runtime): Status {
     if (session.costUsd !== undefined) status.costUsd = session.costUsd;
   }
   return status;
+}
+
+/**
+ * The choices for command arguments (0.8, Tab). Sessions and jobs come from files, so they are read
+ * before each input line (`refresh`) and kept; completion itself stays synchronous.
+ */
+export class CommandArgs {
+  private sessions: ArgChoice[] = [];
+  private jobs: ArgChoice[] = [];
+
+  constructor(private readonly runtime: Runtime) {}
+
+  async refresh(): Promise<void> {
+    try {
+      const { sessions } = await this.runtime.listSessions();
+      this.sessions = sessions.map((s) => ({ value: s.id, hint: s.title }));
+      const jobs = await listJobs(this.runtime.root);
+      this.jobs = jobs.map((j) => ({ value: j.id, hint: `${j.status} · ${j.title}` }));
+    } catch {
+      // Completion is a help: a folder that cannot be read gives no choices.
+    }
+  }
+
+  choices(command: string, before: readonly string[]): ArgChoice[] {
+    const words = (...w: string[]) => w.map((value) => ({ value }));
+    const [first, second] = before;
+    switch (command) {
+      case "models":
+        if (first !== undefined) return [];
+        return [
+          ...words("opus", "sonnet", "haiku", "fable"),
+          ...this.runtime.modelList().map((m) => ({ value: m.spec })),
+        ];
+      case "sessions":
+        if (first === undefined) return [...words("rename", "delete"), ...this.sessions];
+        return (first === "rename" || first === "delete") && second === undefined
+          ? this.sessions
+          : [];
+      case "jobs":
+        if (first === undefined) return [...words("cancel"), ...this.jobs];
+        return first === "cancel" && second === undefined ? this.jobs : [];
+      case "diff":
+        return first === undefined ? words("last") : [];
+      case "mcp":
+        if (first === undefined) return words("logout");
+        return first === "logout" && second === undefined
+          ? this.runtime.mcpStatus().map((s) => ({ value: s.name }))
+          : [];
+      case "lsp":
+        if (first === undefined) return words("install");
+        return first === "install" && second === undefined ? words(...LSP_LANGUAGES) : [];
+      default:
+        return [];
+    }
+  }
 }

@@ -94,7 +94,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     | ((
         text: string,
         cursor: number,
-      ) => { text: string; cursor: number; candidates: string[] } | undefined)
+      ) => { text: string; cursor: number; candidates: string[]; lines?: boolean } | undefined)
     | undefined;
   /** Ctrl-G and /editor (0.6): the chat sets it; it edits the text in the user's editor. */
   externalEdit: ((text: string) => { text?: string; problem?: string }) | undefined;
@@ -197,7 +197,9 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     const result = this.completer?.(text, cursor);
     if (result === undefined) return;
     this.editLine({ type: "set", text: result.text, cursor: result.cursor });
-    if (result.candidates.length > 0) this.info(result.candidates.join("  "));
+    if (result.candidates.length > 0) {
+      this.info(result.candidates.join(result.lines === true ? "\n" : "  "));
+    }
   }
 
   /** Ctrl-G or /editor (0.6): edit the input line in $VISUAL or $EDITOR. The text is not sent. */

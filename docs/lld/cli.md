@@ -217,6 +217,13 @@ interface ChatState {
   only after a `.`). One match completes (a command gets a space, a folder keeps its `/`); several complete
   their common start and are listed (at most 30). Ink: `store.completeLine()` (Shift+Tab stays plan mode);
   the REPL: readline's `completer`.
+- **Arguments (0.8):** after `/command ` the word at the cursor completes from `sources.args(command,
+  before)`. `CommandArgs` (controller.ts, both chats) gives: `/models` aliases and model specs; `/sessions`
+  `rename`, `delete` and session ids (then ids after rename or delete); `/jobs` `cancel` and job ids; `/diff
+  last`; `/mcp logout` and server names; `/lsp install` and the languages. Choices with a hint (a session's
+  title, a job's status and title) are listed one per line. Sessions and jobs come from files, so
+  `refresh()` reads them before each input line (not awaited) and completion stays synchronous; readline
+  gets the words without hints.
 - **External editor (0.6, `externalEditor.ts`):** Ctrl-G or `/editor` (the controller handles it before
   `runCommand`) calls `store.openEditor()`. `inkChat` sets `store.externalEdit`: raw mode off, stdin paused,
   `editInEditor(text)` (a 0600 temp file, `$VISUAL`/`$EDITOR`/`vi` as argv with quotes, `runInTerminal` from

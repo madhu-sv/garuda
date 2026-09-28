@@ -3,7 +3,7 @@ import type { Runtime } from "../app/runtime.js";
 import type { Approver } from "../permissions/types.js";
 import { runCommand } from "./chat/commands.js";
 import { complete, rootLister } from "./chat/complete.js";
-import { commandNames } from "./chat/controller.js";
+import { CommandArgs, commandNames } from "./chat/controller.js";
 import { BUILD_PROMPT, planHandoff } from "./chat/plan.js";
 import type { Notifier } from "./notify.js";
 import type { Renderer } from "./renderer.js";
@@ -39,18 +39,28 @@ export async function runRepl(
   const history: string[] = [];
   // Tab completion (0.6): the same /commands and @paths as the Ink chat.
   const list = rootLister(runtime.root);
+  const args = new CommandArgs(runtime);
   const completer = (line: string): [string[], string] => {
-    const result = complete(line, line.length, { commands: commandNames(runtime), list });
+    const result = complete(line, line.length, {
+      commands: commandNames(runtime),
+      list,
+      args: (command, before) => args.choices(command, before),
+    });
     if (result === undefined) return [[], line];
     const word = line.slice(line.search(/\S*$/));
     const done = result.text.slice(line.search(/\S*$/));
-    return [result.candidates.length > 0 ? result.candidates : [done], word];
+    // Readline lists the words itself: no hints (0.8) in them.
+    const words = result.candidates.map((c) =>
+      result.lines === true ? (c.split("  ")[0] ?? c) : c,
+    );
+    return [words.length > 0 ? words : [done], word];
   };
   const ask = lineSource(io, completer);
   let lastInterrupt = 0;
   let first = firstInput;
 
   for (;;) {
+    void args.refresh();
     const input: Input =
       first !== undefined
         ? { kind: "line", text: first }

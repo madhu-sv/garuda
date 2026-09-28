@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { attachMentions, mentionTokens } from "../src/app/mentions.js";
 import { Runtime } from "../src/app/runtime.js";
 import { complete, rootLister } from "../src/cli/chat/complete.js";
+import { CommandArgs } from "../src/cli/chat/controller.js";
 import { ChatStore } from "../src/cli/chat/store.js";
 import type { AgentEvent } from "../src/loop/runAgent.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
@@ -225,5 +226,94 @@ describe("Tab completion (0.6)", () => {
     store.editLine({ type: "insert", text: "o" });
     store.completeLine();
     expect(store.getState().editor.text).toBe("/hooks ");
+  });
+});
+
+describe("Tab completion of command arguments (0.8)", () => {
+  const base = { commands: ["sessions", "models"], list: () => [] };
+
+  it("completes the next argument from the command's choices; hints go one per line", () => {
+    const args = (command: string, before: readonly string[]) =>
+      command === "sessions" && before.length === 0
+        ? [
+            { value: "rename" },
+            { value: "20260928-1000-aaaa", hint: "API work" },
+            { value: "20260928-1100-bbbb", hint: "first task" },
+          ]
+        : [];
+    const s = { ...base, args };
+    expect(complete("/sessions ren", 13, s)).toEqual({
+      text: "/sessions rename ",
+      cursor: 17,
+      candidates: [],
+    });
+    expect(complete("/sessions 2026", 14, s)).toEqual({
+      text: "/sessions 20260928-1",
+      cursor: 20,
+      lines: true,
+      candidates: ["20260928-1000-aaaa  API work", "20260928-1100-bbbb  first task"],
+    });
+    // A later argument, another command, or no match: nothing.
+    expect(complete("/sessions rename x", 18, s)).toBeUndefined();
+    expect(complete("/models x", 9, s)).toBeUndefined();
+    expect(complete("/sessions zz", 12, s)).toBeUndefined();
+    // @paths still win inside a command line.
+    expect(complete("/sessions @", 11, { ...s, list: () => ["a.md"] })?.text).toBe(
+      "/sessions @a.md",
+    );
+  });
+
+  it("CommandArgs gives sessions with titles, models, jobs and fixed words", async () => {
+    const root = project();
+    const model = new FakeModelClient([reply([text("One.")])]);
+    const runtime = await Runtime.create({
+      root,
+      modelId: "claude-opus-5-5",
+      model: async () => model,
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host" }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    await runtime.runTurn("fix the parser", new AbortController().signal);
+    const id = runtime.session?.id as string;
+    const args = new CommandArgs(runtime);
+    await args.refresh();
+    const s = {
+      commands: ["sessions"],
+      list: () => [],
+      args: (c: string, b: readonly string[]) => args.choices(c, b),
+    };
+    expect(complete("/sessions delete ", 17, s)?.text).toBe(`/sessions delete ${id} `);
+    expect(complete("/sessions ", 10, s)?.candidates).toEqual([
+      `${id}  fix the parser`,
+      "delete",
+      "rename",
+    ]);
+    expect(complete("/models son", 11, s)?.text).toBe("/models sonnet ");
+    expect(complete("/models claude-opus", 19, s)?.candidates.length).toBeGreaterThan(0);
+    expect(complete("/models opus x", 14, s)).toBeUndefined();
+    expect(complete("/jobs ", 6, s)?.text).toBe("/jobs cancel ");
+    expect(complete("/diff l", 7, s)?.text).toBe("/diff last ");
+    expect(complete("/lsp install p", 14, s)?.text).toBe("/lsp install python ");
+    expect(complete("/mcp lo", 7, s)?.text).toBe("/mcp logout ");
+    expect(complete("/help x", 7, s)).toBeUndefined();
+  });
+
+  it("Tab in the chat store lists hinted choices one per line", () => {
+    const store = new ChatStore({ model: "m", sandbox: "s" }, { paint: (_s, t) => t });
+    store.completer = (t, c) =>
+      complete(t, c, {
+        ...base,
+        args: () => [
+          { value: "a1", hint: "one" },
+          { value: "a2", hint: "two" },
+        ],
+      });
+    store.editLine({ type: "insert", text: "/sessions a" });
+    store.completeLine();
+    expect(store.getState().items.at(-1)?.text).toBe("a1  one\na2  two");
   });
 });

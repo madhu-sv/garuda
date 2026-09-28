@@ -130,6 +130,8 @@ Set the context window, price and output limit per model, and add providers, in 
 - `!command` runs a command yourself, like the bash tool: in the sandbox with no question, deny rules and
   hooks apply. You see the output, and it goes to the model with your next message. Esc stops it.
 - Tab completes `/commands` (built-in, your own, skills) and `@paths`; with several matches it lists them.
+  It also completes arguments: `/models <model>`, `/sessions <id|rename|delete>` (with each session's
+  title), `/jobs <id|cancel>`, `/diff last`, `/mcp logout <server>` and `/lsp install <language>`.
 - Ctrl-G (or `/editor`) opens the prompt in `$VISUAL` or `$EDITOR` (default `vi`). The saved text comes
   back into the input line; press Enter to send it. The plain chat also joins lines that end with `\`.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.

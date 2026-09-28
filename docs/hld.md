@@ -308,7 +308,7 @@ choice, the queue, the input line and a footer. See [cli.md](lld/cli.md).
 
 Input (0.6): Esc stops a task; `\` + Enter or Alt+Enter make a new line; Ctrl-G or `/editor` opens
 `$EDITOR`; `@path` attaches a file; `!command` runs a command as the bash tool would; Tab completes commands
-and paths. A `Notifier` sends a desktop notification (OSC 9) or the bell when an approval waits or a long
+and paths, and since 0.8 command arguments (models, sessions, jobs, fixed words). A `Notifier` sends a desktop notification (OSC 9) or the bell when an approval waits or a long
 task ends, and stays quiet while the window has focus (terminal focus reporting).
 
 Custom slash commands (0.4) are Markdown prompts in `~/.garuda/commands` and `.garuda/commands`. A project

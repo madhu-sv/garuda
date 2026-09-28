@@ -3,8 +3,9 @@ import { join, resolve, sep } from "node:path";
 
 /**
  * Tab completion in the chat (0.6): `/` commands (built-in, custom, skills) at the start of the
- * line, and `@` paths anywhere. One match completes; several complete their common start and list
- * the candidates. Pure except for the folder listing, which stays inside the root.
+ * line, and `@` paths anywhere; since 0.8 also the arguments of a command (`args`). One match
+ * completes; several complete their common start and list the candidates. Pure except for the
+ * folder listing, which stays inside the root.
  */
 
 export interface Completion {
@@ -13,6 +14,14 @@ export interface Completion {
   cursor: number;
   /** Shown to the user when there is more than one match. */
   candidates: string[];
+  /** The candidates have hints (0.8: a session's title): show one per line. */
+  lines?: boolean;
+}
+
+/** One argument choice (0.8): the word to insert, and an optional hint to show with it. */
+export interface ArgChoice {
+  value: string;
+  hint?: string;
 }
 
 export interface CompletionSources {
@@ -20,6 +29,11 @@ export interface CompletionSources {
   commands: readonly string[];
   /** Entries of a folder in the root: names, folders end with "/". Hidden entries only on a "." prefix. */
   list(folder: string, withHidden: boolean): string[];
+  /**
+   * The choices for the next argument of `/command` (0.8). `before` has the arguments already
+   * typed. Absent or empty: no completion.
+   */
+  args?(command: string, before: readonly string[]): readonly ArgChoice[];
 }
 
 const MAX_CANDIDATES = 30;
@@ -42,6 +56,31 @@ export function complete(
     const prefix = path.slice(cut);
     const entries = sources.list(folder, prefix.startsWith("."));
     return apply(text, cursor, start, `@${folder}`, prefix, entries, "");
+  }
+  if (before.startsWith("/") && start > 0 && sources.args !== undefined) {
+    const [head = "", ...rest] = before.slice(0, start).trim().split(/\s+/);
+    const choices = sources.args(head.slice(1), rest);
+    if (choices.length === 0) return undefined;
+    const hints = new Map(choices.map((c) => [c.value, c.hint]));
+    const result = apply(
+      text,
+      cursor,
+      start,
+      "",
+      word,
+      choices.map((c) => c.value),
+      " ",
+    );
+    if (result === undefined || result.candidates.length === 0 || hints.size === 0) return result;
+    if (![...hints.values()].some((h) => h !== undefined && h !== "")) return result;
+    return {
+      ...result,
+      lines: true,
+      candidates: result.candidates.map((c) => {
+        const hint = hints.get(c);
+        return hint === undefined || hint === "" ? c : `${c}  ${hint}`;
+      }),
+    };
   }
   return undefined;
 }
