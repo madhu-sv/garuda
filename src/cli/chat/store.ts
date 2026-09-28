@@ -306,7 +306,11 @@ export class ChatStore implements Renderer, Approver, Interruptible {
 
   event(event: AgentEvent): void {
     switch (event.type) {
+      case "thinking_delta":
+        this.thinking += event.text;
+        return;
       case "text_delta": {
+        this.flushThinking();
         const { blocks, rest } = takeBlocks(this.state.streaming + event.text);
         for (const block of blocks)
           this.add({ kind: "text", text: renderMarkdown(block, this.paint) });
@@ -402,7 +406,20 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     this.add({ kind: "note", level, text: this.paint(style, trimmed) });
   }
 
+  /** Readable thinking of the current block (0.9, /thinking show). */
+  private thinking = "";
+
+  /** Show the thinking so far as a dimmed item: the first lines, Ctrl-O for all (0.9). */
+  private flushThinking(): void {
+    const text = this.thinking.trim();
+    this.thinking = "";
+    if (text === "") return;
+    this.add({ kind: "output", text: thinkingPreview(text, (s) => this.paint("dim", s)) });
+    this.lastOutput = { title: "thinking", text };
+  }
+
   private flushText(): void {
+    this.flushThinking();
     const rest = this.state.streaming;
     if (rest.trim() !== "")
       this.add({ kind: "text", text: renderMarkdown(rest.trim(), this.paint) });
@@ -468,4 +485,20 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     if (choice !== undefined && !approval.choices.some((c) => c.choice === choice)) return;
     this.answer(choice ?? approval.choices[approval.selected]?.choice ?? "deny");
   }
+}
+
+/** Most thinking lines shown in the chat (0.9); Ctrl-O shows all. */
+const THINKING_LINES = 4;
+
+/** "✻ " and the first lines of the thinking, dimmed, with a hint when there is more (0.9). */
+export function thinkingPreview(text: string, dim: (s: string) => string): string {
+  const lines = text.split("\n").filter((l) => l.trim() !== "");
+  const shown = lines
+    .slice(0, THINKING_LINES)
+    .map((l) => (l.length > 160 ? `${l.slice(0, 159)}…` : l));
+  const more =
+    lines.length > THINKING_LINES
+      ? [`… ${lines.length - THINKING_LINES} more line(s): Ctrl-O`]
+      : [];
+  return [...shown, ...more].map((l, i) => dim(`${i === 0 ? "✻" : " "} ${l}`)).join("\n");
 }

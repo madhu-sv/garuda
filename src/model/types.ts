@@ -96,6 +96,21 @@ export interface ServerToolSpec {
   blockedDomains?: readonly string[];
 }
 
+/** Claude's effort levels (0.9): how readily and how deeply the model thinks. */
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+export const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
+
+/**
+ * What the request asks of Claude's thinking (0.9, /thinking). Absent fields: the model's default.
+ * `adaptive` turns on adaptive thinking (models where it is optional); `display` asks for readable
+ * ("summarized") or empty ("omitted") thinking; `effort` goes to `output_config.effort`.
+ */
+export interface ThinkingRequest {
+  adaptive?: boolean;
+  display?: "summarized" | "omitted";
+  effort?: Effort;
+}
+
 export interface ModelRequest {
   system: string;
   messages: readonly Message[];
@@ -103,6 +118,8 @@ export interface ModelRequest {
   /** Tools that the provider runs (0.6). Only for clients that list them in `serverTools`. */
   serverTools?: readonly ServerToolSpec[];
   maxTokens: number;
+  /** Claude's thinking (0.9). Only clients that know thinking use it. */
+  thinking?: ThinkingRequest;
 }
 
 /** "pause_turn" (0.6): a long server tool call paused; send the conversation again to go on. */
@@ -134,6 +151,8 @@ export interface ModelResponse {
 /** Events that a model client streams while it generates one response. */
 export type ModelEvent =
   | { type: "text_delta"; text: string }
+  /** Readable thinking as it streams (0.9, only when the request asks for it). */
+  | { type: "thinking_delta"; text: string }
   | { type: "response"; response: ModelResponse };
 
 export interface StreamOptions {

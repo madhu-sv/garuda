@@ -2,6 +2,7 @@ import type { Runtime } from "../../app/runtime.js";
 import { BUILTIN_COMMANDS } from "../../commands/builtins.js";
 import { listJobs } from "../../jobs/job.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
+import { THINKING_WORDS } from "../../model/thinking.js";
 import type { Notifier } from "../notify.js";
 import { runTurnInTerminal } from "../turn.js";
 import { runCommand } from "./commands.js";
@@ -195,6 +196,8 @@ export class CommandArgs {
           : [];
       case "details":
         return first === undefined ? words("on", "off") : [];
+      case "thinking":
+        return first === undefined ? words(...THINKING_WORDS) : [];
       case "lsp":
         if (first === undefined) return words("install");
         return first === "install" && second === undefined ? words(...LSP_LANGUAGES) : [];

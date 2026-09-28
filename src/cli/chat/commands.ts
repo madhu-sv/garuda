@@ -45,6 +45,7 @@ export const HELP = [
   "  /init      set up this folder: AGENTS.md, and files from other agents (Claude Code, OpenCode …)",
   "  /editor    write the next prompt in $VISUAL or $EDITOR (also Ctrl-G)",
   "  /details   show or hide the result line under each tool call; /details on|off",
+  "  /thinking  Claude's thinking: /thinking low|medium|high|xhigh|max|default, show|hide, on|off",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -81,6 +82,14 @@ export async function runCommand(
     // "/plan <task>" (0.8): switch, then run the task in the new mode.
     const task = text.slice(command.length).trim();
     if (task !== "") return { prompt: task };
+  } else if (command === "/thinking") {
+    const word = text.slice(command.length).trim();
+    if (word === "") renderer.info(runtime.thinkingStatus());
+    else {
+      const result = runtime.setThinking(word);
+      if (result.ok) renderer.info(result.text);
+      else renderer.warn(result.text);
+    }
   } else if (command === "/details") {
     detailsCommand(renderer, text.slice(command.length).trim());
   } else if (command === "/usage") renderer.info(usageSummary(runtime));

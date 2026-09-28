@@ -3,13 +3,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import { afterAll, describe, expect, it } from "vitest";
-import { Runtime } from "../src/app/runtime.js";
+import { Runtime, type RuntimeOptions } from "../src/app/runtime.js";
+import { runCommand } from "../src/cli/chat/commands.js";
+import { noColor } from "../src/cli/chat/markdown.js";
+import { ChatStore } from "../src/cli/chat/store.js";
 import { transcript } from "../src/context/compact.js";
-import { runAgent } from "../src/loop/runAgent.js";
+import { runAgent, thinkingMaxTokens } from "../src/loop/runAgent.js";
 import { fromWireMessage, toWireMessage, toWireParams } from "../src/model/anthropic.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { toWireMessages } from "../src/model/openaiCompatible.js";
-import { withoutThinking } from "../src/model/thinking.js";
+import { lookupModel } from "../src/model/pricing.js";
+import {
+  changeThinking,
+  fitThinking,
+  thinkingRequest,
+  withoutThinking,
+} from "../src/model/thinking.js";
 import type { Message, ThinkingBlock } from "../src/model/types.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { parseSettings } from "../src/permissions/settings.js";
@@ -180,5 +189,126 @@ describe("thinking blocks (0.9)", () => {
       { role: "user", content: [text("go")] },
       { role: "assistant", content: [text("ok")] },
     ]);
+  });
+});
+
+describe("/thinking (0.9)", () => {
+  const ALWAYS = lookupModel("claude-sonnet-5").thinking;
+  const OPTIONAL = lookupModel("claude-sonnet-4-6").thinking;
+
+  it("maps a choice to request fields per model", () => {
+    expect(ALWAYS?.mode).toBe("always");
+    expect(OPTIONAL?.efforts).not.toContain("xhigh");
+    expect(lookupModel("claude-haiku-4-5").thinking).toBeUndefined();
+    expect(thinkingRequest({}, ALWAYS)).toBeUndefined();
+    expect(thinkingRequest({ effort: "low", show: true }, ALWAYS)).toEqual({
+      effort: "low",
+      display: "summarized",
+    });
+    // Optional models: show alone must not turn thinking on.
+    expect(thinkingRequest({ show: true }, OPTIONAL)).toBeUndefined();
+    expect(thinkingRequest({ enabled: true, show: false }, OPTIONAL)).toEqual({
+      adaptive: true,
+      display: "omitted",
+    });
+    expect(thinkingRequest({ effort: "high" }, undefined)).toBeUndefined();
+
+    const params = toWireParams("claude-sonnet-5", {
+      system: "s",
+      messages: [],
+      tools: [],
+      maxTokens: 1,
+      thinking: { effort: "max", display: "summarized" },
+    });
+    expect(params.thinking).toEqual({ type: "adaptive", display: "summarized" });
+    expect(params.output_config).toEqual({ effort: "max" });
+    const plain = toWireParams("m", { system: "s", messages: [], tools: [], maxTokens: 1 });
+    expect(plain.thinking).toBeUndefined();
+    expect(plain.output_config).toBeUndefined();
+    expect(thinkingMaxTokens(8192, undefined)).toBe(8192);
+    expect(thinkingMaxTokens(8192, { effort: "low" })).toBe(16_384);
+    expect(thinkingMaxTokens(8192, { effort: "max" })).toBe(32_000);
+  });
+
+  it("changes the choice with one word, and refuses what the model cannot do", () => {
+    const ok = (c: ReturnType<typeof changeThinking>) => (c.ok ? c.choice : undefined);
+    expect(ok(changeThinking({}, "high", ALWAYS, "claude-sonnet-5"))).toEqual({ effort: "high" });
+    expect(changeThinking({}, "off", ALWAYS, "claude-sonnet-5")).toMatchObject({
+      ok: false,
+      text: expect.stringContaining("always thinks"),
+    });
+    expect(changeThinking({}, "xhigh", OPTIONAL, "claude-sonnet-4-6")).toMatchObject({
+      ok: false,
+      text: expect.stringContaining("low, medium, high, max"),
+    });
+    expect(ok(changeThinking({ effort: "low" }, "default", ALWAYS, "m"))).toEqual({});
+    expect(ok(changeThinking({}, "on", OPTIONAL, "m"))).toEqual({ enabled: true });
+    expect(changeThinking({}, "show", undefined, "ollama/qwen3")).toMatchObject({ ok: false });
+    expect(changeThinking({}, "loud", ALWAYS, "m")).toMatchObject({ ok: false });
+    expect(fitThinking({ effort: "xhigh", show: true }, OPTIONAL)).toEqual({
+      choice: { show: true },
+      dropped: ["effort xhigh"],
+    });
+  });
+
+  it("the chat command sends the choice, records it, and a resume brings it back", async () => {
+    const root = dir();
+    let asked: unknown;
+    const model = new FakeModelClient([
+      (request) => {
+        asked = request.thinking;
+        expect(request.maxTokens).toBeGreaterThanOrEqual(16_384);
+        return reply([
+          { type: "thinking", text: "Look at math.js first.", wire: WIRE_THINKING },
+          text("Done."),
+        ]);
+      },
+    ]);
+    const store = new FileSessionStore(root);
+    const options = {
+      root,
+      modelId: "claude-sonnet-5",
+      model: async () => model,
+      approver: new AutoApprover("once"),
+      store,
+      settings: parseSettings({ executor: "host", thinking: { effort: "low" } }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    } satisfies RuntimeOptions;
+    const runtime = await Runtime.create(options);
+    const chat = new ChatStore({ model: "m", sandbox: "s" }, { paint: noColor });
+    const run = (line: string) =>
+      runCommand(line, { runtime, renderer: chat, sessionPath: (id) => id });
+    await run("/thinking");
+    expect(chat.getState().items.at(-1)?.text).toBe(
+      "Thinking for claude-sonnet-5: always on · effort low · text the model's default.",
+    );
+    await run("/thinking show");
+    expect(chat.getState().items.at(-1)?.text).toMatch(
+      /text shown .* the prompt cache starts again\.$/,
+    );
+    await run("/thinking off");
+    expect(chat.getState().items.at(-1)?.text).toMatch(/always thinks/);
+
+    await runtime.runTurn("go", new AbortController().signal);
+    expect(asked).toEqual({ effort: "low", display: "summarized" });
+
+    const again = await Runtime.create({
+      ...options,
+      settings: parseSettings({ executor: "host" }),
+      resume: true,
+    });
+    expect(again.thinkingStatus()).toContain("effort low · text shown");
+  });
+
+  it("shows readable thinking dimmed, then the answer; Ctrl-O has all of it", () => {
+    const chat = new ChatStore({ model: "m", sandbox: "s" }, { paint: noColor });
+    const long = ["one", "two", "three", "four", "five", "six"].join("\n");
+    chat.event({ type: "thinking_delta", text: long });
+    chat.event({ type: "text_delta", text: "The answer.\n\n" });
+    const texts = chat.getState().items.map((i) => i.text);
+    expect(texts[0]).toBe("✻ one\n  two\n  three\n  four\n  … 2 more line(s): Ctrl-O");
+    expect(texts[1]).toBe("The answer.");
   });
 });

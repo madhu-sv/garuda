@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { CodeIndexMode } from "../knowledge/mode.js";
 import type { Price } from "../model/pricing.js";
+import { EFFORTS, type Effort } from "../model/types.js";
 import { EXECUTOR_NAMES } from "../sandbox/index.js";
 import { parseRule, type Rule } from "./rules.js";
 import type { SandboxSettings } from "./sandboxPaths.js";
@@ -88,9 +89,16 @@ const schema = z.strictObject({
   lsp: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /**
    * Claude's thinking (0.9). keepBlocks: send thinking blocks back (default true, as the API asks);
-   * false is for A/B runs only.
+   * false is for A/B runs only. enabled, effort, show: the start value of /thinking.
    */
-  thinking: z.strictObject({ keepBlocks: z.boolean().optional() }).optional(),
+  thinking: z
+    .strictObject({
+      keepBlocks: z.boolean().optional(),
+      enabled: z.boolean().optional(),
+      effort: z.enum(EFFORTS).optional(),
+      show: z.boolean().optional(),
+    })
+    .optional(),
   /** The explore subagent (0.3). enabled: default false. Limits per explore run. */
   subagents: z
     .strictObject({
@@ -135,7 +143,7 @@ export interface Settings {
   skills?: { enabled: boolean };
   agents?: { enabled: boolean };
   notifications?: { channel?: NotifyChoice; afterSeconds?: number };
-  thinking?: { keepBlocks?: boolean };
+  thinking?: { keepBlocks?: boolean; enabled?: boolean; effort?: Effort; show?: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
@@ -197,9 +205,16 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(undo?.enabled === undefined ? {} : { undo: { enabled: undo.enabled } }),
     ...(skills?.enabled === undefined ? {} : { skills: { enabled: skills.enabled } }),
     ...(agents?.enabled === undefined ? {} : { agents: { enabled: agents.enabled } }),
-    ...(thinking?.keepBlocks === undefined
+    ...(thinking === undefined
       ? {}
-      : { thinking: { keepBlocks: thinking.keepBlocks } }),
+      : {
+          thinking: {
+            ...(thinking.keepBlocks === undefined ? {} : { keepBlocks: thinking.keepBlocks }),
+            ...(thinking.enabled === undefined ? {} : { enabled: thinking.enabled }),
+            ...(thinking.effort === undefined ? {} : { effort: thinking.effort }),
+            ...(thinking.show === undefined ? {} : { show: thinking.show }),
+          },
+        }),
     ...(notifications === undefined
       ? {}
       : {

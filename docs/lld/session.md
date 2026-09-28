@@ -41,6 +41,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `undo` | after (the snapshot of the files at the undo) (0.4) |
 | `redo` | – (0.4) |
 | `title` | title (0.8, `/sessions rename`; the last one wins; resume ignores it) |
+| `thinking` | choice (0.9, `/thinking`; the last one wins; a resume brings it back) |
 | `end` | stopReason, steps |
 
 ## Store (`store.ts`)

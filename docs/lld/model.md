@@ -24,11 +24,12 @@ interface TextBlock { type: "text"; text: string; citations?: unknown[] }   // c
 interface Message { role: "user" | "assistant"; content: ContentBlock[] }
 interface ToolSpec { name: string; description: string; inputSchema: Record<string, unknown> }
 interface ServerToolSpec { type: "web_search"; maxUses; allowedDomains?; blockedDomains? }   // 0.6
-interface ModelRequest { system; messages: Message[]; tools: ToolSpec[]; serverTools?: ServerToolSpec[]; maxTokens }
+interface ModelRequest { system; messages: Message[]; tools: ToolSpec[]; serverTools?: ServerToolSpec[]; maxTokens; thinking?: ThinkingRequest }
+interface ThinkingRequest { adaptive?: boolean; display?: "summarized" | "omitted"; effort?: Effort }   // 0.9
 interface ModelResponse { content: AssistantBlock[]; stopReason: StopReason; usage: Usage }
 type StopReason = "end_turn" | "tool_use" | "max_tokens" | "refusal" | "pause_turn" | "other";
 interface Usage { inputTokens; outputTokens; cacheReadTokens; cacheWriteTokens; webSearches? }
-type ModelEvent = { type: "text_delta"; text } | { type: "response"; response: ModelResponse };
+type ModelEvent = { type: "text_delta"; text } | { type: "thinking_delta"; text } | { type: "response"; response: ModelResponse };
 
 interface ModelClient {
   readonly serverTools?: ServerToolSpec["type"][];   // what the provider can run itself (0.6)
@@ -50,6 +51,14 @@ out (`thinking.ts`, `withoutThinking`) only where they cannot go back unchanged:
 signature belongs to its model), on a resume with another model, and when redaction changed one on
 disk. The compaction summary, `/export` and the OpenAI-compatible adapter ignore them. The setting
 `thinking.keepBlocks: false` (and `garuda eval --keep-thinking off`) drops them as before, for A/B runs.
+
+`/thinking` (0.9) sends `ModelRequest.thinking`. `ModelInfo.thinking` in `pricing.ts` says per model:
+`always` (the 5-series) or `optional` (Opus 4.6 to 4.8, Sonnet 4.6), and the effort levels (4.6 has no
+`xhigh`). `thinkingRequest(choice, caps)` builds the fields: `effort` → `output_config.effort`;
+`adaptive` or `display` → `thinking: { type: "adaptive", display? }` (a display alone is never sent to
+an optional model, because it would turn thinking on). No choice sends nothing, as before 0.9. When
+thinking is asked for, `max_tokens` is at least 16,384 (32,000 for `xhigh` and `max`), because thinking
+counts toward it. With `display: "summarized"` the adapter streams `thinking_delta` events.
 
 The loop, the session and the tools use only these types.
 

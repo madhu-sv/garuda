@@ -11,6 +11,7 @@ import {
   type ServerToolSpec,
   type ServerToolUseBlock,
   type StopReason,
+  type ThinkingRequest,
   type ToolResultBlock,
   type ToolUseBlock,
   type Usage,
@@ -41,6 +42,8 @@ import type {
 
 export type AgentEvent =
   | { type: "text_delta"; text: string }
+  /** Claude's readable thinking as it streams (0.9, /thinking show). */
+  | { type: "thinking_delta"; text: string }
   | { type: "tool_call"; call: ToolUseBlock }
   | { type: "tool_result"; call: ToolUseBlock; outcome: ToolOutcome }
   /** A one-line status of a long call, for example a subagent's current step. */
@@ -95,6 +98,18 @@ export interface AgentDeps {
    * back within a tool-use turn. False drops them, as Garuda did before 0.9 (for A/B runs).
    */
   keepThinking?: boolean;
+  /** What each request asks of Claude's thinking (0.9, /thinking). Absent: the model's defaults. */
+  thinking?: ThinkingRequest;
+}
+
+/** Thinking counts toward max_tokens (0.9): more room when /thinking asks for it. */
+export function thinkingMaxTokens(
+  maxTokens: number,
+  thinking: ThinkingRequest | undefined,
+): number {
+  if (thinking === undefined) return maxTokens;
+  if (thinking.effort === "xhigh" || thinking.effort === "max") return Math.max(maxTokens, 32_000);
+  return Math.max(maxTokens, 16_384);
 }
 
 /** The server tools of `deps` that this model client can run. */
@@ -182,7 +197,8 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       messages: session.messages,
       tools,
       ...(serverTools.length === 0 ? {} : { serverTools }),
-      maxTokens: deps.maxTokens ?? DEFAULT_MAX_TOKENS,
+      maxTokens: thinkingMaxTokens(deps.maxTokens ?? DEFAULT_MAX_TOKENS, deps.thinking),
+      ...(deps.thinking === undefined ? {} : { thinking: deps.thinking }),
     };
     const started = performance.now();
     const received = await callModelWithRetry(
@@ -298,7 +314,7 @@ async function callModel(
 ): Promise<ModelResponse> {
   let response: ModelResponse | undefined;
   for await (const event of model.stream(request, { signal })) {
-    if (event.type === "text_delta") emit(event);
+    if (event.type === "text_delta" || event.type === "thinking_delta") emit(event);
     else response = event.response;
   }
   if (response === undefined) throw new Error("Model stream ended without a response.");

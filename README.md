@@ -102,7 +102,7 @@ Set the context window, price and output limit per model, and add providers, in 
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
   (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
-  `/init` (set up this folder, see below), `/editor`, `/compact`, `/details`, `/diff` (see Undo), `/schedule` and `/jobs` (see
+  `/init` (set up this folder, see below), `/editor`, `/compact`, `/details`, `/thinking`, `/diff` (see Undo), `/schedule` and `/jobs` (see
   Scheduled jobs), `/exit`. Your custom commands and
   skills run with `/name`.
 - `/sessions` lists this project's sessions (newest first: time, first prompt, turns, cost, model).
@@ -123,6 +123,12 @@ Set the context window, price and output limit per model, and add providers, in 
 - `/details` hides the result line under each tool call (`⎿ 12 line(s)`), so a turn shows one line per
   call. A failed call still shows its result, and Ctrl-O still shows the last output in full. `/details`
   again, or `/details on`, shows them. It applies to new lines only.
+- `/thinking` controls Claude's thinking for this chat. Claude Opus 5.5, Opus 5 and Sonnet 5 always think;
+  Opus 4.6 to 4.8 and Sonnet 4.6 think only after `/thinking on`. `/thinking low|medium|high|xhigh|max`
+  sets the effort (less or more thinking; `default` goes back). `/thinking show` asks for readable
+  thinking: the chat shows its first lines dimmed, and Ctrl-O shows all; `hide` goes back. The session
+  records the choice; `"thinking": { "effort": "low", "show": true }` in settings sets the start value. A
+  change starts the prompt cache again. Other providers do not offer it.
 - Esc or Ctrl-C during a task stops the task and kills its commands (Esc also drops queued lines). The
   chat goes on. A second Ctrl-C during the task exits Garuda at once; Esc never exits.
 - New lines: end the line with `\` and press Enter, or press Alt+Enter (Option+Enter on a Mac with

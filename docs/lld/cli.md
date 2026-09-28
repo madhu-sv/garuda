@@ -140,7 +140,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /compact /details /diff /schedule /jobs /exit; /name: skill or command]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /refs /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /compact /details /thinking /diff /schedule /jobs /exit; /name: skill or command]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
@@ -222,6 +222,13 @@ interface ChatState {
 - **Details (0.9):** `Renderer.details` (the Ink store and `PlainRenderer`; default true). `/details [on|off]`
   flips or sets it. Off: a `tool_result` or `server_tool` event adds only the call line, unless the call
   failed; todo lines stay. Items already drawn do not change (`<Static>`). Ctrl-O keeps the last output.
+- **Thinking (0.9):** `/thinking` prints `runtime.thinkingStatus()`; `/thinking <word>` calls
+  `runtime.setThinking(word)` (`changeThinking` in `model/thinking.ts`: on, off, show, hide, default, an
+  effort; refused when the model cannot do it). The runtime writes a `thinking` record, and a new or
+  resumed session carries the choice; `/models` keeps what the new model can use (`fitThinking`).
+  `thinking_delta` events: the Ink store keeps them until the next text, tool call or step end, then adds
+  the first 4 lines dimmed (`thinkingPreview`) and keeps the whole text for Ctrl-O; the plain renderer
+  writes them dimmed to stderr in full.
 - **Arguments (0.8):** after `/command ` the word at the cursor completes from `sources.args(command,
   before)`. `CommandArgs` (controller.ts, both chats) gives: `/models` aliases and model specs; `/sessions`
   `rename`, `delete` and session ids (then ids after rename or delete); `/jobs` `cancel` and job ids; `/diff

@@ -1,3 +1,4 @@
+import type { ThinkingChoice } from "../model/thinking.js";
 import type { Message, ModelResponse, Usage } from "../model/types.js";
 
 /**
@@ -103,6 +104,12 @@ export interface RedoRecord extends Base {
   type: "redo";
 }
 
+/** /thinking (0.9): the whole choice after the change. The last one wins on resume. */
+export interface ThinkingRecord extends Base {
+  type: "thinking";
+  choice: ThinkingChoice;
+}
+
 /** /sessions rename (0.8): the session's title in /sessions. The last one wins. */
 export interface TitleRecord extends Base {
   type: "title";
@@ -125,6 +132,7 @@ export type SessionRecord =
   | UndoRecord
   | RedoRecord
   | TitleRecord
+  | ThinkingRecord
   | EndRecord;
 
 /** A record before the journal adds the time. */

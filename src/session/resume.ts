@@ -1,6 +1,6 @@
 import { contextSize } from "../model/pricing.js";
 import { hasServerBlocks, withoutServerBlocks } from "../model/serverTools.js";
-import { withoutThinking } from "../model/thinking.js";
+import { type ThinkingChoice, withoutThinking } from "../model/thinking.js";
 import type { Message } from "../model/types.js";
 import { addUsage, ZERO_USAGE } from "../model/types.js";
 import type { SessionRecord, StartRecord } from "./records.js";
@@ -26,6 +26,8 @@ export interface RebuiltState {
   start: StartRecord | undefined;
   /** Undo points and redo entries (0.4). */
   undo: UndoState;
+  /** The last /thinking choice (0.9). */
+  thinking?: ThinkingChoice;
 }
 
 /** Rebuild the conversation and the totals from session records (F25). */
@@ -89,6 +91,9 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
           addCost(record.costUsd);
         }
         break;
+      case "thinking":
+        state.thinking = record.choice;
+        break;
       case "end":
       case "title":
         break;
@@ -131,6 +136,7 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
   session.costUsd = state.costUsd;
   session.contextTokens = state.contextTokens;
   session.undo = state.undo;
+  if (state.thinking !== undefined) session.thinking = state.thinking;
   journal.write({ type: "resume", sessionId: id, ...options.start });
   closeOpenToolCalls(session);
   return session;

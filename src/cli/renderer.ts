@@ -39,6 +39,14 @@ export class PlainRenderer implements Renderer {
   private openLine = false;
   /** /details (0.9): show the result line of each tool call. */
   details = true;
+  /** Thinking text is streaming (0.9). */
+  private thinking = false;
+
+  private endThinking(): void {
+    if (!this.thinking) return;
+    this.thinking = false;
+    this.err.write("\n");
+  }
 
   constructor(
     streams: Streams = { out: process.stdout, err: process.stderr },
@@ -51,11 +59,19 @@ export class PlainRenderer implements Renderer {
 
   event(event: AgentEvent): void {
     switch (event.type) {
+      case "thinking_delta":
+        // Readable thinking (0.9, /thinking show): dimmed on stderr, in full.
+        if (!this.thinking) this.line(this.paint("dim", "✻ thinking"));
+        this.thinking = true;
+        this.err.write(this.paint("dim", event.text));
+        return;
       case "text_delta":
+        this.endThinking();
         this.out.write(event.text);
         this.openLine = !event.text.endsWith("\n");
         return;
       case "tool_call":
+        this.endThinking();
         this.line(
           `${this.paint("cyan", "●")} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`,
         );
@@ -91,6 +107,8 @@ export class PlainRenderer implements Renderer {
         return;
       }
       case "step_end":
+        this.endThinking();
+        return;
       // Live status lines need a live view; plain output stays one line per call.
       case "tool_progress":
         return;

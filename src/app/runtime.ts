@@ -48,8 +48,16 @@ import {
   type Price,
   responseCost,
 } from "../model/pricing.js";
-import { withoutThinking } from "../model/thinking.js";
-import type { Message, ModelClient, ServerToolSpec } from "../model/types.js";
+import {
+  changeThinking,
+  fitThinking,
+  type ThinkingCaps,
+  type ThinkingChoice,
+  thinkingRequest,
+  thinkingText,
+  withoutThinking,
+} from "../model/thinking.js";
+import type { Message, ModelClient, ServerToolSpec, ThinkingRequest } from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -213,6 +221,9 @@ export class Runtime {
   private currentModelId: string;
   private currentLimits: RunLimits;
   private currentPrice: Price | undefined;
+  /** What the main model offers for /thinking (0.9), and the user's choice. */
+  private currentThinkingCaps: ThinkingCaps | undefined;
+  private thinkingChoice: ThinkingChoice = {};
   private maxTokens: number | undefined;
   /** How /models turns a spec into a client (0.6). Absent: /models cannot switch. */
   private readonly modelChoices: RuntimeOptions["models"];
@@ -334,6 +345,16 @@ export class Runtime {
     const info = options.modelInfo ?? lookupModel(options.modelId);
     this.maxTokens = options.maxTokens;
     this.currentPrice = settings.price ?? info.price;
+    this.currentThinkingCaps = info.thinking;
+    const start = settings.thinking;
+    this.thinkingChoice = fitThinking(
+      {
+        ...(start?.enabled === undefined ? {} : { enabled: start.enabled }),
+        ...(start?.effort === undefined ? {} : { effort: start.effort }),
+        ...(start?.show === undefined ? {} : { show: start.show }),
+      },
+      info.thinking,
+    ).choice;
     this.currentLimits = {
       maxSteps: settings.maxSteps ?? DEFAULT_MAX_STEPS,
       tokenBudget: settings.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
@@ -560,6 +581,7 @@ export class Runtime {
         start: runtime.startFields(),
         ...(options.resume === true ? {} : { sessionId: options.resume }),
       });
+      runtime.adoptThinking(runtime.current);
     }
     return runtime;
   }
@@ -856,6 +878,7 @@ export class Runtime {
     } catch (error) {
       return { ok: false, text: (error as Error).message };
     }
+    this.adoptThinking(this.current);
     // Notes and approvals for the old session do not carry over; the process-wide ones do.
     this.pendingNotes.length = 0;
     this.claudeSearch = "unasked";
@@ -985,6 +1008,9 @@ export class Runtime {
     this.model = client;
     this.currentModelId = resolved.spec;
     this.currentPrice = this.settings.price ?? resolved.info.price;
+    this.currentThinkingCaps = resolved.info.thinking;
+    const fitted = fitThinking(this.thinkingChoice, resolved.info.thinking);
+    this.thinkingChoice = fitted.choice;
     this.currentLimits = {
       ...this.currentLimits,
       contextWindow: this.settings.contextWindow ?? resolved.info.contextWindow,
@@ -1003,6 +1029,11 @@ export class Runtime {
     ) {
       lines.push(
         "The conversation is too large for this model's context window: Garuda compacts it before the next request.",
+      );
+    }
+    if (fitted.dropped.length > 0) {
+      lines.push(
+        `${resolved.spec} cannot use ${fitted.dropped.join(" and ")}: it goes back to the default.`,
       );
     }
     if (this.currentPrice === undefined) {
@@ -1062,6 +1093,7 @@ export class Runtime {
       ...(this.price === undefined ? {} : { price: this.price }),
       ...(this.onEvent === undefined ? {} : { onEvent: this.onEvent }),
       ...(this.settings.thinking?.keepBlocks === false ? { keepThinking: false } : {}),
+      ...(this.thinkingParams === undefined ? {} : { thinking: this.thinkingParams }),
       signal,
     });
     // A finished plan (0.7): /schedule turns it into a job.
@@ -1453,6 +1485,43 @@ export class Runtime {
     }
   }
 
+  /** The request fields for /thinking (0.9); undefined: the model's defaults. */
+  private get thinkingParams(): ThinkingRequest | undefined {
+    return thinkingRequest(this.thinkingChoice, this.currentThinkingCaps);
+  }
+
+  /** /thinking (0.9): the state line. */
+  thinkingStatus(): string {
+    return thinkingText(this.thinkingChoice, this.currentThinkingCaps, this.currentModelId);
+  }
+
+  /** /thinking <word> (0.9): change the choice for this chat; the session records it. */
+  setThinking(word: string): { ok: boolean; text: string } {
+    const change = changeThinking(
+      this.thinkingChoice,
+      word,
+      this.currentThinkingCaps,
+      this.currentModelId,
+    );
+    if (!change.ok) return change;
+    const before = JSON.stringify(this.thinkingParams ?? {});
+    this.thinkingChoice = change.choice;
+    this.current?.journal?.write({ type: "thinking", choice: change.choice });
+    const changed = JSON.stringify(this.thinkingParams ?? {}) !== before;
+    return {
+      ok: true,
+      text: changed
+        ? `${change.text} The next turn uses it; the prompt cache starts again.`
+        : change.text,
+    };
+  }
+
+  /** A resumed session brings its last /thinking choice (0.9), as far as this model allows. */
+  private adoptThinking(session: Session): void {
+    if (session.thinking === undefined) return;
+    this.thinkingChoice = fitThinking(session.thinking, this.currentThinkingCaps).choice;
+  }
+
   /**
    * /compact [focus] (0.8): summarise the older turns now; the last steps stay in full. Undefined
    * when there is no session or too little to compact.
@@ -1566,6 +1635,10 @@ export class Runtime {
     const id = newSessionId();
     const session = createSession(this.root, id, this.store.open(id));
     session.journal?.write({ type: "start", sessionId: id, ...this.startFields() });
+    // A /thinking choice carries into a new session (0.9); the record lets a resume find it.
+    if (Object.keys(this.thinkingChoice).length > 0) {
+      session.journal?.write({ type: "thinking", choice: this.thinkingChoice });
+    }
     this.current = session;
     return session;
   }

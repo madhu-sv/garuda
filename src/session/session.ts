@@ -1,4 +1,5 @@
 import { contextSize } from "../model/pricing.js";
+import type { ThinkingChoice } from "../model/thinking.js";
 import {
   addUsage,
   type Message,
@@ -42,6 +43,8 @@ export interface Session {
   journal?: Journal;
   /** Turns that /undo can take back, and undos that /redo can bring back (0.4). */
   undo: UndoState;
+  /** The last /thinking choice of this session (0.9), from its records on resume. */
+  thinking?: ThinkingChoice;
 }
 
 export function createSession(

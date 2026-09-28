@@ -50,6 +50,12 @@ export class AnthropicClient implements ModelClient {
     for await (const event of stream) {
       if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
         yield { type: "text_delta", text: event.delta.text };
+      } else if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "thinking_delta" &&
+        event.delta.thinking !== ""
+      ) {
+        yield { type: "thinking_delta", text: event.delta.thinking };
       }
     }
     const final = await stream.finalMessage();
@@ -82,6 +88,15 @@ export function toWireParams(
   }
   const tools = toWireTools(request.tools, request.serverTools ?? []);
   if (tools.length > 0) params.tools = tools;
+  // Thinking (0.9, /thinking). Nothing set: the model's defaults, as before.
+  const thinking = request.thinking;
+  if (thinking?.adaptive === true || thinking?.display !== undefined) {
+    params.thinking = {
+      type: "adaptive",
+      ...(thinking.display === undefined ? {} : { display: thinking.display }),
+    };
+  }
+  if (thinking?.effort !== undefined) params.output_config = { effort: thinking.effort };
   return params;
 }
 

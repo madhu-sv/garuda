@@ -54,6 +54,9 @@ export class FakeModelClient implements ModelClient {
 
     for (const block of response.content) {
       if (block.type === "text") yield { type: "text_delta", text: block.text };
+      if (block.type === "thinking" && block.text !== "") {
+        yield { type: "thinking_delta", text: block.text };
+      }
     }
     yield { type: "response", response };
   }

@@ -1,4 +1,4 @@
-import type { ModelResponse, Usage } from "./types.js";
+import { EFFORTS, type Effort, type ModelResponse, type Usage } from "./types.js";
 
 /** USD per million tokens. `cacheWrite` is the 5-minute cache write price. */
 export interface Price {
@@ -12,11 +12,28 @@ export interface ModelInfo {
   /** Undefined when Garuda does not know the model: cost then shows as unknown. */
   price?: Price;
   contextWindow: number;
+  /**
+   * Claude's thinking (0.9): "always" (the API refuses to turn it off) or "optional" (adaptive
+   * thinking on request), and the effort levels. Undefined: /thinking does not apply.
+   */
+  thinking?: { mode: "always" | "optional"; efforts: readonly Effort[] };
 }
 
 export const DEFAULT_CONTEXT_WINDOW = 200_000;
 
 const M = 1_000_000;
+
+/**
+ * Thinking by model (0.9). Source: platform.claude.com/docs/en/build-with-claude/thinking and
+ * /effort (September 2026). The 5-series always thinks; Opus 4.6 to 4.8 and Sonnet 4.6 think on
+ * request (4.6 has no "xhigh"). Older models use a token budget, which /thinking does not offer.
+ */
+const ALWAYS = { mode: "always", efforts: EFFORTS } as const;
+const OPTIONAL = { mode: "optional", efforts: EFFORTS } as const;
+const OPTIONAL_46 = {
+  mode: "optional",
+  efforts: EFFORTS.filter((e) => e !== "xhigh"),
+} as const;
 
 /**
  * Known Claude models, by model-id prefix. The longest matching prefix wins,
@@ -25,16 +42,16 @@ const M = 1_000_000;
  * Settings can override both values (`model.price`, `model.contextWindow`).
  */
 const KNOWN: ReadonlyArray<readonly [prefix: string, info: ModelInfo]> = [
-  ["claude-fable-5-1", { price: p(10, 50, 0.25, 12.5), contextWindow: M }],
-  ["claude-fable-5", { price: p(10, 50, 1, 12.5), contextWindow: M }],
-  ["claude-opus-5-5", { price: p(4, 20, 0.2, 5), contextWindow: M }],
-  ["claude-opus-5", { price: p(5, 25, 0.5, 6.25), contextWindow: M }],
-  ["claude-opus-4-8", { price: p(5, 25, 0.5, 6.25), contextWindow: M }],
-  ["claude-opus-4-7", { price: p(5, 25, 0.5, 6.25), contextWindow: M }],
-  ["claude-opus-4-6", { price: p(5, 25, 0.5, 6.25), contextWindow: M }],
+  ["claude-fable-5-1", { price: p(10, 50, 0.25, 12.5), contextWindow: M, thinking: ALWAYS }],
+  ["claude-fable-5", { price: p(10, 50, 1, 12.5), contextWindow: M, thinking: ALWAYS }],
+  ["claude-opus-5-5", { price: p(4, 20, 0.2, 5), contextWindow: M, thinking: ALWAYS }],
+  ["claude-opus-5", { price: p(5, 25, 0.5, 6.25), contextWindow: M, thinking: ALWAYS }],
+  ["claude-opus-4-8", { price: p(5, 25, 0.5, 6.25), contextWindow: M, thinking: OPTIONAL }],
+  ["claude-opus-4-7", { price: p(5, 25, 0.5, 6.25), contextWindow: M, thinking: OPTIONAL }],
+  ["claude-opus-4-6", { price: p(5, 25, 0.5, 6.25), contextWindow: M, thinking: OPTIONAL_46 }],
   ["claude-opus-4-5", { price: p(5, 25, 0.5, 6.25), contextWindow: 200_000 }],
-  ["claude-sonnet-5", { price: p(2, 10, 0.2, 2.5), contextWindow: M }],
-  ["claude-sonnet-4-6", { price: p(3, 15, 0.3, 3.75), contextWindow: M }],
+  ["claude-sonnet-5", { price: p(2, 10, 0.2, 2.5), contextWindow: M, thinking: ALWAYS }],
+  ["claude-sonnet-4-6", { price: p(3, 15, 0.3, 3.75), contextWindow: M, thinking: OPTIONAL_46 }],
   ["claude-sonnet-4-5", { price: p(3, 15, 0.3, 3.75), contextWindow: 200_000 }],
   ["claude-haiku-4-5", { price: p(1, 5, 0.1, 1.25), contextWindow: 200_000 }],
 ];
