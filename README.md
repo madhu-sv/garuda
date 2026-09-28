@@ -609,8 +609,11 @@ A plan can run later, with nobody at the keyboard: for example overnight.
   sleeps at that time, the job starts at the next wake (`sudo pmset schedule wake "<date>"` can wake it).
   `/jobs cancel <id>` removes the agent.
 - With a Claude model, `/schedule` also asks whether the job should use the Batch API: half the token
-  price, but each step waits for its batch (about 3 minutes in our measurement). 15 minutes before the
-  finish-by time (`"finishBy": "07:00"` in the job file) a job that still runs goes on with the normal API.
+  price, but each step waits for its batch: about 3 minutes in the first measurement, sometimes hours.
+  A step that waits more than 20 minutes (`"stepLimitMinutes"`) runs on the normal API, and the next step
+  tries the Batch API again. 15 minutes before the finish-by time (`"finishBy": "07:00"` in the job file)
+  a job that still runs goes on with the normal API. The run prints the batch id and a line per minute
+  of waiting.
 
 ## Hooks
 

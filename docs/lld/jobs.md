@@ -117,11 +117,17 @@ offers it (`createJob` needs the `launchd` option), so no other caller and no te
 
 ## The Batch API (0.7)
 
-For a Claude model, `/schedule` asks "Use the Batch API for this job?" (preview: half price, about 3
-minutes per step, the switch time). Yes sets `batch: true` and `finishBy: "07:00"` in the job file (the user
-may change `finishBy`). At run time the CLI builds a `DeadlineClient`: the Batch API until 15 minutes before
-the next `finishBy`, then the normal API for the rest of the job (a waiting batch is cancelled). The result
-keeps `modelCalls: { batch, normal, switchedAt? }`, and the report shows them. Costs are exact per
+For a Claude model, `/schedule` asks "Use the Batch API for this job?" (preview: half price, the uneven
+wait, the step limit, the switch time). Yes sets `batch: true`, `finishBy: "07:00"` and
+`stepLimitMinutes: 20` in the job file (the user may change both). At run time the CLI builds a
+`DeadlineClient`: the Batch API until 15 minutes before the next `finishBy`, then the normal API for the rest
+of the job; before that, a step that waits more than the step limit is cancelled and runs on the normal
+API, and the next step tries the Batch API again. The run prints the switch time with its date, the batch
+id of each step and a line per minute of waiting. The result keeps `modelCalls: { batch, normal, slow,
+switchedAt? }`, and the report shows them.
+
+Why the step limit: the first measurement waited about 3 minutes per step, but the next day one batch
+stayed `in_progress` for more than 6 hours. Only the slow steps pay full price. Costs are exact per
 response: batch responses at half the token price.
 
 ## Safety

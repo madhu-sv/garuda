@@ -235,7 +235,19 @@ function fromWireUsage(usage: Anthropic.Messages.Usage): Usage {
 export interface AnthropicBatchClientOptions extends AnthropicClientOptions {
   /** Waits between status checks, in ms; the last one repeats. Default: 5 s, 10 s, 20 s, then 30 s. */
   pollMs?: readonly number[];
+  /**
+   * Told when a batch starts (waitedMs 0) and about every `noticeMs` while it waits (0.7), so a
+   * quiet terminal does not look stuck.
+   */
+  onWait?: (wait: { batchId: string; waitedMs: number; status: string }) => void;
+  /** Default: 60 s. */
+  noticeMs?: number;
 }
+
+/** One status check may take this long; a check that hangs (after sleep, a lost connection) is dropped. */
+export const BATCH_CHECK_TIMEOUT_MS = 60_000;
+/** Status checks that fail in a row before the request fails. */
+const MAX_FAILED_CHECKS = 10;
 
 /** The Batch API's default waits between status checks. */
 export const BATCH_POLL_MS: readonly number[] = [5_000, 10_000, 20_000, 30_000];
@@ -252,10 +264,14 @@ export class AnthropicBatchClient implements ModelClient {
   private readonly client: Anthropic;
   private readonly model: string;
   private readonly pollMs: readonly number[];
+  private readonly onWait: AnthropicBatchClientOptions["onWait"];
+  private readonly noticeMs: number;
 
   constructor(options: AnthropicBatchClientOptions) {
     this.model = options.model;
     this.pollMs = options.pollMs ?? BATCH_POLL_MS;
+    this.onWait = options.onWait;
+    this.noticeMs = options.noticeMs ?? 60_000;
     this.client =
       options.client ??
       new Anthropic(options.apiKey === undefined ? {} : { apiKey: options.apiKey });
@@ -271,11 +287,32 @@ export class AnthropicBatchClient implements ModelClient {
       { requests: [{ custom_id: "garuda", params }] },
       signal === undefined ? {} : { signal },
     );
+    const started = Date.now();
+    this.onWait?.({ batchId: batch.id, waitedMs: 0, status: "created" });
+    let noticed = 0;
+    let failed = 0;
     try {
       for (let i = 0; ; i++) {
         await wait(this.pollMs[Math.min(i, this.pollMs.length - 1)] ?? 30_000, signal);
-        const state = await this.client.messages.batches.retrieve(batch.id);
-        if (state.processing_status === "ended") break;
+        let status: string;
+        try {
+          // A time limit per check: a check that hangs must not block the job for hours.
+          const state = await this.client.messages.batches.retrieve(batch.id, undefined, {
+            timeout: BATCH_CHECK_TIMEOUT_MS,
+            ...(signal === undefined ? {} : { signal }),
+          });
+          status = state.processing_status;
+          failed = 0;
+        } catch (error) {
+          if (signal?.aborted === true || ++failed >= MAX_FAILED_CHECKS) throw error;
+          status = "check failed, trying again";
+        }
+        if (status === "ended") break;
+        const waited = Date.now() - started;
+        if (waited - noticed >= this.noticeMs) {
+          noticed = waited;
+          this.onWait?.({ batchId: batch.id, waitedMs: waited, status });
+        }
       }
     } catch (error) {
       // An abort (Ctrl-C, a finish-by time): stop the batch, so it costs nothing more.

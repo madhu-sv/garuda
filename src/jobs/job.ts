@@ -37,7 +37,13 @@ const resultSchema = z.object({
   error: z.string().optional(),
   /** With the Batch API: requests per API, and when the job switched to the normal API. */
   modelCalls: z
-    .object({ batch: z.number(), normal: z.number(), switchedAt: z.string().optional() })
+    .object({
+      batch: z.number(),
+      normal: z.number(),
+      /** Steps that waited past the step limit and ran on the normal API. */
+      slow: z.number().optional(),
+      switchedAt: z.string().optional(),
+    })
     .optional(),
 });
 
@@ -71,6 +77,13 @@ const jobSchema = z.object({
   finishBy: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional(),
+  /** A batch step that waits longer goes to the normal API (only that step). Default 20. */
+  stepLimitMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
     .optional(),
   /** Ignored folders of the checkout (node_modules, .venv) that the worktree links to. */
   links: z.array(z.string()),

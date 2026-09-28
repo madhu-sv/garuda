@@ -184,7 +184,12 @@ describe("scheduled jobs: create, run, report (0.7)", () => {
     expect(asked.requests[1]?.preview).toContain(
       "At 06:45 (15 minutes before the finish-by time 07:00)",
     );
-    expect(await loadJob(root, batched.job.id)).toMatchObject({ batch: true, finishBy: "07:00" });
+    expect(asked.requests[1]?.preview).toContain("more than 20 minutes runs on the normal API");
+    expect(await loadJob(root, batched.job.id)).toMatchObject({
+      batch: true,
+      finishBy: "07:00",
+      stepLimitMinutes: 20,
+    });
     const { jobReport } = await import("../src/jobs/text.js");
     expect(
       jobReport({
@@ -202,7 +207,7 @@ describe("scheduled jobs: create, run, report (0.7)", () => {
         },
       }),
     ).toContain(
-      "- Model calls: 2 through the Batch API, 1 normal (switched at 2026-09-28T05:45:00.000Z)",
+      "- Model calls: 2 through the Batch API, 1 normal; the rest normal from 2026-09-28T05:45:00.000Z",
     );
   });
 

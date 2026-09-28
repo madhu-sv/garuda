@@ -271,3 +271,63 @@ describe("the finish-by switch for jobs (0.7)", () => {
     expect(switchTime("00:10")).toBe("23:55");
   });
 });
+
+describe("slow batches (0.7)", () => {
+  it("a step past the step limit runs on the normal API; the next step tries the batch again", async () => {
+    const { DeadlineClient } = await import("../src/model/deadline.js");
+    let batchCalls = 0;
+    const batch = {
+      async *stream(_r: unknown, options?: { signal?: AbortSignal }) {
+        batchCalls++;
+        const ms = batchCalls === 1 ? 1_000 : 5;
+        await new Promise<void>((resolve, reject) => {
+          const t = setTimeout(resolve, ms);
+          options?.signal?.addEventListener("abort", () => {
+            clearTimeout(t);
+            reject(options.signal?.reason);
+          });
+        });
+        yield { type: "response" as const, response: reply([text("batch")]) };
+      },
+    };
+    const normal = new FakeModelClient([reply([text("normal")])]);
+    const client = new DeadlineClient(
+      batch as never,
+      async () => normal,
+      new Date(Date.now() + 60_000),
+      {
+        stepLimitMs: 30,
+      },
+    );
+    const first = await collect(client.stream(request));
+    const second = await collect(client.stream(request));
+    const texts = [first, second].map((events) =>
+      events.flatMap((e) => (e.type === "response" ? [e.response.content[0]] : [])),
+    );
+    expect(texts).toEqual([[text("normal")], [text("batch")]]);
+    expect(client.calls).toMatchObject({ primary: 1, fallback: 1, slow: 1, switchedAt: undefined });
+  });
+
+  it("tells the batch id and the wait; a failed status check is tried again", async () => {
+    const fake = fakeSdk({ type: "succeeded", message: MESSAGE }, 3);
+    let checks = 0;
+    const retrieve = fake.sdk.messages.batches.retrieve.bind(fake.sdk.messages.batches);
+    (fake.sdk.messages.batches as { retrieve: unknown }).retrieve = async (id: string) => {
+      if (++checks === 1) throw new Error("socket hang up");
+      return retrieve(id);
+    };
+    const waits: string[] = [];
+    const client = new AnthropicBatchClient({
+      model: "m",
+      client: fake.sdk,
+      pollMs: [0],
+      noticeMs: 0,
+      onWait: (w) => waits.push(`${w.batchId} ${w.status}`),
+    });
+    const events = await collect(client.stream(request));
+    expect(events.at(-1)?.type).toBe("response");
+    expect(waits[0]).toBe("batch_1 created");
+    expect(waits).toContain("batch_1 check failed, trying again");
+    expect(waits).toContain("batch_1 in_progress");
+  });
+});

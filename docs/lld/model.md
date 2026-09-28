@@ -59,16 +59,22 @@ The same mapping as the streaming client; each `stream()` call sends one request
 and reads the result when the batch has ended. It yields the whole text as one `text_delta`, then the
 response. A `succeeded` result maps like a normal message. An `errored` result throws an error that
 carries the API error, so an overload or API error is transient and the loop sends the request again;
-`canceled` and `expired` are not transient. An abort cancels the batch. `ResolvedModel.createBatch()` exists
+`canceled` and `expired` are not transient. An abort cancels the batch. Each status check has a 60 s time limit, and a failed
+check is tried again (10 failures in a row fail the request), so a check that hangs after sleep cannot
+block a job. `onWait` gets the batch id when a batch starts and a status line about every minute.
+`ResolvedModel.createBatch(env, { onWait })` exists
 only for the Anthropic provider. Each batch response carries `priceFactor: 0.5`; `responseCost` (the loop,
 compaction, child runs) prices tokens at that factor and web searches at full price.
 
 Measured (basic suite, claude-sonnet-5, 10 tasks at a time, one run each): normal API $0.217, 78% of tokens
-from the cache, 23 s; Batch API $0.100, 81%, 33 min (about 3 minutes per step).
+from the cache, 23 s; Batch API $0.100, 81%, 33 min (about 3 minutes per step). The next day a single
+batch stayed in progress for more than 6 hours: the wait is uneven.
 
 `DeadlineClient` (`deadline.ts`) wraps a slow, cheap client and a fast one: requests go to the first until a
 switch time; a request still waiting then is cancelled and sent to the second, and so are all later ones.
-The user's abort is never a switch. Scheduled jobs on the Batch API use it (see [jobs.md](jobs.md)).
+With `stepLimitMs`, a request that waits longer goes to the fast client for that request only
+(`calls.slow`). The user's abort is never a switch. Scheduled jobs on the Batch API use it (see
+[jobs.md](jobs.md)).
 
 ### Prompt caching (N2)
 

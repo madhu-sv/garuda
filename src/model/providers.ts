@@ -96,7 +96,10 @@ export interface ResolvedModel {
   /** Load the adapter and build the client (on first use, N3). */
   create(env?: NodeJS.ProcessEnv): Promise<ModelClient>;
   /** The Batch API client (0.7): only for the Anthropic provider. Half price, minutes per step. */
-  createBatch?(env?: NodeJS.ProcessEnv): Promise<ModelClient>;
+  createBatch?(
+    env?: NodeJS.ProcessEnv,
+    options?: Pick<import("./anthropic.js").AnthropicBatchClientOptions, "onWait">,
+  ): Promise<ModelClient>;
 }
 
 export async function loadModelsConfig(
@@ -179,10 +182,13 @@ export function resolveModel(
     ...(entry?.maxTokens === undefined ? {} : { maxTokens: entry.maxTokens }),
     ...(def.type === "anthropic"
       ? {
-          async createBatch(env: NodeJS.ProcessEnv = process.env) {
+          async createBatch(
+            env: NodeJS.ProcessEnv = process.env,
+            options: Pick<import("./anthropic.js").AnthropicBatchClientOptions, "onWait"> = {},
+          ) {
             const apiKey = def.apiKeyEnv === undefined ? undefined : env[def.apiKeyEnv];
             const { AnthropicBatchClient } = await import("./anthropic.js");
-            return new AnthropicBatchClient({ model, ...(apiKey ? { apiKey } : {}) });
+            return new AnthropicBatchClient({ model, ...(apiKey ? { apiKey } : {}), ...options });
           },
         }
       : {}),

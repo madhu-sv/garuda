@@ -30,7 +30,11 @@ export function jobReport(job: Job): string {
     `- Base: ${job.base.slice(0, 12)}`,
     `- Approved: ${job.allow.length === 0 ? "nothing beyond the sandbox" : job.allow.join(", ")}`,
   );
-  if (job.batch === true) lines.push(`- Batch API: yes, finish by ${job.finishBy ?? "07:00"}`);
+  if (job.batch === true) {
+    lines.push(
+      `- Batch API: yes, finish by ${job.finishBy ?? "07:00"}, step limit ${job.stepLimitMinutes ?? 20} min`,
+    );
+  }
   if (job.startedAt !== undefined) lines.push(`- Started: ${job.startedAt}`);
   if (r === undefined) return lines.join("\n");
   lines.push(
@@ -40,7 +44,7 @@ export function jobReport(job: Job): string {
   if (r.modelCalls !== undefined) {
     const m = r.modelCalls;
     lines.push(
-      `- Model calls: ${m.batch} through the Batch API, ${m.normal} normal${m.switchedAt === undefined ? "" : ` (switched at ${m.switchedAt})`}`,
+      `- Model calls: ${m.batch} through the Batch API, ${m.normal} normal${m.slow ? ` (${m.slow} after a batch waited too long)` : ""}${m.switchedAt === undefined ? "" : `; the rest normal from ${m.switchedAt}`}`,
     );
   }
   if (r.error !== undefined) lines.push(`- Error: ${r.error}`);

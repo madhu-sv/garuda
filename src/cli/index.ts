@@ -564,13 +564,36 @@ async function jobBatchClient(
 ): Promise<import("../model/types.js").ModelClient> {
   const { DeadlineClient } = await import("../model/deadline.js");
   const { nextTime } = await import("../jobs/launchd.js");
-  const { DEFAULT_FINISH_BY, SWITCH_BEFORE_MS, switchTime } = await import("../jobs/create.js");
+  const { DEFAULT_FINISH_BY, DEFAULT_STEP_LIMIT_MINUTES, SWITCH_BEFORE_MS } = await import(
+    "../jobs/create.js"
+  );
   const finishBy = job.job.finishBy ?? DEFAULT_FINISH_BY;
+  const stepLimit = job.job.stepLimitMinutes ?? DEFAULT_STEP_LIMIT_MINUTES;
   const switchAt = new Date(nextTime(finishBy).getTime() - SWITCH_BEFORE_MS);
-  const batch = await (resolved.createBatch as NonNullable<ResolvedModel["createBatch"]>)();
-  job.deadline = new DeadlineClient(batch, () => resolved.create(), switchAt);
+  const batch = await (resolved.createBatch as NonNullable<ResolvedModel["createBatch"]>)(
+    process.env,
+    {
+      // A quiet terminal must not look stuck: the batch id, then a line every minute.
+      onWait: ({ batchId, waitedMs, status }) =>
+        renderer.info(
+          waitedMs === 0
+            ? `Waiting for batch ${batchId} …`
+            : `  still waiting for ${batchId}: ${Math.round(waitedMs / 60_000)} min (${status})`,
+        ),
+    },
+  );
+  job.deadline = new DeadlineClient(batch, () => resolved.create(), switchAt, {
+    stepLimitMs: stepLimit * 60_000,
+  });
+  const when = switchAt.toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   renderer.info(
-    `Batch API (half price, minutes per step) until ${switchTime(finishBy)}; then the normal API.`,
+    `Batch API (half price) until ${when}, then the normal API. A step that waits more than ${stepLimit} min runs on the normal API.`,
   );
   return job.deadline;
 }

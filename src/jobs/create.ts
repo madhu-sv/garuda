@@ -26,6 +26,8 @@ import { jobBase, linkCandidates, worktreeDir } from "./worktree.js";
 export const DEFAULT_FINISH_BY = "07:00";
 /** How long before the finish-by time a batch job switches to the normal API. */
 export const SWITCH_BEFORE_MS = 15 * 60_000;
+/** A batch step that waits longer than this runs on the normal API (that step only). */
+export const DEFAULT_STEP_LIMIT_MINUTES = 20;
 
 /** "06:45" for "07:00". */
 export function switchTime(finishBy: string): string {
@@ -147,8 +149,9 @@ export async function createJob(
         tool: "schedule",
         target: { kind: "input", json: "{}" },
         preview: [
-          "Half the token price. Each step waits for its batch: about 3 minutes in Garuda's measurement, so a 40-step job takes about 2 hours.",
-          `At ${switchTime(DEFAULT_FINISH_BY)} (15 minutes before the finish-by time ${DEFAULT_FINISH_BY}), a job that still runs goes on with the normal API. You can change "finishBy" in the job file.`,
+          "Half the token price. Each step waits for its batch: about 3 minutes in Garuda's first measurement, but some batches wait hours.",
+          `A step that waits more than ${DEFAULT_STEP_LIMIT_MINUTES} minutes runs on the normal API (full price); the next step tries the Batch API again.`,
+          `At ${switchTime(DEFAULT_FINISH_BY)} (15 minutes before the finish-by time ${DEFAULT_FINISH_BY}), a job that still runs goes on with the normal API. You can change "finishBy" and "stepLimitMinutes" in the job file.`,
         ].join("\n"),
         isolation: options.executor.isolation,
         title: "Use the Batch API for this job?",
@@ -161,6 +164,7 @@ export async function createJob(
     if (batch !== "deny") {
       job.batch = true;
       job.finishBy = DEFAULT_FINISH_BY;
+      job.stepLimitMinutes = DEFAULT_STEP_LIMIT_MINUTES;
     }
   }
   await saveJob(job);

@@ -180,6 +180,7 @@ export async function finishJob(
           modelCalls: {
             batch: prepared.deadline.calls.primary,
             normal: prepared.deadline.calls.fallback,
+            slow: prepared.deadline.calls.slow,
             ...(prepared.deadline.calls.switchedAt === undefined
               ? {}
               : { switchedAt: prepared.deadline.calls.switchedAt.toISOString() }),
