@@ -164,6 +164,8 @@ export function resolveModel(
       : base.price !== undefined
         ? { price: base.price }
         : {}),
+    // Thinking by model (0.9): only Claude models on the Anthropic provider have it.
+    ...(base.thinking === undefined ? {} : { thinking: base.thinking }),
   };
 
   const notes: string[] = [];

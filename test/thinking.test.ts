@@ -13,6 +13,7 @@ import { fromWireMessage, toWireMessage, toWireParams } from "../src/model/anthr
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { toWireMessages } from "../src/model/openaiCompatible.js";
 import { lookupModel } from "../src/model/pricing.js";
+import { resolveModel } from "../src/model/providers.js";
 import {
   changeThinking,
   fitThinking,
@@ -195,6 +196,12 @@ describe("thinking blocks (0.9)", () => {
 describe("/thinking (0.9)", () => {
   const ALWAYS = lookupModel("claude-sonnet-5").thinking;
   const OPTIONAL = lookupModel("claude-sonnet-4-6").thinking;
+
+  it("the CLI's resolved model carries the thinking facts (live test: /thinking said no)", () => {
+    expect(resolveModel("claude-sonnet-5").info.thinking?.mode).toBe("always");
+    expect(resolveModel("anthropic/claude-opus-4-8").info.thinking?.mode).toBe("optional");
+    expect(resolveModel("ollama/qwen3-coder:30b").info.thinking).toBeUndefined();
+  });
 
   it("maps a choice to request fields per model", () => {
     expect(ALWAYS?.mode).toBe("always");
