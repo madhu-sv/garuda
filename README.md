@@ -232,7 +232,7 @@ references/style.md in this folder.
 In plan mode the agent reads the code and writes a plan; it cannot change anything.
 
 - `/plan` and `/build` switch the mode; in the chat, Shift+Tab toggles it. `garuda --plan` starts in plan
-  mode. The footer shows `PLAN`.
+  mode. The footer shows `PLAN`. `/plan <task>` switches and plans the task at once (`/build <task>` too).
 - Allowed: reading tools, and bash in the sandbox, which then cannot write the project (temp folders and
   package caches only), so read-only commands and many tests still work. Denied, with no question: file
   edits and writes, `remember`, commands outside the sandbox, and web_fetch or MCP tools without an allow

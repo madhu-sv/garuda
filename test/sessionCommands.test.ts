@@ -427,3 +427,16 @@ describe("/sessions rename and delete (0.8)", () => {
     expect(said().at(-1)).toBe("Use: /sessions delete <number or id>.");
   });
 });
+
+describe("/plan <task> and /build <task> (0.8)", () => {
+  it("switch the mode, then give the task to run as a turn", async () => {
+    const runtime = await runtimeFor(project(), new FakeModelClient([]));
+    const { run, said } = chat(runtime);
+    expect(await run("/plan  add gcd to math.js ")).toEqual({ prompt: "add gcd to math.js" });
+    expect(runtime.mode).toBe("plan");
+    expect(said().at(-1)).toMatch(/^Plan mode:/);
+    expect(await run("/plan")).toBe("done");
+    expect(await run("/build now build it")).toEqual({ prompt: "now build it" });
+    expect(runtime.mode).toBe("build");
+  });
+});

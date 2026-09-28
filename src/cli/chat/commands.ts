@@ -38,8 +38,8 @@ export const HELP = [
   "  /lsp       language servers for diagnostics; /lsp install <typescript|python|java>",
   "  /commands  your custom commands and skills (~/.garuda, .garuda, .claude)",
   "  /agents    your custom agents and their tools (~/.garuda, .garuda, .claude)",
-  "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles)",
-  "  /build     build mode: change files and run commands (the default)",
+  "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles); /plan <task> plans it",
+  "  /build     build mode: change files and run commands (the default); /build <task> runs it",
   "  /undo      take back the last turn: its file changes and its messages",
   "  /redo      bring back the last undone turn",
   "  /init      set up this folder: AGENTS.md, and files from other agents (Claude Code, OpenCode …)",
@@ -77,6 +77,9 @@ export async function runCommand(
   else if (command === "/plan" || command === "/build") {
     runtime.setMode(command === "/plan" ? "plan" : "build");
     renderer.info(modeText(runtime));
+    // "/plan <task>" (0.8): switch, then run the task in the new mode.
+    const task = text.slice(command.length).trim();
+    if (task !== "") return { prompt: task };
   } else if (command === "/usage") renderer.info(usageSummary(runtime));
   else if (command === "/session") {
     const id = runtime.session?.id;
