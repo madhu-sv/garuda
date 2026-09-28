@@ -79,6 +79,9 @@ Sessions and models in the chat (0.6):
   first prompt line, prompts, model, cost.
 - `switchSession(ref)`: `resumeSession` for a number from the list, an id, or the unique start of an id;
   it writes a `resume` record, drops the pending notes, and says how full the context is.
+- `renameSession(ref, title)` and `deleteSession(ref, signal)` (0.8): the same refs as `switchSession`.
+  The title is one line without control characters (`cleanTitle`, at most 60 characters). Delete asks
+  (the preview has the title and turns), never takes the open session, and calls `store.remove`.
 - `sessionRecords()`: the current session's records, for `/export`.
 - `compact(focus, signal)` (0.8): `compactNow` on the current session with the main model and its price;
   the result has the tokens before and after and the summary's cost.

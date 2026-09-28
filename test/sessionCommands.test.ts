@@ -354,3 +354,76 @@ describe("/compact (0.8)", () => {
     expect(BUILTIN_COMMANDS).toContain("compact");
   });
 });
+
+describe("/sessions rename and delete (0.8)", () => {
+  it("renames a session: the list shows the title and keeps the order", async () => {
+    const root = project();
+    const model = new FakeModelClient([reply([text("One.")]), reply([text("Two.")])]);
+    const runtime = await runtimeFor(root, model);
+    await runtime.runTurn("first task", signal());
+    const firstId = runtime.session?.id as string;
+    runtime.newSession();
+    await new Promise((r) => setTimeout(r, 20));
+    await runtime.runTurn("second task", signal());
+    const { run, said } = chat(runtime);
+
+    await run("/sessions rename 2 API\u0007 work\n  on auth");
+    expect(said().at(-1)).toBe(`Session ${firstId} is now "API work on auth".`);
+    await run("/sessions");
+    const list = said().at(-1) as string;
+    expect(list).toMatch(/1\. .* second task {2}\(open\)/);
+    expect(list).toMatch(/2\. .* API work on auth\n/);
+    expect(list).toContain("/sessions rename <number or id> <title> · /sessions delete");
+    // The title record does not change the conversation.
+    const records = await new FileSessionStore(root).read(firstId);
+    expect(records.at(-1)).toMatchObject({ type: "title", title: "API work on auth" });
+    expect(rebuildState(records).messages).toHaveLength(2);
+
+    await run("/sessions rename 2");
+    expect(said().at(-1)).toBe("Use: /sessions rename <number or id> <title>.");
+    await run("/sessions rename 9 x");
+    expect(said().at(-1)).toBe('There is no session "9" in this project. Type /sessions.');
+  });
+
+  it("deletes a session after a yes, with its subagent logs; never the open one", async () => {
+    const root = project();
+    const model = new FakeModelClient([reply([text("One.")]), reply([text("Two.")])]);
+    const questions: string[] = [];
+    let answer: "once" | "deny" = "deny";
+    const approver = {
+      ask: async (request: { title?: string; preview: string }) => {
+        questions.push(`${request.title}\n${request.preview}`);
+        return answer;
+      },
+    };
+    const runtime = await runtimeFor(root, model, { approver });
+    await runtime.runTurn("old task", signal());
+    const oldId = runtime.session?.id as string;
+    runtime.newSession();
+    await runtime.runTurn("new task", signal());
+    const store = new FileSessionStore(root);
+    const child = store.childPath(oldId, "explore-1");
+    store.openChild(oldId, "explore-1").write({ type: "redo" });
+    const { run, said } = chat(runtime);
+
+    await run(`/sessions delete ${runtime.session?.id}`);
+    expect(said().at(-1)).toMatch(/is open\. Start a new one \(\/new\) or open another first\.$/);
+    expect(questions).toEqual([]);
+
+    await run(`/sessions delete ${oldId}`);
+    expect(questions[0]).toContain("Delete a session?");
+    expect(questions[0]).toContain('"old task" · 1 turn');
+    expect(said().at(-1)).toBe("Nothing changed.");
+    expect(existsSync(store.path(oldId))).toBe(true);
+
+    answer = "once";
+    await run(`/sessions delete ${oldId}`);
+    expect(said().at(-1)).toBe(`Session ${oldId} is deleted.`);
+    expect(existsSync(store.path(oldId))).toBe(false);
+    expect(existsSync(dirname(child))).toBe(false);
+    expect((await store.list()).map((s) => s.id)).toEqual([runtime.session?.id]);
+
+    await run("/sessions delete");
+    expect(said().at(-1)).toBe("Use: /sessions delete <number or id>.");
+  });
+});

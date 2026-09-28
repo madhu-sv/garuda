@@ -23,7 +23,7 @@ export const HELP = [
   "  /help      show this help",
   "  /usage     tokens and cost of this session",
   "  /session   the session id and file",
-  "  /sessions  this project's sessions; /sessions <n|id> continues one",
+  "  /sessions  this project's sessions; /sessions <n|id> continues one; rename, delete",
   "  /models    the models; /models <n|id|opus|sonnet|haiku> switches for this chat",
   "  /export    write this conversation as Markdown; /export <file>",
   "  /compact   summarise the older turns now; /compact <what to keep>",
@@ -82,7 +82,12 @@ export async function runCommand(
     const id = runtime.session?.id;
     renderer.info(id === undefined ? "No session yet." : `Session ${id}\n${sessionPath(id)}`);
   } else if (command === "/sessions") {
-    await sessionsCommand(runtime, renderer, text.slice(command.length).trim());
+    await sessionsCommand(
+      runtime,
+      renderer,
+      text.slice(command.length).trim(),
+      signal ?? new AbortController().signal,
+    );
   } else if (command === "/models") {
     const arg = text.slice(command.length).trim();
     if (arg === "") renderer.info(modelsText(runtime));
@@ -160,7 +165,31 @@ export async function runCommand(
 }
 
 /** /sessions: the list; /sessions <n|id>: continue that session (0.6). */
-async function sessionsCommand(runtime: Runtime, renderer: Renderer, arg: string): Promise<void> {
+async function sessionsCommand(
+  runtime: Runtime,
+  renderer: Renderer,
+  arg: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const [verb = "", ref = "", ...rest] = arg.split(/\s+/);
+  if (verb === "rename" || verb === "delete") {
+    const use = `Use: /sessions ${verb} <number or id>${verb === "rename" ? " <title>" : ""}.`;
+    if (
+      ref === "" ||
+      (verb === "rename" && rest.length === 0) ||
+      (verb === "delete" && rest.length > 0)
+    ) {
+      renderer.warn(use);
+      return;
+    }
+    const result =
+      verb === "rename"
+        ? await runtime.renameSession(ref, rest.join(" "))
+        : await runtime.deleteSession(ref, signal);
+    if (result.ok) renderer.info(result.text);
+    else renderer.warn(result.text);
+    return;
+  }
   if (arg !== "") {
     const result = await runtime.switchSession(arg);
     if (result.ok) renderer.info(result.text);
@@ -192,6 +221,7 @@ async function sessionsCommand(runtime: Runtime, renderer: Renderer, arg: string
       ...rows,
       ...(total > sessions.length ? [`  … ${total - sessions.length} older`] : []),
       "Continue one with /sessions <number or id>. /new starts a new one.",
+      "/sessions rename <number or id> <title> · /sessions delete <number or id>",
     ].join("\n"),
   );
 }

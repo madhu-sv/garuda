@@ -40,6 +40,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `snapshot` | tree (the undo snapshot of the files before the turn), messages (the count before the turn), prompt (one short line), durationMs (0.4) |
 | `undo` | after (the snapshot of the files at the undo) (0.4) |
 | `redo` | – (0.4) |
+| `title` | title (0.8, `/sessions rename`; the last one wins; resume ignores it) |
 | `end` | stopReason, steps |
 
 ## Store (`store.ts`)
@@ -51,6 +52,8 @@ interface SessionStore {
   read(sessionId): Promise<SessionRecord[]>;
   latest(): Promise<string | undefined>;
   list(): Promise<{ id; updated: Date }[]>;   // newest first (0.6, /sessions)
+  setTitle(id, title): Promise<void>;          // 0.8: appends a title record, keeps the file time
+  remove(id): Promise<void>;                   // 0.8: the file and its subagent folder
 }
 ```
 
@@ -100,4 +103,4 @@ before it edits it.
 ## Tests
 
 `test/sessions.test.ts` (journal, redaction, resume, replay), `test/m4.acceptance.test.ts`,
-`test/sessionCommands.test.ts` (0.6: `/sessions`, `/models`, `/export`; 0.8: `/compact`).
+`test/sessionCommands.test.ts` (0.6: `/sessions`, `/models`, `/export`; 0.8: `/compact`, `/sessions rename` and `delete`).

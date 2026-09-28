@@ -89,6 +89,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         }
         break;
       case "end":
+      case "title":
         break;
     }
   }

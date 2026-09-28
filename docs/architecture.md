@@ -203,7 +203,7 @@ All state is in files. There is no server and no database.
 
 | File | Owner | Content |
 | --- | --- | --- |
-| `<root>/.garuda/sessions/<id>.jsonl` | Garuda | One record per line: start, resume, model (0.6), user, assistant, tool results, compaction, snapshot, undo, redo, end. 0600, redacted. |
+| `<root>/.garuda/sessions/<id>.jsonl` | Garuda | One record per line: start, resume, model (0.6), user, assistant, tool results, compaction, snapshot, undo, redo, title (0.8), end. 0600, redacted. |
 | `<root>/.garuda/jobs/<id>.json`, `<id>.md` | Garuda, user | A scheduled job (0.7): the plan, the approval list, status and result (the user may edit it before the run); the report. |
 | `~/.garuda/worktrees/<project>-<hash>/<id>/` | Garuda | The worktree of a job, on its branch `garuda/job-<id>`. |
 | `~/Library/LaunchAgents/dev.garuda.job.<id>.plist`, `<root>/.garuda/jobs/<id>.log` | Garuda | The launchd agent of a job (macOS, 0.7) and its log; the agent is removed after the run. |

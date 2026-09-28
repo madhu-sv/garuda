@@ -56,7 +56,7 @@ import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
 import { FileTracker } from "../session/fileTracker.js";
-import { type SessionSummary, summariseSession } from "../session/list.js";
+import { cleanTitle, type SessionSummary, summariseSession } from "../session/list.js";
 import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
 import {
@@ -840,10 +840,7 @@ export class Runtime {
    * does. `ref` is a number from the /sessions list or a session id (or its unique start).
    */
   async switchSession(ref: string): Promise<{ ok: boolean; text: string }> {
-    const all = await this.store.list();
-    const id = /^\d+$/.test(ref)
-      ? all[Number(ref) - 1]?.id
-      : (all.find((s) => s.id === ref) ?? onlyOne(all.filter((s) => s.id.startsWith(ref))))?.id;
+    const id = await this.findSession(ref);
     if (id === undefined) {
       return { ok: false, text: `There is no session "${ref}" in this project. Type /sessions.` };
     }
@@ -866,6 +863,65 @@ export class Runtime {
       ok: true,
       text: `Continuing session ${id} (${s.messages.length} messages, ${Math.round((s.contextTokens / this.currentLimits.contextWindow) * 100)}% of the context window). Read files again before you edit them.`,
     };
+  }
+
+  /** A number from the /sessions list, a session id, or the unique start of one. */
+  private async findSession(ref: string): Promise<string | undefined> {
+    const all = await this.store.list();
+    return /^\d+$/.test(ref)
+      ? all[Number(ref) - 1]?.id
+      : (all.find((s) => s.id === ref) ?? onlyOne(all.filter((s) => s.id.startsWith(ref))))?.id;
+  }
+
+  /** /sessions rename <n|id> <title> (0.8). */
+  async renameSession(ref: string, title: string): Promise<{ ok: boolean; text: string }> {
+    const id = await this.findSession(ref);
+    if (id === undefined) {
+      return { ok: false, text: `There is no session "${ref}" in this project. Type /sessions.` };
+    }
+    const clean = cleanTitle(title);
+    if (clean === "") return { ok: false, text: "Give a title: /sessions rename <n|id> <title>." };
+    await this.store.setTitle(id, clean);
+    return { ok: true, text: `Session ${id} is now "${clean}".` };
+  }
+
+  /**
+   * /sessions delete <n|id> (0.8): ask, then delete the session file and its subagent journals.
+   * The open session cannot go.
+   */
+  async deleteSession(ref: string, signal: AbortSignal): Promise<{ ok: boolean; text: string }> {
+    const id = await this.findSession(ref);
+    if (id === undefined) {
+      return { ok: false, text: `There is no session "${ref}" in this project. Type /sessions.` };
+    }
+    if (id === this.current?.id) {
+      return {
+        ok: false,
+        text: `Session ${id} is open. Start a new one (/new) or open another first.`,
+      };
+    }
+    const records = await this.store.read(id);
+    const summary = summariseSession(id, new Date(), records);
+    const choice = await this.approver.ask(
+      {
+        tool: "sessions",
+        target: { kind: "input", json: "{}" },
+        preview: [
+          `Session ${id}`,
+          `"${summary.title}" · ${summary.turns} turn${summary.turns === 1 ? "" : "s"}`,
+          "The file and its subagent logs go for good. /undo cannot bring them back.",
+        ].join("\n"),
+        isolation: this.executor.isolation,
+        title: "Delete a session?",
+        question: "Delete it?",
+        choices: ["once", "deny"],
+        labels: { once: "Yes, delete it", deny: "No" },
+      },
+      signal,
+    );
+    if (choice === "deny") return { ok: true, text: "Nothing changed." };
+    await this.store.remove(id);
+    return { ok: true, text: `Session ${id} is deleted.` };
   }
 
   /** The records of the current session, for /export (0.6). Redacted as on disk. */

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, rm, stat, utimes } from "node:fs/promises";
 import { basename, join } from "node:path";
 import type { NewRecord, SessionRecord } from "./records.js";
 import { Redactor } from "./redact.js";
@@ -26,6 +26,10 @@ export interface SessionStore {
   latest(): Promise<string | undefined>;
   /** The sessions of this project, newest first (0.6, /sessions). */
   list(): Promise<{ id: string; updated: Date }[]>;
+  /** Give a session a title (0.8, /sessions rename). Its place in the list does not change. */
+  setTitle(sessionId: string, title: string): Promise<void>;
+  /** Delete a session and its subagent journals for good (0.8, /sessions delete). */
+  remove(sessionId: string): Promise<void>;
 }
 
 export const SESSIONS_DIR = join(".garuda", "sessions");
@@ -73,6 +77,19 @@ export class FileSessionStore implements SessionStore {
 
   async read(sessionId: string): Promise<SessionRecord[]> {
     return parseRecords(await readFile(this.path(sessionId), "utf8"));
+  }
+
+  async setTitle(sessionId: string, title: string): Promise<void> {
+    const file = this.path(sessionId);
+    const before = await stat(file);
+    this.open(sessionId).write({ type: "title", title });
+    // Keep the file time: the list sorts by the last work, and a new title is not work.
+    await utimes(file, before.atime, before.mtime);
+  }
+
+  async remove(sessionId: string): Promise<void> {
+    await rm(this.path(sessionId));
+    await rm(join(this.dir, safeId(sessionId)), { recursive: true, force: true });
   }
 
   async latest(): Promise<string | undefined> {

@@ -103,6 +103,12 @@ export interface RedoRecord extends Base {
   type: "redo";
 }
 
+/** /sessions rename (0.8): the session's title in /sessions. The last one wins. */
+export interface TitleRecord extends Base {
+  type: "title";
+  title: string;
+}
+
 export interface EndRecord extends Base {
   type: "end";
   stopReason: string;
@@ -118,6 +124,7 @@ export type SessionRecord =
   | SnapshotRecord
   | UndoRecord
   | RedoRecord
+  | TitleRecord
   | EndRecord;
 
 /** A record before the journal adds the time. */

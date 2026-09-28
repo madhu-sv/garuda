@@ -106,6 +106,8 @@ Set the context window, price and output limit per model, and add providers, in 
   skills run with `/name`.
 - `/sessions` lists this project's sessions (newest first: time, first prompt, turns, cost, model).
   `/sessions <number or id>` continues one in the chat, as `--resume` does. Read tracking starts again.
+  `/sessions rename <number or id> <title>` gives a session a title for the list. `/sessions delete <number
+  or id>` asks, then deletes the session file and its subagent logs for good; the open session cannot go.
 - `/models` lists the known Claude models and the models in `~/.garuda/models.json`, with context window and
   price. `/models <number, id or opus|sonnet|haiku|fable>` switches the main model for the next turns of this
   chat. The session records the change; a new chat starts with `-m` or `GARUDA_MODEL` again. The prompt cache

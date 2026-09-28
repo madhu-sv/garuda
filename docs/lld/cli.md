@@ -225,7 +225,8 @@ interface ChatState {
   gives a warning and keeps the line. The plain REPL joins lines that end with `\` (prompt `… `).
 - **Sessions, models, export (0.6):** `/sessions` prints `runtime.listSessions()` (at most 20, two lines
   each; the open one is marked); `/sessions <n|id>` calls `runtime.switchSession(ref)` (a number from the
-  list, an id, or the unique start of one). `/models` prints `modelsText(runtime)` from `runtime.modelList()`
+  list, an id, or the unique start of one). `/sessions rename <ref> <title>` (0.8) calls
+  `runtime.renameSession`; `/sessions delete <ref>` calls `runtime.deleteSession`, which asks first. `/models` prints `modelsText(runtime)` from `runtime.modelList()`
   (● marks the current model; `modelFacts` gives "1.0M context, $4/$20 per M tokens"); `/models <ref>` calls
   `runtime.setModel(ref)`. The footer shows the new model after the command. `/compact [focus]` (0.8)
   calls `runtime.compact(focus, signal)`; the Ink chat shows it as busy (`store.begin`), and Esc or Ctrl-C

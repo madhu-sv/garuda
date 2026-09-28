@@ -105,6 +105,7 @@ export function sessionMarkdown(records: readonly SessionRecord[], sessionId: st
         break;
       case "start":
       case "resume":
+      case "title":
         break;
     }
   }

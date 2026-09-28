@@ -220,7 +220,7 @@ now.
 ### Sessions, models and export in the chat (0.6)
 
 `/sessions` lists the project's sessions from `SessionStore.list()`; `/sessions <n|id>` resumes one in the
-same process. `/models` lists the known and configured models; `/models <ref>` switches the main model for
+same process; `/sessions rename` and `delete` (0.8) give one a title or delete it after a question. `/models` lists the known and configured models; `/models <ref>` switches the main model for
 the next turns (`modelId`, window, price and client change together; a `model` record keeps it).
 `/export` writes the session records as Markdown. `/compact [focus]` (0.8) summarises the older turns at
 once, with the automatic compaction's summary step. Details: [lld/cli.md](lld/cli.md),
