@@ -149,7 +149,8 @@ flowchart LR
 | --- | --- |
 | `inkChat.ts` | Entry. Creates the store, sets it as approver and event target, renders `App`, runs `runChat`, unmounts. Never awaits `waitUntilExit()` (it hangs after unmount). |
 | `store.ts` | `ChatStore`: all chat state and logic. Implements `Renderer`, `Approver` and `Interruptible`. |
-| `controller.ts` | `runChat`: next line → command or turn; `statusOf` for the footer. |
+| `controller.ts` | `runChat`: next line → command or turn; `statusOf` for the footer; `CommandArgs` (0.8): Tab choices for command arguments. |
+| `complete.ts` | Tab completion (0.6): commands, `@paths`, command arguments and the fuzzy file search (0.8: `fuzzyFiles`, `rootFiles`). |
 | `ui.tsx` | Ink view: `<Static>` for finished items, a small live area, the key map. |
 | `lineEditor.ts` | Pure line editor: insert, delete, words, kill, history with draft. |
 | `markdown.ts` | `takeBlocks` (split a stream at blank lines, not inside fences) and `renderMarkdown`. |
@@ -230,9 +231,9 @@ interface ChatState {
   (case-insensitive); the score adds 1 per character, 5 for a run, 3 at a word start (after `/ - _ .`),
   minus the gap since the last character (at most 10), and 20 when the whole query fits in the file
   name, 8 more when it starts the name, minus a tenth of the name length; shorter paths win a tie.
-  `rootFiles(root)` walks the root with no hidden entries, no symbolic links and no `.git`, `node_modules`, `.garuda`, `dist`,
-  `build`, `target`, `.venv`, `venv`, `__pycache__`; at most 20,000 files, kept for 10 s. One match
-  completes; several are listed one per line and the line stays as typed.
+  `rootFiles(root)` walks the root with no hidden entries, no symbolic links and no `.git`,
+  `node_modules`, `.garuda`, `dist`, `build`, `target`, `.venv`, `venv`, `__pycache__`; at most 20,000
+  files, kept for 10 s. One match completes; several are listed one per line and the line stays as typed.
 - **External editor (0.6, `externalEditor.ts`):** Ctrl-G or `/editor` (the controller handles it before
   `runCommand`) calls `store.openEditor()`. `inkChat` sets `store.externalEdit`: raw mode off, stdin paused,
   `editInEditor(text)` (a 0600 temp file, `$VISUAL`/`$EDITOR`/`vi` as argv with quotes, `runInTerminal` from
