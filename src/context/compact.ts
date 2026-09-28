@@ -141,7 +141,13 @@ async function summaryStage(
   const messages = [opening, ...recent];
   const costUsd = costOf?.(summary);
   addCost(session, summary.usage, costUsd);
-  const afterTokens = Math.ceil(charCount(messages) / CHARS_PER_TOKEN);
+  // The context also holds the system prompt and the tool list, which do not change: take off only
+  // what the messages lost (0.8; before, the estimate counted the messages alone).
+  const savedChars = Math.max(0, charCount(session.messages) - charCount(messages));
+  const afterTokens = Math.max(
+    Math.ceil(charCount(messages) / CHARS_PER_TOKEN),
+    before - Math.ceil(savedChars / CHARS_PER_TOKEN),
+  );
   return apply(session, { stage: "summary", beforeTokens: before, afterTokens }, messages, {
     summary,
     costUsd,

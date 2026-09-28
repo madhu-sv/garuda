@@ -95,6 +95,7 @@ describe("compaction (F23)", () => {
   it("stage 2 asks the model for a summary of older turns when trimming is not enough", async () => {
     const session = longSession(8);
     session.contextTokens = 95_000;
+    const before = structuredClone(session.messages);
     const summaryUsage: Usage = {
       inputTokens: 3_000,
       outputTokens: 200,
@@ -133,6 +134,11 @@ describe("compaction (F23)", () => {
     expect(session.usage.inputTokens).toBe(3_000);
     expect(session.costUsd).toBeCloseTo(0.01);
     expect(session.contextTokens).toBe(result?.afterTokens);
+    // The estimate keeps the part outside the messages (system prompt, tools): only the saved
+    // characters come off (0.8; live test: 26.1k → "about 2.5k" was the messages alone).
+    const chars = JSON.stringify(before).length;
+    expect(result?.afterTokens).toBeGreaterThan(95_000 - chars / 4);
+    expect(result?.afterTokens).toBeLessThan(95_000);
   });
 
   it("the loop compacts before a model call and keeps system and tools stable (N2)", async () => {
