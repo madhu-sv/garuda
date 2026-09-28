@@ -35,4 +35,4 @@ Low-level design documents:
 | Scheduled jobs (0.7) | `src/jobs/`, `src/cli/jobCommand.ts` | [jobs.md](lld/jobs.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
-The code, the tests and the commits use the same IDs. The documents describe version 0.8.0-dev.
+The code, the tests and the commits use the same IDs. The documents describe version 0.8.0.
