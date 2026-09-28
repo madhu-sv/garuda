@@ -224,6 +224,13 @@ interface ChatState {
   title, a job's status and title) are listed one per line. Sessions and jobs come from files, so
   `refresh()` reads them before each input line (not awaited) and completion stays synchronous; readline
   gets the words without hints.
+- **Fuzzy @ (0.8):** when the `@path` prefix matches no entry, `fuzzyFiles(query, sources.files(), 10)`
+  searches all files of the root. A file matches when its path holds the query's characters in order
+  (case-insensitive); the score adds 1 per character, 5 for a run, 3 at a word start (after `/ - _ .`),
+  and 20 when the whole query fits in the file name; shorter paths win a tie. `rootFiles(root)` walks the
+  root with no hidden entries, no symbolic links and no `.git`, `node_modules`, `.garuda`, `dist`,
+  `build`, `target`, `.venv`, `venv`, `__pycache__`; at most 20,000 files, kept for 10 s. One match
+  completes; several are listed one per line and the line stays as typed.
 - **External editor (0.6, `externalEditor.ts`):** Ctrl-G or `/editor` (the controller handles it before
   `runCommand`) calls `store.openEditor()`. `inkChat` sets `store.externalEdit`: raw mode off, stdin paused,
   `editInEditor(text)` (a 0600 temp file, `$VISUAL`/`$EDITOR`/`vi` as argv with quotes, `runInTerminal` from

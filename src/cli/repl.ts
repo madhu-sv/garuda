@@ -2,7 +2,7 @@ import { createInterface } from "node:readline";
 import type { Runtime } from "../app/runtime.js";
 import type { Approver } from "../permissions/types.js";
 import { runCommand } from "./chat/commands.js";
-import { complete, rootLister } from "./chat/complete.js";
+import { complete, rootFiles, rootLister } from "./chat/complete.js";
 import { CommandArgs, commandNames } from "./chat/controller.js";
 import { BUILD_PROMPT, planHandoff } from "./chat/plan.js";
 import type { Notifier } from "./notify.js";
@@ -40,11 +40,13 @@ export async function runRepl(
   // Tab completion (0.6): the same /commands and @paths as the Ink chat.
   const list = rootLister(runtime.root);
   const args = new CommandArgs(runtime);
+  const files = rootFiles(runtime.root);
   const completer = (line: string): [string[], string] => {
     const result = complete(line, line.length, {
       commands: commandNames(runtime),
       list,
       args: (command, before) => args.choices(command, before),
+      files,
     });
     if (result === undefined) return [[], line];
     const word = line.slice(line.search(/\S*$/));

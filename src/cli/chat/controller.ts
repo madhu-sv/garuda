@@ -5,7 +5,7 @@ import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import type { Notifier } from "../notify.js";
 import { runTurnInTerminal } from "../turn.js";
 import { runCommand } from "./commands.js";
-import { type ArgChoice, complete, rootLister } from "./complete.js";
+import { type ArgChoice, complete, rootFiles, rootLister } from "./complete.js";
 import { BUILD_PROMPT, planHandoff } from "./plan.js";
 import type { ChatStore, Status } from "./store.js";
 
@@ -27,11 +27,13 @@ export async function runChat(
   };
   const list = rootLister(runtime.root);
   const args = new CommandArgs(runtime);
+  const files = rootFiles(runtime.root);
   store.completer = (text, cursor) =>
     complete(text, cursor, {
       commands: commandNames(runtime),
       list,
       args: (command, before) => args.choices(command, before),
+      files,
     });
   for (;;) {
     void args.refresh();

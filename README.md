@@ -132,6 +132,9 @@ Set the context window, price and output limit per model, and add providers, in 
 - Tab completes `/commands` (built-in, your own, skills) and `@paths`; with several matches it lists them.
   It also completes arguments: `/models <model>`, `/sessions <id|rename|delete>` (with each session's
   title), `/jobs <id|cancel>`, `/diff last`, `/mcp logout <server>` and `/lsp install <language>`.
+- When no path starts with what you typed after `@`, Tab searches all files by their letters in order:
+  `@rntm` finds `src/app/runtime.ts`. One match completes; otherwise the best 10 are listed. The search
+  skips hidden files, `node_modules`, `dist`, `build`, `target` and virtual environments.
 - Ctrl-G (or `/editor`) opens the prompt in `$VISUAL` or `$EDITOR` (default `vi`). The saved text comes
   back into the input line; press Enter to send it. The plain chat also joins lines that end with `\`.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.

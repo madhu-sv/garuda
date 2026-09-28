@@ -1,10 +1,18 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { attachMentions, mentionTokens } from "../src/app/mentions.js";
 import { Runtime } from "../src/app/runtime.js";
-import { complete, rootLister } from "../src/cli/chat/complete.js";
+import { complete, fuzzyFiles, rootFiles, rootLister } from "../src/cli/chat/complete.js";
 import { CommandArgs } from "../src/cli/chat/controller.js";
 import { ChatStore } from "../src/cli/chat/store.js";
 import type { AgentEvent } from "../src/loop/runAgent.js";
@@ -315,5 +323,77 @@ describe("Tab completion of command arguments (0.8)", () => {
     store.editLine({ type: "insert", text: "/sessions a" });
     store.completeLine();
     expect(store.getState().items.at(-1)?.text).toBe("a1  one\na2  two");
+  });
+});
+
+describe("fuzzy @ search (0.8)", () => {
+  const files = [
+    "src/app/runtime.ts",
+    "src/app/mentions.ts",
+    "src/cli/repl.ts",
+    "test/runtime.test.ts",
+    "docs/lld/runtime-and-loop.md",
+    "README.md",
+  ];
+
+  it("ranks matches in the file name, runs and word starts first", () => {
+    expect(fuzzyFiles("rntm", files, 10)).toEqual([
+      "src/app/runtime.ts",
+      "test/runtime.test.ts",
+      "docs/lld/runtime-and-loop.md",
+    ]);
+    expect(fuzzyFiles("app/men", files, 10)).toEqual(["src/app/mentions.ts"]);
+    expect(fuzzyFiles("README", files, 10)).toEqual(["README.md"]);
+    expect(fuzzyFiles("zzz", files, 10)).toEqual([]);
+    expect(fuzzyFiles("t", files, 2)).toHaveLength(2);
+  });
+
+  it("only when the prefix finds nothing: one match completes, several are listed", () => {
+    const s = {
+      commands: [],
+      list: (folder: string) => (folder === "" ? ["src/", "test/"] : []),
+      files: () => files,
+    };
+    // A prefix match wins: no fuzzy search.
+    expect(complete("@sr", 3, s)?.text).toBe("@src/");
+    expect(complete("fix @app/men now", 12, s)).toEqual({
+      text: "fix @src/app/mentions.ts now",
+      cursor: 24,
+      candidates: [],
+    });
+    expect(complete("@rntm", 5, s)).toEqual({
+      text: "@rntm",
+      cursor: 5,
+      lines: true,
+      candidates: ["@src/app/runtime.ts", "@test/runtime.test.ts", "@docs/lld/runtime-and-loop.md"],
+    });
+    expect(complete("@qqq", 4, s)).toBeUndefined();
+  });
+
+  it("walks the root: no hidden entries, no node_modules or dist, no links; kept for 10 s", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "garuda-fuzzy-")));
+    try {
+      for (const f of [
+        "src/a.ts",
+        "node_modules/x/i.js",
+        "dist/a.js",
+        ".env",
+        ".git/HEAD",
+        "src/.hid/b.ts",
+      ]) {
+        mkdirSync(dirname(join(root, f)), { recursive: true });
+        writeFileSync(join(root, f), "");
+      }
+      symlinkSync(join(root, "src"), join(root, "link"));
+      let now = 0;
+      const list = rootFiles(root, () => now);
+      expect(list()).toEqual(["src/a.ts"]);
+      writeFileSync(join(root, "src/b.ts"), "");
+      expect(list()).toEqual(["src/a.ts"]);
+      now = 10_000;
+      expect([...list()].sort()).toEqual(["src/a.ts", "src/b.ts"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

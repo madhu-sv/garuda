@@ -1,5 +1,5 @@
-import { readdirSync, statSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { type Dirent, readdirSync, statSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 
 /**
  * Tab completion in the chat (0.6): `/` commands (built-in, custom, skills) at the start of the
@@ -34,6 +34,8 @@ export interface CompletionSources {
    * typed. Absent or empty: no completion.
    */
   args?(command: string, before: readonly string[]): readonly ArgChoice[];
+  /** All files in the root, as relative paths (0.8): the fuzzy search when `@path` has no match. */
+  files?(): readonly string[];
 }
 
 const MAX_CANDIDATES = 30;
@@ -55,7 +57,20 @@ export function complete(
     const folder = path.slice(0, cut);
     const prefix = path.slice(cut);
     const entries = sources.list(folder, prefix.startsWith("."));
-    return apply(text, cursor, start, `@${folder}`, prefix, entries, "");
+    const exact = apply(text, cursor, start, `@${folder}`, prefix, entries, "");
+    if (exact !== undefined || sources.files === undefined || path === "") return exact;
+    // No path starts so (0.8): a fuzzy search over all files, for example @rntm → src/app/runtime.ts.
+    const found = fuzzyFiles(path, sources.files(), MAX_FUZZY);
+    if (found.length === 0) return undefined;
+    if (found.length === 1) {
+      const insert = `@${found[0]}`;
+      return {
+        text: text.slice(0, start) + insert + text.slice(cursor),
+        cursor: start + insert.length,
+        candidates: [],
+      };
+    }
+    return { text, cursor, candidates: found.map((f) => `@${f}`), lines: true };
   }
   if (before.startsWith("/") && start > 0 && sources.args !== undefined) {
     const [head = "", ...rest] = before.slice(0, start).trim().split(/\s+/);
@@ -145,5 +160,103 @@ export function rootLister(root: string): CompletionSources["list"] {
     } catch {
       return [];
     }
+  };
+}
+
+/** Most fuzzy matches shown (0.8). */
+const MAX_FUZZY = 10;
+
+/**
+ * Fuzzy file search (0.8): the files whose path holds the query's characters in order (case does not
+ * matter), best first. Matches in the file name, runs of characters and starts of words (after /, -,
+ * _, .) score higher; shorter paths win a tie.
+ */
+export function fuzzyFiles(query: string, files: readonly string[], max: number): string[] {
+  const q = query.toLowerCase();
+  const scored: { file: string; score: number }[] = [];
+  for (const file of files) {
+    const score = fuzzyScore(q, file);
+    if (score !== undefined) scored.push({ file, score });
+  }
+  return scored
+    .sort(
+      (a, b) => b.score - a.score || a.file.length - b.file.length || (a.file < b.file ? -1 : 1),
+    )
+    .slice(0, max)
+    .map((s) => s.file);
+}
+
+function fuzzyScore(query: string, file: string): number | undefined {
+  const path = file.toLowerCase();
+  const nameStart = path.lastIndexOf("/") + 1;
+  // Try the file name first: a query that fits in it is the best kind of match.
+  const inName = match(query, path, nameStart);
+  if (inName !== undefined) return inName + 20;
+  return match(query, path, 0);
+}
+
+function match(query: string, path: string, from: number): number | undefined {
+  let score = 0;
+  let at = from;
+  let last = -2;
+  for (const ch of query) {
+    const i = path.indexOf(ch, at);
+    if (i === -1) return undefined;
+    score += 1;
+    if (i === last + 1) score += 5;
+    const prev = path[i - 1];
+    if (i === 0 || prev === "/" || prev === "-" || prev === "_" || prev === ".") score += 3;
+    last = i;
+    at = i + 1;
+  }
+  return score;
+}
+
+/** Folders the file walk skips (0.8): tools' output and caches, not the user's code. */
+const SKIP_DIRS = new Set([
+  ".git",
+  "node_modules",
+  ".garuda",
+  "dist",
+  "build",
+  "target",
+  ".venv",
+  "venv",
+  "__pycache__",
+]);
+const MAX_FILES = 20_000;
+const FILES_TTL_MS = 10_000;
+
+/**
+ * All files in the root for the fuzzy search (0.8): no hidden entries, no symbolic links, no
+ * SKIP_DIRS, at most 20,000 files. The list is kept for 10 seconds, so repeated Tabs do not walk
+ * the tree again.
+ */
+export function rootFiles(root: string, now: () => number = Date.now): () => string[] {
+  let cache: { at: number; files: string[] } | undefined;
+  return () => {
+    if (cache !== undefined && now() - cache.at < FILES_TTL_MS) return cache.files;
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      let entries: Dirent[];
+      try {
+        entries = readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (files.length >= MAX_FILES) return;
+        if (entry.name.startsWith(".")) continue;
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (!SKIP_DIRS.has(entry.name)) walk(full);
+        } else if (entry.isFile()) {
+          files.push(relative(root, full).split(sep).join("/"));
+        }
+      }
+    };
+    walk(root);
+    cache = { at: now(), files };
+    return files;
   };
 }
