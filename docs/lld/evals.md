@@ -77,7 +77,7 @@ environment list.
 garuda eval [-m model] [-s basic|hard|java|python|all] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
-            [--keep-thinking on|off]
+            [--keep-thinking on|off] [--format on|off]
             [--batch on|off] [--parallel n]
 garuda eval --prepare java|python
 ```
@@ -93,6 +93,9 @@ time, stop reason), totals, a mean per task for `--repeat`, and `report.json`. E
 
 `--keep-thinking off` (0.9) drops Claude's thinking blocks as Garuda did before 0.9, to measure the
 change (default on, as in the product; `report.json` records `keepThinking`).
+
+`--format on|off` (0.10, JS suites): both arms get a `biome.json` and the project formatted with Garuda's
+own Biome first; `on` also formats after each edit (see [format.md](format.md)).
 
 `--parallel n` (0.7) runs n tasks at the same time (a small pool; the results keep the task order).
 `--batch on` (0.7, Anthropic models only) makes each task's model client the `AnthropicBatchClient`: every

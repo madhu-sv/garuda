@@ -104,6 +104,10 @@ async function main(): Promise<void> {
     .option("--todo <mode>", "the todo_write tool: off (default) or on, for A/B runs")
     .option("--lsp <mode>", "language server errors in edit results: off (default) or on")
     .option(
+      "--format <mode>",
+      "the project's formatter after edits: off (default) or on, for A/B runs",
+    )
+    .option(
       "--keep-thinking <mode>",
       "send Claude's thinking blocks back: on (default) or off, for A/B runs",
     )

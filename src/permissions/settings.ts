@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import type { FormatterSetting } from "../format/formatters.js";
 import type { CodeIndexMode } from "../knowledge/mode.js";
 import type { Price } from "../model/pricing.js";
 import { EFFORTS, type Effort } from "../model/types.js";
@@ -88,6 +89,27 @@ const schema = z.strictObject({
   /** Language server diagnostics after edits (0.4). enabled: default false. */
   lsp: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /**
+   * The project's formatter after edits (0.10). enabled: default false (A/B first). commands: by
+   * name, false turns a detected formatter off; a command adds one or replaces a detected one.
+   */
+  formatters: z
+    .strictObject({
+      enabled: z.boolean().optional(),
+      commands: z
+        .record(
+          z.string().regex(/^[a-z][a-z0-9-]*$/),
+          z.union([
+            z.literal(false),
+            z.strictObject({
+              extensions: z.array(z.string().min(1)).min(1),
+              command: z.array(z.string().min(1)).min(1),
+            }),
+          ]),
+        )
+        .optional(),
+    })
+    .optional(),
+  /**
    * Claude's thinking (0.9). keepBlocks: send thinking blocks back (default true, as the API asks);
    * false is for A/B runs only. enabled, effort, show: the start value of /thinking.
    */
@@ -144,6 +166,7 @@ export interface Settings {
   agents?: { enabled: boolean };
   notifications?: { channel?: NotifyChoice; afterSeconds?: number };
   thinking?: { keepBlocks?: boolean; enabled?: boolean; effort?: Effort; show?: boolean };
+  formatters?: { enabled: boolean; commands: Record<string, FormatterSetting> };
 }
 
 export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
@@ -168,6 +191,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     agents,
     notifications,
     thinking,
+    formatters,
   } = parsed.data;
   const rules = (list: string[] = []) =>
     list.map((text) => {
@@ -205,6 +229,14 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(undo?.enabled === undefined ? {} : { undo: { enabled: undo.enabled } }),
     ...(skills?.enabled === undefined ? {} : { skills: { enabled: skills.enabled } }),
     ...(agents?.enabled === undefined ? {} : { agents: { enabled: agents.enabled } }),
+    ...(formatters === undefined
+      ? {}
+      : {
+          formatters: {
+            enabled: formatters.enabled ?? false,
+            commands: formatters.commands ?? {},
+          },
+        }),
     ...(thinking === undefined
       ? {}
       : {

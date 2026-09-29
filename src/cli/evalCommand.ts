@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { formatReport, runEvals } from "../evals/runner.js";
 import { ALL_TASKS, EVAL_SUITES, requiredToolchains } from "../evals/suites.js";
 import { checkToolchains, prepareToolchain, TOOLCHAINS, toolchainId } from "../evals/toolchains.js";
@@ -36,6 +37,8 @@ export interface EvalCommandOptions {
   lsp?: string;
   /** --keep-thinking on|off: send Claude's thinking blocks back (0.9). */
   keepThinking?: string;
+  /** --format on|off: the project's formatter after edits (0.10). */
+  format?: string;
   /** --batch on|off: model calls through the Batch API (0.7, Anthropic only). */
   batch?: string;
   /** --parallel <n>: tasks at the same time. Default 1; with --batch on, all tasks (up to 20). */
@@ -96,6 +99,26 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   if (todoMode !== "on" && todoMode !== "off") {
     process.stderr.write(`Unknown todo mode ${options.todo}. Use: on, off.\n`);
     return 1;
+  }
+  const formatMode = options.format ?? "off";
+  if (formatMode !== "on" && formatMode !== "off") {
+    process.stderr.write(`Unknown format mode ${options.format}. Use: on, off.\n`);
+    return 1;
+  }
+  // The formatter A/B (0.10) uses Garuda's own Biome on the JS suites.
+  let biome: string | undefined;
+  if (options.format !== undefined) {
+    biome = garudaBiome();
+    if (biome === undefined) {
+      process.stderr.write(
+        "--format needs Biome in Garuda's node_modules (a source checkout after pnpm install).\n",
+      );
+      return 1;
+    }
+    if (options.suite === "java" || options.suite === "python" || options.suite === "all") {
+      process.stderr.write("--format works with the JS suites: basic and hard.\n");
+      return 1;
+    }
   }
   const thinkingMode = options.keepThinking ?? "on";
   if (thinkingMode !== "on" && thinkingMode !== "off") {
@@ -193,7 +216,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   if (batchMode === "on") {
@@ -220,6 +243,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       todo: todoMode === "on",
       lsp: lspMode === "on",
       keepThinking: thinkingMode === "on",
+      ...(biome === undefined ? {} : { format: { on: formatMode === "on", biome } }),
       ...(sub === undefined
         ? {}
         : { subagentModel: { spec: sub.spec, model: () => sub.create(), info: sub.info } }),
@@ -243,7 +267,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = `${formatReport(results)}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, batch: batchMode, parallel, wallMs, executor: executor.name, results }, null, 2)}\n`,
+    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, batch: batchMode, parallel, wallMs, executor: executor.name, results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;
@@ -274,4 +298,15 @@ async function prepare(name: string): Promise<number> {
   }
   process.stderr.write(`${toolchain.hint}\n${status?.output ?? ""}\n`);
   return 1;
+}
+
+/** Biome from Garuda's own dev dependencies, or undefined (an npm install or the single binary). */
+function garudaBiome(): string | undefined {
+  try {
+    const pkg = createRequire(import.meta.url).resolve("@biomejs/biome/package.json");
+    const bin = join(dirname(pkg), "bin", "biome");
+    return existsSync(bin) ? bin : undefined;
+  } catch {
+    return undefined;
+  }
 }

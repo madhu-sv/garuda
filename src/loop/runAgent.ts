@@ -29,6 +29,7 @@ import {
 } from "../session/session.js";
 import type {
   DiagnosticsSource,
+  FormatSource,
   ToolContext,
   ToolHooks,
   ToolOutcome,
@@ -75,6 +76,8 @@ export interface AgentDeps {
   hooks?: ToolHooks;
   /** Language server diagnostics after edits (0.4). */
   diagnostics?: DiagnosticsSource;
+  /** The project's formatter after edits (0.10). */
+  format?: FormatSource;
   maxTokens?: number;
   /** Stop after this many model calls in one run (F6). */
   maxSteps?: number;
@@ -241,6 +244,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       ...(deps.knowledge === undefined ? {} : { knowledge: deps.knowledge }),
       ...(deps.hooks === undefined ? {} : { hooks: deps.hooks }),
       ...(deps.diagnostics === undefined ? {} : { diagnostics: deps.diagnostics }),
+      ...(deps.format === undefined ? {} : { format: deps.format }),
     };
     const { results, meta } = await runTools(calls, deps, context, emit);
     addToolResults(session, results, meta);

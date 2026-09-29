@@ -25,8 +25,9 @@ interface ToolContext {
 }
 ```
 
-`withDiagnostics(result, context, file)` adds the diagnostics text after a tool's own result. It never
-fails the call: the file is already written.
+`afterWrite(result, context, file)` (0.10) runs after edit_file and write_file: the formatter, if on
+(`context.format`, see [format.md](format.md)), then `withDiagnostics(result, context, file)`, which adds
+the diagnostics text after a tool's own result. Neither fails the call: the file is already written.
 
 `ToolRunner` is what the loop needs (`specs`, `isReadOnly`, `runsCommands`, `execute`). `ToolRegistry`
 implements it; replay uses a recorded one. `isReadOnly` decides the loop's parallel batches: a read-only tool with

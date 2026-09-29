@@ -5,7 +5,7 @@ import { displayPath, resolveInRoot } from "../permissions/pathGuard.js";
 import { writeFileAtomic } from "./atomicWrite.js";
 import { unifiedDiff } from "./diff.js";
 import { splitLines } from "./limits.js";
-import { type Tool, withDiagnostics } from "./types.js";
+import { afterWrite, type Tool } from "./types.js";
 
 const input = z.object({
   path: z.string().min(1).describe("Path of the new file, relative to the working root."),
@@ -44,7 +44,7 @@ export const writeFileTool: Tool<z.infer<typeof input>> = {
     }
     // The agent knows this content, so it can edit the file next without a read.
     files.record(absolute, content);
-    return withDiagnostics(`Created ${shown} (${splitLines(content).length} lines).`, context, {
+    return afterWrite(`Created ${shown} (${splitLines(content).length} lines).`, context, {
       absolute,
       shown,
       text: content,

@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.9.0.
+Garuda is a terminal coding agent. This is version 0.10.0-dev.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -21,7 +21,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.7: scheduled jobs (plan now, build later with an approval list, own branch), launchd, Batch API (step limit, finish-by time) | Done |
 | 0.8: chat UX from the second OpenCode comparison (`/compact`, argument completion, fuzzy @, session rename and delete, `/plan <task>`) | Done |
 | 0.9: `/details`, `/thinking` (effort, show), Claude's thinking blocks kept, command palette (Ctrl-P) | Done |
-| 0.10: agent quality, each with an A/B run first (formatters after edits, a question tool, apply_patch, a general-purpose subagent) | Planned |
+| 0.10: agent quality, each with an A/B run first (formatters after edits, a question tool, apply_patch, a general-purpose subagent) | In progress |
 
 ## Use
 
@@ -272,6 +272,26 @@ forgets it. `/redo` brings it back.
   `/diff last <path>` limits it to one file or folder. It compares with the files now, so your own changes
   count too. It uses the undo snapshots, so it is off when undo is off.
 
+## Formatters (opt-in)
+
+With `"formatters": { "enabled": true }` in `.garuda/settings.json`, Garuda runs the project's own
+formatter on each file that `edit_file` or `write_file` changes, and the result shows what it changed:
+
+```
+Edited src/cart.ts.
+Formatted with prettier:
+-  const total=items.reduce((s,i)=>s+i.price,0)
++  const total = items.reduce((s, i) => s + i.price, 0);
+```
+
+- It finds Biome or Prettier (their config and `node_modules/.bin`), ruff or black (`pyproject.toml`,
+  a venv or PATH), gofmt (`go.mod`) and rustfmt (`Cargo.toml`). It never installs a formatter.
+- `"commands"` changes the list: `{ "prettier": false }` turns one off; `{ "mine": { "extensions":
+  ["txt"], "command": ["fmt", "$FILE"] } }` adds one or replaces a detected one.
+- Formatters run only in the OS sandbox, like the model's commands. A failed formatter adds a note; it
+  never undoes the edit.
+- Off by default until measured: `garuda eval -s hard --repeat 3 --format on` (and `--format off`).
+
 ## LSP diagnostics (opt-in)
 
 With `garuda --lsp`, or `"lsp": { "enabled": true }` in `.garuda/settings.json`, a language server checks
@@ -322,6 +342,7 @@ garuda eval -s hard --repeat 3 --subagents on   # A/B: the same, with the explor
 garuda eval --parallel 4                   # 4 tasks at the same time
 garuda eval --batch on                     # A/B: model calls through the Batch API (half price, slow)
 garuda eval -s hard --keep-thinking off    # A/B: drop Claude's thinking blocks, as before 0.9
+garuda eval -s hard --format on            # A/B: Biome formats after each edit (and --format off)
 ```
 
 `--batch on` (0.7, Anthropic models) sends every model call as a batch of one: half the token price,

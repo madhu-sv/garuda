@@ -5,6 +5,7 @@ import type { CallInfo, PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
 import type { FileTracker } from "../session/fileTracker.js";
 import type { SubagentReport } from "../session/records.js";
+import { unifiedDiff } from "./diff.js";
 
 export interface ToolContext {
   /** Absolute path of the working root (F1, F15). */
@@ -26,6 +27,48 @@ export interface ToolContext {
   progress?: (text: string) => void;
   /** Language server errors for a file that a tool just wrote (0.4). Absent when LSP is off. */
   diagnostics?: DiagnosticsSource;
+  /** Formats a file that a tool just wrote (0.10). Absent when formatters are off. */
+  format?: FormatSource;
+}
+
+/**
+ * Runs the project's formatter on a file (0.10). Undefined: no formatter for this file. It never
+ * throws: a broken formatter must not fail an edit that was already written.
+ */
+export type FormatSource = (
+  absolute: string,
+  signal: AbortSignal,
+) => Promise<{ name: string; text?: string; problem?: string } | undefined>;
+
+/** Most lines of the formatter's diff in a tool result (0.10). */
+const FORMAT_DIFF_LINES = 30;
+
+/**
+ * After edit_file or write_file: format the file (0.10), then add diagnostics (0.4). The model
+ * gets what the formatter changed, and the file counts as read in its new form.
+ */
+export async function afterWrite(
+  result: string,
+  context: ToolContext,
+  file: { absolute: string; shown: string; text: string },
+): Promise<string> {
+  let text = file.text;
+  let note = "";
+  if (context.format !== undefined) {
+    const formatted = await context.format(file.absolute, context.signal).catch(() => undefined);
+    if (formatted?.problem !== undefined) {
+      note = `\n${formatted.name} could not format it: ${formatted.problem}`;
+    } else if (formatted?.text !== undefined && formatted.text !== text) {
+      const diff = unifiedDiff(file.shown, text, formatted.text).split("\n");
+      text = formatted.text;
+      context.files.record(file.absolute, text);
+      note =
+        diff.length <= FORMAT_DIFF_LINES
+          ? `\nFormatted with ${formatted.name}:\n${diff.join("\n")}`
+          : `\nFormatted with ${formatted.name} (${diff.length} diff lines): read the file again before you edit the changed lines.`;
+    }
+  }
+  return withDiagnostics(`${result}${note}`, context, { ...file, text });
 }
 
 /**

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createAgentTool } from "../agents/agentTool.js";
@@ -14,6 +15,12 @@ import {
 } from "../commands/custom.js";
 import { COMPACTION_DEFAULTS, type CompactionResult, compactNow } from "../context/compact.js";
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
+import {
+  detectFormatters,
+  type Formatter,
+  formatCommand,
+  formatterFor,
+} from "../format/formatters.js";
 import { HOOKS_FILE, type Hook, hooksHash, loadHooks } from "../hooks/config.js";
 import { HookRunner, hooksConsent } from "../hooks/runner.js";
 import type { PlanForJob } from "../jobs/create.js";
@@ -81,6 +88,7 @@ import { loadSkills, type Skill, skillConsent } from "../skills/load.js";
 import { createSkillTool, skillText } from "../skills/tool.js";
 import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
+import type { FormatSource } from "../tools/types.js";
 import { createWebSearchTool } from "../tools/webSearch.js";
 import { filesText, undoQuestion } from "../undo/question.js";
 import {
@@ -94,6 +102,8 @@ import { VERSION } from "../version.js";
 import type { ClaudeSearchConfig, SearchConfig } from "../web/search.js";
 import { attachMentions } from "./mentions.js";
 
+/** A formatter that runs longer than this is stopped (0.10). */
+const FORMAT_TIMEOUT_MS = 20_000;
 /**
  * The note that starts each plan-mode turn (0.4). The system prompt stays the same in both modes
  * (N2); the permission engine and the sandbox enforce the mode, this note explains it.
@@ -224,6 +234,8 @@ export class Runtime {
   /** What the main model offers for /thinking (0.9), and the user's choice. */
   private currentThinkingCaps: ThinkingCaps | undefined;
   private thinkingChoice: ThinkingChoice = {};
+  /** The detected formatters (0.10), on first use. */
+  private formatters: Formatter[] | undefined;
   private maxTokens: number | undefined;
   /** How /models turns a spec into a client (0.6). Absent: /models cannot switch. */
   private readonly modelChoices: RuntimeOptions["models"];
@@ -1086,6 +1098,7 @@ export class Runtime {
               (await this.lsp()).diagnostics(absolute, shown, text, s),
           }
         : {}),
+      ...(this.formatSource === undefined ? {} : { format: this.formatSource }),
       maxSteps: this.limits.maxSteps,
       tokenBudget: this.limits.tokenBudget,
       ...(this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens }),
@@ -1483,6 +1496,34 @@ export class Runtime {
       this.snapshots = undefined;
       this.onNotice?.(`Undo is off for this session: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * The project's formatter after edits (0.10): on with `formatters.enabled`, and only in the OS
+   * sandbox (a formatter is a project command, like the model's bash). Detected on first use.
+   */
+  private get formatSource(): FormatSource | undefined {
+    const config = this.settings.formatters;
+    if (config?.enabled !== true || this.executor.isolation === "none") return undefined;
+    return async (absolute, signal) => {
+      this.formatters ??= detectFormatters(this.root, process.env.PATH, config.commands);
+      const formatter = formatterFor(this.formatters, absolute);
+      if (formatter === undefined) return undefined;
+      const result = await this.executor.run(
+        formatCommand(formatter, absolute),
+        this.permissions.execPolicy(FORMAT_TIMEOUT_MS),
+        { signal },
+      );
+      if (result.timedOut) return { name: formatter.name, problem: "it took too long" };
+      if (result.exitCode !== 0) {
+        const first = (result.stderr.text || result.stdout.text).trim().split("\n")[0] ?? "";
+        return {
+          name: formatter.name,
+          problem: `exit code ${result.exitCode}${first === "" ? "" : `: ${first.slice(0, 200)}`}`,
+        };
+      }
+      return { name: formatter.name, text: await readFile(absolute, "utf8") };
+    };
   }
 
   /** The request fields for /thinking (0.9); undefined: the model's defaults. */

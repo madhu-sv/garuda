@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
-import { copyFile, mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Runtime, type RuntimeOptions } from "../app/runtime.js";
@@ -61,6 +61,12 @@ export interface EvalOptions {
   lsp?: boolean;
   /** Keep Claude's thinking blocks (0.9). Default: on, as in the product. */
   keepThinking?: boolean;
+  /**
+   * The formatter A/B (0.10). Both arms get a biome.json and the whole project formatted first,
+   * so it starts in the formatter's style, as a project with a formatter does; `on` also formats
+   * each file after an edit. `biome` is Biome's binary (Garuda's own dev dependency).
+   */
+  format?: { on: boolean; biome: string };
   /** The explore subagent's model. Default: the main model. */
   subagentModel?: RuntimeOptions["subagentModel"];
   /** Tasks that run at the same time (0.7). Default: 1. */
@@ -73,6 +79,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   const started = Date.now();
   const root = realpathSync(await mkdtemp(join(tmpdir(), `garuda-eval-${task.id}-`)));
   await writeFiles(root, task.files);
+  if (options.format !== undefined) await formatProject(root, options.format.biome);
   const protect = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
   const before = await snapshot(root, protect);
 
@@ -85,6 +92,19 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
     ...(options.subagents === undefined ? {} : { subagents: { enabled: options.subagents } }),
     ...(options.todo === undefined ? {} : { todo: { enabled: options.todo } }),
+    ...(options.format === undefined
+      ? {}
+      : {
+          formatters: {
+            enabled: options.format.on,
+            commands: {
+              biome: {
+                extensions: ["js", "jsx", "mjs", "cjs", "ts", "tsx", "json"],
+                command: [options.format.biome, "format", "--write", "$FILE"],
+              },
+            },
+          },
+        }),
     ...(options.keepThinking === undefined
       ? {}
       : { thinking: { keepBlocks: options.keepThinking } }),
@@ -287,4 +307,36 @@ function meanRows(results: readonly EvalResult[], ids: readonly string[]): strin
       ].join("  ") + note
     );
   });
+}
+
+/** The formatter A/B's project config (0.10): spaces, width 100, formatting only. */
+export const EVAL_BIOME_CONFIG = {
+  formatter: { indentStyle: "space", indentWidth: 2, lineWidth: 100 },
+  linter: { enabled: false },
+  assist: { enabled: false },
+};
+
+/** Write biome.json and format the whole scratch project once, before the run (0.10). */
+export async function formatProject(root: string, biome: string): Promise<void> {
+  await writeFile(join(root, "biome.json"), `${JSON.stringify(EVAL_BIOME_CONFIG, null, 2)}\n`);
+  const result = await new HostExecutor().run(`${shellWord(biome)} format --write .`, {
+    root,
+    sandbox: false,
+    writePaths: [root],
+    denyWritePaths: [],
+    denyReadPaths: [],
+    network: false,
+    envAllowlist: [...DEFAULT_ENV_ALLOWLIST],
+    timeoutMs: 60_000,
+    maxOutputBytes: 20_000,
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Biome could not format the eval project: ${result.stderr.text.trim().split("\n")[0] ?? ""}`,
+    );
+  }
+}
+
+function shellWord(text: string): string {
+  return /^[A-Za-z0-9_./:@=+-]+$/.test(text) ? text : `'${text.replace(/'/g, "'\\''")}'`;
 }

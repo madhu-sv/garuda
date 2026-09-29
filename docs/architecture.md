@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.9.0. This document describes the parts of Garuda, their dependencies, the trust
+Version 0.10.0-dev. This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -64,6 +64,7 @@ flowchart TB
     lang[lang: language profiles]
     skills[skills: Agent Skills, skill tool]
     commands[commands: custom slash commands]
+    format[format: formatter detection]
   end
   subgraph Platform[Platform layer]
     model[model: ModelClient, Anthropic adapter, fake, prices]
@@ -76,6 +77,7 @@ flowchart TB
   runtime --> mcp
   runtime --> hooks
   runtime --> lang
+  runtime --> format
   runtime --> agents
   runtime --> init
   runtime --> skills
@@ -113,6 +115,7 @@ flowchart TB
 | Skills | `src/skills/` | Load Agent Skills folders (Garuda's and Claude Code's); the `skill` tool; consent for project skills; `/name`. |
 | Undo | `src/undo/` | Snapshots of the project before each turn in a git store of Garuda's own; `/undo` and `/redo`. |
 | Init | `src/init/` | `garuda init` and `/init`: read other agents' files (read only), write new Garuda files after one yes, offer `git init`, give the prompt of the init turn. |
+| Format | `src/format/` | The project's formatter after edits (0.10): detect it from config files and binaries; the runtime runs it in the sandbox. |
 | LSP | `src/lsp/` | Language servers in the sandbox: find, install, start; errors of a changed file after an edit. |
 | Knowledge | `src/knowledge/` | Local code index: symbols, references, a code graph. No model call. |
 | MCP | `src/mcp/` | Start local MCP servers in the sandbox, connect to remote ones (Streamable HTTP, OAuth), consent and pinning, tool adapters, text cleaning. |
@@ -261,3 +264,4 @@ All state is in files. There is no server and no database.
 | Chat UX (0.8) | `/compact` summarises at once (same summary step as the automatic path); fuzzy `@` only when no path starts so; `/sessions delete` asks and never takes the open session | Manual compaction frees context before a new part of the work; prefix completion stays predictable, the fuzzy search helps only when it fails; deleting a session is the one step that cannot be undone. |
 | Thinking blocks (0.9) | Kept and sent back unchanged for Claude models; left out only after a model switch or when redaction changed one | The API asks for them within a tool-use turn, and the newest Claude models always think. Measured with `--keep-thinking on/off`. `/thinking` sends nothing until the user asks, so the defaults stay the model's. |
 | Command palette (0.9) | Ctrl-P in the Ink chat; rows from the `/help` text, then custom commands and skills; Enter runs a command with no arguments, else fills the line | One source for the help and the palette; commands with arguments go to the line, where Tab completes them. The plain chat keeps `/` and Tab. |
+| Formatters (0.10) | Detected from config + an existing binary, settings can change them; after each edit; only in the OS sandbox; off until measured | The project's own style with no extra step; the model sees the formatter's diff, so its next edit matches. A formatter is a project command, so it gets the sandbox, as bash does. |

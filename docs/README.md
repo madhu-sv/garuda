@@ -33,6 +33,7 @@ Low-level design documents:
 | Skills | `src/skills/` | [skills.md](lld/skills.md) |
 | Evals | `src/evals/` | [evals.md](lld/evals.md) |
 | Scheduled jobs (0.7) | `src/jobs/`, `src/cli/jobCommand.ts` | [jobs.md](lld/jobs.md) |
+| Formatters (0.10) | `src/format/`, `afterWrite` in `src/tools/types.ts` | [format.md](lld/format.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
-The code, the tests and the commits use the same IDs. The documents describe version 0.9.0.
+The code, the tests and the commits use the same IDs. The documents describe version 0.10.0-dev.

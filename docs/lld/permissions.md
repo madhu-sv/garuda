@@ -127,6 +127,7 @@ A tool's `CallInfo` may carry a `title` (0.5): the engine passes it to the appro
   "skills": { "enabled": false },
   "agents": { "enabled": false },
   "notifications": { "channel": "auto", "afterSeconds": 10 },
+  "formatters": { "enabled": true, "commands": { "prettier": false } },
   "thinking": { "keepBlocks": true, "enabled": true, "effort": "low", "show": false },
   "limits": { "maxSteps": 50, "tokenBudget": 20000000 },
   "model": { "contextWindow": 200000, "price": { "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 3.75 } }

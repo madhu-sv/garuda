@@ -153,7 +153,7 @@ edit of a file sends its full text again.
 
 ## Failures never block an edit
 
-The edit is already written when the check runs. `withDiagnostics` adds the text after the tool's own
+The edit is already written (and formatted, 0.10) when the check runs. `withDiagnostics` adds the text after the tool's own
 result, and adds nothing when:
 
 | Case | Behaviour |

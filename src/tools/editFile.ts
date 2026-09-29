@@ -3,7 +3,7 @@ import { z } from "zod";
 import { displayPath, resolveInRoot } from "../permissions/pathGuard.js";
 import { writeFileAtomic } from "./atomicWrite.js";
 import { unifiedDiff } from "./diff.js";
-import { type Tool, type ToolContext, withDiagnostics } from "./types.js";
+import { afterWrite, type Tool, type ToolContext } from "./types.js";
 
 const input = z.object({
   path: z.string().min(1).describe("File path, relative to the working root."),
@@ -53,7 +53,7 @@ export const editFileTool: Tool<Input> = {
     const edit = await plan(args, context);
     await writeFileAtomic(edit.absolute, edit.after, { createOnly: false });
     context.files.record(edit.absolute, edit.after);
-    return withDiagnostics(`Edited ${edit.shown}.`, context, {
+    return afterWrite(`Edited ${edit.shown}.`, context, {
       absolute: edit.absolute,
       shown: edit.shown,
       text: edit.after,
