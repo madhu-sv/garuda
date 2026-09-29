@@ -81,9 +81,11 @@ export function testSummary(run: TestRun | undefined): string {
 export const passed = (run: TestRun | undefined) =>
   run !== undefined && !run.timedOut && run.exitCode === 0;
 
-const TEST_PATH =
+/** Test files by path (0.11; also the repo benchmark, 0.12). */
+export const TEST_PATH =
   /(^|\/)(tests?|__tests__|spec)\/|\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)test_[^/]*\.py$|_test\.(py|go)$|(^|\/)src\/test\//;
-const MANIFEST =
+/** Dependency manifests and lock files by path. */
+export const MANIFEST =
   /(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|pyproject\.toml|requirements[^/]*\.txt|poetry\.lock|uv\.lock|pom\.xml|build\.gradle(\.kts)?|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|Gemfile(\.lock)?)$/;
 const DELIVERY =
   /(^|\/)(\.github\/workflows\/|\.gitlab-ci\.yml$|Dockerfile$|docker-compose[^/]*\.ya?ml$|\.env)/;

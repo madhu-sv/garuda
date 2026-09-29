@@ -15,6 +15,7 @@ import type { ExecutorName } from "../sandbox/index.js";
 import { FileSessionStore } from "../session/store.js";
 import { writeFiles } from "./files.js";
 import { isProtectedPath } from "./projects.js";
+import { applyTests, removeTaskWorktree, taskWorktree } from "./repoTasks.js";
 import { TOOLCHAIN_ENV } from "./toolchains.js";
 import type { EvalResult, EvalTask } from "./types.js";
 
@@ -32,6 +33,9 @@ export const EVAL_DENY_RULES = [
   "bash(curl*)",
   "bash(wget*)",
 ];
+
+/** The check of a repo task (0.12): the project's own tests. */
+export const REPO_CHECK_TIMEOUT_MS = 5 * 60_000;
 
 /** A task that runs longer than this is stopped. */
 export const EVAL_TASK_TIMEOUT_MS = 10 * 60_000;
@@ -77,8 +81,16 @@ export interface EvalOptions {
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
   const started = Date.now();
-  const root = realpathSync(await mkdtemp(join(tmpdir(), `garuda-eval-${task.id}-`)));
-  await writeFiles(root, task.files);
+  const host = new HostExecutor();
+  let root: string;
+  if (task.repo === undefined) {
+    root = realpathSync(await mkdtemp(join(tmpdir(), `garuda-eval-${task.id}-`)));
+    await writeFiles(root, task.files);
+  } else {
+    // Benchmark your repo (0.12): the project at the commit's parent, with its tests added.
+    root = await taskWorktree(host, task.repo.root, task.repo.base);
+    await applyTests(root, task.repo.tests);
+  }
   if (options.format !== undefined) await formatProject(root, options.format.biome);
   const protect = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
   const before = await snapshot(root, protect);
@@ -179,7 +191,12 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
 
   if (result.reason === undefined) {
     const changed = await changedFiles(root, before);
-    const check = await runCheck(root, task.check);
+    // A project's own test suite can take longer than a small task's check.
+    const check = await runCheck(
+      root,
+      task.check,
+      task.repo === undefined ? undefined : REPO_CHECK_TIMEOUT_MS,
+    );
     if (changed.length > 0)
       result.reason = `The agent changed protected files: ${changed.join(", ")}.`;
     else if (!check.ok) result.reason = `The check failed:\n${check.output}`;
@@ -187,7 +204,10 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   }
 
   result.durationMs = Date.now() - started;
-  if (!options.keep) await rm(root, { recursive: true, force: true });
+  if (!options.keep) {
+    if (task.repo === undefined) await rm(root, { recursive: true, force: true });
+    else await removeTaskWorktree(host, task.repo.root, root);
+  }
   return result;
 }
 
@@ -215,6 +235,7 @@ export async function runEvals(
 export async function runCheck(
   root: string,
   command: string,
+  timeoutMs = 120_000,
 ): Promise<{ ok: boolean; output: string }> {
   const r = await new HostExecutor().run(command, {
     root,
@@ -224,7 +245,7 @@ export async function runCheck(
     denyReadPaths: [],
     network: false,
     envAllowlist: [...DEFAULT_ENV_ALLOWLIST, ...TOOLCHAIN_ENV],
-    timeoutMs: 120_000,
+    timeoutMs,
     maxOutputBytes: 4_000,
   });
   const output = `${r.stdout.text}${r.stderr.text}`.trim();

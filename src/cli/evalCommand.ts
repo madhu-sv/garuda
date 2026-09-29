@@ -1,15 +1,28 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import {
+  buildRepoSuite,
+  DEFAULT_COMMITS,
+  loadRepoSuite,
+  type RepoSuite,
+  repoEvalTasks,
+  saveRepoSuite,
+} from "../evals/repoTasks.js";
 import { formatReport, runEvals } from "../evals/runner.js";
 import { ALL_TASKS, EVAL_SUITES, requiredToolchains } from "../evals/suites.js";
 import { checkToolchains, prepareToolchain, TOOLCHAINS, toolchainId } from "../evals/toolchains.js";
+import type { EvalTask } from "../evals/types.js";
+import { git } from "../jobs/git.js";
+import { detectTestCommand } from "../jobs/proof.js";
 import {
   CODE_INDEX_MODES,
   type CodeIndexMode,
   DEFAULT_CODE_INDEX_MODE,
 } from "../knowledge/mode.js";
+import { detectProfiles } from "../lang/profiles.js";
 import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
+import { HostExecutor } from "../sandbox/host.js";
 import { createExecutor, EXECUTOR_NAMES, type ExecutorName } from "../sandbox/index.js";
 import { newSessionId } from "../session/store.js";
 
@@ -43,6 +56,16 @@ export interface EvalCommandOptions {
   batch?: string;
   /** --parallel <n>: tasks at the same time. Default 1; with --batch on, all tasks (up to 20). */
   parallel?: number;
+  /** --from-git: build the repo suite from this project's history (0.12), then exit. */
+  fromGit?: boolean;
+  /** --commits <n>: recent commits to look at. */
+  commits?: number;
+  /** --since <date>: only commits after this date (git's --since). */
+  since?: string;
+  /** --max-tasks <n>: stop when the suite has this many tasks. */
+  maxTasks?: number;
+  /** --test-command <cmd>: the project's test command (default: detected). */
+  testCommand?: string;
 }
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
@@ -50,8 +73,23 @@ export const BATCH_TASK_TIMEOUT_MS = 12 * 60 * 60_000;
 
 /** `garuda eval` (N5). Results go to .garuda/evals/<run-id>/ in the current folder. */
 export async function runEvalCommand(options: EvalCommandOptions): Promise<number> {
+  if (options.fromGit) return buildFromGit(options);
+  let repoTasks: EvalTask[] | undefined;
+  if (options.list || options.suite === "repo") {
+    const loaded = await repoSuite();
+    if (typeof loaded === "string") {
+      if (options.suite === "repo") {
+        process.stderr.write(`${loaded}\n`);
+        return 1;
+      }
+    } else repoTasks = repoEvalTasks(loaded);
+  }
   if (options.list) {
-    for (const [suite, tasks] of Object.entries(EVAL_SUITES)) {
+    const suites: [string, readonly EvalTask[]][] = [
+      ...Object.entries(EVAL_SUITES),
+      ...(repoTasks === undefined ? [] : [["repo", repoTasks] as [string, EvalTask[]]]),
+    ];
+    for (const [suite, tasks] of suites) {
       const needs = requiredToolchains(tasks).map((id) => TOOLCHAINS[id].title);
       process.stdout.write(`${suite}:${needs.length > 0 ? ` (needs ${needs.join(", ")})` : ""}\n`);
       for (const task of tasks) process.stdout.write(`  ${task.id.padEnd(18)} ${task.title}\n`);
@@ -115,7 +153,12 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       );
       return 1;
     }
-    if (options.suite === "java" || options.suite === "python" || options.suite === "all") {
+    if (
+      options.suite === "java" ||
+      options.suite === "python" ||
+      options.suite === "all" ||
+      options.suite === "repo"
+    ) {
       process.stderr.write("--format works with the JS suites: basic and hard.\n");
       return 1;
     }
@@ -150,15 +193,18 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     }
   }
   const suite = options.suite ?? "basic";
-  const suiteTasks = suite === "all" ? ALL_TASKS : EVAL_SUITES[suite];
+  const suiteTasks =
+    suite === "all" ? ALL_TASKS : suite === "repo" ? repoTasks : EVAL_SUITES[suite];
   if (suiteTasks === undefined) {
     process.stderr.write(
-      `Unknown suite ${suite}. Use: ${[...Object.keys(EVAL_SUITES), "all"].join(", ")}.\n`,
+      `Unknown suite ${suite}. Use: ${[...Object.keys(EVAL_SUITES), "all", "repo"].join(", ")}.\n`,
     );
     return 1;
   }
+  // --task picks from every built-in suite; with -s repo, from the repo suite.
+  const pool = suite === "repo" ? suiteTasks : ALL_TASKS;
   const chosen =
-    options.task === undefined ? suiteTasks : ALL_TASKS.filter((t) => options.task?.includes(t.id));
+    options.task === undefined ? suiteTasks : pool.filter((t) => options.task?.includes(t.id));
   const repeat = Math.max(1, options.repeat ?? 1);
   // Each task runs `repeat` times in a row, in a new scratch folder each time.
   const tasks = chosen.flatMap((t) => Array.from({ length: repeat }, () => t));
@@ -271,6 +317,85 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;
+}
+
+/** The repo suite of the project in the current folder (0.12), or the text for the user. */
+async function repoSuite(): Promise<RepoSuite | string> {
+  const root = await gitRoot(process.cwd());
+  if (root === undefined) return "-s repo needs a git repository: run it in your project.";
+  let suite: RepoSuite | undefined;
+  try {
+    suite = await loadRepoSuite(root);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  if (suite === undefined) {
+    return `No repo suite in ${root}. Build it first: garuda eval --from-git`;
+  }
+  if (suite.tasks.length === 0) {
+    return `The repo suite has no tasks. Build it again with more commits: garuda eval --from-git --commits 500`;
+  }
+  // The project may have moved since the suite was built: its commits are still here.
+  return { ...suite, root };
+}
+
+async function gitRoot(cwd: string): Promise<string | undefined> {
+  const r = await git(new HostExecutor(), cwd, ["rev-parse", "--show-toplevel"], { check: false });
+  return r.exitCode === 0 ? realpathSync(r.stdout.trim()) : undefined;
+}
+
+/**
+ * `garuda eval --from-git` (0.12, W3): turn recent commits that changed code and tests into eval
+ * tasks. It runs the project's tests twice per candidate (at the parent with the new tests, and at
+ * the commit), on this machine, as `garuda eval` runs its checks.
+ */
+async function buildFromGit(options: EvalCommandOptions): Promise<number> {
+  const root = await gitRoot(process.cwd());
+  if (root === undefined) {
+    process.stderr.write("--from-git needs a git repository: run it in your project.\n");
+    return 1;
+  }
+  const testCommand = options.testCommand ?? detectTestCommand(root, detectProfiles(root));
+  if (testCommand === undefined) {
+    process.stderr.write(
+      'No test command found. Give one: garuda eval --from-git --test-command "npm test"\n',
+    );
+    return 1;
+  }
+  for (const [name, value] of [
+    ["--commits", options.commits],
+    ["--max-tasks", options.maxTasks],
+  ] as const) {
+    if (value !== undefined && !(Number.isInteger(value) && value > 0)) {
+      process.stderr.write(`${name} must be a whole number above 0.\n`);
+      return 1;
+    }
+  }
+  process.stderr.write(
+    `Building the repo suite from ${options.commits ?? DEFAULT_COMMITS} recent commits${options.since === undefined ? "" : ` since ${options.since}`} in ${root}.\nEach candidate runs \`${testCommand}\` twice on this machine (no sandbox), in a git worktree; your checkout does not change.\n\n`,
+  );
+  const { suite, checked, skipped } = await buildRepoSuite(new HostExecutor(), root, {
+    testCommand,
+    ...(options.commits === undefined ? {} : { commits: options.commits }),
+    ...(options.since === undefined ? {} : { since: options.since }),
+    ...(options.maxTasks === undefined ? {} : { maxTasks: options.maxTasks }),
+    onProgress: (line) => process.stderr.write(`  ${line}\n`),
+  });
+  const file = await saveRepoSuite(suite);
+  const reasons = Object.entries(skipped)
+    .sort((a, b) => b[1] - a[1])
+    .map(([why, n]) => `  ${String(n).padStart(4)}  ${why}`);
+  process.stdout.write(
+    `${[
+      `\n${suite.tasks.length} task(s) kept; ${checked} candidate(s) checked with the tests.`,
+      ...(reasons.length === 0 ? [] : ["Skipped:", ...reasons]),
+      `Suite: ${file}`,
+      ...(suite.tasks.length === 0
+        ? ["No task: try more commits (--commits 500) or an older --since."]
+        : ["Run it: garuda eval -s repo -m <model> (add --list to see the tasks)"]),
+    ].join("\n")}\n`,
+  );
+  return suite.tasks.length === 0 ? 2 : 0;
 }
 
 /** `garuda eval --prepare java|python`. */

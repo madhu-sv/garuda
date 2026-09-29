@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.11.0.
+Garuda is a terminal coding agent. This is version 0.12.0-dev.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -23,7 +23,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.9: `/details`, `/thinking` (effort, show), Claude's thinking blocks kept, command palette (Ctrl-P) | Done |
 | 0.10: formatters after edits (opt-in; measured: +14% cost, no gain) | Done |
 | 0.11: night shift (a queue of overnight jobs, one digest, a launchd agent) and proof of work (tests before and after, risk flags, a principal-engineer review) | Done |
-| 0.12: benchmark your repo (eval tasks from the repo's own git history) | Planned |
+| 0.12: benchmark your repo (eval tasks from the repo's own git history) | In progress |
 
 ## Use
 
@@ -364,6 +364,23 @@ says what is missing:
 The checks guard against shortcuts: the tests and build files (`pom.xml`, `pyproject.toml`) are
 protected, the Java check refuses a `.mvn` folder, and pytest reads only `pyproject.toml` and no
 `conftest.py`.
+
+### Benchmark your repo (0.12)
+
+Measure Garuda on your own code. `--from-git` turns recent commits that changed code and tests into
+tasks: the agent starts at the commit's parent, gets the commit message and the commit's tests, and
+passes when the tests pass and it did not change them.
+
+```sh
+garuda eval --from-git                     # build .garuda/evals/repo-suite.json from the last 200 commits
+garuda eval --from-git --since 2026-01-01 --max-tasks 10 --test-command "pnpm test"
+garuda eval -s repo --list                 # the tasks
+garuda eval -s repo -m claude-sonnet-5     # run them (the A/B flags work too)
+```
+
+A commit is kept only when its tests fail at the parent and pass at the commit. Commits that change
+dependencies, binary files or more than 10 files are skipped. Building runs your test command twice per
+candidate on this machine, with no sandbox, in git worktrees: your checkout does not change.
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).
 Commands run in the scratch folders, in the OS sandbox when there is one (`--executor auto|os|host`). Results and session files go to

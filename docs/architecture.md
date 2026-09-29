@@ -125,7 +125,7 @@ flowchart TB
 | Subagents | `src/agents/` | The explore tool: a child agent loop with read-only tools, its own session and limits, that answers one question. |
 | Language profiles | `src/lang/` | Find the build tool from marker files (Maven, Gradle, Python): test commands, prompt notes, package caches for the sandbox. |
 | Jobs | `src/jobs/` | Scheduled jobs (0.7): the job file, the base commit and worktree on a job branch, the commit and the report. `garuda run` in the CLI runs a job with its approval list and an engine that denies instead of asking. The launchd agent (macOS) starts a job with nobody at the terminal; a job may use the Batch API until its finish-by time. Proof of work (0.11): tests before and after, risk flags, a principal-engineer review, a verdict. The night shift (0.11): a queue per project, `garuda night` runs it (up to 3 at a time) and writes one digest. |
-| Evals | `src/evals/` | Eval tasks (Node, Java, Python), the generated "shopkit" repository, toolchain checks, the runner and the report. |
+| Evals | `src/evals/` | Eval tasks (Node, Java, Python), the generated "shopkit" repository, the repo suite from the project's git history (0.12), toolchain checks, the runner and the report. |
 
 ## 4. Dependency rules
 

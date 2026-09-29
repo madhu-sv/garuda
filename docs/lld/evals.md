@@ -18,20 +18,24 @@ same-build A/B runs.
 | `projects.ts` | The shared `pom.xml` (fixed plugin and JUnit versions) and `pyproject.toml`, the Java and Python check commands, and `isProtectedPath`. |
 | `toolchains.ts` | The `maven` and `pytest` toolchains: a probe project, `checkToolchains`, `prepareToolchain`. |
 | `suites.ts` | `basic`, `hard`, `java`, `python`, `all`; `requiredToolchains(tasks)`. |
+| `repoTasks.ts` | Benchmark your repo (0.12): candidate commits from git history (`skipReason`, `recentCommits`), `repoPrompt`, `taskWorktree` / `applyTests` / `removeTaskWorktree`, `buildRepoSuite`, `saveRepoSuite` / `loadRepoSuite`, `repoEvalTasks`. |
 | `runner.ts` | Runs tasks; `formatReport`. |
 
 ## Runner
 
 For each task (and each repeat):
 
-1. Create a scratch folder in the temp directory; write the task files.
+1. Create a scratch folder in the temp directory; write the task files. A repo task (0.12) gets a git
+   worktree of the project at the commit's parent (detached, `node_modules` and venvs linked), with the
+   commit's test files added.
 2. Snapshot the protected files. Default: tests (`test/`, `tests/`, `src/test/`) and build files
    (`pom.xml`, `pyproject.toml`). A task can list its own.
 3. `Runtime.create` with an `AutoApprover("once")`, deny rules (`rm -rf*`, `sudo*`, `git push*`, `curl*`,
    `wget*`), `mcp: false`, `hooks: false`, `web.enabled: false`, and the chosen executor and code index mode.
 4. `runTurn(prompt)` with a 10-minute limit.
 5. Pass when the protected files are unchanged and the check command (for example `node --test`) exits 0.
-   The check runs on the host with a 120 s limit.
+   The check runs on the host with a 120 s limit (5 min for a repo task). A repo task's worktree is removed
+   after the run (`git worktree remove`), unless `--keep`.
 6. Copy the session file to `.garuda/evals/<run-id>/<task>.jsonl` (`-2`, `-3` … for repeats).
 
 ## Java and Python suites (0.3)
@@ -74,15 +78,50 @@ environment list.
 ## Command
 
 ```text
-garuda eval [-m model] [-s basic|hard|java|python|all] [-t ids…] [--repeat n] [--index off|lookup|all]
+garuda eval [-m model] [-s basic|hard|java|python|all|repo] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
             [--batch on|off] [--parallel n]
 garuda eval --prepare java|python
+garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
 
-`--list` shows the toolchains that each suite needs.
+`--list` shows the toolchains that each suite needs, and the repo suite when the project has one.
+
+## Benchmark your repo (0.12, W3)
+
+The fixed suites measure Garuda on Garuda's tasks. The repo suite measures it on the user's own code, so
+a user can check a model, a setting or a Garuda version on the work they do.
+
+`garuda eval --from-git` builds the suite from the project's recent commits (default 200, newest first;
+`--since` narrows them), in the git root of the current folder:
+
+1. File rules (`skipReason`): skip a commit with no files, more than 10 files, a binary file, a changed
+   dependency manifest or lock file (the worktree links the checkout's `node_modules`), no test change, or
+   only test changes. Merges are not read. Test files match `TEST_PATH` from proof of work.
+2. The tests prove the task: in a worktree at the commit's parent, with the commit's test files added
+   (a deleted test file is deleted), the test command must fail; at the commit it must pass. Else the
+   commit is skipped ("the tests already pass at the parent", "the tests fail at the commit").
+3. Stop at `--max-tasks` (default 30). The test command is `--test-command`, else the one that jobs use
+   (`detectTestCommand`). Both runs are on the host, with no sandbox, as eval checks are; the output says
+   so. The user's checkout does not change.
+4. Save `.garuda/evals/repo-suite.json` (version 1: root, HEAD, test command; per task the commit, its
+   parent, the subject, the prompt and the test files' content). Print the kept count and the skip
+   reasons.
+
+The task prompt is the commit message, then the visible tests: "The tests for this change are already in
+the project: … Make the change so that they pass. Do not change these test files." (as SWE-bench gives
+the failing tests). The check is the test command; the protected files are the task's test files, so
+the agent cannot pass by editing them.
+
+`garuda eval -s repo` loads the suite of the current project (the git root replaces the saved root, so
+a moved checkout works) and runs it like any suite: `--repeat`, `--parallel`, `--batch` and the A/B
+flags work. `--format` does not (it would format the whole project). `-t` picks from the repo suite.
+
+Limits: the test command runs the whole test suite, so a slow suite makes a slow task (5 min limit per
+check). A commit that needs a new dependency is skipped. Build the suite again after new commits; old
+tasks stay valid while their commits exist.
 
 `-m` takes any model spec, for example `garuda eval -m ollama/qwen3-coder:30b -s hard`, so open models
 can be measured on the same tasks.

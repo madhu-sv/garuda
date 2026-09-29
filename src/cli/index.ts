@@ -90,7 +90,7 @@ async function main(): Promise<void> {
     .command("eval")
     .description("run the eval tasks in scratch folders and report pass/fail, steps and cost")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
-    .option("-s, --suite <name>", "basic (default), hard, java, python or all")
+    .option("-s, --suite <name>", "basic (default), hard, java, python, all or repo")
     .option("-t, --task <ids...>", "run only these tasks (from any suite)")
     .option("--max-steps <n>", "step limit per task", (v) => Number.parseInt(v, 10))
     .option("--repeat <n>", "run each task n times and show the mean", (v) =>
@@ -125,6 +125,15 @@ async function main(): Promise<void> {
       "--prepare <toolchain>",
       "java: download Maven plugins and JUnit once; python: check pytest",
     )
+    .option("--from-git", "build the repo suite from this project's recent commits, then exit")
+    .option("--commits <n>", "with --from-git: recent commits to look at (default 200)", (v) =>
+      Number.parseInt(v, 10),
+    )
+    .option("--since <date>", "with --from-git: only commits after this date")
+    .option("--max-tasks <n>", "with --from-git: most tasks in the suite (default 30)", (v) =>
+      Number.parseInt(v, 10),
+    )
+    .option("--test-command <cmd>", "with --from-git: the test command (default: detected)")
     .action(async (options) => {
       const { runEvalCommand } = await import("./evalCommand.js");
       process.exitCode = await runEvalCommand({

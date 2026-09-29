@@ -25,6 +25,12 @@ export interface EvalTask {
    * can pass, and that it fails before the fix.
    */
   solution: Record<string, string>;
+  /**
+   * A task from the project's own history (0.12, "benchmark your repo"). The runner makes a git
+   * worktree of `root` at `base` in place of writing `files`, then adds the commit's tests
+   * (`content: null` deletes the file).
+   */
+  repo?: { root: string; base: string; tests: { path: string; content: string | null }[] };
 }
 
 export interface EvalResult {
