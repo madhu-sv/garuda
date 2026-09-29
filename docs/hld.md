@@ -128,7 +128,12 @@ sequenceDiagram
   Reg-->>Main: tool result, usage added to the session
 ```
 
-### Diagnostics after an edit (0.4)
+### Formatting and diagnostics after an edit (0.4, 0.10)
+
+With formatters on (0.10, opt-in), `edit_file` and `write_file` run the project's formatter in the OS
+sandbox first; the result shows its diff, and the file counts as read in its new form. Details:
+[lld/format.md](lld/format.md).
+
 
 With LSP on, `edit_file` and `write_file` write the file, then ask the `LspManager` for the errors of that
 file. The manager starts the language server on first use, in the OS sandbox. Details:
@@ -295,6 +300,7 @@ Details: [lld/init.md](lld/init.md).
 | Custom slash commands (0.4) | `~/.garuda/commands`, `.garuda/commands` | `/name` prompts. |
 | Code index | `.garuda/settings.json` (`codeIndex`) | `find_symbol`, `find_references`, `repo_map`. |
 | LSP diagnostics | `.garuda/settings.json` (`lsp`), `--lsp`, `~/.garuda/lsp.json` | Language server errors in edit results. |
+| Formatters (0.10) | `.garuda/settings.json` (`formatters`) | The project's formatter after each edit; off by default. |
 | Language experts | `src/knowledge/` (`LanguageExpert`) | Code index support for a language. |
 | Executors | `src/sandbox/` (`Executor`) | Another isolation technology. |
 | Session stores | `src/session/` (`SessionStore`) | Another place for sessions. |
@@ -318,7 +324,7 @@ command shows its text and asks the first time, like project hooks. See [command
 
 ## 11. Quality
 
-- About 570 unit and acceptance tests, all with the fake model.
+- About 580 unit and acceptance tests, all with the fake model.
 - Contract tests run every executor (host, Seatbelt, bubblewrap) through the same suite.
 - Architecture tests enforce the dependency rules.
 - Evals: a basic suite (10 tasks), a hard suite (6 tasks on a generated repo of about 107 files), and

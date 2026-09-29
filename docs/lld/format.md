@@ -38,6 +38,12 @@ first. `"$FILE"` in the command is the file's absolute path; `formatCommand` quo
 
 ## Measuring (`garuda eval --format on|off`)
 
+Result (2026-09-29, hard suite, claude-sonnet-5, 3 runs per task): on 18/18, 141 steps, $0.6834, 84% of
+tokens from the cache, 84 s; off 18/18, 144 steps, $0.5974, 87%, 73 s. About 14% more cost with no
+gain in steps or passes, so formatters stay off by default. A shorter note in place of the diff may
+cost less; it needs its own A/B.
+
+
 The eval projects have no formatter, so the A/B brings one: Garuda's own Biome (a dev dependency; a
 source checkout after `pnpm install`). With `--format` given, both arms get a `biome.json` (spaces,
 width 100, formatting only) and the whole scratch project formatted first (`formatProject`), so each
