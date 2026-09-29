@@ -146,8 +146,8 @@ Set the context window, price and output limit per model, and add providers, in 
   `@rntm` finds `src/app/runtime.ts`. One match completes; otherwise the best 10 are listed. The search
   skips hidden files, `node_modules`, `dist`, `build`, `target` and virtual environments.
 - Ctrl-P opens the command palette (full chat only): every command with its one-line help, then your
-  own commands and skills. Type to filter (`thk` finds `/thinking`; words of the help work too), ↑/↓
-  to choose. Enter runs a command that needs no arguments (`/usage`, `/undo`, `/details` …) or puts
+  own commands and skills. Type to filter: `thk` finds `/thinking`; when no name matches, words of the
+  help do (`markdown` finds `/export`). ↑/↓ choose. Enter runs a command that needs no arguments (`/usage`, `/undo`, `/details` …) or puts
   `/name ` in the input line for one that takes them (`/models`, `/sessions`, `/thinking` …), so Tab can
   complete the rest. Esc or Ctrl-P closes it.
 - Ctrl-G (or `/editor`) opens the prompt in `$VISUAL` or `$EDITOR` (default `vi`). The saved text comes

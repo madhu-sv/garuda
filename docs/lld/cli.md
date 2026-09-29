@@ -150,7 +150,7 @@ flowchart LR
 | `inkChat.ts` | Entry. Creates the store, sets it as approver and event target, renders `App`, runs `runChat`, unmounts. Never awaits `waitUntilExit()` (it hangs after unmount). |
 | `store.ts` | `ChatStore`: all chat state and logic. Implements `Renderer`, `Approver` and `Interruptible`. |
 | `controller.ts` | `runChat`: next line → command or turn; `statusOf` for the footer; `CommandArgs` (0.8): Tab choices for command arguments. |
-| `palette.ts` | The command palette (0.9): `PaletteEntry`, `filterPalette` (the fuzzy name search of `@`, then the help text), `paletteWindow`. `paletteEntries(runtime)` in `commands.ts` builds the rows from `HELP`, custom commands and skills. |
+| `palette.ts` | The command palette (0.9): `PaletteEntry`, `filterPalette` (the fuzzy name search of `@`; the help text only when no name matches), `paletteWindow`. `paletteEntries(runtime)` in `commands.ts` builds the rows from `HELP`, custom commands and skills. |
 | `complete.ts` | Tab completion (0.6): commands, `@paths`, command arguments and the fuzzy file search (0.8: `fuzzyFiles`, `rootFiles`). |
 | `ui.tsx` | Ink view: `<Static>` for finished items, a small live area, the key map. |
 | `lineEditor.ts` | Pure line editor: insert, delete, words, kill, history with draft. |

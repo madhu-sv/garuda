@@ -100,6 +100,9 @@ describe("the command palette (0.9)", () => {
     expect(filterPalette(ENTRIES, "/mod").map((e) => e.name)).toEqual(["models"]);
     expect(filterPalette(ENTRIES, "thk").map((e) => e.name)).toEqual(["thinking"]);
     expect(filterPalette(ENTRIES, "markdown").map((e) => e.name)).toEqual(["export"]);
+    // A name match hides help matches ("models" has "mod"; "the models" in help does not add rows).
+    const more = [...ENTRIES, { name: "where", hint: "no model call", runs: false }];
+    expect(filterPalette(more, "mod").map((e) => e.name)).toEqual(["models"]);
     expect(filterPalette(ENTRIES, "zzz")).toEqual([]);
     expect(paletteWindow(0, 30)).toBe(0);
     expect(paletteWindow(15, 30)).toBe(6);

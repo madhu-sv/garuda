@@ -23,8 +23,10 @@ export interface PaletteState {
 export const PALETTE_ROWS = 10;
 
 /**
- * The rows for a query: names by the fuzzy search of `@` (letters in order, starts of words first),
- * then rows whose help holds the query. An empty query keeps the order of the list.
+ * The rows for a query: names by the fuzzy search of `@` (letters in order, starts of words first).
+ * Only when no name matches: the rows whose help holds the query (live test: "mod" also listed
+ * /where and /refs for "no model call", and /plan and /build for "mode"). An empty query keeps the
+ * order of the list.
  */
 export function filterPalette(entries: readonly PaletteEntry[], query: string): PaletteEntry[] {
   const q = query.trim().replace(/^\//, "").toLowerCase();
@@ -35,10 +37,8 @@ export function filterPalette(entries: readonly PaletteEntry[], query: string): 
     const entry = byName.get(n);
     return entry === undefined ? [] : [entry];
   });
-  for (const entry of entries) {
-    if (!out.includes(entry) && entry.hint.toLowerCase().includes(q)) out.push(entry);
-  }
-  return out;
+  if (out.length > 0) return out;
+  return entries.filter((entry) => entry.hint.toLowerCase().includes(q));
 }
 
 /** The first row to show, so that the selected row stays in view. */
