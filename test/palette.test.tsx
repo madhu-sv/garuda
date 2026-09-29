@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { render } from "ink-testing-library";
@@ -56,6 +56,13 @@ function storeWith(entries: PaletteEntry[] = ENTRIES): ChatStore {
 describe("the command palette (0.9)", () => {
   it("lists every built-in command with its help, then custom commands and skills", async () => {
     const root = join(base, "p");
+    // A home of the test's own (live test: the developer's ~/.garuda/commands/explain.md showed up).
+    const home = join(base, "home");
+    mkdirSync(join(home, ".garuda", "commands"), { recursive: true });
+    writeFileSync(
+      join(home, ".garuda", "commands", "explain.md"),
+      "---\ndescription: explain a file\n---\nExplain $ARGUMENTS.\n",
+    );
     const runtime = await Runtime.create({
       root,
       modelId: "claude-sonnet-5",
@@ -65,12 +72,16 @@ describe("the command palette (0.9)", () => {
       settings: parseSettings({ executor: "host" }),
       mcp: false,
       hooks: false,
+      commands: { home },
+      skills: { home },
       profiles: [],
     });
     const entries = paletteEntries(runtime);
     const names = entries.map((e) => e.name);
-    // Every built-in but the "quit" alias is in the help, so in the palette.
-    expect([...names].sort()).toEqual(BUILTIN_COMMANDS.filter((c) => c !== "quit").sort());
+    // Every built-in but the "quit" alias is in the help, so in the palette; then the user's command.
+    expect(names.at(-1)).toBe("explain");
+    expect(entries.at(-1)).toEqual({ name: "explain", hint: "explain a file", runs: false });
+    expect(names.slice(0, -1).sort()).toEqual(BUILTIN_COMMANDS.filter((c) => c !== "quit").sort());
     expect(entries.find((e) => e.name === "usage")).toEqual({
       name: "usage",
       hint: "tokens and cost of this session",
