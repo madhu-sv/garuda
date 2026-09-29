@@ -186,8 +186,8 @@ export class CommandArgs {
           ? this.sessions
           : [];
       case "jobs":
-        if (first === undefined) return [...words("cancel"), ...this.jobs];
-        return first === "cancel" && second === undefined ? this.jobs : [];
+        if (first === undefined) return [...words("cancel", "delete"), ...this.jobs];
+        return (first === "cancel" || first === "delete") && second === undefined ? this.jobs : [];
       case "diff":
         return first === undefined ? words("last") : [];
       case "mcp":

@@ -30,7 +30,7 @@ export const HELP = [
   "  /compact   summarise the older turns now; /compact <what to keep>",
   "  /diff      file changes in this session; /diff last (last turn); /diff [last] <path>",
   "  /schedule  make the last plan a job that runs later: /schedule [HH:MM], then garuda run <id>",
-  "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel <id>",
+  "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel|delete <id>",
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /refs X    every use of symbol X (code index, no model call)",
   "  /map [dir] what each JS/TS file exports and imports",
@@ -331,6 +331,11 @@ async function jobsCommand(runtime: Runtime, renderer: Renderer, id: string): Pr
   const cancel = /^cancel\s+(\S+)$/.exec(id);
   if (cancel !== null) {
     renderer.info(await runtime.cancelJob(cancel[1] as string));
+    return;
+  }
+  const remove = /^delete\s+(\S+)$/.exec(id);
+  if (remove !== null) {
+    renderer.info(await runtime.deleteJob(remove[1] as string, new AbortController().signal));
     return;
   }
   if (id !== "") {

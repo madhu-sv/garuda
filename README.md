@@ -654,6 +654,8 @@ A plan can run later, with nobody at the keyboard: for example overnight.
   `.garuda/jobs/<id>.md`, also shown by `/jobs <id>`. Review with `git diff`, then `git merge
   garuda/job-<id>`, and remove the worktree.
 - `/jobs` lists the jobs. Keep the Mac awake and on power while the terminal waits.
+- `/jobs delete <id>` (0.11) asks, then removes the job file, report, log and worktree. An unmerged job
+  branch may hold work: you choose to keep it or delete it too. A running job cannot be deleted.
 - On macOS, `/schedule HH:MM` offers a launchd agent: the job then starts at that time also with no
   terminal open. It runs through your login shell (so your `.zshrc` gives it the API keys) under
   `caffeinate`, logs to `.garuda/jobs/<id>.log`, and sends a macOS notification at the end. If the Mac

@@ -173,6 +173,10 @@ response: batch responses at half the token price.
   (`nightDigest`): a row per job (verdict, tests after, files, cost with the review, branch), then the
   jobs that need a look with their flags and the review's summary. It sends one notification
   ("N job(s), M ready to merge") when stdout is a terminal.
+- `/jobs delete <id>` (`jobs/remove.ts`, `Runtime.deleteJob`): refuses a running job; `jobLeftovers`
+  finds the files, the worktree and the branch (merged = an ancestor of HEAD); one question (an unmerged
+  branch adds "Yes, but keep the branch"); then the launchd agent, `git worktree remove --force` and
+  `prune`, `git branch -D` only when chosen, and the files.
 - `/jobs` marks queued jobs ("in the night queue") and verdicts. A launchd agent for the queue is next.
 
 ## Safety

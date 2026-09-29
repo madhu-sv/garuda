@@ -1240,6 +1240,72 @@ export class Runtime {
     return `Job ${id} is cancelled${hadAgent ? " and its launchd agent is removed" : ""}. \`garuda run ${id}\` can still run it.`;
   }
 
+  /**
+   * /jobs delete <id> (0.11): ask, then remove the job file, report, log and worktree, and the
+   * branch when the user says so (an unmerged branch may hold work). A running job cannot go.
+   */
+  async deleteJob(
+    id: string,
+    signal: AbortSignal,
+    /** For tests: the agent's home and the executor for launchctl. */
+    agent: { env?: import("../jobs/launchd.js").AgentEnv; executor?: Executor } = {},
+  ): Promise<string> {
+    const { loadJob } = await import("../jobs/job.js");
+    const { defaultAgentEnv, removeAgent } = await import("../jobs/launchd.js");
+    const { jobLeftovers, removeJob } = await import("../jobs/remove.js");
+    let job: Awaited<ReturnType<typeof loadJob>>;
+    try {
+      job = await loadJob(this.root, id);
+    } catch (error) {
+      return (error as Error).message;
+    }
+    if (job.status === "running") {
+      return `Job ${id} is running. Stop it first (Ctrl-C in its terminal), or set "status" to "stopped" in its file if no garuda runs it.`;
+    }
+    const executor = agent.executor ?? this.executor;
+    const left = await jobLeftovers(executor, job);
+    const unmerged = left.branch && !left.merged;
+    const choice = await this.approver.ask(
+      {
+        tool: "jobs",
+        target: { kind: "input", json: "{}" },
+        preview: [
+          `Job ${id}: ${job.title} (${job.status})`,
+          `Goes: the job file, report and log${left.worktree ? ", its worktree" : ""}${job.launchd === undefined ? "" : ", its launchd agent"}.`,
+          !left.branch
+            ? "It has no branch."
+            : unmerged
+              ? `Its branch ${job.branch} is NOT merged: it may hold work. Keep it, or delete it too.`
+              : `Its branch ${job.branch} is merged: deleting it loses nothing.`,
+        ].join("\n"),
+        isolation: this.executor.isolation,
+        title: "Delete a job?",
+        question: "Delete it?",
+        ...(unmerged
+          ? {
+              choices: ["once", "session", "deny"] as const,
+              labels: {
+                once: "Yes, and delete the branch too",
+                session: "Yes, but keep the branch",
+                deny: "No",
+              },
+            }
+          : {
+              choices: ["once", "deny"] as const,
+              labels: { once: "Yes, delete it", deny: "No" },
+            }),
+      },
+      signal,
+    );
+    if (choice === "deny") return "Nothing changed.";
+    if (job.launchd !== undefined) {
+      await removeAgent(executor, job, agent.env ?? defaultAgentEnv());
+    }
+    const gone = await removeJob(executor, job, left, choice === "once");
+    const kept = left.branch && choice !== "once" ? ` The branch ${job.branch} stays.` : "";
+    return `Job ${id} is deleted: ${gone.join(", ")}.${kept}`;
+  }
+
   /** What this session adds to the base tools, for the start banner. Counts configured items. */
   extras(): string[] {
     // The build tools first: they say what kind of project this is.

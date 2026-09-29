@@ -512,3 +512,88 @@ describe("scheduled jobs: launchd (0.7)", () => {
     expect(await runtime.cancelJob(id)).toMatch(/is stopped: there is nothing to cancel/);
   });
 });
+
+describe("scheduled jobs: /jobs delete (0.11)", () => {
+  it("asks, removes the file, report, worktree; keeps an unmerged branch unless told; never a running job", async () => {
+    const { root, home } = await repo();
+    const make = async () => {
+      const created = await createJob({
+        root,
+        executor: new SandboxedHost(),
+        approver: new AutoApprover("once"),
+        plan: { request: "Fix add", plan: PLAN, sessionId: "s1" },
+        modelId: "fake",
+        home,
+        signal: signal(),
+      });
+      if (!created.ok) throw new Error(created.text);
+      return created.job;
+    };
+    const answers: ("once" | "session" | "deny")[] = [];
+    const previews: string[] = [];
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake",
+      model: async () => new FakeModelClient([]),
+      approver: {
+        ask: async (request) => {
+          previews.push(`${request.preview}\n${JSON.stringify(request.labels)}`);
+          return answers.shift() ?? "deny";
+        },
+      },
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host" }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    const agent = { executor: host };
+
+    // A job that never ran: no branch; No keeps it, Yes deletes the file.
+    const fresh = await make();
+    expect(await runtime.deleteJob(fresh.id, signal(), agent)).toBe("Nothing changed.");
+    expect(previews[0]).toContain("It has no branch.");
+    answers.push("once");
+    expect(await runtime.deleteJob(fresh.id, signal(), agent)).toBe(
+      `Job ${fresh.id} is deleted: the job file, report and log.`,
+    );
+    expect(existsSync(join(root, ".garuda/jobs", `${fresh.id}.json`))).toBe(false);
+
+    // A job that made its worktree and branch, with a commit that is not merged.
+    const ran = await make();
+    const prepared = await prepareJob(root, ran.id, undefined, quiet, host);
+    if (typeof prepared === "number") throw new Error(`exit ${prepared}`);
+    writeFileSync(join(prepared.root, "src/math.js"), "export const add = (a, b) => a + b;\n");
+    await git(host, prepared.root, ["commit", "-qam", "job work"]);
+    expect(await runtime.deleteJob(ran.id, signal(), agent)).toMatch(/is running\. Stop it first/);
+    await saveJob({ ...prepared.job, status: "done" });
+    answers.push("session");
+    const kept = await runtime.deleteJob(ran.id, signal(), agent);
+    expect(previews.at(-1)).toContain(`Its branch ${ran.branch} is NOT merged`);
+    expect(previews.at(-1)).toContain("Yes, but keep the branch");
+    expect(kept).toBe(
+      `Job ${ran.id} is deleted: the job file, report and log, the worktree. The branch ${ran.branch} stays.`,
+    );
+    expect(existsSync(prepared.root)).toBe(false);
+    const branches = (await git(host, root, ["branch", "--list", ran.branch])).stdout;
+    expect(branches).toContain(ran.branch);
+  });
+
+  it("the chat command, and Tab offers cancel and delete", async () => {
+    const { root } = await repo();
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake",
+      model: async () => new FakeModelClient([]),
+      approver: new AutoApprover("deny"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host" }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    const store = new ChatStore({ model: "m", sandbox: "s" }, { paint: noColor });
+    await runCommand("/jobs delete nope", { runtime, renderer: store, sessionPath: (i) => i });
+    expect(store.getState().items.at(-1)?.text).toMatch(/There is no job nope/);
+  });
+});

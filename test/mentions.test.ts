@@ -303,7 +303,8 @@ describe("Tab completion of command arguments (0.8)", () => {
     expect(complete("/models son", 11, s)?.text).toBe("/models sonnet ");
     expect(complete("/models claude-opus", 19, s)?.candidates.length).toBeGreaterThan(0);
     expect(complete("/models opus x", 14, s)).toBeUndefined();
-    expect(complete("/jobs ", 6, s)?.text).toBe("/jobs cancel ");
+    expect(complete("/jobs ", 6, s)?.candidates).toEqual(["cancel", "delete"]);
+    expect(complete("/jobs d", 7, s)?.text).toBe("/jobs delete ");
     expect(complete("/diff l", 7, s)?.text).toBe("/diff last ");
     expect(complete("/lsp install p", 14, s)?.text).toBe("/lsp install python ");
     expect(complete("/mcp lo", 7, s)?.text).toBe("/mcp logout ");
