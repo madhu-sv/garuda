@@ -32,7 +32,7 @@ Low-level design documents:
 | Init and migration | `src/init/` | [init.md](lld/init.md) |
 | Skills | `src/skills/` | [skills.md](lld/skills.md) |
 | Evals | `src/evals/` | [evals.md](lld/evals.md) |
-| Scheduled jobs (0.7) | `src/jobs/`, `src/cli/jobCommand.ts` | [jobs.md](lld/jobs.md) |
+| Scheduled jobs (0.7), proof of work and the night shift (0.11) | `src/jobs/`, `src/cli/jobCommand.ts`, `src/cli/nightCommand.ts` | [jobs.md](lld/jobs.md) |
 | Formatters (0.10) | `src/format/`, `afterWrite` in `src/tools/types.ts` | [format.md](lld/format.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).

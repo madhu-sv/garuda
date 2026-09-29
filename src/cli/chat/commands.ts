@@ -355,14 +355,20 @@ async function jobsCommand(runtime: Runtime, renderer: Renderer, id: string): Pr
         const r = j.result;
         const facts = [
           j.status,
+          ...(j.status === "scheduled" && j.queue === true && j.launchd === undefined
+            ? ["in the night queue"]
+            : []),
           ...(j.at === undefined || j.status !== "scheduled" ? [] : [`at ${j.at}`]),
+          ...(r?.proof === undefined
+            ? []
+            : [r.proof.verdict === "ready" ? "ready to merge" : "needs a look"]),
           ...(r === undefined ? [] : [`${r.files.length} file(s)`]),
           ...(r?.costUsd === undefined ? [] : [`$${r.costUsd.toFixed(2)}`]),
           ...(r === undefined || r.denied.length === 0 ? [] : [`${r.denied.length} denied`]),
         ].join(" · ");
         return `  ${j.id}  ${j.title}\n    ${facts}`;
       }),
-      "Details: /jobs <id>. Run one: garuda run <id> [--at HH:MM].",
+      "Details: /jobs <id>. Run one: garuda run <id> [--at HH:MM]. Run the queue: garuda night [--at HH:MM].",
     ].join("\n"),
   );
 }

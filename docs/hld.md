@@ -14,6 +14,7 @@ Version 0.11.0-dev. This document shows how the parts work together. The compone
 | `garuda --replay <id\|file>` | Play a session back with recorded results. No API calls. | "matches" or a list of differences. |
 | `garuda eval` | Run eval tasks in scratch folders; `--parallel n`, `--batch on` (0.7) for the Batch API. | A table and `report.json`. |
 | `garuda run <job> [--at HH:MM] [-m model]` | Run a scheduled job (0.7): its plan, unattended, in its own worktree and branch. | The run's lines, then the job report (also in `.garuda/jobs/<id>.md`). |
+| `garuda night [--at HH:MM] [--parallel n]` | Run the project's night queue (0.11), up to 3 jobs at a time. | One line per job; the digest (also in `.garuda/jobs/night-<date>.md`). |
 | `garuda eval -s java` / `--prepare java` | Check the toolchain, then run the Java (or Python) suite; `--prepare` fills `~/.m2` once. | A hint when a toolchain is missing; otherwise the same report. |
 
 ## 2. Start of a process

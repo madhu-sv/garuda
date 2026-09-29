@@ -117,6 +117,8 @@ const jobSchema = z.object({
    */
   test: z.string().min(1).optional(),
   review: z.boolean().optional(),
+  /** In the project's night queue (0.11): `garuda night` runs it. */
+  queue: z.boolean().optional(),
   /** The launchd agent that starts the job (macOS), while it is installed. */
   launchd: z.object({ label: z.string(), plist: z.string(), when: z.string() }).optional(),
   status: z.enum(JOB_STATUSES),

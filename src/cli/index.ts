@@ -158,6 +158,18 @@ async function main(): Promise<void> {
       },
     );
 
+  program
+    .command("night")
+    .description(
+      "run this project's night queue (jobs from /schedule), up to 3 at a time, then write one digest",
+    )
+    .option("--at <HH:MM>", "wait until this local time first (keep the terminal open)")
+    .option("--parallel <n>", "jobs at the same time (1 to 10, default 3)")
+    .action(async (options: { at?: string; parallel?: string }) => {
+      const { nightCommand } = await import("./nightCommand.js");
+      process.exitCode = await nightCommand(options, new PlainRenderer());
+    });
+
   const lsp = program
     .command("lsp")
     .description("show the language servers for diagnostics (TS/JS, Python, Java)")

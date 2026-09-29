@@ -113,6 +113,7 @@ export async function createJob(
     maxSteps: options.maxSteps ?? DEFAULT_JOB_MAX_STEPS,
     links,
     ...(options.test === undefined ? {} : { test: options.test }),
+    queue: true,
     status: "scheduled",
   };
   const preview = [
@@ -135,6 +136,7 @@ export async function createJob(
     options.test === undefined
       ? 'Proof of work: no test command found (set "test" in the job file); a principal-engineer review of the diff (one model call).'
       : `Proof of work: \`${options.test}\` runs in the sandbox before and after the job; a principal-engineer review of the diff (one model call).`,
+    "Night shift: the job joins this project's queue; `garuda night` runs the queue (up to 3 jobs at a time) and writes one digest.",
   ].join("\n");
   const choice = await options.approver.ask(
     {

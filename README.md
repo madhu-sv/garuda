@@ -666,6 +666,14 @@ A plan can run later, with nobody at the keyboard: for example overnight.
   a job that still runs goes on with the normal API. The run prints the batch id and a line per minute
   of waiting.
 
+### The night shift (0.11)
+
+Each `/schedule` also puts the job in the project's night queue. `garuda night --at 01:00` waits, then
+runs the queued jobs, up to 3 at a time (`--parallel n`, 1 to 10), each in its own worktree and with its
+own log (`.garuda/jobs/<id>.log`). At the end it writes one digest, `.garuda/jobs/night-<date>.md`: a row
+per job with its verdict, tests, files, cost and branch, and why the others need a look. `/jobs` shows
+which jobs are in the queue. A job with its own launchd agent is not in the queue.
+
 ### Proof of work (0.11)
 
 Each job report starts with a verdict: **Ready to merge** or **Needs a look**. It rests on three things:

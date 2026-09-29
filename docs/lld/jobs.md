@@ -39,6 +39,7 @@ sequenceDiagram
 | `jobs/git.ts` | `git(executor, cwd, args)` and `hostCommand` (launchctl, osascript): through the Executor (N8), outside the sandbox; git with the user's config but `core.hooksPath=/dev/null`. |
 | `jobs/launchd.ts` | The launchd agent (macOS): `agentPlist`, `installAgent`, `removeAgent`, `nextTime`, `defaultAgentEnv`. |
 | `jobs/proof.ts` | Proof of work (0.11): `detectTestCommand`, `riskFlags`, `stackOf`, `reviewerSystem`, `reviewPrompt`, `parseReview`, `jobVerdict`. |
+| `jobs/night.ts` | The night shift (0.11): `nightQueue`, `processRunner`, `runQueue`, `nightDigest`, `writeDigest`. |
 | `jobs/text.ts` | `jobPrompt` (the task for the unattended run) and `jobReport` (Markdown). |
 | `cli/jobCommand.ts` | `prepareJob` (load, `--at` wait, worktree, settings, status running) and `finishJob` (commit, result, report, notification), `msUntil`. |
 
@@ -55,6 +56,7 @@ checks it again (schema, id, root, rules).
 | `allow` | Permission rules for this job only, in the settings format. |
 | `onUnapproved` | `deny-and-continue` (the only mode in 0.7). |
 | `at`, `maxSteps`, `links` | The time given to `/schedule`; the step limit (100); linked ignored folders. |
+| `queue` | In the project's night queue (0.11); `/schedule` sets it. |
 | `test`, `review` | Proof of work (0.11): the test command run before and after (absent: none); the review (default true). |
 | `status`, `startedAt`, `endedAt`, `result` | `scheduled` → `running` → `done`, `stopped` (Ctrl-C) or `failed`; the result: stop reason, steps, tokens, cost, time, session, commit, files with line counts, denied calls, the agent's last answer. |
 
@@ -156,6 +158,21 @@ response: batch responses at half the token price.
   and cost). The report puts Verdict, Tests, Risk flags and the review first; the notification says
   "ready to merge" or "needs a look".
 - The builder's role is in `jobPrompt`: a staff engineer, small focused changes, tests for each change.
+
+## The night shift (`jobs/night.ts`, `cli/nightCommand.ts`, 0.11)
+
+- `/schedule` puts each new job in the queue (`queue: true`; the question says so). `nightQueue(root)`:
+  the jobs that are `scheduled`, in the queue and without a launchd agent of their own, oldest first.
+- `garuda night [--at HH:MM] [--parallel n]` waits (Ctrl-C cancels), then `runQueue` runs the jobs up to
+  `parallel` at a time (default 3, at most 10). Each job is its own process, `garuda run <id>`
+  (`processRunner`: the host executor, in the project, with this process's environment so the API keys
+  come along, output appended to `.garuda/jobs/<id>.log`, 24 h at most). The worktrees keep the jobs
+  apart; each job still does its own proof of work and report, and does not notify.
+- At the end the command reloads the job files and writes one digest, `.garuda/jobs/night-<date>.md`
+  (`nightDigest`): a row per job (verdict, tests after, files, cost with the review, branch), then the
+  jobs that need a look with their flags and the review's summary. It sends one notification
+  ("N job(s), M ready to merge") when stdout is a terminal.
+- `/jobs` marks queued jobs ("in the night queue") and verdicts. A launchd agent for the queue is next.
 
 ## Safety
 
