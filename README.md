@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.10.0-dev.
+Garuda is a terminal coding agent. This is version 0.10.0.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -21,7 +21,8 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.7: scheduled jobs (plan now, build later with an approval list, own branch), launchd, Batch API (step limit, finish-by time) | Done |
 | 0.8: chat UX from the second OpenCode comparison (`/compact`, argument completion, fuzzy @, session rename and delete, `/plan <task>`) | Done |
 | 0.9: `/details`, `/thinking` (effort, show), Claude's thinking blocks kept, command palette (Ctrl-P) | Done |
-| 0.10: agent quality, each with an A/B run first (formatters after edits, a question tool, apply_patch, a general-purpose subagent) | In progress |
+| 0.10: formatters after edits (opt-in; measured: +14% cost, no gain) | Done |
+| 0.11: night shift (a queue of overnight jobs, one digest) and proof of work (tests before and after, risk flags, a principal-engineer review) | Planned |
 
 ## Use
 
