@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.10.0. This document describes the parts of Garuda, their dependencies, the trust
+Version 0.11.0-dev. This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -124,7 +124,7 @@ flowchart TB
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
 | Subagents | `src/agents/` | The explore tool: a child agent loop with read-only tools, its own session and limits, that answers one question. |
 | Language profiles | `src/lang/` | Find the build tool from marker files (Maven, Gradle, Python): test commands, prompt notes, package caches for the sandbox. |
-| Jobs | `src/jobs/` | Scheduled jobs (0.7): the job file, the base commit and worktree on a job branch, the commit and the report. `garuda run` in the CLI runs a job with its approval list and an engine that denies instead of asking. The launchd agent (macOS) starts a job with nobody at the terminal; a job may use the Batch API until its finish-by time. |
+| Jobs | `src/jobs/` | Scheduled jobs (0.7): the job file, the base commit and worktree on a job branch, the commit and the report. `garuda run` in the CLI runs a job with its approval list and an engine that denies instead of asking. The launchd agent (macOS) starts a job with nobody at the terminal; a job may use the Batch API until its finish-by time. Proof of work (0.11): tests before and after, risk flags, a principal-engineer review, a verdict. |
 | Evals | `src/evals/` | Eval tasks (Node, Java, Python), the generated "shopkit" repository, toolchain checks, the runner and the report. |
 
 ## 4. Dependency rules
@@ -265,3 +265,4 @@ All state is in files. There is no server and no database.
 | Thinking blocks (0.9) | Kept and sent back unchanged for Claude models; left out only after a model switch or when redaction changed one | The API asks for them within a tool-use turn, and the newest Claude models always think. Measured with `--keep-thinking on/off`. `/thinking` sends nothing until the user asks, so the defaults stay the model's. |
 | Command palette (0.9) | Ctrl-P in the Ink chat; rows from the `/help` text, then custom commands and skills; Enter runs a command with no arguments, else fills the line | One source for the help and the palette; commands with arguments go to the line, where Tab completes them. The plain chat keeps `/` and Tab. |
 | Formatters (0.10) | Detected from config + an existing binary, settings can change them; after each edit; only in the OS sandbox; off by default (A/B: +14% cost, no gain) | The project's own style with no extra step; the model sees the formatter's diff, so its next edit matches. A formatter is a project command, so it gets the sandbox, as bash does. |
+| Proof of work (0.11) | Tests before and after in the sandbox; risk flags; the same model reviews in a principal engineer's role; a STOP flag overrides the review | An unattended branch needs evidence before a merge. The same model keeps cost and setup low; the role and a fresh context give it a reviewer's view. Hard facts (failing tests) never depend on the model. |

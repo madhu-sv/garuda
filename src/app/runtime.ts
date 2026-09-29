@@ -24,6 +24,7 @@ import {
 import { HOOKS_FILE, type Hook, hooksHash, loadHooks } from "../hooks/config.js";
 import { HookRunner, hooksConsent } from "../hooks/runner.js";
 import type { PlanForJob } from "../jobs/create.js";
+import { detectTestCommand, type TestRun, tail } from "../jobs/proof.js";
 import { KnowledgeIndex } from "../knowledge/index.js";
 import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
 import {
@@ -64,7 +65,13 @@ import {
   thinkingText,
   withoutThinking,
 } from "../model/thinking.js";
-import type { Message, ModelClient, ServerToolSpec, ThinkingRequest } from "../model/types.js";
+import type {
+  Message,
+  ModelClient,
+  ModelResponse,
+  ServerToolSpec,
+  ThinkingRequest,
+} from "../model/types.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -1149,9 +1156,59 @@ export class Runtime {
       ...(at === undefined ? {} : { at }),
       // The chat offers a launchd agent on macOS (a second question).
       launchd: {},
+      ...testOption(detectTestCommand(this.root, this.profiles)),
       signal,
     });
     return { ok: created.ok, text: created.text };
+  }
+
+  /**
+   * Run a check command (0.11: a job's tests) in the sandbox with the policy of bash, outside the
+   * permission engine: Garuda runs it, not the model. The output is not a note for the model.
+   */
+  async runCheck(command: string, timeoutMs: number, signal: AbortSignal): Promise<TestRun> {
+    const result = await this.executor.run(command, this.permissions.execPolicy(timeoutMs), {
+      signal,
+    });
+    return {
+      exitCode: result.exitCode,
+      timedOut: result.timedOut,
+      durationMs: result.durationMs,
+      tail: tail(`${result.stdout.text}\n${result.stderr.text}`),
+    };
+  }
+
+  /**
+   * One model request with no tools (0.11: the job's review): the main model, its price. It does
+   * not touch the session.
+   */
+  async askModel(
+    system: string,
+    text: string,
+    signal: AbortSignal,
+  ): Promise<{ text: string; costUsd?: number }> {
+    const model = await this.client();
+    let response: ModelResponse | undefined;
+    for await (const event of model.stream(
+      {
+        system,
+        messages: [{ role: "user", content: [{ type: "text", text }] }],
+        tools: [],
+        maxTokens: 8_192,
+      },
+      { signal },
+    )) {
+      if (event.type === "response") response = event.response;
+    }
+    if (response === undefined) throw new Error("The model gave no answer.");
+    const answer = response.content
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("")
+      .trim();
+    const price = this.currentPrice;
+    return price === undefined
+      ? { text: answer }
+      : { text: answer, costUsd: responseCost(response, price) };
   }
 
   /**
@@ -1727,4 +1784,9 @@ function lastAssistantText(messages: readonly Message[]): string {
     if (text !== "") return text;
   }
   return "";
+}
+
+/** `{ test }` when there is a test command (exactOptionalPropertyTypes). */
+function testOption(test: string | undefined): { test?: string } {
+  return test === undefined ? {} : { test };
 }

@@ -1,9 +1,19 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Runtime } from "../app/runtime.js";
-import { hostCommand, JobGitError } from "../jobs/git.js";
+import { git as gitCommand, hostCommand, JobGitError } from "../jobs/git.js";
 import { JOBS_DIR, type Job, type JobResult, loadJob, saveJob } from "../jobs/job.js";
 import { type AgentEnv, defaultAgentEnv, removeAgent } from "../jobs/launchd.js";
+import {
+  jobVerdict,
+  parseReview,
+  reviewerSystem,
+  reviewPrompt,
+  riskFlags,
+  stackOf,
+  type TestRun,
+  testSummary,
+} from "../jobs/proof.js";
 import { jobReport } from "../jobs/text.js";
 import { commitJob, jobChanges, prepareWorktree } from "../jobs/worktree.js";
 import type { DeadlineClient } from "../model/deadline.js";
@@ -31,6 +41,97 @@ export interface PreparedJob {
   startedAt: number;
   /** With the Batch API: the client that counts batch and normal requests (0.7). */
   deadline?: DeadlineClient;
+  /** Proof of work (0.11): the tests at the job's base, before the turn. */
+  testsBefore?: TestRun;
+}
+
+/** Most time for one test run of a job (0.11). */
+export const JOB_TEST_TIMEOUT_MS = 10 * 60_000;
+
+/**
+ * Proof of work (0.11): run the job's tests at its base, before the turn, in the sandbox. The
+ * worktree then goes back to the base (test output files must not reach the job's commit).
+ */
+export async function testsBefore(
+  prepared: PreparedJob,
+  runtime: Runtime,
+  renderer: Renderer,
+  git: Executor = createExecutor("host").executor,
+): Promise<void> {
+  const { job } = prepared;
+  if (job.test === undefined) return;
+  renderer.info(`Tests before the job: ${job.test}`);
+  prepared.testsBefore = await runtime.runCheck(
+    job.test,
+    JOB_TEST_TIMEOUT_MS,
+    new AbortController().signal,
+  );
+  renderer.info(`Tests before the job: ${testSummary(prepared.testsBefore)}`);
+  await gitCommand(git, job.worktree, ["checkout", "--", "."], { check: false });
+  await gitCommand(git, job.worktree, ["clean", "-fdq"], { check: false });
+}
+
+/** After the commit (0.11): the tests again, the risk flags, the review and the verdict. */
+async function proveJob(
+  prepared: PreparedJob,
+  result: JobResult,
+  runtime: Runtime,
+  renderer: Renderer,
+  git: Executor,
+): Promise<NonNullable<JobResult["proof"]>> {
+  const { job } = prepared;
+  const signal = new AbortController().signal;
+  let after: TestRun | undefined;
+  if (job.test !== undefined) {
+    after = await runtime.runCheck(job.test, JOB_TEST_TIMEOUT_MS, signal);
+    renderer.info(`Tests after the job: ${testSummary(after)}`);
+  }
+  const before = prepared.testsBefore;
+  const flags = riskFlags({
+    result,
+    ...(job.test === undefined ? {} : { test: job.test }),
+    ...(before === undefined ? {} : { before }),
+    ...(after === undefined ? {} : { after }),
+  });
+  if (result.commit === undefined) flags.push({ level: "look", text: "No file changed." });
+  const proof: NonNullable<JobResult["proof"]> = {
+    verdict: "needs-look",
+    ...(before === undefined ? {} : { before }),
+    ...(after === undefined ? {} : { after }),
+    flags,
+  };
+  if (job.review !== false && result.commit !== undefined) {
+    renderer.info("Reviewing the diff (a principal engineer's review)…");
+    try {
+      const diff = (
+        await gitCommand(git, job.root, ["diff", "--no-renames", job.base, job.branch], {
+          check: false,
+        })
+      ).stdout;
+      const answer = await runtime.askModel(
+        reviewerSystem(stackOf(result.files, runtime.profiles)),
+        reviewPrompt({
+          prompt: job.prompt,
+          files: result.files,
+          ...(job.test === undefined ? {} : { test: job.test }),
+          ...(before === undefined ? {} : { before }),
+          ...(after === undefined ? {} : { after }),
+          flags,
+          diff,
+        }),
+        signal,
+      );
+      const parsed = parseReview(answer.text);
+      proof.review = {
+        ...parsed,
+        ...(answer.costUsd === undefined ? {} : { costUsd: answer.costUsd }),
+      };
+    } catch (error) {
+      proof.reviewError = (error as Error).message;
+    }
+  }
+  proof.verdict = jobVerdict(flags, proof.review?.verdict);
+  return proof;
 }
 
 /** Load the job, wait for --at, make its worktree, and build its settings. A number = exit code. */
@@ -200,6 +301,9 @@ export async function finishJob(
     if (!(error instanceof JobGitError)) throw error;
     result.error = [result.error, `commit: ${error.message}`].filter(Boolean).join("; ");
   }
+  if (outcome.kind !== "interrupted") {
+    result.proof = await proveJob(prepared, result, runtime, renderer, git);
+  }
   job.status =
     outcome.kind === "error" ? "failed" : outcome.kind === "interrupted" ? "stopped" : "done";
   job.endedAt = new Date().toISOString();
@@ -209,7 +313,13 @@ export async function finishJob(
   const file = join(job.root, JOBS_DIR, `${job.id}.md`);
   await writeFile(file, `${report}\n`, { mode: 0o600 });
   renderer.info(`\n${report}\n\nReport: ${file}`);
-  const note = `Garuda: job ${job.id} ${job.status} (${result.files.length} file(s) changed)`;
+  const verdict =
+    result.proof === undefined
+      ? ""
+      : result.proof.verdict === "ready"
+        ? ", ready to merge"
+        : ", needs a look";
+  const note = `Garuda: job ${job.id} ${job.status}${verdict} (${result.files.length} file(s) changed)`;
   if (process.stdout.isTTY) {
     process.stdout.write(
       notificationBytes(pickChannel(runtime.notificationSettings?.channel), note),

@@ -1,9 +1,11 @@
 import type { Job } from "./job.js";
+import { passed, testSummary } from "./proof.js";
 
 /** The task of a job: the user's request, the plan, and the rules of an unattended run (0.7). */
 export function jobPrompt(request: string, plan: string): string {
   return [
     "Carry out the plan below. It was made in an earlier session; you now run as a scheduled job, and nobody can answer questions or approve calls.",
+    "- Work as a staff engineer: small, focused changes that follow the plan and the project's conventions, with tests that prove each change. A principal engineer reviews your diff before the user merges it.",
     "- Calls outside the job's approved list are denied. Do not retry a denied call: continue without it, and list it at the end.",
     "- Do not commit, push or change branches: Garuda commits your changes to the job's branch when you finish.",
     "- Run the project's tests when the plan says how. End with a short report: what you changed, the test result, and what is left for the user.",
@@ -48,6 +50,7 @@ export function jobReport(job: Job): string {
     );
   }
   if (r.error !== undefined) lines.push(`- Error: ${r.error}`);
+  if (r.proof !== undefined) lines.push("", ...proofLines(job, r.proof));
   lines.push("", "## Files");
   if (r.files.length === 0) lines.push("", "No file changed.");
   else {
@@ -77,4 +80,35 @@ export function jobReport(job: Job): string {
       : `Review: \`git diff ${job.base.slice(0, 12)} ${job.branch}\` · merge: \`git merge ${job.branch}\` · clean up: \`git worktree remove ${job.worktree}\``,
   );
   return lines.join("\n");
+}
+
+/** The proof-of-work sections of the report (0.11): verdict, tests, risk flags, review. */
+function proofLines(job: Job, proof: NonNullable<NonNullable<Job["result"]>["proof"]>): string[] {
+  const out = [
+    "## Verdict",
+    "",
+    proof.verdict === "ready"
+      ? "**Ready to merge**: the tests pass, nothing stops it, and the review found no blocker."
+      : "**Needs a look**: see the flags and the review below before you merge.",
+    "",
+    "## Tests",
+    "",
+    job.test === undefined
+      ? 'No test command (set "test" in the job file).'
+      : `\`${job.test}\`: before the job ${testSummary(proof.before)}; after it ${testSummary(proof.after)}.`,
+  ];
+  if (proof.after !== undefined && !passed(proof.after)) {
+    out.push("", "```text", proof.after.tail, "```");
+  }
+  out.push("", "## Risk flags", "");
+  if (proof.flags.length === 0) out.push("None.");
+  for (const f of proof.flags) out.push(`- ${f.level === "stop" ? "STOP" : "look"}: ${f.text}`);
+  if (proof.review !== undefined) {
+    const cost =
+      proof.review.costUsd === undefined ? "" : ` (${`$${proof.review.costUsd.toFixed(4)}`})`;
+    out.push("", `## Review by a principal engineer${cost}`, "", proof.review.text);
+  } else if (proof.reviewError !== undefined) {
+    out.push("", "## Review", "", `The review failed: ${proof.reviewError}`);
+  }
+  return out;
 }

@@ -65,6 +65,8 @@ export interface CreateJobOptions {
    * `defaultAgentEnv()` and the job's executor.
    */
   launchd?: { platform?: NodeJS.Platform; env?: AgentEnv; executor?: Executor };
+  /** The project's test command (0.11): run before and after the job. Absent: no tests. */
+  test?: string;
 }
 
 /**
@@ -110,6 +112,7 @@ export async function createJob(
     ...(options.at === undefined ? {} : { at: options.at }),
     maxSteps: options.maxSteps ?? DEFAULT_JOB_MAX_STEPS,
     links,
+    ...(options.test === undefined ? {} : { test: options.test }),
     status: "scheduled",
   };
   const preview = [
@@ -128,6 +131,10 @@ export async function createJob(
       : ["", "Not rules, left out:", ...problems.map((p) => `  ${p}`)]),
     "",
     "Any other call that would ask is denied at run time; the job goes on and reports it.",
+    "",
+    options.test === undefined
+      ? 'Proof of work: no test command found (set "test" in the job file); a principal-engineer review of the diff (one model call).'
+      : `Proof of work: \`${options.test}\` runs in the sandbox before and after the job; a principal-engineer review of the diff (one model call).`,
   ].join("\n");
   const choice = await options.approver.ask(
     {

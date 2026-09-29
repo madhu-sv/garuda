@@ -38,6 +38,7 @@ sequenceDiagram
 | `jobs/worktree.ts` | `jobBase`, `linkCandidates`, `worktreeDir`, `prepareWorktree`, `commitJob`, `jobChanges`. |
 | `jobs/git.ts` | `git(executor, cwd, args)` and `hostCommand` (launchctl, osascript): through the Executor (N8), outside the sandbox; git with the user's config but `core.hooksPath=/dev/null`. |
 | `jobs/launchd.ts` | The launchd agent (macOS): `agentPlist`, `installAgent`, `removeAgent`, `nextTime`, `defaultAgentEnv`. |
+| `jobs/proof.ts` | Proof of work (0.11): `detectTestCommand`, `riskFlags`, `stackOf`, `reviewerSystem`, `reviewPrompt`, `parseReview`, `jobVerdict`. |
 | `jobs/text.ts` | `jobPrompt` (the task for the unattended run) and `jobReport` (Markdown). |
 | `cli/jobCommand.ts` | `prepareJob` (load, `--at` wait, worktree, settings, status running) and `finishJob` (commit, result, report, notification), `msUntil`. |
 
@@ -54,6 +55,7 @@ checks it again (schema, id, root, rules).
 | `allow` | Permission rules for this job only, in the settings format. |
 | `onUnapproved` | `deny-and-continue` (the only mode in 0.7). |
 | `at`, `maxSteps`, `links` | The time given to `/schedule`; the step limit (100); linked ignored folders. |
+| `test`, `review` | Proof of work (0.11): the test command run before and after (absent: none); the review (default true). |
 | `status`, `startedAt`, `endedAt`, `result` | `scheduled` → `running` → `done`, `stopped` (Ctrl-C) or `failed`; the result: stop reason, steps, tokens, cost, time, session, commit, files with line counts, denied calls, the agent's last answer. |
 
 ## Making a job (`/schedule [HH:MM]`)
@@ -129,6 +131,31 @@ switchedAt? }`, and the report shows them.
 Why the step limit: the first measurement waited about 3 minutes per step, but the next day one batch
 stayed `in_progress` for more than 6 hours. Only the slow steps pay full price. Costs are exact per
 response: batch responses at half the token price.
+
+## Proof of work (`jobs/proof.ts`, 0.11)
+
+- `detectTestCommand(root, profiles)` at `/schedule`: a `test` script in package.json (pnpm, yarn or
+  npm by the lock file; not npm's placeholder), else the first profile's `test`. It goes into the job
+  file as `test` (the user may change it) and into the question's preview.
+- Before the turn, `testsBefore` (the CLI, after the runtime is built) runs it with `runtime.runCheck`:
+  the sandbox and bash's policy, outside the permission engine, 10 minutes at most. Then `git checkout
+  -- .` and `git clean -fdq` put the worktree back at its base, so test output never reaches the commit
+  (the links are ignored, so they stay).
+- After the commit, `proveJob` (in `finishJob`, not after Ctrl-C) runs the tests again, then
+  `riskFlags` (pure): STOP = not `done`, an error, tests fail after; look = no test command, test files
+  deleted or changed, manifests or lock files, CI/container/`.env` files, more than 20 files or 500 lines,
+  denied calls, tests fixed by the job, no file changed.
+- The review (`job.review` not false, and a commit): `runtime.askModel(reviewerSystem(stack),
+  reviewPrompt(...))`, one request with no tools and no session. The role: a principal engineer and a
+  domain expert in the stack (`stackOf`: languages of the changed files, then the profiles' labels). The
+  input: the job prompt, the files, the test results (the failing output), the flags and `git diff base
+  branch` (cut at 60,000 characters). `parseReview` reads `VERDICT: ready | needs a look`; no verdict line
+  counts as "needs a look". A failed review is recorded (`reviewError`), never an error of the job.
+- `jobVerdict`: any STOP flag → needs a look; else the review's verdict; with no review, ready only
+  with no flag. The result keeps `proof` (verdict, test runs with the last 30 lines, flags, review text
+  and cost). The report puts Verdict, Tests, Risk flags and the review first; the notification says
+  "ready to merge" or "needs a look".
+- The builder's role is in `jobPrompt`: a staff engineer, small focused changes, tests for each change.
 
 ## Safety
 

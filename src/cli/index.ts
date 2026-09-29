@@ -404,6 +404,11 @@ async function start(options: Options, program: Command): Promise<number> {
       }
       if (resolved.kind === "prompt") prompt = resolved.prompt;
     }
+    // Proof of work (0.11): the job's tests at its base, before the turn.
+    if (job !== undefined) {
+      const { testsBefore } = await import("./jobCommand.js");
+      await testsBefore(job, runtime, renderer);
+    }
     const outcome = await runTurnInTerminal(
       runtime,
       terminalApprover,

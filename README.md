@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.10.0.
+Garuda is a terminal coding agent. This is version 0.11.0-dev.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -22,7 +22,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.8: chat UX from the second OpenCode comparison (`/compact`, argument completion, fuzzy @, session rename and delete, `/plan <task>`) | Done |
 | 0.9: `/details`, `/thinking` (effort, show), Claude's thinking blocks kept, command palette (Ctrl-P) | Done |
 | 0.10: formatters after edits (opt-in; measured: +14% cost, no gain) | Done |
-| 0.11: night shift (a queue of overnight jobs, one digest) and proof of work (tests before and after, risk flags, a principal-engineer review) | Planned |
+| 0.11: night shift (a queue of overnight jobs, one digest) and proof of work (tests before and after, risk flags, a principal-engineer review) | In progress |
 
 ## Use
 
@@ -665,6 +665,23 @@ A plan can run later, with nobody at the keyboard: for example overnight.
   tries the Batch API again. 15 minutes before the finish-by time (`"finishBy": "07:00"` in the job file)
   a job that still runs goes on with the normal API. The run prints the batch id and a line per minute
   of waiting.
+
+### Proof of work (0.11)
+
+Each job report starts with a verdict: **Ready to merge** or **Needs a look**. It rests on three things:
+
+- **Tests before and after.** Garuda finds the test command (a `test` script in `package.json`, run with
+  pnpm, yarn or npm by the lock file; else the Maven, Gradle or pytest command) and runs it in the sandbox
+  at the job's base and again after the job. `"test"` in the job file changes or sets it.
+- **Risk flags.** STOP: the job did not finish, or the tests fail after it. Look: no test command, test
+  files deleted or changed, dependency or build files changed, CI or environment files changed, a large
+  change, denied calls, tests that failed before and pass after.
+- **A review.** The job's model works as a staff engineer. A second request to the same model, as a
+  principal engineer who knows the project's stack, reads the request, the plan, the diff, the test
+  results and the flags, and answers `VERDICT: ready | needs a look` with findings. It costs one model
+  call (shown in the report); `"review": false` in the job file turns it off.
+
+A STOP flag always means "Needs a look"; otherwise the review decides.
 
 ## Hooks
 

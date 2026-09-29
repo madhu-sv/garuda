@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.10.0. This document shows how the parts work together. The component documents in
+Version 0.11.0-dev. This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -236,7 +236,9 @@ once, with the automatic compaction's summary step. Details: [lld/cli.md](lld/cl
 `/schedule` turns the last finished plan into a job file with its own approval list (from the plan's
 `permissions` block), after one question. `garuda run <id>` builds it later in a git worktree on the
 branch `garuda/job-<id>`: the permission engine allows the list and denies (never asks) everything else,
-then Garuda commits the changes on the branch and writes a report. On macOS, `/schedule HH:MM` can add a
+then Garuda commits the changes on the branch and writes a report. Proof of work (0.11): the tests run
+before and after in the sandbox, risk flags come from the change, and the same model as a principal
+engineer reviews the diff; the report starts with "Ready to merge" or "Needs a look". On macOS, `/schedule HH:MM` can add a
 launchd agent that starts the run with nobody at the terminal and removes itself after it. With a Claude
 model, a job can use the Batch API at half price: a step that waits more than its limit (20 minutes) runs on
 the normal API, and from 15 minutes before the finish-by time (07:00) the whole job does. Details:

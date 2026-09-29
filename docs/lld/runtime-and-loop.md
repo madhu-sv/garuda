@@ -86,6 +86,9 @@ Sessions and models in the chat (0.6):
   `runAgent` as `deps.thinking` (`thinkingRequest`), and `thinkingMaxTokens` raises `max_tokens`.
 - `formatSource` (0.10): with `formatters.enabled` and an OS sandbox, the `format` dependency of the loop
   (see [format.md](format.md)).
+- `runCheck(command, timeoutMs, signal)` and `askModel(system, text, signal)` (0.11, a job's proof of
+  work): a command in the sandbox with bash's policy, outside the engine; one model request with no
+  tools, the main model and its price, no session.
 - `sessionRecords()`: the current session's records, for `/export`.
 - `compact(focus, signal)` (0.8): `compactNow` on the current session with the main model and its price;
   the result has the tokens before and after and the summary's cost.

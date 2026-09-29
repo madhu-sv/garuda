@@ -23,6 +23,13 @@ const fileChange = z.object({
   removed: z.number().optional(),
 });
 
+const testRun = z.object({
+  exitCode: z.number().nullable(),
+  timedOut: z.boolean(),
+  durationMs: z.number(),
+  tail: z.string(),
+});
+
 const resultSchema = z.object({
   stopReason: z.string(),
   steps: z.number(),
@@ -43,6 +50,23 @@ const resultSchema = z.object({
       /** Steps that waited past the step limit and ran on the normal API. */
       slow: z.number().optional(),
       switchedAt: z.string().optional(),
+    })
+    .optional(),
+  /** Proof of work (0.11): tests before and after, risk flags, the review and the verdict. */
+  proof: z
+    .object({
+      verdict: z.enum(["ready", "needs-look"]),
+      before: testRun.optional(),
+      after: testRun.optional(),
+      flags: z.array(z.object({ level: z.enum(["stop", "look"]), text: z.string() })),
+      review: z
+        .object({
+          verdict: z.enum(["ready", "needs-look"]),
+          text: z.string(),
+          costUsd: z.number().optional(),
+        })
+        .optional(),
+      reviewError: z.string().optional(),
     })
     .optional(),
 });
@@ -87,6 +111,12 @@ const jobSchema = z.object({
     .optional(),
   /** Ignored folders of the checkout (node_modules, .venv) that the worktree links to. */
   links: z.array(z.string()),
+  /**
+   * Proof of work (0.11): the test command, run in the sandbox before and after the job (absent:
+   * no tests), and the review of the diff (default true).
+   */
+  test: z.string().min(1).optional(),
+  review: z.boolean().optional(),
   /** The launchd agent that starts the job (macOS), while it is installed. */
   launchd: z.object({ label: z.string(), plist: z.string(), when: z.string() }).optional(),
   status: z.enum(JOB_STATUSES),
