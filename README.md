@@ -679,7 +679,8 @@ which jobs are in the queue. A job with its own launchd agent is not in the queu
 Each job report starts with a verdict: **Ready to merge** or **Needs a look**. It rests on three things:
 
 - **Tests before and after.** Garuda finds the test command (a `test` script in `package.json`, run with
-  pnpm, yarn or npm by the lock file; else the Maven, Gradle or pytest command) and runs it in the sandbox
+  pnpm, yarn or npm by the lock file; else the Maven, Gradle or pytest command; else `node --test` when
+  there are `*.test.js` files) and runs it in the sandbox
   at the job's base and again after the job. `"test"` in the job file changes or sets it.
 - **Risk flags.** STOP: the job did not finish, or the tests fail after it. Look: no test command, test
   files deleted or changed, dependency or build files changed, CI or environment files changed, a large

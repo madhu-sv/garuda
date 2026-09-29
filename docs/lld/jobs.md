@@ -137,7 +137,8 @@ response: batch responses at half the token price.
 ## Proof of work (`jobs/proof.ts`, 0.11)
 
 - `detectTestCommand(root, profiles)` at `/schedule`: a `test` script in package.json (pnpm, yarn or
-  npm by the lock file; not npm's placeholder), else the first profile's `test`. It goes into the job
+  npm by the lock file; not npm's placeholder), else the first profile's `test`, else `node --test` when
+  the root or `test/` holds `*.test.{js,mjs,cjs}` files. It goes into the job
   file as `test` (the user may change it) and into the question's preview.
 - Before the turn, `testsBefore` (the CLI, after the runtime is built) runs it with `runtime.runCheck`:
   the sandbox and bash's policy, outside the permission engine, 10 minutes at most. Then `git checkout

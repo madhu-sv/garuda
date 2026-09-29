@@ -186,8 +186,10 @@ export async function createJob(
     const agent = await offerAgent(job, options);
     if (agent !== undefined) return { ok: true, job, text: [...lines, agent].join("\n") };
   }
-  const run = `garuda run ${id}${options.at === undefined ? "" : ` --at ${options.at}`}`;
-  lines.push(`Run it in a terminal in this folder: ${run}`);
+  const at = options.at === undefined ? "" : ` --at ${options.at}`;
+  lines.push(
+    `Run the night queue in a terminal in this folder: garuda night${at} (or this job alone: garuda run ${id}${at})`,
+  );
   if (options.at !== undefined) {
     lines.push("The terminal waits until then; keep the Mac awake and on power.");
   }

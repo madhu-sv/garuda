@@ -59,6 +59,10 @@ describe("proof of work: the parts (0.11)", () => {
     const python = { test: "python -m pytest -q" } as LanguageProfile;
     expect(detectTestCommand(npm, [python])).toBe("python -m pytest -q");
     expect(detectTestCommand(join(base, "none"), [])).toBeUndefined();
+    // A plain Node project with node:test files (live test: garuda-live had no test script).
+    const plain = join(base, `d${n++}`);
+    write(plain, { "test/math.test.js": "" });
+    expect(detectTestCommand(plain, [])).toBe("node --test");
   });
 
   it("flags what stops a merge and what needs a look", () => {

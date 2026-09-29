@@ -171,7 +171,9 @@ describe("scheduled jobs: create, run, report (0.7)", () => {
     expect(job.prompt).toContain("nobody can answer questions or approve calls");
     expect(approver.requests[0]?.preview).toContain("  edit_file(src/math.js)");
     expect(approver.requests[0]?.preview).toContain("Not rules, left out:\n  not a rule (");
-    expect(created.text).toContain(`garuda run ${job.id} --at 01:00`);
+    expect(created.text).toContain(
+      `garuda night --at 01:00 (or this job alone: garuda run ${job.id} --at 01:00)`,
+    );
     // No launchd option: no second question and no agent, also on macOS.
     expect(approver.requests).toHaveLength(1);
     expect(job.batch).toBeUndefined();

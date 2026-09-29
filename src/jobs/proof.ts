@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import type { LanguageProfile } from "../lang/profiles.js";
 import type { JobResult } from "./job.js";
@@ -53,7 +53,22 @@ export function detectTestCommand(
   } catch {
     // No package.json, or a broken one: try the profiles.
   }
-  return profiles[0]?.test;
+  if (profiles[0] !== undefined) return profiles[0].test;
+  // Live test (0.11): a plain Node project with node:test files and no test script.
+  return hasNodeTests(root) ? "node --test" : undefined;
+}
+
+/** `*.test.{js,mjs,cjs}` in the root or in `test/` (Node's own test runner finds them). */
+function hasNodeTests(root: string): boolean {
+  const isTest = (name: string) => /\.test\.[cm]?js$/.test(name);
+  for (const dir of [root, join(root, "test")]) {
+    try {
+      if (readdirSync(dir).some(isTest)) return true;
+    } catch {
+      // No such folder.
+    }
+  }
+  return false;
 }
 
 /** A test run's summary for the report and the reviewer. */
