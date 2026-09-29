@@ -239,8 +239,10 @@ once, with the automatic compaction's summary step. Details: [lld/cli.md](lld/cl
 branch `garuda/job-<id>`: the permission engine allows the list and denies (never asks) everything else,
 then Garuda commits the changes on the branch and writes a report. Proof of work (0.11): the tests run
 before and after in the sandbox, risk flags come from the change, and the same model as a principal
-engineer reviews the diff; the report starts with "Ready to merge" or "Needs a look". On macOS, `/schedule HH:MM` can add a
-launchd agent that starts the run with nobody at the terminal and removes itself after it. With a Claude
+engineer reviews the diff; the report starts with "Ready to merge" or "Needs a look". The night shift
+(0.11): `/schedule` puts each job in the project's queue; `garuda night` runs it, up to 3 jobs at a time,
+and writes one digest. On macOS, `/schedule HH:MM` can add a launchd agent that starts the queue (or one
+job) with nobody at the terminal and removes itself after it. With a Claude
 model, a job can use the Batch API at half price: a step that waits more than its limit (20 minutes) runs on
 the normal API, and from 15 minutes before the finish-by time (07:00) the whole job does. Details:
 [lld/jobs.md](lld/jobs.md).
@@ -327,7 +329,7 @@ command shows its text and asks the first time, like project hooks. See [command
 
 ## 11. Quality
 
-- About 580 unit and acceptance tests, all with the fake model.
+- About 590 unit and acceptance tests, all with the fake model.
 - Contract tests run every executor (host, Seatbelt, bubblewrap) through the same suite.
 - Architecture tests enforce the dependency rules.
 - Evals: a basic suite (10 tasks), a hard suite (6 tasks on a generated repo of about 107 files), and

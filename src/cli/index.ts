@@ -37,6 +37,7 @@ import { runTurnInTerminal, type TurnOutcome } from "./turn.js";
  *   garuda lsp [install <lang>] language servers for diagnostics (0.4)
  *   garuda init                 set up this folder, then chat (0.5): same as /init
  *   garuda run <job> [--at HH:MM]  run a scheduled job, unattended (0.7)
+ *   garuda night [--at HH:MM]   run the project's night queue, then write one digest (0.11)
  */
 
 interface Options {
