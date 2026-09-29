@@ -3,9 +3,9 @@ import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { git } from "../jobs/git.js";
-import { MANIFEST, TEST_PATH } from "../jobs/proof.js";
-import { LINK_CANDIDATES } from "../jobs/worktree.js";
+import { git, shellWord } from "../jobs/git.js";
+import { MANIFEST, TEST_PATH, tail } from "../jobs/proof.js";
+import { cleanArgs, LINK_CANDIDATES } from "../jobs/worktree.js";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
 import type { Executor } from "../sandbox/types.js";
 import { TOOLCHAIN_ENV } from "./toolchains.js";
@@ -34,6 +34,8 @@ const taskSchema = z.object({
   subject: z.string(),
   prompt: z.string(),
   tests: z.array(testFile),
+  /** The check: the test command for this task's test files. Absent: the suite's test command. */
+  check: z.string().optional(),
 });
 const suiteSchema = z.object({
   version: z.literal(1),
@@ -55,17 +57,62 @@ export interface CommitInfo {
   files: { path: string; added?: number; removed?: number }[];
 }
 
-/** Why a commit is not a candidate, or undefined when it is one (pure). */
+/** Docs: they do not count toward the file limit, and no test needs them. */
+export const DOC_PATH = /\.(md|mdx|rst|txt|adoc)$|(^|\/)docs?\//i;
+const PACKAGE_JSON = /(^|\/)package\.json$/;
+
+/**
+ * Why a commit is not a candidate, or undefined when it is one (pure). A changed package.json is
+ * not a reason here: `dependencyChange` checks its diff (a version or a script change is fine).
+ */
 export function skipReason(commit: CommitInfo): string | undefined {
   const { files } = commit;
   if (files.length === 0) return "no files";
-  if (files.length > MAX_TASK_FILES) return `more than ${MAX_TASK_FILES} files`;
+  const code = files.filter((f) => !DOC_PATH.test(f.path));
+  if (code.length > MAX_TASK_FILES) return `more than ${MAX_TASK_FILES} files`;
   if (files.some((f) => f.added === undefined)) return "a binary file";
-  if (files.some((f) => MANIFEST.test(f.path))) return "dependencies changed";
-  const tests = files.filter((f) => TEST_PATH.test(f.path));
+  if (files.some((f) => MANIFEST.test(f.path) && !PACKAGE_JSON.test(f.path))) {
+    return "dependencies changed";
+  }
+  const tests = code.filter((f) => TEST_PATH.test(f.path));
   if (tests.length === 0) return "no test change";
-  if (tests.length === files.length) return "only tests changed";
+  if (tests.length === code.length) return "only tests changed";
   return undefined;
+}
+
+/**
+ * True when a package.json diff changes dependencies: a changed line in a dependencies block, or
+ * a `"name": "version"` entry other than the package's own version (pure).
+ */
+export function dependencyChange(diff: string): boolean {
+  for (const line of diff.split("\n")) {
+    if (!/^[+-]/.test(line) || /^(\+\+\+|---)/.test(line)) continue;
+    if (/[dD]ependencies"/.test(line)) return true;
+    const entry = /^[+-]\s*"([^"]+)":\s*"[~^<>=]*\d/.exec(line);
+    if (entry !== null && entry[1] !== "version") return true;
+  }
+  return false;
+}
+
+/**
+ * The test command for some test files (pure): `{files}` in the command takes them; pnpm, yarn,
+ * npm, node --test, vitest, jest and pytest get them at the end; other commands run whole.
+ */
+export function scopedTestCommand(command: string, files: readonly string[]): string {
+  const list = files.map(shellWord).join(" ");
+  if (command.includes("{files}")) return command.replaceAll("{files}", list);
+  if (files.length === 0) return command;
+  const c = command.trim();
+  if (/^npm (run )?test$/.test(c)) return `${c} -- ${list}`;
+  if (
+    /^(pnpm|yarn)( run)? test$/.test(c) ||
+    /^node --test$/.test(c) ||
+    /^(npx |pnpm exec )?(vitest|jest)( run)?$/.test(c) ||
+    /-m pytest( -q)?$|^pytest( -q)?$/.test(c)
+  ) {
+    return `${c} ${list}`;
+  }
+  return c;
 }
 
 /** The task text: the commit message, and where the tests are (visible tests). */
@@ -157,12 +204,12 @@ export async function applyTests(
   }
 }
 
-/** Run the test command in a folder (on the host, as eval checks do). True when it passes. */
-export async function testsPass(
+/** Run the test command in a folder (on the host, as eval checks do): passed, and the output's end. */
+export async function runTests(
   executor: Executor,
   dir: string,
   command: string,
-): Promise<boolean> {
+): Promise<{ ok: boolean; tail: string }> {
   const result = await executor.run(command, {
     root: dir,
     sandbox: false,
@@ -174,7 +221,11 @@ export async function testsPass(
     timeoutMs: BUILD_TEST_TIMEOUT_MS,
     maxOutputBytes: 20_000,
   });
-  return result.exitCode === 0 && !result.timedOut;
+  const output = `${result.stdout.text}${result.stderr.text}`;
+  return {
+    ok: result.exitCode === 0 && !result.timedOut,
+    tail: result.timedOut ? "(stopped: too long)" : tail(output, 15),
+  };
 }
 
 export interface BuildOptions {
@@ -193,7 +244,13 @@ export async function buildRepoSuite(
   executor: Executor,
   root: string,
   options: BuildOptions,
-): Promise<{ suite: RepoSuite; checked: number; skipped: Record<string, number> }> {
+): Promise<{
+  suite: RepoSuite;
+  checked: number;
+  skipped: Record<string, number>;
+  /** The first failure at a commit: the tests may not run in a worktree on this machine. */
+  failure?: { sha: string; command: string; tail: string };
+}> {
   const say = options.onProgress ?? (() => {});
   const head = (await git(executor, root, ["rev-parse", "HEAD"])).stdout.trim();
   const commits = await recentCommits(executor, root, {
@@ -206,6 +263,7 @@ export async function buildRepoSuite(
   };
   const tasks: RepoTaskSpec[] = [];
   let checked = 0;
+  let failure: { sha: string; command: string; tail: string } | undefined;
   const max = options.maxTasks ?? DEFAULT_MAX_TASKS;
   for (const commit of commits) {
     if (tasks.length >= max) break;
@@ -226,27 +284,53 @@ export async function buildRepoSuite(
       skip("the first commit (no parent)");
       continue;
     }
+    if (commit.files.some((f) => PACKAGE_JSON.test(f.path))) {
+      const diff = await git(
+        executor,
+        root,
+        ["show", "--format=", commit.sha, "--", "package.json"],
+        {
+          check: false,
+        },
+      );
+      if (dependencyChange(diff.stdout)) {
+        skip("dependencies changed");
+        continue;
+      }
+    }
     const base = parent.stdout.trim();
-    const testPaths = commit.files.filter((f) => TEST_PATH.test(f.path)).map((f) => f.path);
+    const testPaths = commit.files
+      .filter((f) => TEST_PATH.test(f.path) && !DOC_PATH.test(f.path))
+      .map((f) => f.path);
     const tests: RepoTaskSpec["tests"] = [];
     for (const path of testPaths) {
       const shown = await git(executor, root, ["show", `${commit.sha}:${path}`], { check: false });
       tests.push({ path, content: shown.exitCode === 0 ? shown.stdout : null });
     }
+    const runnable = tests.filter((t) => t.content !== null).map((t) => t.path);
+    if (runnable.length === 0) {
+      skip("only deletes tests");
+      continue;
+    }
+    // Only the commit's test files: faster than the whole suite, and other tests that fail on this
+    // machine (or in a worktree) do not hide the task.
+    const check = scopedTestCommand(options.testCommand, runnable);
     checked++;
     say(`checking ${commit.sha.slice(0, 7)} ${commit.subject}`);
     const dir = await taskWorktree(executor, root, base);
     try {
       await applyTests(dir, tests);
-      if (await testsPass(executor, dir, options.testCommand)) {
+      if ((await runTests(executor, dir, check)).ok) {
         skip("the tests already pass at the parent");
         continue;
       }
       await git(executor, dir, ["checkout", "--quiet", "--", "."], { check: false });
-      await git(executor, dir, ["clean", "-fdq"], { check: false });
+      await git(executor, dir, cleanArgs(), { check: false });
       await git(executor, dir, ["checkout", "--quiet", "--detach", commit.sha]);
-      if (!(await testsPass(executor, dir, options.testCommand))) {
+      const atCommit = await runTests(executor, dir, check);
+      if (!atCommit.ok) {
         skip("the tests fail at the commit");
+        failure ??= { sha: commit.sha, command: check, tail: atCommit.tail };
         continue;
       }
     } finally {
@@ -259,6 +343,7 @@ export async function buildRepoSuite(
       subject: commit.subject,
       prompt: repoPrompt(commit, testPaths),
       tests,
+      check,
     });
     say(`kept ${commit.sha.slice(0, 7)} (${tasks.length}/${max})`);
   }
@@ -273,6 +358,7 @@ export async function buildRepoSuite(
     },
     checked,
     skipped,
+    ...(failure === undefined ? {} : { failure }),
   };
 }
 
@@ -302,7 +388,7 @@ export function repoEvalTasks(suite: RepoSuite): EvalTask[] {
     title: t.subject,
     prompt: t.prompt,
     files: {},
-    check: suite.testCommand,
+    check: t.check ?? suite.testCommand,
     protect: t.tests.filter((f) => f.content !== null).map((f) => f.path),
     solution: {},
     repo: { root: suite.root, base: t.base, tests: t.tests },

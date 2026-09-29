@@ -97,12 +97,20 @@ a user can check a model, a setting or a Garuda version on the work they do.
 `garuda eval --from-git` builds the suite from the project's recent commits (default 200, newest first;
 `--since` narrows them), in the git root of the current folder:
 
-1. File rules (`skipReason`): skip a commit with no files, more than 10 files, a binary file, a changed
-   dependency manifest or lock file (the worktree links the checkout's `node_modules`), no test change, or
-   only test changes. Merges are not read. Test files match `TEST_PATH` from proof of work.
+1. File rules (`skipReason`): skip a commit with no files, more than 10 files (docs do not count:
+   Markdown, text and `docs/`), a binary file, a changed lock file or non-npm manifest (the worktree links
+   the checkout's `node_modules`), no test change, or only test changes. A changed `package.json` is
+   skipped only when its diff changes dependencies (`dependencyChange`); a version or script change is
+   fine. Merges are not read. Test files match `TEST_PATH` from proof of work.
 2. The tests prove the task: in a worktree at the commit's parent, with the commit's test files added
-   (a deleted test file is deleted), the test command must fail; at the commit it must pass. Else the
-   commit is skipped ("the tests already pass at the parent", "the tests fail at the commit").
+   (a deleted test file is deleted), the task's tests must fail; at the commit they must pass. Else the
+   commit is skipped ("the tests already pass at the parent", "the tests fail at the commit"). The
+   output shows the end of the first failure at a commit, so a command that cannot run in a worktree is
+   easy to see.
+   The task's tests: `scopedTestCommand` gives the commit's test files to the runner (pnpm, yarn, npm with
+   `--`, `node --test`, vitest, jest, pytest; `{files}` in `--test-command` for any other). Other runners
+   (Maven, Gradle, Go) run the whole suite. Only the task's files is faster, and other tests that fail on
+   this machine do not hide the task. The command is saved per task as its check.
 3. Stop at `--max-tasks` (default 30). The test command is `--test-command`, else the one that jobs use
    (`detectTestCommand`). Both runs are on the host, with no sandbox, as eval checks are; the output says
    so. The user's checkout does not change.
@@ -112,15 +120,19 @@ a user can check a model, a setting or a Garuda version on the work they do.
 
 The task prompt is the commit message, then the visible tests: "The tests for this change are already in
 the project: … Make the change so that they pass. Do not change these test files." (as SWE-bench gives
-the failing tests). The check is the test command; the protected files are the task's test files, so
+the failing tests). The check is the task's test command; the protected files are the task's test files, so
 the agent cannot pass by editing them.
 
 `garuda eval -s repo` loads the suite of the current project (the git root replaces the saved root, so
 a moved checkout works) and runs it like any suite: `--repeat`, `--parallel`, `--batch` and the A/B
 flags work. `--format` does not (it would format the whole project). `-t` picks from the repo suite.
 
-Limits: the test command runs the whole test suite, so a slow suite makes a slow task (5 min limit per
-check). A commit that needs a new dependency is skipped. Build the suite again after new commits; old
+First live test (garuda, 40 commits, cloud): 21 tasks kept from 22 candidates in 2 minutes. The first
+Mac run kept none: `git clean` removed the `node_modules` link at the commit, and the whole suite ran
+(both fixed in 0104).
+
+Limits: a runner that cannot take files runs the whole suite, so a slow suite makes a slow task (5 min
+limit per check). A commit that needs a new dependency is skipped. Build the suite again after new commits; old
 tasks stay valid while their commits exist.
 
 `-m` takes any model spec, for example `garuda eval -m ollama/qwen3-coder:30b -s hard`, so open models

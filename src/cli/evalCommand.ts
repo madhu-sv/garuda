@@ -372,9 +372,9 @@ async function buildFromGit(options: EvalCommandOptions): Promise<number> {
     }
   }
   process.stderr.write(
-    `Building the repo suite from ${options.commits ?? DEFAULT_COMMITS} recent commits${options.since === undefined ? "" : ` since ${options.since}`} in ${root}.\nEach candidate runs \`${testCommand}\` twice on this machine (no sandbox), in a git worktree; your checkout does not change.\n\n`,
+    `Building the repo suite from ${options.commits ?? DEFAULT_COMMITS} recent commits${options.since === undefined ? "" : ` since ${options.since}`} in ${root}.\nEach candidate runs its own test files with \`${testCommand}\` twice on this machine (no sandbox), in a git worktree; your checkout does not change.\n\n`,
   );
-  const { suite, checked, skipped } = await buildRepoSuite(new HostExecutor(), root, {
+  const { suite, checked, skipped, failure } = await buildRepoSuite(new HostExecutor(), root, {
     testCommand,
     ...(options.commits === undefined ? {} : { commits: options.commits }),
     ...(options.since === undefined ? {} : { since: options.since }),
@@ -389,6 +389,13 @@ async function buildFromGit(options: EvalCommandOptions): Promise<number> {
     `${[
       `\n${suite.tasks.length} task(s) kept; ${checked} candidate(s) checked with the tests.`,
       ...(reasons.length === 0 ? [] : ["Skipped:", ...reasons]),
+      ...(failure === undefined
+        ? []
+        : [
+            `The first failure at a commit (${failure.sha.slice(0, 7)}: \`${failure.command}\`):`,
+            ...failure.tail.split("\n").map((line) => `  ${line}`),
+            'If every commit fails like this, the tests do not run in a worktree on this machine; give a working command with --test-command ("{files}" takes the test files).',
+          ]),
       `Suite: ${file}`,
       ...(suite.tasks.length === 0
         ? ["No task: try more commits (--commits 500) or an older --since."]

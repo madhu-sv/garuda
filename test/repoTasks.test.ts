@@ -1,10 +1,20 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   buildRepoSuite,
   type CommitInfo,
+  dependencyChange,
   loadRepoSuite,
   MAX_TASK_FILES,
   REPO_SUITE_FILE,
@@ -12,10 +22,12 @@ import {
   repoEvalTasks,
   repoPrompt,
   saveRepoSuite,
+  scopedTestCommand,
   skipReason,
 } from "../src/evals/repoTasks.js";
 import { runEvalTask } from "../src/evals/runner.js";
 import { git } from "../src/jobs/git.js";
+import { cleanArgs } from "../src/jobs/worktree.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { HostExecutor } from "../src/sandbox/host.js";
 
@@ -41,11 +53,49 @@ describe("repo tasks: the parts (0.12)", () => {
       skipReason(commit(Array.from({ length: MAX_TASK_FILES + 1 }, (_, i) => f(`src/${i}.ts`)))),
     ).toBe(`more than ${MAX_TASK_FILES} files`);
     expect(skipReason(commit([{ path: "logo.png" }, f("test/a.test.ts")]))).toBe("a binary file");
-    expect(skipReason(commit([f("package.json"), f("src/a.ts"), f("test/a.test.ts")]))).toBe(
+    expect(skipReason(commit([f("go.mod"), f("src/a.ts"), f("test/a.test.ts")]))).toBe(
       "dependencies changed",
     );
     expect(skipReason(commit([f("src/a.ts")]))).toBe("no test change");
     expect(skipReason(commit([f("test/a.test.ts")]))).toBe("only tests changed");
+    // Docs do not count toward the limit; package.json goes to dependencyChange.
+    const docs = Array.from({ length: MAX_TASK_FILES }, (_, i) => f(`docs/${i}.md`));
+    expect(skipReason(commit([...docs, f("README.md"), f("src/a.ts"), f("test/a.test.ts")]))).toBe(
+      undefined,
+    );
+    expect(skipReason(commit([f("README.md"), f("test/a.test.ts")]))).toBe("only tests changed");
+    expect(skipReason(commit([f("package.json"), f("src/a.ts"), f("test/a.test.ts")]))).toBe(
+      undefined,
+    );
+    expect(skipReason(commit([f("pnpm-lock.yaml"), f("src/a.ts"), f("test/a.test.ts")]))).toBe(
+      "dependencies changed",
+    );
+  });
+
+  it("finds a dependency change in a package.json diff, not a version or script change", () => {
+    const diff = (lines: string) => `--- a/package.json\n+++ b/package.json\n@@ -1 +1 @@\n${lines}`;
+    expect(dependencyChange(diff('-  "version": "0.11.0",\n+  "version": "0.12.0-dev",'))).toBe(
+      false,
+    );
+    expect(dependencyChange(diff('+    "check": "pnpm test",'))).toBe(false);
+    expect(dependencyChange(diff('-    "zod": "^4.0.0",\n+    "zod": "^4.1.0",'))).toBe(true);
+    expect(dependencyChange(diff('+  "devDependencies": {'))).toBe(true);
+    expect(dependencyChange(diff('   "zod": "^4.0.0",'))).toBe(false);
+  });
+
+  it("runs only the task's test files when it knows the runner", () => {
+    const files = ["test/a.test.ts", "test/my b.test.ts"];
+    expect(scopedTestCommand("pnpm test", files)).toBe(
+      "pnpm test test/a.test.ts 'test/my b.test.ts'",
+    );
+    expect(scopedTestCommand("npm test", ["t.js"])).toBe("npm test -- t.js");
+    expect(scopedTestCommand("node --test", ["t.js"])).toBe("node --test t.js");
+    expect(scopedTestCommand("python3 -m pytest -q", ["tests/test_x.py"])).toBe(
+      "python3 -m pytest -q tests/test_x.py",
+    );
+    expect(scopedTestCommand("make test FILES={files}", ["a", "b"])).toBe("make test FILES=a b");
+    expect(scopedTestCommand("mvn -B -q -o test", ["src/test/X.java"])).toBe("mvn -B -q -o test");
+    expect(scopedTestCommand("pnpm test && pnpm lint", ["t.js"])).toBe("pnpm test && pnpm lint");
   });
 
   it("writes the task from the commit message and names the visible tests", () => {
@@ -135,17 +185,39 @@ async function history(root: string): Promise<Record<string, string>> {
   return shas;
 }
 
+describe("git clean keeps the linked folders (0.12 live test)", () => {
+  it("removes other untracked files but not the node_modules symlink", async () => {
+    const dir = join(base, "clean");
+    const target = join(base, "clean-deps");
+    mkdirSync(target, { recursive: true });
+    mkdirSync(dir, { recursive: true });
+    const run = (args: string[]) =>
+      git(host, dir, ["-c", "user.name=Test", "-c", "user.email=t@example.com", ...args]);
+    await run(["init", "--quiet"]);
+    writeFileSync(join(dir, ".gitignore"), "node_modules/\n");
+    await run(["add", "-A"]);
+    await run(["commit", "--quiet", "-m", "i"]);
+    symlinkSync(target, join(dir, "node_modules"), "dir");
+    writeFileSync(join(dir, "junk.txt"), "x");
+    expect(cleanArgs(["node_modules"])).toEqual(["clean", "-fdq", "-e", "/node_modules"]);
+    await git(host, dir, cleanArgs());
+    expect(existsSync(join(dir, "junk.txt"))).toBe(false);
+    expect(lstatSync(join(dir, "node_modules")).isSymbolicLink()).toBe(true);
+  });
+});
+
 describe("repo tasks: the suite from git (0.12)", () => {
   const root = join(base, "project");
   let shas: Record<string, string> = {};
   let suite: RepoSuite;
   let skipped: Record<string, number> = {};
   let checked = 0;
+  let failure: Awaited<ReturnType<typeof buildRepoSuite>>["failure"];
   const progress: string[] = [];
 
   beforeAll(async () => {
     shas = await history(root);
-    ({ suite, skipped, checked } = await buildRepoSuite(host, root, {
+    ({ suite, skipped, checked, failure } = await buildRepoSuite(host, root, {
       testCommand: "node --test",
       onProgress: (line) => progress.push(line),
     }));
@@ -170,6 +242,13 @@ describe("repo tasks: the suite from git (0.12)", () => {
       "the tests already pass at the parent": 1,
       "the tests fail at the commit": 1,
     });
+    // The check runs only the task's test file; the first failure at a commit is kept.
+    expect(suite.tasks[0]?.check).toBe("node --test test/mul.test.js");
+    expect(failure).toMatchObject({
+      sha: shas["Add sub (broken)"],
+      command: "node --test test/sub.test.js",
+    });
+    expect(failure?.tail).toMatch(/fail 1/);
     expect(progress.at(-1)).toMatch(/^kept [0-9a-f]{7} \(1\/30\)$/);
   });
 

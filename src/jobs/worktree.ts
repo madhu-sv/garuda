@@ -60,6 +60,14 @@ export async function jobBase(executor: Executor, root: string): Promise<JobBase
   return { commit: base.stdout.trim(), uncommitted: true, untracked };
 }
 
+/**
+ * `git clean` that keeps the linked folders. A link is a symlink, not a folder, so a
+ * "node_modules/" line in .gitignore does not keep it: clean -fd would remove it.
+ */
+export function cleanArgs(links: readonly string[] = LINK_CANDIDATES): string[] {
+  return ["clean", "-fdq", ...links.flatMap((name) => ["-e", `/${name}`])];
+}
+
 /** The ignored folders of the checkout that the worktree should link to. */
 export function linkCandidates(root: string): string[] {
   return LINK_CANDIDATES.filter((name) => {

@@ -378,8 +378,9 @@ garuda eval -s repo --list                 # the tasks
 garuda eval -s repo -m claude-sonnet-5     # run them (the A/B flags work too)
 ```
 
-A commit is kept only when its tests fail at the parent and pass at the commit. Commits that change
-dependencies, binary files or more than 10 files are skipped. Building runs your test command twice per
+A commit is kept only when its tests fail at the parent and pass at the commit. Garuda runs only the
+commit's test files when it knows the runner; `--test-command "make test T={files}"` works for others.
+Commits that change dependencies, binary files or more than 10 code files are skipped. Building runs your test command twice per
 candidate on this machine, with no sandbox, in git worktrees: your checkout does not change.
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).

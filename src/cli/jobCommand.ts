@@ -15,7 +15,7 @@ import {
   testSummary,
 } from "../jobs/proof.js";
 import { jobReport } from "../jobs/text.js";
-import { commitJob, jobChanges, prepareWorktree } from "../jobs/worktree.js";
+import { cleanArgs, commitJob, jobChanges, prepareWorktree } from "../jobs/worktree.js";
 import type { DeadlineClient } from "../model/deadline.js";
 import { totalTokens } from "../model/pricing.js";
 import { parseRule } from "../permissions/rules.js";
@@ -68,7 +68,9 @@ export async function testsBefore(
   );
   renderer.info(`Tests before the job: ${testSummary(prepared.testsBefore)}`);
   await gitCommand(git, job.worktree, ["checkout", "--", "."], { check: false });
-  await gitCommand(git, job.worktree, ["clean", "-fdq"], { check: false });
+  // Keep the links (node_modules, venvs): a symlink is not a folder, so .gitignore's
+  // "node_modules/" does not protect it from clean.
+  await gitCommand(git, job.worktree, cleanArgs(job.links), { check: false });
 }
 
 /** After the commit (0.11): the tests again, the risk flags, the review and the verdict. */

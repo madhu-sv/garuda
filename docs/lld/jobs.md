@@ -142,8 +142,10 @@ response: batch responses at half the token price.
   file as `test` (the user may change it) and into the question's preview.
 - Before the turn, `testsBefore` (the CLI, after the runtime is built) runs it with `runtime.runCheck`:
   the sandbox and bash's policy, outside the permission engine, 10 minutes at most. Then `git checkout
-  -- .` and `git clean -fdq` put the worktree back at its base, so test output never reaches the commit
-  (the links are ignored, so they stay).
+  -- .` and `git clean -fdq -e /<link>…` (`cleanArgs`) put the worktree back at its base, so test output
+  never reaches the commit. The `-e` keeps the links: a symlink is not a folder, so a `node_modules/` line
+  in `.gitignore` does not protect it (fixed in 0.12; before, a job's tests after the change could not
+  find `vitest`).
 - After the commit, `proveJob` (in `finishJob`, not after Ctrl-C) runs the tests again, then
   `riskFlags` (pure): STOP = not `done`, an error, tests fail after; look = no test command, test files
   deleted or changed, manifests or lock files, CI/container/`.env` files, more than 20 files or 500 lines,

@@ -133,7 +133,10 @@ async function main(): Promise<void> {
     .option("--max-tasks <n>", "with --from-git: most tasks in the suite (default 30)", (v) =>
       Number.parseInt(v, 10),
     )
-    .option("--test-command <cmd>", "with --from-git: the test command (default: detected)")
+    .option(
+      "--test-command <cmd>",
+      "with --from-git: the test command; {files} takes the test files (default: detected)",
+    )
     .action(async (options) => {
       const { runEvalCommand } = await import("./evalCommand.js");
       process.exitCode = await runEvalCommand({
