@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
+import { hostCommand } from "../jobs/git.js";
 import { loadJob } from "../jobs/job.js";
-import { defaultAgentEnv } from "../jobs/launchd.js";
+import { type AgentEnv, defaultAgentEnv, nightSpec, removeSpec } from "../jobs/launchd.js";
 import {
   DEFAULT_NIGHT_PARALLEL,
   type JobRunner,
@@ -12,6 +13,7 @@ import {
   writeDigest,
 } from "../jobs/night.js";
 import { createExecutor } from "../sandbox/index.js";
+import type { Executor } from "../sandbox/types.js";
 import { msUntil } from "./jobCommand.js";
 import { notificationBytes, pickChannel } from "./notify.js";
 import type { Renderer } from "./renderer.js";
@@ -21,10 +23,31 @@ import type { Renderer } from "./renderer.js";
  * one digest and send one notification.
  */
 export async function nightCommand(
-  options: { at?: string; parallel?: string },
+  options: { at?: string; parallel?: string; fromLaunchd?: boolean },
   renderer: Renderer,
   runner?: JobRunner,
   root: string = realpathSync(process.cwd()),
+  /** For tests: the agent's home and the executor for launchctl and osascript. */
+  agent: { env?: AgentEnv; executor?: Executor; platform?: NodeJS.Platform } = {},
+): Promise<number> {
+  const code = await runNight(options, renderer, runner, root, agent);
+  // Started by the queue's launchd agent (0.11): the agent goes last (its unload ends this process).
+  if (options.fromLaunchd === true) {
+    await removeSpec(
+      agent.executor ?? createExecutor("host").executor,
+      nightSpec(root),
+      agent.env ?? defaultAgentEnv(),
+    );
+  }
+  return code;
+}
+
+async function runNight(
+  options: { at?: string; parallel?: string; fromLaunchd?: boolean },
+  renderer: Renderer,
+  runner: JobRunner | undefined,
+  root: string,
+  agent: { env?: AgentEnv; executor?: Executor; platform?: NodeJS.Platform },
 ): Promise<number> {
   const parallel =
     options.parallel === undefined ? DEFAULT_NIGHT_PARALLEL : Number(options.parallel);
@@ -77,12 +100,25 @@ export async function nightCommand(
   const file = await writeDigest(root, digest, started);
   renderer.info(`\n${digest}\n\nDigest: ${file}`);
   const ready = jobs.filter((j) => j.result?.proof?.verdict === "ready").length;
+  const note = `Garuda night shift: ${jobs.length} job(s), ${ready} ready to merge`;
   if (process.stdout.isTTY) {
-    process.stdout.write(
-      notificationBytes(
-        pickChannel(undefined),
-        `Garuda night shift: ${jobs.length} job(s), ${ready} ready to merge`,
-      ),
+    process.stdout.write(notificationBytes(pickChannel(undefined), note));
+  } else if (options.fromLaunchd === true && (agent.platform ?? process.platform) === "darwin") {
+    // No terminal: a macOS notification. The text goes as an argument, never as script text.
+    await hostCommand(
+      agent.executor ?? createExecutor("host").executor,
+      root,
+      [
+        "osascript",
+        "-e",
+        "on run argv",
+        "-e",
+        'display notification (item 1 of argv) with title "Garuda"',
+        "-e",
+        "end run",
+        note,
+      ],
+      { check: false },
     );
   }
   return 0;

@@ -676,6 +676,12 @@ own log (`.garuda/jobs/<id>.log`). At the end it writes one digest, `.garuda/job
 per job with its verdict, tests, files, cost and branch, and why the others need a look. `/jobs` shows
 which jobs are in the queue. A job with its own launchd agent is not in the queue.
 
+On macOS, `/schedule HH:MM` asks whether launchd should start **the whole night queue** at that time
+(one agent per project, `garuda night` through your login shell under `caffeinate`, log
+`.garuda/jobs/night.log`, a macOS notification at the end), **only this job**, or nothing. A later
+`/schedule HH:MM` moves the queue's agent to the new time. The agent removes itself after the run;
+`/jobs` shows it, and `/jobs cancel night` removes it.
+
 ### Proof of work (0.11)
 
 Each job report starts with a verdict: **Ready to merge** or **Needs a look**. It rests on three things:

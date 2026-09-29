@@ -14,10 +14,12 @@ import {
 import {
   type AgentEnv,
   agentLabel,
-  agentPath,
   defaultAgentEnv,
   installAgent,
+  installSpec,
   nextTime,
+  nightAgentTime,
+  nightSpec,
 } from "./launchd.js";
 import { jobPrompt } from "./text.js";
 import { jobBase, linkCandidates, worktreeDir } from "./worktree.js";
@@ -196,46 +198,62 @@ export async function createJob(
   return { ok: true, job, text: lines.join("\n") };
 }
 
-/** The second question on macOS: start the job with launchd. The text for the user; undefined = No. */
+/**
+ * The second question on macOS: start the night queue (0.11) or only this job with launchd. The
+ * text for the user; undefined = No.
+ */
 async function offerAgent(job: Job, options: CreateJobOptions): Promise<string | undefined> {
   const env = options.launchd?.env ?? defaultAgentEnv();
   const at = job.at as string;
   const when = nextTime(at, options.now);
   const day = when.toDateString();
+  const earlier = nightAgentTime(job.root, env);
   const choice = await options.approver.ask(
     {
       tool: "schedule",
       target: { kind: "input", json: "{}" },
       preview: [
-        `launchd starts the job at ${at} on ${day}, also when no terminal is open.`,
+        `launchd starts the night queue (every queued job, up to 3 at a time, then one digest) at ${at} on ${day}, also when no terminal is open. Or only this job.`,
+        ...(earlier === undefined
+          ? []
+          : [
+              `The queue's agent now starts at ${earlier.toTimeString().slice(0, 5)} on ${earlier.toDateString()}: it moves to ${at}.`,
+            ]),
         `It runs through your login shell (${env.shell} -lic), so your shell setup gives it the API keys; no key is written to a file.`,
-        "caffeinate keeps the Mac from idle sleep while the job runs. If the Mac sleeps at that time, the job starts at the next wake.",
-        `The agent: ${agentPath(env.home, job.id)}. Log: ${JOBS_DIR}/${job.id}.log.`,
-        `/jobs cancel ${job.id} removes it; the job removes it after it runs.`,
+        "caffeinate keeps the Mac from idle sleep while it runs. If the Mac sleeps at that time, it starts at the next wake.",
+        `Logs: ${JOBS_DIR}/night.log (the queue) or ${JOBS_DIR}/${job.id}.log (one job). /jobs cancel night (or ${job.id}) removes it; it removes itself after it runs.`,
       ].join("\n"),
       isolation: options.executor.isolation,
-      title: `Run the job at ${at} with launchd?`,
-      question: "Add the launchd agent?",
-      choices: ["once", "deny"],
-      labels: { once: "Yes, add the agent", deny: "No, I will run it myself" },
+      title: `Start at ${at} with launchd?`,
+      question: "Add a launchd agent?",
+      choices: ["once", "session", "deny"],
+      labels: {
+        once: "Yes, the whole night queue",
+        session: "Only this job",
+        deny: "No, I will run it myself",
+      },
     },
     options.signal,
   );
   if (choice === "deny") return undefined;
+  const executor = options.launchd?.executor ?? options.executor;
+  if (choice === "once") {
+    try {
+      await installSpec(executor, nightSpec(job.root), env, when);
+      return `launchd starts the night queue at ${at} on ${day}. Keep the Mac on power. Log: ${JOBS_DIR}/night.log. Cancel: /jobs cancel night.`;
+    } catch (error) {
+      return `The launchd agent failed (${(error as Error).message}). Run the queue in a terminal instead: garuda night --at ${at}`;
+    }
+  }
   try {
-    const installed = await installAgent(
-      options.launchd?.executor ?? options.executor,
-      job,
-      env,
-      options.now,
-    );
+    const installed = await installAgent(executor, job, env, options.now);
     job.launchd = {
       label: agentLabel(job.id),
       plist: installed.plist,
       when: installed.when.toISOString(),
     };
     await saveJob(job);
-    return `launchd starts it at ${at} on ${day}. Keep the Mac on power. Log: ${JOBS_DIR}/${job.id}.log. Cancel: /jobs cancel ${job.id}.`;
+    return `launchd starts it at ${at} on ${day}; it leaves the night queue. Keep the Mac on power. Log: ${JOBS_DIR}/${job.id}.log. Cancel: /jobs cancel ${job.id}.`;
   } catch (error) {
     return `The launchd agent failed (${(error as Error).message}). Run it in a terminal instead: garuda run ${job.id} --at ${at}`;
   }

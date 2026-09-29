@@ -1,7 +1,8 @@
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { Executor } from "../sandbox/types.js";
 import { hostCommand, shellWord } from "./git.js";
 import { JOBS_DIR, type Job } from "./job.js";
@@ -56,28 +57,69 @@ export function nextTime(at: string, now: Date = new Date()): Date {
 const xml = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+/** What an agent starts (0.11): a label, the project, Garuda's arguments, the log. */
+export interface AgentSpec {
+  label: string;
+  root: string;
+  args: string[];
+  log: string;
+}
+
+/** The job's agent: `garuda run <id> --from-launchd`. */
+export function jobSpec(job: Pick<Job, "id" | "root">): AgentSpec {
+  return {
+    label: agentLabel(job.id),
+    root: job.root,
+    args: ["run", job.id, "--from-launchd"],
+    log: join(job.root, JOBS_DIR, `${job.id}.log`),
+  };
+}
+
+/** The night queue's agent (0.11): `garuda night --from-launchd`, one per project. */
+export function nightSpec(root: string): AgentSpec {
+  const hash = createHash("sha256").update(root).digest("hex").slice(0, 8);
+  const name =
+    basename(root)
+      .replace(/[^A-Za-z0-9_-]/g, "_")
+      .slice(0, 40) || "project";
+  return {
+    label: `dev.garuda.night.${name}-${hash}`,
+    root,
+    args: ["night", "--from-launchd"],
+    log: join(root, JOBS_DIR, "night.log"),
+  };
+}
+
+export function specPath(home: string, spec: AgentSpec): string {
+  return join(home, "Library", "LaunchAgents", `${spec.label}.plist`);
+}
+
 /** The agent's plist: the login shell runs `garuda run <id> --from-launchd` in the project. */
-export function agentPlist(job: Job, env: AgentEnv, when: Date): string {
+export function agentPlist(job: Pick<Job, "id" | "root">, env: AgentEnv, when: Date): string {
+  return specPlist(jobSpec(job), env, when);
+}
+
+/** A plist for any agent: the login shell runs Garuda with `spec.args` in the project. */
+export function specPlist(spec: AgentSpec, env: AgentEnv, when: Date): string {
   // The single binary (Node SEA) is its own program: no script after it.
   const program =
     env.script === "" || env.script === env.node
       ? shellWord(env.node)
       : `${shellWord(env.node)} ${shellWord(env.script)}`;
-  const command = `cd ${shellWord(job.root)} && exec ${program} run ${shellWord(job.id)} --from-launchd`;
+  const command = `cd ${shellWord(spec.root)} && exec ${program} ${spec.args.map(shellWord).join(" ")}`;
   const args = ["/usr/bin/caffeinate", "-i", env.shell, "-lic", command];
-  const log = join(job.root, JOBS_DIR, `${job.id}.log`);
   const int = (key: string, value: number) => `      <key>${key}</key><integer>${value}</integer>`;
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
     '<plist version="1.0">',
     "  <dict>",
-    `    <key>Label</key><string>${xml(agentLabel(job.id))}</string>`,
+    `    <key>Label</key><string>${xml(spec.label)}</string>`,
     "    <key>ProgramArguments</key>",
     "    <array>",
     ...args.map((a) => `      <string>${xml(a)}</string>`),
     "    </array>",
-    `    <key>WorkingDirectory</key><string>${xml(job.root)}</string>`,
+    `    <key>WorkingDirectory</key><string>${xml(spec.root)}</string>`,
     "    <key>StartCalendarInterval</key>",
     "    <dict>",
     int("Month", when.getMonth() + 1),
@@ -86,8 +128,8 @@ export function agentPlist(job: Job, env: AgentEnv, when: Date): string {
     int("Minute", when.getMinutes()),
     "    </dict>",
     "    <key>RunAtLoad</key><false/>",
-    `    <key>StandardOutPath</key><string>${xml(log)}</string>`,
-    `    <key>StandardErrorPath</key><string>${xml(log)}</string>`,
+    `    <key>StandardOutPath</key><string>${xml(spec.log)}</string>`,
+    `    <key>StandardErrorPath</key><string>${xml(spec.log)}</string>`,
     "  </dict>",
     "</plist>",
     "",
@@ -102,21 +144,63 @@ export async function installAgent(
   now: Date = new Date(),
 ): Promise<{ plist: string; when: Date }> {
   if (job.at === undefined) throw new Error("The job has no time.");
-  const when = nextTime(job.at, now);
-  const plist = agentPath(env.home, job.id);
+  return installSpec(executor, jobSpec(job), env, nextTime(job.at, now));
+}
+
+/** Write any agent's plist and load it (an earlier one of the same label is unloaded first). */
+export async function installSpec(
+  executor: Executor,
+  spec: AgentSpec,
+  env: AgentEnv,
+  when: Date,
+): Promise<{ plist: string; when: Date }> {
+  const plist = specPath(env.home, spec);
   await mkdir(join(env.home, "Library", "LaunchAgents"), { recursive: true });
-  await writeFile(plist, agentPlist(job, env, when), { mode: 0o644 });
+  await writeFile(plist, specPlist(spec, env, when), { mode: 0o644 });
   // An agent of an earlier try: unload it first (no error when there is none).
-  await hostCommand(
-    executor,
-    job.root,
-    ["launchctl", "bootout", `gui/${env.uid}/${agentLabel(job.id)}`],
-    {
-      check: false,
-    },
-  );
-  await hostCommand(executor, job.root, ["launchctl", "bootstrap", `gui/${env.uid}`, plist]);
+  await hostCommand(executor, spec.root, ["launchctl", "bootout", `gui/${env.uid}/${spec.label}`], {
+    check: false,
+  });
+  await hostCommand(executor, spec.root, ["launchctl", "bootstrap", `gui/${env.uid}`, plist]);
   return { plist, when };
+}
+
+/** Remove any agent: delete the plist, then unload it (the last step when it runs this process). */
+export async function removeSpec(
+  executor: Executor,
+  spec: AgentSpec,
+  env: AgentEnv,
+): Promise<boolean> {
+  const plist = specPath(env.home, spec);
+  const had = existsSync(plist);
+  await rm(plist, { force: true });
+  const out = await hostCommand(
+    executor,
+    spec.root,
+    ["launchctl", "bootout", `gui/${env.uid}/${spec.label}`],
+    { check: false },
+  );
+  return had || out.exitCode === 0;
+}
+
+/** When the night queue's agent starts (read from its plist), or undefined when there is none. */
+export function nightAgentTime(root: string, env: Pick<AgentEnv, "home">): Date | undefined {
+  let text: string;
+  try {
+    text = readFileSync(specPath(env.home, nightSpec(root)), "utf8");
+  } catch {
+    return undefined;
+  }
+  const n = (key: string) =>
+    Number(new RegExp(`<key>${key}</key><integer>(\\d+)</integer>`).exec(text)?.[1]);
+  const month = n("Month");
+  const day = n("Day");
+  if (Number.isNaN(month) || Number.isNaN(day)) return undefined;
+  const now = new Date();
+  const when = new Date(now.getFullYear(), month - 1, day, n("Hour"), n("Minute"));
+  // A date early in the year for an agent made in December: next year.
+  if (when.getTime() < now.getTime() - 180 * 86_400_000) when.setFullYear(now.getFullYear() + 1);
+  return when;
 }
 
 /**
@@ -124,14 +208,5 @@ export async function installAgent(
  * the unload ends this process too, so it must be the last step.
  */
 export async function removeAgent(executor: Executor, job: Job, env: AgentEnv): Promise<boolean> {
-  const plist = agentPath(env.home, job.id);
-  const had = existsSync(plist);
-  await rm(plist, { force: true });
-  const out = await hostCommand(
-    executor,
-    job.root,
-    ["launchctl", "bootout", `gui/${env.uid}/${agentLabel(job.id)}`],
-    { check: false },
-  );
-  return had || out.exitCode === 0;
+  return removeSpec(executor, jobSpec(job), env);
 }

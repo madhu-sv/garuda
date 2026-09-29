@@ -30,7 +30,7 @@ export const HELP = [
   "  /compact   summarise the older turns now; /compact <what to keep>",
   "  /diff      file changes in this session; /diff last (last turn); /diff [last] <path>",
   "  /schedule  make the last plan a job that runs later: /schedule [HH:MM], then garuda run <id>",
-  "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel|delete <id>",
+  "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel|delete <id>; /jobs cancel night",
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /refs X    every use of symbol X (code index, no model call)",
   "  /map [dir] what each JS/TS file exports and imports",
@@ -349,12 +349,21 @@ async function jobsCommand(runtime: Runtime, renderer: Renderer, id: string): Pr
     return;
   }
   const jobs = await listJobs(runtime.root);
+  const { defaultAgentEnv, nightAgentTime } = await import("../../jobs/launchd.js");
+  const night = nightAgentTime(runtime.root, defaultAgentEnv());
+  const nightLine =
+    night === undefined
+      ? []
+      : [
+          `Night shift: launchd starts the queue at ${night.toTimeString().slice(0, 5)} on ${night.toDateString()} (/jobs cancel night removes it).`,
+        ];
   if (jobs.length === 0) {
     renderer.info("No jobs in this project. Make a plan (/plan), then /schedule.");
     return;
   }
   renderer.info(
     [
+      ...nightLine,
       `Jobs (${JOBS_DIR}), newest first:`,
       ...jobs.map((j) => {
         const r = j.result;

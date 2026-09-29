@@ -177,7 +177,14 @@ response: batch responses at half the token price.
   finds the files, the worktree and the branch (merged = an ancestor of HEAD); one question (an unmerged
   branch adds "Yes, but keep the branch"); then the launchd agent, `git worktree remove --force` and
   `prune`, `git branch -D` only when chosen, and the files.
-- `/jobs` marks queued jobs ("in the night queue") and verdicts. A launchd agent for the queue is next.
+- `/jobs` marks queued jobs ("in the night queue") and verdicts.
+- The queue's launchd agent (`launchd.ts`: `AgentSpec`, `nightSpec`, `specPlist`, `installSpec`,
+  `removeSpec`, `nightAgentTime`): `/schedule HH:MM` on macOS asks "Start at HH:MM with launchd?" with
+  three answers: the whole night queue (the agent `dev.garuda.night.<project>-<hash>` runs `garuda night
+  --from-launchd`, log `.garuda/jobs/night.log`; an earlier agent of the project is unloaded and
+  replaced), only this job (the 0.7 agent; the job leaves the queue), or no. `garuda night
+  --from-launchd` sends a macOS notification (`osascript`, the text as an argument) and removes the
+  agent last. `/jobs` shows the agent's time (read from its plist); `/jobs cancel night` removes it.
 
 ## Safety
 

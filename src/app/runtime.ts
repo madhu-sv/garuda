@@ -1221,7 +1221,20 @@ export class Runtime {
     agent: { env?: import("../jobs/launchd.js").AgentEnv; executor?: Executor } = {},
   ): Promise<string> {
     const { loadJob, saveJob } = await import("../jobs/job.js");
-    const { defaultAgentEnv, removeAgent } = await import("../jobs/launchd.js");
+    const { defaultAgentEnv, nightSpec, removeAgent, removeSpec } = await import(
+      "../jobs/launchd.js"
+    );
+    // /jobs cancel night (0.11): the queue's launchd agent goes; the queue stays.
+    if (id === "night") {
+      const removed = await removeSpec(
+        agent.executor ?? this.executor,
+        nightSpec(this.root),
+        agent.env ?? defaultAgentEnv(),
+      );
+      return removed
+        ? "The night queue's launchd agent is removed. The queue stays: garuda night runs it."
+        : "The night queue has no launchd agent.";
+    }
     let job: Awaited<ReturnType<typeof loadJob>>;
     try {
       job = await loadJob(this.root, id);

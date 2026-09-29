@@ -15,10 +15,18 @@ import { runCommand } from "../src/cli/chat/commands.js";
 import { noColor } from "../src/cli/chat/markdown.js";
 import { ChatStore } from "../src/cli/chat/store.js";
 import { finishJob, msUntil, prepareJob } from "../src/cli/jobCommand.js";
+import { nightCommand } from "../src/cli/nightCommand.js";
 import { createJob } from "../src/jobs/create.js";
 import { git } from "../src/jobs/git.js";
 import { loadJob, planPermissions, planTitle, saveJob } from "../src/jobs/job.js";
-import { agentPath, agentPlist, nextTime } from "../src/jobs/launchd.js";
+import {
+  agentPath,
+  agentPlist,
+  nextTime,
+  nightAgentTime,
+  nightSpec,
+  specPath,
+} from "../src/jobs/launchd.js";
 import { jobBase, worktreeDir } from "../src/jobs/worktree.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
@@ -447,7 +455,8 @@ describe("scheduled jobs: launchd (0.7)", () => {
   it("/schedule HH:MM on macOS offers the agent; yes installs it, /jobs cancel removes it", async () => {
     const { root, home } = await repo();
     const { executor, commands } = recording();
-    const approver = new AutoApprover("once");
+    // "Only this job" at the launchd question (0.11: "once" there means the whole queue).
+    const approver = new AutoApprover((r) => (r.title?.includes("launchd") ? "session" : "once"));
     const created = await createJob({
       root,
       executor: new SandboxedHost(),
@@ -463,11 +472,13 @@ describe("scheduled jobs: launchd (0.7)", () => {
     if (!created.ok) throw new Error(created.text);
     const id = created.job.id;
     expect(approver.requests[1]).toMatchObject({
-      title: "Run the job at 01:00 with launchd?",
-      choices: ["once", "deny"],
+      title: "Start at 01:00 with launchd?",
+      choices: ["once", "session", "deny"],
     });
     expect(approver.requests[1]?.preview).toContain("/bin/zsh -lic");
-    expect(created.text).toContain("launchd starts it at 01:00 on Mon Sep 28 2026");
+    expect(created.text).toContain(
+      "launchd starts it at 01:00 on Mon Sep 28 2026; it leaves the night queue.",
+    );
     const plist = agentPath(home, id);
     expect(readFileSync(plist, "utf8")).toContain(`run ${id} --from-launchd`);
     expect(commands).toEqual([
@@ -510,6 +521,83 @@ describe("scheduled jobs: launchd (0.7)", () => {
     expect(commands).toEqual([`launchctl bootout gui/501/dev.garuda.job.${id}`]);
     expect((await loadJob(root, id)).status).toBe("stopped");
     expect(await runtime.cancelJob(id)).toMatch(/is stopped: there is nothing to cancel/);
+  });
+});
+
+describe("the night queue's launchd agent (0.11)", () => {
+  const env = (home: string) => ({
+    home,
+    uid: 501,
+    shell: "/bin/zsh",
+    node: "/opt/homebrew/bin/node",
+    script: "/Users/me/dev/garuda/dist/cli/index.js",
+  });
+
+  it("/schedule HH:MM can start the whole queue; the run removes the agent; /jobs cancel night too", async () => {
+    const { root, home } = await repo();
+    const { executor, commands } = recording();
+    const approver = new AutoApprover("once");
+    const created = await createJob({
+      root,
+      executor: new SandboxedHost(),
+      approver,
+      plan: { request: "Fix the add bug", plan: PLAN, sessionId: "s1" },
+      modelId: "m",
+      at: "01:00",
+      home,
+      now: new Date(2026, 8, 27, 23, 0),
+      signal: signal(),
+      launchd: { platform: "darwin", env: env(home), executor },
+    });
+    if (!created.ok) throw new Error(created.text);
+    expect(created.text).toContain("launchd starts the night queue at 01:00 on Mon Sep 28 2026.");
+    const spec = nightSpec(root);
+    expect(spec.label).toMatch(/^dev\.garuda\.night\.project-[0-9a-f]{8}$/);
+    const plist = readFileSync(specPath(home, spec), "utf8");
+    expect(plist).toContain("run.js night --from-launchd</string>".replace("run.js", "index.js"));
+    expect(plist).toContain(".garuda/jobs/night.log");
+    expect(commands).toEqual([
+      `launchctl bootout gui/501/${spec.label}`,
+      `launchctl bootstrap gui/501 ${specPath(home, spec)}`,
+    ]);
+    const job = await loadJob(root, created.job.id);
+    expect(job.launchd).toBeUndefined();
+    expect(job.queue).toBe(true);
+    expect(nightAgentTime(root, { home })?.getHours()).toBe(1);
+
+    // The run from the agent: the queue runs, a macOS notification, then the agent goes.
+    commands.length = 0;
+    const code = await nightCommand(
+      { fromLaunchd: true },
+      quiet,
+      async (j) => {
+        await saveJob({ ...j, status: "done" });
+        return 0;
+      },
+      root,
+      { env: env(home), executor, platform: "darwin" },
+    );
+    expect(code).toBe(0);
+    expect(commands[0]).toMatch(/^osascript /);
+    expect(commands.at(-1)).toBe(`launchctl bootout gui/501/${spec.label}`);
+    expect(existsSync(specPath(home, spec))).toBe(false);
+
+    // /jobs cancel night with no agent says so.
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake",
+      model: async () => new FakeModelClient([]),
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host" }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    commands.length = 0;
+    expect(await runtime.cancelJob("night", { env: env(home), executor })).toBe(
+      "The night queue's launchd agent is removed. The queue stays: garuda night runs it.",
+    );
   });
 });
 

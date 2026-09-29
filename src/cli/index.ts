@@ -165,7 +165,8 @@ async function main(): Promise<void> {
     )
     .option("--at <HH:MM>", "wait until this local time first (keep the terminal open)")
     .option("--parallel <n>", "jobs at the same time (1 to 10, default 3)")
-    .action(async (options: { at?: string; parallel?: string }) => {
+    .addOption(new Option("--from-launchd").hideHelp())
+    .action(async (options: { at?: string; parallel?: string; fromLaunchd?: boolean }) => {
       const { nightCommand } = await import("./nightCommand.js");
       process.exitCode = await nightCommand(options, new PlainRenderer());
     });
