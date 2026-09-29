@@ -5,7 +5,7 @@ import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { THINKING_WORDS } from "../../model/thinking.js";
 import type { Notifier } from "../notify.js";
 import { runTurnInTerminal } from "../turn.js";
-import { runCommand } from "./commands.js";
+import { paletteEntries, runCommand } from "./commands.js";
 import { type ArgChoice, complete, rootFiles, rootLister } from "./complete.js";
 import { BUILD_PROMPT, planHandoff } from "./plan.js";
 import type { ChatStore, Status } from "./store.js";
@@ -29,6 +29,7 @@ export async function runChat(
   const list = rootLister(runtime.root);
   const args = new CommandArgs(runtime);
   const files = rootFiles(runtime.root);
+  store.paletteSource = () => paletteEntries(runtime);
   store.completer = (text, cursor) =>
     complete(text, cursor, {
       commands: commandNames(runtime),

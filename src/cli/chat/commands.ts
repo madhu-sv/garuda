@@ -13,6 +13,7 @@ import type { ToolContext } from "../../tools/types.js";
 import { colorDiff } from "../approver.js";
 import type { Renderer } from "../renderer.js";
 import { formatTokens } from "../report.js";
+import type { PaletteEntry } from "./palette.js";
 import { modeText } from "./plan.js";
 
 /** Chat commands (F2). The plain chat and the Ink chat share them. */
@@ -587,4 +588,41 @@ function detailsCommand(renderer: Renderer, arg: string): void {
       ? "Details on: each tool call shows its result line."
       : "Details off: tool calls show one line; a failed call still shows its result. In the full chat, Ctrl-O shows the last output in full. /details turns them on again.",
   );
+}
+
+/** Built-in commands that Enter in the palette runs at once: no arguments, or a bare toggle. */
+const RUN_AT_ONCE = new Set([
+  "help",
+  "usage",
+  "session",
+  "hooks",
+  "commands",
+  "agents",
+  "plan",
+  "build",
+  "undo",
+  "redo",
+  "init",
+  "editor",
+  "details",
+  "new",
+  "exit",
+]);
+
+/** The palette's rows: the built-in commands from the help, then custom commands and skills. */
+export function paletteEntries(runtime: Runtime): PaletteEntry[] {
+  const builtins = [...HELP.matchAll(/^ {2}\/([a-z]+)(?: (?:X|\[dir\]))?\s+(.+)$/gm)].map((m) => ({
+    name: m[1] ?? "",
+    hint: m[2] ?? "",
+    runs: RUN_AT_ONCE.has(m[1] ?? ""),
+  }));
+  const custom = runtime.commands.map((c) => ({
+    name: c.name,
+    hint: c.description ?? "custom command",
+    runs: false,
+  }));
+  const skills = runtime.skills
+    .filter((s) => s.userInvocable)
+    .map((s) => ({ name: s.name, hint: `skill: ${s.description}`, runs: false }));
+  return [...builtins, ...custom, ...skills];
 }

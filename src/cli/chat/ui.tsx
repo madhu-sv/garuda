@@ -1,6 +1,7 @@
 import { Box, Static, Text, useInput, usePaste } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { focusEvent } from "../focus.js";
+import { PALETTE_ROWS, type PaletteState, paletteWindow } from "./palette.js";
 import type { ChatState, ChatStore, Item } from "./store.js";
 
 /**
@@ -45,7 +46,12 @@ export function App({ store }: { store: ChatStore }) {
             {"  "}queued: {firstLine(line)}
           </Text>
         ))}
-        {state.approval === undefined && !state.exiting && <InputLine state={state} />}
+        {state.approval === undefined && !state.exiting && state.palette !== undefined && (
+          <PaletteView palette={state.palette} />
+        )}
+        {state.approval === undefined && !state.exiting && state.palette === undefined && (
+          <InputLine state={state} />
+        )}
         <Footer state={state} />
       </Box>
     </>
@@ -102,6 +108,38 @@ export function approvalKeys(choices: readonly string[]): string {
   return `↑↓ and Enter, or ${numbers} · ${keys}`;
 }
 
+function PaletteView({ palette }: { palette: PaletteState }) {
+  const first = paletteWindow(palette.selected, palette.entries.length);
+  const rows = palette.entries.slice(first, first + PALETTE_ROWS);
+  const width = Math.max(8, ...rows.map((e) => e.name.length + 1));
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text>
+        <Text color="cyan">Command › </Text>
+        {palette.query}
+        <Text inverse> </Text>
+      </Text>
+      {rows.length === 0 && <Text dimColor> No command matches.</Text>}
+      {rows.map((entry, i) => {
+        const selected = first + i === palette.selected;
+        return (
+          <Text key={entry.name} {...(selected ? { color: "cyan" } : {})}>
+            {selected ? "❯ " : "  "}
+            {`/${entry.name}`.padEnd(width + 1)}
+            <Text dimColor>{entry.hint}</Text>
+          </Text>
+        );
+      })}
+      <Text dimColor>
+        {palette.entries.length > PALETTE_ROWS
+          ? `${palette.selected + 1} of ${palette.entries.length} · `
+          : ""}
+        type to filter · ↑↓ · Enter picks · Esc closes
+      </Text>
+    </Box>
+  );
+}
+
 function InputLine({ state }: { state: ChatState }) {
   const { text, cursor } = state.editor;
   const at = text[cursor];
@@ -125,7 +163,7 @@ function Footer({ state }: { state: ChatState }) {
   if (costUsd !== undefined) parts.push(`$${costUsd.toFixed(costUsd < 0.01 ? 4 : 2)}`);
   const keys = state.busy
     ? "Esc stop · Ctrl-O output"
-    : "\\ then Enter: new line · Ctrl-G editor · /help";
+    : "\\ then Enter: new line · Ctrl-G editor · Ctrl-P commands";
   return (
     <Text>
       {mode === "plan" ? (
@@ -186,6 +224,17 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     store.interrupt();
     return;
   }
+  // The command palette (0.9): keys go to it while it is open.
+  if (state.palette !== undefined && state.approval === undefined) {
+    if (key.escape || (key.ctrl && input === "p")) store.closePalette();
+    else if (key.upArrow) store.movePalette(-1);
+    else if (key.downArrow) store.movePalette(1);
+    else if (key.return) store.pickPalette();
+    else if (key.backspace || key.delete) store.paletteQuery(null);
+    else if (input !== "" && !key.ctrl && !key.meta && !/[\r\n\t]/.test(input))
+      store.paletteQuery(input);
+    return;
+  }
   if (state.approval !== undefined) {
     if (key.upArrow) store.moveApproval(-1);
     else if (key.downArrow) store.moveApproval(1);
@@ -201,6 +250,7 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
   if (key.ctrl) {
     const actions: Record<string, () => void> = {
       o: () => store.showLastOutput(),
+      p: () => store.togglePalette(),
       g: () => store.openEditor(),
       a: () => store.editLine({ type: "home" }),
       e: () => store.editLine({ type: "end" }),

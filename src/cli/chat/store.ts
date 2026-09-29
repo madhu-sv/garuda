@@ -13,6 +13,7 @@ import {
 import type { Interruptible } from "../turn.js";
 import { type EditAction, type EditorState, edit, emptyEditor, submit } from "./lineEditor.js";
 import { ansi, type Paint, renderMarkdown, takeBlocks } from "./markdown.js";
+import { filterPalette, type PaletteEntry, type PaletteState } from "./palette.js";
 
 /**
  * The state of the Ink chat (0.2). The view only draws it; all logic is here, so tests
@@ -73,6 +74,8 @@ export interface ChatState {
   status: Status;
   /** Set when a turn ends Garuda (Ctrl-D, /exit, two Ctrl-C). */
   exiting: boolean;
+  /** The command palette, while it is open (0.9, Ctrl-P). */
+  palette?: PaletteState;
 }
 
 const EXIT_WINDOW_MS = 2_000;
@@ -86,6 +89,8 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   private waiting: ((input: string | undefined) => void) | undefined;
   private answer: ((choice: ApprovalChoice) => void) | undefined;
   private lastOutput: { title: string; text: string } | undefined;
+  /** All palette rows while the palette is open (0.9). */
+  private paletteAll: PaletteEntry[] = [];
   private interruptAt = 0;
   /** A stop of the running turn was asked (Esc or Ctrl-C): Esc does not ask again. */
   private stopping = false;
@@ -96,6 +101,8 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         cursor: number,
       ) => { text: string; cursor: number; candidates: string[]; lines?: boolean } | undefined)
     | undefined;
+  /** The command palette's rows (0.9): the chat sets it. */
+  paletteSource: (() => PaletteEntry[]) | undefined;
   /** Ctrl-G and /editor (0.6): the chat sets it; it edits the text in the user's editor. */
   externalEdit: ((text: string) => { text?: string; problem?: string }) | undefined;
   private readonly paint: Paint;
@@ -176,6 +183,53 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   }
 
   /** Esc: drop queued lines. */
+  /** Ctrl-P (0.9): open the command palette, or close it when it is open. */
+  togglePalette(): void {
+    if (this.state.palette !== undefined) {
+      this.closePalette();
+      return;
+    }
+    const all = this.paletteSource?.() ?? [];
+    this.paletteAll = all;
+    this.update({ palette: { query: "", entries: all, selected: 0 } });
+  }
+
+  closePalette(): void {
+    const { palette: _closed, ...rest } = this.state;
+    this.state = rest;
+    for (const listener of this.listeners) listener();
+  }
+
+  /** Type into the palette's filter (text), or take a character off (null). */
+  paletteQuery(text: string | null): void {
+    const palette = this.state.palette;
+    if (palette === undefined) return;
+    const query = text === null ? palette.query.slice(0, -1) : palette.query + text;
+    this.update({
+      palette: { query, entries: filterPalette(this.paletteAll, query), selected: 0 },
+    });
+  }
+
+  movePalette(delta: number): void {
+    const palette = this.state.palette;
+    if (palette === undefined || palette.entries.length === 0) return;
+    const n = palette.entries.length;
+    this.update({ palette: { ...palette, selected: (palette.selected + delta + n) % n } });
+  }
+
+  /** Enter: run the selected command, or put it in the input line for its arguments. */
+  pickPalette(): void {
+    const entry = this.state.palette?.entries[this.state.palette.selected];
+    this.closePalette();
+    if (entry === undefined) return;
+    if (entry.runs) {
+      this.editLine({ type: "set", text: `/${entry.name}`, cursor: entry.name.length + 1 });
+      this.submitLine();
+    } else {
+      this.editLine({ type: "set", text: `/${entry.name} `, cursor: entry.name.length + 2 });
+    }
+  }
+
   clearQueue(): void {
     if (this.state.queue.length > 0) this.update({ queue: [] });
   }

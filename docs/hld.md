@@ -306,7 +306,8 @@ Ctrl-C target of a turn, so the logic is testable without a terminal. Finished l
 the terminal scrollback; the live area holds only the open text block, running tools, the approval
 choice, the queue, the input line and a footer. See [cli.md](lld/cli.md).
 
-Input (0.6): Esc stops a task; `\` + Enter or Alt+Enter make a new line; Ctrl-G or `/editor` opens
+Input (0.6): Esc stops a task; `\` + Enter or Alt+Enter make a new line; Ctrl-P (0.9) opens the command
+palette; Ctrl-G or `/editor` opens
 `$EDITOR`; `@path` attaches a file; `!command` runs a command as the bash tool would; Tab completes commands
 and paths (0.8: a fuzzy file search when no path starts so), and since 0.8 command arguments (models,
 sessions, jobs, fixed words). A `Notifier` sends a desktop notification (OSC 9) or the bell when an approval waits or a long

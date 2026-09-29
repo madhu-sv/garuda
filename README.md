@@ -20,7 +20,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.6: chat UX (Esc, multi-line, $EDITOR; @file, !cmd, completion; sessions and models in the chat; focus-aware notifications, /diff), Claude's web search | Done |
 | 0.7: scheduled jobs (plan now, build later with an approval list, own branch), launchd, Batch API (step limit, finish-by time) | Done |
 | 0.8: chat UX from the second OpenCode comparison (`/compact`, argument completion, fuzzy @, session rename and delete, `/plan <task>`) | Done |
-| 0.9: `/details` and `/thinking` toggles, command palette | In progress |
+| 0.9: `/details`, `/thinking` (effort, show), Claude's thinking blocks kept, command palette (Ctrl-P) | In progress |
 
 ## Use
 
@@ -145,6 +145,11 @@ Set the context window, price and output limit per model, and add providers, in 
 - When no path starts with what you typed after `@`, Tab searches all files by their letters in order:
   `@rntm` finds `src/app/runtime.ts`. One match completes; otherwise the best 10 are listed. The search
   skips hidden files, `node_modules`, `dist`, `build`, `target` and virtual environments.
+- Ctrl-P opens the command palette (full chat only): every command with its one-line help, then your
+  own commands and skills. Type to filter (`thk` finds `/thinking`; words of the help work too), ↑/↓
+  to choose. Enter runs a command that needs no arguments (`/usage`, `/undo`, `/details` …) or puts
+  `/name ` in the input line for one that takes them (`/models`, `/sessions`, `/thinking` …), so Tab can
+  complete the rest. Esc or Ctrl-P closes it.
 - Ctrl-G (or `/editor`) opens the prompt in `$VISUAL` or `$EDITOR` (default `vi`). The saved text comes
   back into the input line; press Enter to send it. The plain chat also joins lines that end with `\`.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.

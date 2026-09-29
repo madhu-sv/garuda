@@ -150,6 +150,7 @@ flowchart LR
 | `inkChat.ts` | Entry. Creates the store, sets it as approver and event target, renders `App`, runs `runChat`, unmounts. Never awaits `waitUntilExit()` (it hangs after unmount). |
 | `store.ts` | `ChatStore`: all chat state and logic. Implements `Renderer`, `Approver` and `Interruptible`. |
 | `controller.ts` | `runChat`: next line → command or turn; `statusOf` for the footer; `CommandArgs` (0.8): Tab choices for command arguments. |
+| `palette.ts` | The command palette (0.9): `PaletteEntry`, `filterPalette` (the fuzzy name search of `@`, then the help text), `paletteWindow`. `paletteEntries(runtime)` in `commands.ts` builds the rows from `HELP`, custom commands and skills. |
 | `complete.ts` | Tab completion (0.6): commands, `@paths`, command arguments and the fuzzy file search (0.8: `fuzzyFiles`, `rootFiles`). |
 | `ui.tsx` | Ink view: `<Static>` for finished items, a small live area, the key map. |
 | `lineEditor.ts` | Pure line editor: insert, delete, words, kill, history with draft. |
@@ -207,7 +208,7 @@ interface ChatState {
   also set by Ctrl-C, reset by `begin`/`end`), so Esc never reaches the second-stop exit. Idle → drop the queue.
 - **New lines (0.6):** Enter with `meta` (Alt/Option+Enter) inserts `\n`; Enter after a `\` at the cursor
   replaces the backslash with `\n`; else Enter submits. `typeAhead` does the same when "\" and Enter arrive in one chunk (fast typing). The
-  footer shows `\ then Enter: new line · Ctrl-G editor`; the start banner's tips line says the same.
+  footer shows `\ then Enter: new line · Ctrl-G editor · Ctrl-P commands` (0.9); the start banner's tips line says the same.
 - **`@path` (0.6):** the runtime attaches mentioned files (see runtime-and-loop.md); the chat shows the
   `notice` event ("Attached src/a.ts (42 lines).").
 - **`!command` (0.6):** the controller (Ink) and the REPL send a line that starts with `!` to
@@ -229,6 +230,12 @@ interface ChatState {
   `thinking_delta` events: the Ink store keeps them until the next text, tool call or step end, then adds
   the first 4 lines dimmed (`thinkingPreview`) and keeps the whole text for Ctrl-O; the plain renderer
   writes them dimmed to stderr in full.
+- **Command palette (0.9):** Ctrl-P calls `store.togglePalette()`: `state.palette` holds the query, the
+  matching rows and the selected row, and `PaletteView` replaces the input line. While it is open, keys go
+  to it: text filters, Backspace, ↑/↓ (wrapping), Enter `pickPalette()`, Esc or Ctrl-P closes. Enter on
+  a row with `runs` (no arguments or a bare toggle: help, usage, session, hooks, commands, agents, plan,
+  build, undo, redo, init, editor, details, new, exit) sets the line to `/name` and submits it; other
+  rows set `/name ` with the cursor at the end. The plain chat has no palette: `/` and Tab do the same.
 - **Arguments (0.8):** after `/command ` the word at the cursor completes from `sources.args(command,
   before)`. `CommandArgs` (controller.ts, both chats) gives: `/models` aliases and model specs; `/sessions`
   `rename`, `delete` and session ids (then ids after rename or delete); `/jobs` `cancel` and job ids; `/diff
