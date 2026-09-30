@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.11.0. This document shows how the parts work together. The component documents in
+Version 0.12.0-dev. This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -76,8 +76,11 @@ read), adds the pending notes (for example the output of a `!command`), and deci
 search goes into the requests (it asks once per session). A server search runs inside the model reply;
 a reply that stops with `pause_turn` goes straight into the next step.
 
+A response cut off at the output limit (0.12) does not end the turn: the loop keeps its text, asks the
+model to go on (a `continue` record), and raises `max_tokens` to 32,000, up to 3 times per run.
+
 Stop reasons: `done`, `max_steps` (default 50), `token_budget` (default 20 M), `repeated_calls` (3
-identical calls in a row), `max_tokens`, `refusal`. Ctrl-C aborts the turn and kills its commands; a
+identical calls in a row), `max_tokens` (after the recoveries), `refusal`. Ctrl-C aborts the turn and kills its commands; a
 second Ctrl-C exits Garuda.
 
 ## 4. One tool call
@@ -330,9 +333,10 @@ command shows its text and asks the first time, like project hooks. See [command
 
 ## 11. Quality
 
-- About 590 unit and acceptance tests, all with the fake model.
+- About 600 unit and acceptance tests, all with the fake model.
 - Contract tests run every executor (host, Seatbelt, bubblewrap) through the same suite.
 - Architecture tests enforce the dependency rules.
 - Evals: a basic suite (10 tasks), a hard suite (6 tasks on a generated repo of about 107 files), and
-  Java and Python suites (5 tasks each, Maven with JUnit 5 and pytest).
+  Java and Python suites (5 tasks each, Maven with JUnit 5 and pytest). The repo suite (0.12) is built
+  from the user's own commits (`garuda eval --from-git`, then `-s repo`).
   0.1 baseline on claude-sonnet-5: basic 10/10; hard 6/6 at about 50 steps and $0.19 in total.
