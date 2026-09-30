@@ -22,6 +22,7 @@ import type { Executor } from "../sandbox/types.js";
 import type { ToolCallMeta } from "../session/records.js";
 import {
   addAssistantResponse,
+  addContinuation,
   addCost,
   addToolResults,
   closeOpenToolCalls,
@@ -147,6 +148,19 @@ export const DEFAULT_MAX_TOKENS = 8192;
 export const DEFAULT_TOKEN_BUDGET = 20_000_000;
 /** F7: this many identical tool calls in a row stop the run. */
 export const REPEAT_LIMIT = 3;
+/** Output limit (0.12): cut-off responses that one run recovers from before it stops. */
+export const MAX_OUTPUT_RECOVERIES = 3;
+/** Output limit (0.12): the max_tokens after a cut-off response (at least). */
+export const RECOVERY_MAX_TOKENS = 32_000;
+
+/**
+ * Output limit (0.12): the note that asks the model to go on. The cut-off response keeps only its
+ * text: a half tool call cannot run, and thinking alone is no answer.
+ */
+export function continuationNote(maxTokens: number, droppedCall: boolean): string {
+  return `<garuda_note>Your last response hit the output limit (${maxTokens} tokens) and was cut off${droppedCall ? " before its tool call was complete, so the call did not run" : ""}. Go on from where you were. Keep each response smaller: write a large file in parts, and think less before a simple step.</garuda_note>`;
+}
+
 /** Waits before the retries of a broken model stream (2 retries). */
 export const MODEL_RETRY_DELAYS_MS: readonly number[] = [1_000, 4_000];
 
@@ -166,6 +180,8 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   let steps = 0;
   let apiMs = 0;
   let modelStopReason: StopReason | undefined;
+  let outputLimit = thinkingMaxTokens(deps.maxTokens ?? DEFAULT_MAX_TOKENS, deps.thinking);
+  let recoveries = 0;
 
   const finish = (stopReason: AgentStopReason): AgentResult => {
     session.journal?.write({ type: "end", stopReason, steps });
@@ -200,7 +216,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       messages: session.messages,
       tools,
       ...(serverTools.length === 0 ? {} : { serverTools }),
-      maxTokens: thinkingMaxTokens(deps.maxTokens ?? DEFAULT_MAX_TOKENS, deps.thinking),
+      maxTokens: outputLimit,
       ...(deps.thinking === undefined ? {} : { thinking: deps.thinking }),
     };
     const started = performance.now();
@@ -213,10 +229,19 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
     ).finally(() => {
       apiMs += performance.now() - started;
     });
-    const response =
+    const kept =
       deps.keepThinking === false
         ? { ...received, content: received.content.filter((b) => b.type !== "thinking") }
         : received;
+    // Output limit (0.12): a cut-off response keeps its text only; the model is asked to go on
+    // with more room. It used to end the turn (live test: a repo task stopped at step 3).
+    const cutOff = kept.stopReason === "max_tokens" && recoveries < MAX_OUTPUT_RECOVERIES;
+    const response = cutOff
+      ? {
+          ...kept,
+          content: kept.content.filter((b) => b.type === "text" && b.text.trim() !== ""),
+        }
+      : kept;
     modelStopReason = response.stopReason;
     usage = addUsage(usage, response.usage);
     addAssistantResponse(session, response, steps, cost(response));
@@ -228,6 +253,20 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
           b.type === "server_tool_result" && b.toolUseId === call.id,
       );
       emit({ type: "server_tool", call, ...(result === undefined ? {} : { result }) });
+    }
+
+    if (cutOff) {
+      recoveries++;
+      const limit = outputLimit;
+      // 32k: every Claude model since Opus 4 allows it; a larger configured limit stays.
+      outputLimit = Math.max(outputLimit, RECOVERY_MAX_TOKENS);
+      const dropped = kept.content.some((b) => b.type === "tool_use");
+      addContinuation(session, continuationNote(limit, dropped), outputLimit);
+      emit({
+        type: "notice",
+        text: `The response hit the output limit (${limit} tokens); Garuda asks the model to go on with ${outputLimit}.`,
+      });
+      continue;
     }
 
     const calls = response.content.filter((b): b is ToolUseBlock => b.type === "tool_use");

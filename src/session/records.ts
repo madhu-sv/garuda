@@ -116,6 +116,16 @@ export interface TitleRecord extends Base {
   title: string;
 }
 
+/**
+ * Output limit (0.12): the model's response was cut off at max_tokens, and Garuda asked it to go
+ * on. Not a user prompt: /sessions does not count it as a turn.
+ */
+export interface ContinueRecord extends Base {
+  type: "continue";
+  message: Message;
+  maxTokens: number;
+}
+
 export interface EndRecord extends Base {
   type: "end";
   stopReason: string;
@@ -133,6 +143,7 @@ export type SessionRecord =
   | RedoRecord
   | TitleRecord
   | ThinkingRecord
+  | ContinueRecord
   | EndRecord;
 
 /** A record before the journal adds the time. */

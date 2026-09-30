@@ -65,6 +65,9 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
       case "redo":
         redoPoint(state.undo, state.messages);
         break;
+      case "continue":
+        state.messages.push(record.message);
+        break;
       case "tool_results":
         state.messages.push(record.message);
         // Subagent runs (explore) count toward the session totals.

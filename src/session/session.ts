@@ -155,6 +155,13 @@ export function addToolResults(
   });
 }
 
+/** Output limit (0.12): ask the model to go on after a cut-off response. */
+export function addContinuation(session: Session, text: string, maxTokens: number): void {
+  const message: Message = { role: "user", content: [{ type: "text", text }] };
+  session.messages.push(message);
+  session.journal?.write({ type: "continue", message, maxTokens });
+}
+
 /** Add token use and cost that are not part of a conversation turn (a compaction summary). */
 export function addCost(session: Session, usage: Usage, costUsd: number | undefined): void {
   session.usage = addUsage(session.usage, usage);

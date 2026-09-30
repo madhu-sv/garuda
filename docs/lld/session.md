@@ -42,6 +42,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `redo` | – (0.4) |
 | `title` | title (0.8, `/sessions rename`; the last one wins; resume ignores it) |
 | `thinking` | choice (0.9, `/thinking`; the last one wins; a resume brings it back) |
+| `continue` | message, maxTokens (0.12: the note after a response cut off at the output limit; a resume adds the message; not a turn in `/sessions`) |
 | `end` | stopReason, steps |
 
 ## Store (`store.ts`)

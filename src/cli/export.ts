@@ -100,6 +100,12 @@ export function sessionMarkdown(records: readonly SessionRecord[], sessionId: st
       case "model":
         out.push(`_The model changed to ${record.model}._`, "");
         break;
+      case "continue":
+        out.push(
+          `_The response hit the output limit; Garuda asked the model to go on (${record.maxTokens} tokens)._`,
+          "",
+        );
+        break;
       case "end":
         if (record.stopReason !== "done") out.push(`_The turn stopped: ${record.stopReason}._`, "");
         break;

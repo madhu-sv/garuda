@@ -258,6 +258,33 @@ describe("/thinking (0.9)", () => {
     });
   });
 
+  it("a model that always thinks gets thinking room by default; others keep 8,192 (0.12)", async () => {
+    const limits: Record<string, number> = {};
+    for (const modelId of ["claude-sonnet-5", "claude-haiku-4-5"]) {
+      const root = dir();
+      const model = new FakeModelClient([
+        (request) => {
+          limits[modelId] = request.maxTokens;
+          return reply([text("Done.")]);
+        },
+      ]);
+      const runtime = await Runtime.create({
+        root,
+        modelId,
+        model: async () => model,
+        approver: new AutoApprover("once"),
+        store: new FileSessionStore(root),
+        settings: parseSettings({ executor: "host" }),
+        mcp: false,
+        hooks: false,
+        profiles: [],
+      });
+      await runtime.runTurn("go", new AbortController().signal);
+      await runtime.close();
+    }
+    expect(limits).toEqual({ "claude-sonnet-5": 16_384, "claude-haiku-4-5": 8_192 });
+  });
+
   it("the chat command sends the choice, records it, and a resume brings it back", async () => {
     const root = dir();
     let asked: unknown;

@@ -129,7 +129,11 @@ flags work. `--format` does not (it would format the whole project). `-t` picks 
 
 First live test (garuda, 40 commits, cloud): 21 tasks kept from 22 candidates in 2 minutes. The first
 Mac run kept none: `git clean` removed the `node_modules` link at the commit, and the whole suite ran
-(both fixed in 0104).
+(both fixed in 0104). The Mac run after the fix kept 19 of 22 candidates from 40 commits.
+
+First repo runs (claude-sonnet-5, Mac, 3 small fixes × 3): 8/9 passed, 123 steps, $1.05, 90% of tokens
+from the cache; means 12.0–14.7 steps and $0.08–0.18 per task. The failure stopped at step 3 with
+`max_tokens` after thinking alone: fixed in the loop (0106, "Output limit" in runtime-and-loop.md).
 
 Limits: a runner that cannot take files runs the whole suite, so a slow suite makes a slow task (5 min
 limit per check). A commit that needs a new dependency is skipped. Build the suite again after new commits; old

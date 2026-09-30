@@ -130,6 +130,11 @@ while steps < maxSteps:
   compactIfNeeded(session)          # see context.md
   steps += 1
   response = stream(system, messages, tools, maxTokens)   # emits text_delta; retried, see below
+  if response stopped at max_tokens and recoveries < 3:     # output limit (0.12)
+    keep its text blocks only (a half tool call cannot run; thinking alone is no answer)
+    addAssistantResponse(session, kept, cost); maxTokens = max(maxTokens, 32 000)
+    addContinuation(session, "<garuda_note>…cut off… Go on…</garuda_note>")   # a `continue` record
+    emit notice; next step
   addAssistantResponse(session, response, cost)
   calls = tool_use blocks
   if none: stop done | max_tokens | refusal (from the model stop reason)
@@ -160,6 +165,13 @@ subagent's current step), `tool_result`, `model_retry` (attempt, max retries, de
 `AgentResult`: `stopReason`, `steps`, `usage` (this run, subagents included), `apiMs` (time in model calls,
 retries included; 0.5) and `modelStopReason` (the last response's stop reason; 0.5). The JSON output of
 `-p` uses the last three (see [cli.md](cli.md)).
+
+Output limit (0.12). A model that always thinks (the 5-series) spends its thinking from `max_tokens`, so
+the runtime gives it `thinkingMaxTokens` also when no `/thinking` choice is set: 16,384 by default (was
+8,192). A response that still hits the limit no longer ends the turn: the loop keeps its text, asks the
+model to go on, and raises the limit to 32,000 (a larger configured limit stays), up to 3 times per run
+(`MAX_OUTPUT_RECOVERIES`); the 4th cut-off stops with `max_tokens`. Its tokens and cost count. Found in
+the repo eval live test: 1 of 9 runs stopped at step 3 with `max_tokens` after thinking alone.
 
 Defaults: `DEFAULT_MAX_STEPS = 50`, `DEFAULT_MAX_TOKENS = 8192`, `DEFAULT_TOKEN_BUDGET = 20 000 000`,
 `REPEAT_LIMIT = 3`.

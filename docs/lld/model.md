@@ -58,7 +58,8 @@ disk. The compaction summary, `/export` and the OpenAI-compatible adapter ignore
 `adaptive` or `display` → `thinking: { type: "adaptive", display? }` (a display alone is never sent to
 an optional model, because it would turn thinking on). No choice sends nothing, as before 0.9. When
 thinking is asked for, `max_tokens` is at least 16,384 (32,000 for `xhigh` and `max`), because thinking
-counts toward it. With `display: "summarized"` the adapter streams `thinking_delta` events.
+counts toward it. Since 0.12 this also holds for a model that always thinks with no choice set, and a
+cut-off response is recovered (see runtime-and-loop.md, "Output limit"). With `display: "summarized"` the adapter streams `thinking_delta` events.
 
 The loop, the session and the tools use only these types.
 

@@ -37,8 +37,10 @@ import {
   type AgentEvent,
   type AgentResult,
   DEFAULT_MAX_STEPS,
+  DEFAULT_MAX_TOKENS,
   DEFAULT_TOKEN_BUDGET,
   runAgent,
+  thinkingMaxTokens,
 } from "../loop/runAgent.js";
 import { loadLspConfig } from "../lsp/config.js";
 import type { InstallResult } from "../lsp/install.js";
@@ -968,6 +970,23 @@ export class Runtime {
   }
 
   /** The records of the current session, for /export (0.6). Redacted as on disk. */
+  /**
+   * The output limit for a turn (0.12). A model that always thinks (the 5-series) spends its
+   * thinking from max_tokens, so it gets the room that /thinking gives, also by default: with 8,192
+   * a repo eval task stopped at max_tokens after thinking alone.
+   */
+  private outputTokens(): { maxTokens?: number } {
+    if (this.currentThinkingCaps?.mode === "always") {
+      return {
+        maxTokens: thinkingMaxTokens(
+          this.maxTokens ?? DEFAULT_MAX_TOKENS,
+          this.thinkingParams ?? {},
+        ),
+      };
+    }
+    return this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens };
+  }
+
   async sessionRecords(): Promise<SessionRecord[] | undefined> {
     return this.current === undefined ? undefined : this.store.read(this.current.id);
   }
@@ -1108,7 +1127,7 @@ export class Runtime {
       ...(this.formatSource === undefined ? {} : { format: this.formatSource }),
       maxSteps: this.limits.maxSteps,
       tokenBudget: this.limits.tokenBudget,
-      ...(this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens }),
+      ...this.outputTokens(),
       contextWindow: this.limits.contextWindow,
       ...(this.price === undefined ? {} : { price: this.price }),
       ...(this.onEvent === undefined ? {} : { onEvent: this.onEvent }),
