@@ -134,6 +134,10 @@ Mac run kept none: `git clean` removed the `node_modules` link at the commit, an
 First repo runs (claude-sonnet-5, Mac, 3 small fixes × 3): 8/9 passed, 123 steps, $1.05, 90% of tokens
 from the cache; means 12.0–14.7 steps and $0.08–0.18 per task. The failure stopped at step 3 with
 `max_tokens` after thinking alone: fixed in the loop (0106, "Output limit" in runtime-and-loop.md).
+After 0106 (the 16,384 default for models that always think), same tasks, 3 runs each: ed8cada 3/3,
+16.0 steps, $0.262 (before: 2/3, $0.182); 78aaa85 3/3, 9.7 steps, $0.071 (before: 12.0, $0.092); b3f72a9
+3/3, 13.3 steps, $0.075 (before: 14.7, $0.076). No cost rise on the two small tasks; ed8cada varies
+most. The default stays. The eval output shows notices, so a recovery from the output limit is visible.
 
 Limits: a runner that cannot take files runs the whole suite, so a slow suite makes a slow task (5 min
 limit per check). A commit that needs a new dependency is skipped. Build the suite again after new commits; old
@@ -142,7 +146,7 @@ tasks stay valid while their commits exist.
 `-m` takes any model spec, for example `garuda eval -m ollama/qwen3-coder:30b -s hard`, so open models
 can be measured on the same tasks.
 
-Output: a live line per tool call (and per model retry), a table (PASS/FAIL/ERR, steps, tokens, cost,
+Output: a live line per tool call (and per model retry and notice, for example the output limit), a table (PASS/FAIL/ERR, steps, tokens, cost,
 time, stop reason), totals, a mean per task for `--repeat`, and `report.json`. Exit code 0 when all pass,
 2 otherwise.
 

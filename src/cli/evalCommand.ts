@@ -297,6 +297,8 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       ...(options.keep ? { keep: true } : {}),
       onEvent: (taskId, event) => {
         if (event.type === "tool_call") process.stderr.write(`  [${taskId}] ${event.call.name}\n`);
+        // For example the output limit (0.12): shows when a run recovered from a cut-off response.
+        if (event.type === "notice") process.stderr.write(`  [${taskId}] ${event.text}\n`);
         if (event.type === "model_retry")
           process.stderr.write(
             `  [${taskId}] retry ${event.attempt}/${event.maxRetries}: ${event.reason}\n`,
