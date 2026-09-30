@@ -248,7 +248,8 @@ describe("repo tasks: the suite from git (0.12)", () => {
       sha: shas["Add sub (broken)"],
       command: "node --test test/sub.test.js",
     });
-    expect(failure?.tail).toMatch(/fail 1/);
+    // The end of the output differs by Node version: the summary (Linux) or the assertion (macOS).
+    expect(failure?.tail).toMatch(/# fail 1|4 !== 2/);
     expect(progress.at(-1)).toMatch(/^kept [0-9a-f]{7} \(1\/30\)$/);
   });
 
