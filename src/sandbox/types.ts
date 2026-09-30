@@ -25,11 +25,24 @@ export interface ExecPolicy {
   /** Absolute paths the command may not read, for example ~/.ssh. */
   denyReadPaths: string[];
   network: boolean;
+  /**
+   * The network allowlist (0.13): with `sandbox` and no `network`, the command reaches the internet
+   * only through Garuda's proxy. The executor sets HTTP(S)_PROXY. bubblewrap has its own network
+   * namespace: `bridge` (a node binary) forwards 127.0.0.1:`port` in it to `socketPath`.
+   */
+  proxy?: NetworkProxyPolicy;
   /** Names of environment variables the command may see. All others are removed. */
   envAllowlist: string[];
   timeoutMs: number;
   /** Cap per stream (stdout, stderr). Output past the cap is cut from the middle. */
   maxOutputBytes: number;
+}
+
+export interface NetworkProxyPolicy {
+  port: number;
+  socketPath: string;
+  /** node, for the bridge in bubblewrap. Absent: bubblewrap commands get no network. */
+  bridge?: string;
 }
 
 export interface CapturedOutput {

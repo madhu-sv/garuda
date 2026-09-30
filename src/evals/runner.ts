@@ -77,6 +77,11 @@ export interface EvalOptions {
   parallel?: number;
   /** Time limit per task. Default: EVAL_TASK_TIMEOUT_MS (the Batch API needs much more). */
   taskTimeoutMs?: number;
+  /**
+   * The network allowlist (0.13): presets and hosts that sandboxed commands may reach through
+   * Garuda's proxy. Other hosts are denied (no question). Default: none, as in the product.
+   */
+  network?: string[];
 }
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
@@ -96,7 +101,11 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   const before = await snapshot(root, protect);
 
   const settings = parseSettings({
-    permissions: { deny: EVAL_DENY_RULES },
+    // With an allowlist, a host outside it is denied: nobody answers questions in an eval.
+    permissions: {
+      deny: options.network === undefined ? EVAL_DENY_RULES : [...EVAL_DENY_RULES, "network"],
+    },
+    ...(options.network === undefined ? {} : { network: { allow: options.network } }),
     // Evals must not depend on the internet.
     web: { enabled: false },
     ...(options.executor === undefined ? {} : { executor: options.executor }),
@@ -136,6 +145,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     mcp: false,
     hooks: false,
     commands: false,
+    // The list comes from the eval command line: the user typed it.
+    ...(options.network === undefined ? {} : { network: { approved: true } }),
     ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
     ...(options.onEvent === undefined
       ? {}

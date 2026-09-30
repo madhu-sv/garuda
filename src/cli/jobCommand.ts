@@ -197,8 +197,11 @@ async function prepare(
   }
   const project = await loadSettings(job.worktree);
   const links = job.links.map((name) => join(job.root, name));
+  // The network allowlist (0.13) is the one approved with the job, not the project's current one.
+  const { network: _projectNetwork, ...projectRest } = project;
   const settings: Settings = {
-    ...project,
+    ...projectRest,
+    ...(job.network === undefined ? {} : { network: { allow: job.network } }),
     allow: [...project.allow, ...job.allow.map((rule) => parseRule(rule))],
     maxSteps: job.maxSteps,
     sandbox: {

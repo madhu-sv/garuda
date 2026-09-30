@@ -57,6 +57,7 @@ checks it again (schema, id, root, rules).
 | `onUnapproved` | `deny-and-continue` (the only mode in 0.7). |
 | `at`, `maxSteps`, `links` | The time given to `/schedule`; the step limit (100); linked ignored folders. |
 | `queue` | In the project's night queue (0.11); `/schedule` sets it. |
+| `network` | The network allowlist (0.13) in effect in the chat at `/schedule` (the question shows it). The run uses it, not the project's current list, with no consent question; other hosts are denied and appear in the report's denied calls. Absent: no network. |
 | `test`, `review` | Proof of work (0.11): the test command run before and after (absent: none); the review (default true). |
 | `status`, `startedAt`, `endedAt`, `result` | `scheduled` → `running` → `done`, `stopped` (Ctrl-C) or `failed`; the result: stop reason, steps, tokens, cost, time, session, commit, files with line counts, denied calls, the agent's last answer. |
 

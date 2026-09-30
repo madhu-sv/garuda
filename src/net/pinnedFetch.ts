@@ -18,7 +18,7 @@ export type Resolver = (host: string) => Promise<{ address: string; family: numb
 
 export class BlockedAddressError extends Error {}
 
-const defaultResolve: Resolver = (host) => dnsLookup(host, { all: true, verbatim: true });
+export const defaultResolve: Resolver = (host) => dnsLookup(host, { all: true, verbatim: true });
 
 export function pinnedFetch(options: { resolve?: Resolver } = {}): typeof fetch {
   const resolve = options.resolve ?? defaultResolve;

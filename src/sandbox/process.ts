@@ -41,7 +41,7 @@ export abstract class ProcessExecutor implements Executor {
     const { file, args } = this.launch(argv, policy);
     const child = spawn(file, args, {
       cwd: policy.root,
-      env: { ...allowedEnv(policy.envAllowlist), ...env },
+      env: { ...allowedEnv(policy.envAllowlist), ...proxyEnv(policy), ...env },
       stdio: ["pipe", "pipe", "pipe"],
       detached: true,
     });
@@ -90,7 +90,7 @@ export abstract class ProcessExecutor implements Executor {
       const { file, args } = this.launch(["bash", "-c", command], policy);
       const child = spawn(file, args, {
         cwd: policy.root,
-        env: { ...allowedEnv(policy.envAllowlist), ...options.env },
+        env: { ...allowedEnv(policy.envAllowlist), ...proxyEnv(policy), ...options.env },
         stdio: ["ignore", "pipe", "pipe"],
         detached: true,
       });
@@ -169,6 +169,30 @@ export function allowedEnv(allowlist: readonly string[]): Record<string, string>
     if (value !== undefined) env[name] = value;
   }
   return env;
+}
+
+/**
+ * The proxy variables for a sandboxed command (0.13). Most tools read HTTP(S)_PROXY: npm, pip,
+ * cargo, go, git, curl; Node's fetch with NODE_USE_ENV_PROXY; Maven and Gradle through their
+ * Java options.
+ */
+export function proxyEnv(policy: ExecPolicy): Record<string, string> {
+  if (!policy.sandbox || policy.network || policy.proxy === undefined) return {};
+  const url = `http://127.0.0.1:${policy.proxy.port}`;
+  const java = `-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=${policy.proxy.port} -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=${policy.proxy.port}`;
+  const add = (name: string) =>
+    `${process.env[name] === undefined ? "" : `${process.env[name]} `}${java}`;
+  return {
+    HTTP_PROXY: url,
+    HTTPS_PROXY: url,
+    http_proxy: url,
+    https_proxy: url,
+    NO_PROXY: "localhost,127.0.0.1,::1",
+    no_proxy: "localhost,127.0.0.1,::1",
+    NODE_USE_ENV_PROXY: "1",
+    MAVEN_OPTS: add("MAVEN_OPTS"),
+    GRADLE_OPTS: add("GRADLE_OPTS"),
+  };
 }
 
 /** The program itself, with no isolation. */

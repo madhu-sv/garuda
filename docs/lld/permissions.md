@@ -119,6 +119,7 @@ A tool's `CallInfo` may carry a `title` (0.5): the engine passes it to the appro
   "codeIndex": "off",
   "permissions": { "allow": ["bash(pnpm test*)"], "deny": ["bash(git push*)"] },
   "env": { "allow": ["NODE_ENV"] },
+  "network": { "allow": ["npm", "pypi", "api.example.com"] },
   "web": { "enabled": true, "allowLocalhost": false },
   "subagents": { "enabled": true, "maxSteps": 20, "tokenBudget": 150000 },
   "todo": { "enabled": true },
@@ -135,6 +136,12 @@ A tool's `CallInfo` may carry a `title` (0.5): the engine passes it to the appro
 ```
 
 A missing file gives the defaults; a broken file is an error that names the file.
+
+`network.allow` (0.13): presets (`NETWORK_PRESETS` in `src/net/allowlist.ts`) or host patterns; any other
+entry is an error. The engine's `setNetwork(handle)` adds `proxy` to sandboxed command policies (not to
+`serverPolicy`), and `takeNetworkBlocks()` returns the hosts the proxy blocked. A host outside the list is
+checked as tool `network` with a URL target, so `network(host)` rules and session answers work as for
+web_fetch.
 
 ## Path guard (`pathGuard.ts`)
 

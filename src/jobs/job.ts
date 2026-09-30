@@ -117,6 +117,11 @@ const jobSchema = z.object({
    */
   test: z.string().min(1).optional(),
   review: z.boolean().optional(),
+  /**
+   * The network allowlist (0.13): presets and hosts that the job's sandboxed commands may reach,
+   * approved with the job. Other hosts are denied and reported. Absent: no network.
+   */
+  network: z.array(z.string()).optional(),
   /** In the project's night queue (0.11): `garuda night` runs it. */
   queue: z.boolean().optional(),
   /** The launchd agent that starts the job (macOS), while it is installed. */

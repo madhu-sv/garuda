@@ -74,6 +74,8 @@ import type {
   ServerToolSpec,
   ThinkingRequest,
 } from "../model/types.js";
+import { expandAllowlist, hostAllowed, NETWORK_PORTS } from "../net/allowlist.js";
+import type { NetworkProxy, ProxyDecision } from "../net/proxy.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -110,6 +112,7 @@ import {
 import { VERSION } from "../version.js";
 import type { ClaudeSearchConfig, SearchConfig } from "../web/search.js";
 import { attachMentions } from "./mentions.js";
+import { networkConsent, networkHash, nodeBinary } from "./network.js";
 
 /** A formatter that runs longer than this is stopped (0.10). */
 const FORMAT_TIMEOUT_MS = 20_000;
@@ -205,6 +208,11 @@ export interface RuntimeOptions {
    * `onDeny` records it for the report. The job's approval list comes in `settings.allow`.
    */
   unattended?: { reason: string; onDeny?: (tool: string, target: CallTarget) => void };
+  /**
+   * The network allowlist (0.13, `settings.network`). `approved`: the list was approved elsewhere
+   * (a job's approval, the eval command line), so no question. `home`: where trust.json is (tests).
+   */
+  network?: { approved?: boolean; home?: string };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
   profiles?: LanguageProfile[];
   /**
@@ -299,6 +307,12 @@ export class Runtime {
   private readonly agentModels = new Map<string, Promise<ChildModel>>();
   private hookRunner: HookRunner | undefined;
   private hooksStarted: Promise<void> | undefined;
+  /** The network allowlist (0.13): the proxy, started before the first turn when settings ask. */
+  private networkStarted: Promise<void> | undefined;
+  private networkProxy: NetworkProxy | undefined;
+  private networkOptions: NonNullable<RuntimeOptions["network"]> = {};
+  /** The signal of the running turn: a proxy question stops with it. */
+  private turnSignal: AbortSignal | undefined;
   /** The snapshot store for undo, or undefined when undo is off (0.4). */
   private snapshots: SnapshotStore | undefined;
   /** Claude's web search (0.6): the "claude" section of search.json, when web tools are on. */
@@ -347,6 +361,7 @@ export class Runtime {
     this.mcpServers = mcpServers;
     this.mcpOptions = options.mcp === false || options.mcp === undefined ? {} : options.mcp;
     this.onNotice = options.onNotice;
+    this.networkOptions = options.network ?? {};
     this.root = options.root;
     this.currentModelId = options.modelId;
     this.model = options.model;
@@ -1087,7 +1102,9 @@ export class Runtime {
   /** Run one turn: the user's prompt, then the loop until it stops. */
   async runTurn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
     this.lastPrompt = prompt;
+    this.turnSignal = signal;
     await this.startHooks(signal);
+    await this.startNetwork(signal);
     await this.startMcp(signal);
     const session = this.ensureSession();
     this.turnMode = this.selectedMode;
@@ -1179,6 +1196,7 @@ export class Runtime {
       // The chat offers a launchd agent on macOS (a second question).
       launchd: {},
       ...testOption(detectTestCommand(this.root, this.profiles)),
+      ...(this.networkAllowlist().length === 0 ? {} : { network: this.networkAllowlist() }),
       signal,
     });
     return { ok: created.ok, text: created.text };
@@ -1456,7 +1474,98 @@ export class Runtime {
 
   /** Stop the MCP and language servers. The CLI calls it before it exits. */
   async close(): Promise<void> {
-    await Promise.all([this.mcp?.close(), this.lspManager?.close()]);
+    await Promise.all([this.mcp?.close(), this.lspManager?.close(), this.networkProxy?.close()]);
+  }
+
+  /** The network allowlist in effect (0.13): the settings entries, or [] when the proxy is off. */
+  networkAllowlist(): string[] {
+    return this.networkProxy === undefined ? [] : [...(this.settings.network?.allow ?? [])];
+  }
+
+  /**
+   * The network allowlist (0.13), once, before the first turn. Only with the OS sandbox: without
+   * it every command asks and runs with the full network anyway. A project list runs only after
+   * the user saw it and agreed; the answer can be pinned to a hash of the list.
+   */
+  private async startNetwork(signal: AbortSignal): Promise<void> {
+    const entries = this.settings.network?.allow ?? [];
+    if (entries.length === 0 || this.executor.isolation !== "os") return;
+    this.networkStarted ??= (async () => {
+      if (this.networkOptions.approved !== true) {
+        const trust = await TrustStore.open(this.networkOptions.home ?? homedir());
+        const hash = networkHash(entries);
+        const known = trust.networkHash(this.root);
+        if (known !== hash) {
+          const choice = await this.approver.ask(
+            networkConsent(entries, this.executor.isolation, known !== undefined),
+            signal,
+          );
+          if (choice === "deny") {
+            this.onNotice?.("Network for commands: off (you said no). Commands have no network.");
+            return;
+          }
+          if (choice === "session") await trust.setNetworkHash(this.root, hash);
+        }
+      }
+      let bridge: string | undefined;
+      if (this.executor.name === "bwrap") {
+        bridge = nodeBinary();
+        if (bridge === undefined) {
+          this.onNotice?.(
+            "Network for commands: off. On Linux the allowlist needs node on the PATH (for the bridge into the sandbox).",
+          );
+          return;
+        }
+      }
+      const hosts = expandAllowlist(entries).hosts;
+      // N3: the proxy (node:http) loads only for a project that uses the allowlist.
+      const { NetworkProxy } = await import("../net/proxy.js");
+      const proxy = new NetworkProxy({
+        decide: (host, port) => this.networkDecision(hosts, host, port),
+      });
+      const started = await proxy.start();
+      this.networkProxy = proxy;
+      this.permissions.setNetwork({
+        policy: { ...started, ...(bridge === undefined ? {} : { bridge }) },
+        takeBlocked: () => proxy.takeBlocked(),
+      });
+      this.onNotice?.(
+        `Network for commands: ${entries.join(", ")}, through Garuda's proxy. Other hosts ask.`,
+      );
+    })();
+    try {
+      await this.networkStarted;
+    } catch (error) {
+      this.networkStarted = undefined;
+      throw error;
+    }
+  }
+
+  /** A host outside the list goes through the permission engine: rules, session answers, a question. */
+  private async networkDecision(
+    hosts: readonly string[],
+    host: string,
+    port: number,
+  ): Promise<ProxyDecision> {
+    if (!NETWORK_PORTS.includes(port)) {
+      return { allowed: false, reason: `only ports ${NETWORK_PORTS.join(" and ")}` };
+    }
+    if (hostAllowed(host, hosts)) return { allowed: true };
+    const decision = await this.permissions.check(
+      {
+        tool: "network",
+        readOnly: false,
+        info: {
+          target: { kind: "url", url: `https://${host}`, host },
+          preview: `A command in the sandbox wants to reach ${host}:${port} through Garuda's proxy. The host is not on the network allowlist ("network.allow" in .garuda/settings.json).`,
+          title: `Let a command reach ${host}?`,
+        },
+      },
+      this.turnSignal ?? new AbortController().signal,
+    );
+    return decision.allowed
+      ? { allowed: true }
+      : { allowed: false, reason: decision.reason.replace(/\.$/, "") };
   }
 
   private get lspHome(): string {

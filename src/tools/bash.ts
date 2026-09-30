@@ -70,10 +70,22 @@ const SANDBOX_BLOCK =
   /Operation not permitted|Read-only file system|EROFS|EPERM|EAI_AGAIN|ENOTFOUND|ENETUNREACH|Network is unreachable|Could not resolve host|Temporary failure in name resolution|getaddrinfo/;
 
 /** A note when a failed command in the sandbox looks blocked by it. */
-export function sandboxHint(result: ExecResult): string | undefined {
+export function sandboxHint(result: ExecResult, allowlist = false): string | undefined {
   if (result.exitCode === 0 || result.timedOut || result.aborted) return undefined;
   if (!SANDBOX_BLOCK.test(`${result.stdout.text}\n${result.stderr.text}`)) return undefined;
-  return "The sandbox may have blocked this command: it has no network, and it can write only in the working root and temp folders. If the command must have more, run it again with outside_sandbox: true. The user must approve.";
+  const network = allowlist
+    ? "it reaches only the hosts on the network allowlist, through Garuda's proxy"
+    : "it has no network";
+  return `The sandbox may have blocked this command: ${network}, and it can write only in the working root and temp folders. If the command must have more, run it again with outside_sandbox: true. The user must approve.`;
+}
+
+/** The network allowlist (0.13): a note that names the hosts the proxy blocked. */
+export function networkHint(
+  blocked: readonly { host: string; port: number; reason: string }[],
+): string | undefined {
+  if (blocked.length === 0) return undefined;
+  const seen = [...new Map(blocked.map((b) => [`${b.host}:${b.port}`, b.reason])).values()];
+  return `${seen.join(" ")} Commands in the sandbox reach only the hosts on the network allowlist. Do not work around it; if the host is needed, tell the user: they can add it to "network.allow" in .garuda/settings.json, or approve outside_sandbox: true.`;
 }
 
 /** Notes for the model about the command it ran (see the system prompt for the same rules). */
@@ -107,7 +119,7 @@ export const bashTool: Tool<Input, BashOutput> = {
     "Long output is cut in the middle. The result shows the exit code, stdout and stderr.",
     "Use read_file, glob and grep to look at files, not cat, ls, find or grep: they need no approval.",
     "Do not pipe into tail or head: the pipe hides the exit code, and long output is cut already.",
-    "When Garuda has an OS sandbox, commands run in it with no approval: no network, writes only in the working root and temp folders.",
+    "When Garuda has an OS sandbox, commands run in it with no approval: no network (or only the hosts on the user's network allowlist), writes only in the working root and temp folders.",
     "Otherwise the user must approve each command.",
   ].join("\n"),
   inputSchema: input,
@@ -131,9 +143,15 @@ export const bashTool: Tool<Input, BashOutput> = {
       sandbox: sandboxed,
     });
     const { command: run, stripped } = stripRootCd(command, root);
+    permissions.takeNetworkBlocks?.();
     const result = await executor.run(run, policy, { signal });
     const hints = commandHints(run, stripped);
-    const blocked = sandboxed ? sandboxHint(result) : undefined;
+    const network = sandboxed ? networkHint(permissions.takeNetworkBlocks?.() ?? []) : undefined;
+    if (network !== undefined) hints.push(network);
+    const blocked =
+      sandboxed && network === undefined
+        ? sandboxHint(result, policy.proxy !== undefined)
+        : undefined;
     if (blocked !== undefined) hints.push(blocked);
     return { ...result, hints };
   },

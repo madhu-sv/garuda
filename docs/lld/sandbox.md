@@ -93,6 +93,31 @@ No `--unshare-pid` and no `--new-session`: the command stays in Garuda's process
 kill works and pids match the host. Limit: bubblewrap needs each mount point to exist, so a protected
 path that does not exist yet (for example `.git/hooks` with no `.git`) is not protected.
 
+## Network allowlist (0.13)
+
+`ExecPolicy.proxy` (`{ port, socketPath, bridge? }`) is set by the permission engine when the runtime
+runs Garuda's proxy (`src/net/proxy.ts`), and only for sandboxed commands (not hooks, not language
+servers). With `sandbox` and no `network`:
+
+- `proxyEnv(policy)` (in `ProcessExecutor`, so every executor) adds `HTTP_PROXY`, `HTTPS_PROXY` (and the
+  lower-case forms), `NO_PROXY=localhost,127.0.0.1,::1`, `NODE_USE_ENV_PROXY=1`, and the Java proxy
+  properties in `MAVEN_OPTS` and `GRADLE_OPTS`, all to `http://127.0.0.1:<port>`.
+- Seatbelt already allows localhost, so the command reaches the proxy's TCP port directly.
+- bubblewrap has its own network namespace (`--unshare-net`): `withBridge` runs `bash -c` with a small
+  script that starts `node -e BRIDGE_JS <socket> <port>` in the background (no output), waits until
+  127.0.0.1:<port> answers (up to 2 s), then `exec`s the command. The bridge forwards each connection to
+  the proxy's Unix socket (visible through the read-only root). The executor kills the process group
+  after the command, so the bridge ends with it.
+
+The proxy (`NetworkProxy`): an HTTP server on 127.0.0.1:0 and on a Unix socket in a private temp folder.
+`CONNECT host:port` (https) and absolute-URL requests (http). For each: IP literals are refused (the list
+names hosts); `decide(host, port)` (the runtime: ports 80 and 443 only; the list; else the permission
+engine with tool `network` and a URL target, which applies rules, session answers, the job's
+deny-and-continue or a question); then the host is resolved and every address must be public
+(`checkAddress`); the connection goes to the checked address (no rebinding). A refusal is `403` with the
+reason in the body; `takeBlocked()` gives the blocked hosts to the bash tool, which adds a note for the
+model. The proxy does not decrypt TLS.
+
 ## Selection (`index.ts`)
 
 `createExecutor(name)` with `name` from settings:
@@ -114,3 +139,6 @@ environment allowlist, output cap, timeout, `shutdown()`, and process-tree kill 
 `test/hostExecutor.test.ts` runs it for the host; `test/sandbox.test.ts` runs it for the machine's OS
 sandbox, plus real checks: writes outside the root fail, protected paths stay read-only, denied reads
 fail, no network, and `sandbox: false` isolates nothing. The Seatbelt tests run only on macOS.
+`test/networkProxy.test.ts` (0.13) tests the allowlist, the proxy (tunnel, 403 with the reason, IP
+literals, private addresses, plain http) and curl through the machine's OS sandbox with and without the
+proxy; `test/network.test.ts` the runtime (consent, pinning, questions, ports), evals and jobs.

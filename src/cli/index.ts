@@ -134,6 +134,10 @@ async function main(): Promise<void> {
       Number.parseInt(v, 10),
     )
     .option(
+      "--network <entries...>",
+      "presets (npm, pypi, maven, go, cargo, github) or hosts that sandboxed commands may reach",
+    )
+    .option(
       "--test-command <cmd>",
       "with --from-git: the test command; {files} takes the test files (default: detected)",
     )
@@ -286,6 +290,8 @@ async function start(options: Options, program: Command): Promise<number> {
       ? {}
       : {
           settings: job.settings,
+          // The job's network list was approved with the job (0.13).
+          network: { approved: true },
           unattended: {
             reason: JOB_DENIAL,
             onDeny: (tool: string, target: CallTarget) => recordJobDenial(job, tool, target),

@@ -115,8 +115,12 @@ export class HookRunner implements ToolHooks {
     if (target?.kind === "command") env.GARUDA_COMMAND = target.command;
     if (target?.kind === "url") env.GARUDA_URL = target.url;
     try {
+      // A hook gets the network only when its definition says so, never the allowlist (0.13).
+      const { proxy: _proxy, ...sandboxed } = permissions.execPolicy(hook.def.timeoutMs, {
+        sandbox: true,
+      });
       const policy = {
-        ...permissions.execPolicy(hook.def.timeoutMs, { sandbox: true }),
+        ...sandboxed,
         network: hook.def.network,
         maxOutputBytes: OUTPUT_BYTES,
       };

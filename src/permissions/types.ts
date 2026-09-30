@@ -55,6 +55,8 @@ export interface PermissionGate {
   check(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision>;
   /** The policy for one command (N8). The engine builds it. */
   execPolicy(timeoutMs: number, options?: { sandbox?: boolean }): ExecPolicy;
+  /** The network allowlist (0.13): hosts that the proxy blocked since the last call. */
+  takeNetworkBlocks?(): { host: string; port: number; reason: string }[];
 }
 
 /**

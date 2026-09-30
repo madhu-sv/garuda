@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.12.0. This document shows how the parts work together. The component documents in
+Version 0.13.0-dev. This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -202,6 +202,12 @@ name for MCP servers (`mcp__github__*`).
 | Eval checks | `HostExecutor` | No (Garuda's own test commands) | None |
 
 The executor is Seatbelt on macOS, bubblewrap on Linux, or the host when neither works (`auto`).
+
+Network allowlist (0.13). With `network.allow` in the settings, the runtime starts a local proxy
+before the first turn (after the user agreed to the project's list). Sandboxed commands get
+HTTP(S)_PROXY to it and can reach nothing else; the proxy lets listed hosts through, asks for other
+hosts (jobs and evals deny), and the bash result names each blocked host. See
+[lld/sandbox.md](lld/sandbox.md).
 
 ## 7. Sessions
 

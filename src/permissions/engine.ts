@@ -1,6 +1,6 @@
 import { sep } from "node:path";
 import type { ProfileAccess } from "../lang/profiles.js";
-import type { ExecPolicy, Isolation } from "../sandbox/types.js";
+import type { ExecPolicy, Isolation, NetworkProxyPolicy } from "../sandbox/types.js";
 import { formatRule, type Rule, ruleMatches } from "./rules.js";
 import { sandboxPaths } from "./sandboxPaths.js";
 import { isProtectedFromWrites, isSensitive } from "./sensitive.js";
@@ -67,6 +67,12 @@ export const PLAN_MODE_DENIAL =
  *   6. An allow rule or a session rule matches       → allow
  *   7. Otherwise ask the user: once, session, deny   (F18); a job (0.7) denies instead
  */
+/** The network proxy as the engine sees it (0.13). */
+export interface NetworkHandle {
+  policy: NetworkProxyPolicy;
+  takeBlocked(): { host: string; port: number; reason: string }[];
+}
+
 export class PermissionEngine implements PermissionGate {
   private readonly root: string;
   private readonly approver: Approver;
@@ -76,6 +82,8 @@ export class PermissionEngine implements PermissionGate {
   private readonly mode: () => AgentMode;
   private readonly unattended: PermissionEngineOptions["unattended"];
   private readonly sessionRules: Rule[] = [];
+  /** The network proxy for sandboxed commands (0.13), when it runs. */
+  private network: NetworkHandle | undefined;
 
   constructor(options: PermissionEngineOptions) {
     this.root = options.root;
@@ -206,6 +214,7 @@ export class PermissionEngine implements PermissionGate {
       writePaths,
       denyWritePaths,
       network: !sandbox,
+      ...(sandbox && this.network !== undefined ? { proxy: this.network.policy } : {}),
       envAllowlist: [
         ...new Set([...DEFAULT_ENV_ALLOWLIST, ...this.access.envAllow, ...this.settings.envAllow]),
       ],
@@ -214,12 +223,23 @@ export class PermissionEngine implements PermissionGate {
     };
   }
 
+  /** The network allowlist (0.13): the runtime sets it when the proxy runs. */
+  setNetwork(network: NetworkHandle | undefined): void {
+    this.network = network;
+  }
+
+  takeNetworkBlocks(): { host: string; port: number; reason: string }[] {
+    return this.network?.takeBlocked() ?? [];
+  }
+
   /**
    * The policy for a language server (0.4): in the sandbox, project read-only, no network, no
    * time limit (it runs for the session).
    */
   serverPolicy(): ExecPolicy {
-    return { ...this.execPolicy(0, { readOnlyRoot: true }), maxOutputBytes: 0 };
+    // No network allowlist (0.13): a language server needs no downloads.
+    const { proxy: _proxy, ...policy } = this.execPolicy(0, { readOnlyRoot: true });
+    return { ...policy, maxOutputBytes: 0 };
   }
 }
 

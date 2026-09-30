@@ -22,6 +22,7 @@ import {
 } from "../knowledge/mode.js";
 import { detectProfiles } from "../lang/profiles.js";
 import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
+import { expandAllowlist } from "../net/allowlist.js";
 import { HostExecutor } from "../sandbox/host.js";
 import { createExecutor, EXECUTOR_NAMES, type ExecutorName } from "../sandbox/index.js";
 import { newSessionId } from "../session/store.js";
@@ -66,6 +67,8 @@ export interface EvalCommandOptions {
   maxTasks?: number;
   /** --test-command <cmd>: the project's test command (default: detected). */
   testCommand?: string;
+  /** --network <entries...>: the network allowlist for sandboxed commands (0.13). */
+  network?: string[];
 }
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
@@ -173,6 +176,16 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     process.stderr.write(`Unknown lsp mode ${options.lsp}. Use: on, off.\n`);
     return 1;
   }
+  let network: string[] | undefined;
+  if (options.network !== undefined) {
+    network = options.network.flatMap((e) => e.split(",")).filter((e) => e.trim() !== "");
+    const { problems } = expandAllowlist(network);
+    if (problems.length > 0) {
+      process.stderr.write(`--network: ${problems.join(" ")}\n`);
+      return 1;
+    }
+    if (network.length === 0) network = undefined;
+  }
   const batchMode = options.batch ?? "off";
   if (batchMode !== "on" && batchMode !== "off") {
     process.stderr.write(`Unknown batch mode ${options.batch}. Use: on, off.\n`);
@@ -262,7 +275,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   if (batchMode === "on") {
@@ -289,6 +302,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       todo: todoMode === "on",
       lsp: lspMode === "on",
       keepThinking: thinkingMode === "on",
+      ...(network === undefined ? {} : { network }),
       ...(biome === undefined ? {} : { format: { on: formatMode === "on", biome } }),
       ...(sub === undefined
         ? {}
@@ -315,7 +329,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = `${formatReport(results)}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, batch: batchMode, parallel, wallMs, executor: executor.name, results }, null, 2)}\n`,
+    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

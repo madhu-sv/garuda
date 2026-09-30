@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.12.0.
+Garuda is a terminal coding agent. This is version 0.13.0-dev.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -24,7 +24,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.10: formatters after edits (opt-in; measured: +14% cost, no gain) | Done |
 | 0.11: night shift (a queue of overnight jobs, one digest, a launchd agent) and proof of work (tests before and after, risk flags, a principal-engineer review) | Done |
 | 0.12: benchmark your repo (eval tasks from the repo's own git history), output-limit recovery | Done |
-| 0.13: network allowlist for commands (W6) | Planned |
+| 0.13: network allowlist for commands (W6) | In progress |
 
 ## Use
 
@@ -447,7 +447,7 @@ In the sandbox, a command:
   and for a Java or Python project `~/.m2/repository`, `~/.gradle/caches` and similar);
 - cannot write `.git/hooks`, `.git/config` or `.garuda/` in the root, because those run or apply later
   outside the sandbox;
-- has no network (localhost works on macOS).
+- has no network (localhost works on macOS), unless you open a network allowlist (0.13, below).
 
 Commands in the sandbox run with no approval. Deny rules still apply. When the sandbox blocks a command
 (for example `pnpm install` needs the network), the model can ask to run it outside the sandbox.
@@ -468,6 +468,31 @@ Settings:
   start at the root.
 - On Linux, install bubblewrap (`sudo apt install bubblewrap`). Some systems block the user namespaces
   that it needs; Garuda then falls back to the host and says why.
+
+### Network allowlist (0.13)
+
+Installs and builds need a package registry, but not the whole internet. The allowlist lets commands in
+the sandbox reach named hosts through Garuda's own proxy, with no question:
+
+```json
+{ "network": { "allow": ["npm", "pypi", "api.example.com", "*.example.org"] } }
+```
+
+- Presets: `npm`, `pypi`, `maven`, `go`, `cargo`, `github` (each names its registry hosts). A host with
+  `*.` matches its subdomains. Only ports 80 and 443.
+- Off by default. The first turn shows the list and asks; "remember" pins it to the list in
+  `~/.garuda/trust.json`, so a changed list asks again.
+- A host that is not on the list asks you (once, this session, or no); `network(host)` in
+  `permissions.allow` or `permissions.deny` answers for good. Jobs and evals deny it and say which host.
+- Commands get `HTTP_PROXY` and `HTTPS_PROXY`: npm, pnpm, yarn, pip, cargo, go, git and curl use them;
+  Node's `fetch` too (`NODE_USE_ENV_PROXY`, Node 24 or later); Maven and Gradle through `MAVEN_OPTS` and
+  `GRADLE_OPTS`. A tool that ignores the proxy variables still has no network.
+- The proxy does not read the traffic: for https it sees only the host name. A host must resolve to
+  public addresses; the proxy connects to the address it checked.
+- On Linux the proxy reaches bubblewrap's network namespace through a small bridge that runs with
+  `node`; with no `node` on the PATH the allowlist stays off and Garuda says so.
+- A job keeps the list that was in effect when you scheduled it (the approval shows it).
+  `garuda eval --network npm,pypi` measures a suite with the list.
 - Limit on Linux: a protected path that does not exist yet (for example `.git/hooks` in a folder with no
   `.git`) is not protected.
 

@@ -5,6 +5,7 @@ import type { FormatterSetting } from "../format/formatters.js";
 import type { CodeIndexMode } from "../knowledge/mode.js";
 import type { Price } from "../model/pricing.js";
 import { EFFORTS, type Effort } from "../model/types.js";
+import { expandAllowlist } from "../net/allowlist.js";
 import { EXECUTOR_NAMES } from "../sandbox/index.js";
 import { parseRule, type Rule } from "./rules.js";
 import type { SandboxSettings } from "./sandboxPaths.js";
@@ -58,6 +59,8 @@ const schema = z.strictObject({
     })
     .optional(),
   env: z.strictObject({ allow: z.array(z.string()).optional() }).optional(),
+  /** The network allowlist for sandboxed commands (0.13): presets (npm, pypi …) or hosts. */
+  network: z.strictObject({ allow: z.array(z.string()).optional() }).optional(),
   /** web_fetch. enabled: default true. allowLocalhost: default false (loopback only, never private ranges). */
   web: z
     .strictObject({ enabled: z.boolean().optional(), allowLocalhost: z.boolean().optional() })
@@ -151,6 +154,8 @@ export interface Settings {
   deny: Rule[];
   /** Extra environment variables that commands may see. */
   envAllow: string[];
+  /** The network allowlist (0.13): presets and hosts that sandboxed commands may reach. */
+  network?: { allow: string[] };
   sandbox?: SandboxSettings;
   web?: { enabled: boolean; allowLocalhost: boolean };
   codeIndex?: CodeIndexMode;
@@ -192,7 +197,12 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     notifications,
     thinking,
     formatters,
+    network,
   } = parsed.data;
+  const networkProblems = expandAllowlist(network?.allow ?? []).problems;
+  if (networkProblems.length > 0) {
+    throw new Error(`${source}: network.allow: ${networkProblems.join(" ")}`);
+  }
   const rules = (list: string[] = []) =>
     list.map((text) => {
       try {
@@ -206,6 +216,9 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     allow: rules(permissions.allow),
     deny: rules(permissions.deny),
     envAllow: env.allow ?? [],
+    ...(network?.allow === undefined || network.allow.length === 0
+      ? {}
+      : { network: { allow: network.allow } }),
     ...(web === undefined
       ? {}
       : { web: { enabled: web.enabled ?? true, allowLocalhost: web.allowLocalhost ?? false } }),

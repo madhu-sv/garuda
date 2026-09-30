@@ -69,6 +69,8 @@ export interface CreateJobOptions {
   launchd?: { platform?: NodeJS.Platform; env?: AgentEnv; executor?: Executor };
   /** The project's test command (0.11): run before and after the job. Absent: no tests. */
   test?: string;
+  /** The network allowlist in effect in the chat (0.13): the job gets the same one. */
+  network?: readonly string[];
 }
 
 /**
@@ -115,6 +117,9 @@ export async function createJob(
     maxSteps: options.maxSteps ?? DEFAULT_JOB_MAX_STEPS,
     links,
     ...(options.test === undefined ? {} : { test: options.test }),
+    ...(options.network === undefined || options.network.length === 0
+      ? {}
+      : { network: [...options.network] }),
     queue: true,
     status: "scheduled",
   };
@@ -134,6 +139,9 @@ export async function createJob(
       : ["", "Not rules, left out:", ...problems.map((p) => `  ${p}`)]),
     "",
     "Any other call that would ask is denied at run time; the job goes on and reports it.",
+    job.network === undefined
+      ? "Network: none for commands."
+      : `Network: ${job.network.join(", ")}, through Garuda's proxy; other hosts are denied and reported.`,
     "",
     options.test === undefined
       ? 'Proof of work: no test command found (set "test" in the job file); a principal-engineer review of the diff (one model call).'

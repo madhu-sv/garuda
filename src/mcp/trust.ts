@@ -11,8 +11,8 @@ import { z } from "zod";
  *   tools  the hash of the tool list seen at approval, to detect changed tools later
  *   toolHashes  one hash per tool, to say which tools were added, removed or changed
  * User servers are recorded under the key "~" (tools only; they need no consent).
- * Project hooks and project slash commands (0.4) and project skills (0.5) keep the hash of what
- * the user allowed.
+ * Project hooks and project slash commands (0.4), project skills (0.5) and the project's network
+ * allowlist (0.13) keep the hash of what the user allowed.
  */
 export const TRUST_FILE = join(".garuda", "trust.json");
 
@@ -33,6 +33,8 @@ const schema = z.object({
   skills: z.record(z.string(), z.record(z.string(), z.string())).default({}),
   /** Project root → agent name → hash of the approved agent file (0.5). */
   agents: z.record(z.string(), z.record(z.string(), z.string())).default({}),
+  /** Project root → hash of the approved network allowlist (0.13). */
+  network: z.record(z.string(), z.string()).default({}),
 });
 type TrustData = z.infer<typeof schema>;
 export type TrustEntry = z.infer<typeof entry>;
@@ -47,6 +49,7 @@ export class TrustStore {
     commands: {},
     skills: {},
     agents: {},
+    network: {},
   };
 
   private constructor(private readonly file: string) {}
@@ -106,6 +109,15 @@ export class TrustStore {
     const agents = this.data.agents[root] ?? {};
     this.data.agents[root] = agents;
     agents[name] = hash;
+    await this.save();
+  }
+
+  networkHash(root: string): string | undefined {
+    return this.data.network[root];
+  }
+
+  async setNetworkHash(root: string, hash: string): Promise<void> {
+    this.data.network[root] = hash;
     await this.save();
   }
 
