@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.14.0-dev. This document shows how the parts work together. The component documents in
+Version 0.16.0-dev. This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -331,7 +331,7 @@ the changes directly.
 | Code index | `.garuda/settings.json` (`codeIndex`) | `find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`, `repo_map`. |
 | LSP diagnostics | `.garuda/settings.json` (`lsp`), `--lsp`, `~/.garuda/lsp.json` | Language server errors in edit results. |
 | Formatters (0.10) | `.garuda/settings.json` (`formatters`) | The project's formatter after each edit; off by default. |
-| Language experts | `src/knowledge/` (`LanguageExpert`) | Code index AST support for languages (TypeScript/JavaScript, Python, Java). |
+| Language experts & plugins (0.16) | `~/.garuda/languages/`, `.garuda/languages/` | Code index AST support for languages (TS/JS, Python, Java, Go, Rust, and custom plugins). |
 | Executors | `src/sandbox/` (`Executor`) | Another isolation technology. |
 | Session stores | `src/session/` (`SessionStore`) | Another place for sessions. |
 

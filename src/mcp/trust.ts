@@ -35,6 +35,8 @@ const schema = z.object({
   agents: z.record(z.string(), z.record(z.string(), z.string())).default({}),
   /** Project root → hash of the approved network allowlist (0.13). */
   network: z.record(z.string(), z.string()).default({}),
+  /** Project root → language plugin name → hash of the approved plugin file (0.16). */
+  languages: z.record(z.string(), z.record(z.string(), z.string())).default({}),
 });
 type TrustData = z.infer<typeof schema>;
 export type TrustEntry = z.infer<typeof entry>;
@@ -50,6 +52,7 @@ export class TrustStore {
     skills: {},
     agents: {},
     network: {},
+    languages: {},
   };
 
   private constructor(private readonly file: string) {}
@@ -118,6 +121,17 @@ export class TrustStore {
 
   async setNetworkHash(root: string, hash: string): Promise<void> {
     this.data.network[root] = hash;
+    await this.save();
+  }
+
+  languageHash(root: string, name: string): string | undefined {
+    return this.data.languages[root]?.[name];
+  }
+
+  async setLanguageHash(root: string, name: string, hash: string): Promise<void> {
+    const languages = this.data.languages[root] ?? {};
+    this.data.languages[root] = languages;
+    languages[name] = hash;
     await this.save();
   }
 

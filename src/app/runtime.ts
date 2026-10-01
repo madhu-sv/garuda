@@ -219,6 +219,11 @@ export interface RuntimeOptions {
     firstTimeoutMs?: number;
     timeoutMs?: number;
   };
+  /**
+   * Language plugins (0.16): ~/.garuda/languages/ and .garuda/languages/.
+   * `home` overrides the user's home directory (tests).
+   */
+  languages?: { home?: string };
 }
 
 /** The output of a `!command` that goes to the model with the next message is cut here (0.6). */
@@ -340,7 +345,9 @@ export class Runtime {
     this.store = options.store;
     this.onEvent = options.onEvent;
     this.system = system;
-    this.knowledge = new KnowledgeIndex(options.root);
+    this.knowledge = new KnowledgeIndex(options.root, {
+      ...(options.languages?.home !== undefined ? { home: options.languages.home } : {}),
+    });
     this.codeIndex = settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE;
     const web = settings.web ?? { enabled: true, allowLocalhost: false };
     this.tools = new ToolRegistry(

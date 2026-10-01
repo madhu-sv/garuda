@@ -274,6 +274,9 @@ interface ChatState {
   prints the list (`A`/`M`/`D`, `+`/`−` counts, "binary") and the colored patch (`colorDiff`), cut at
   `DIFF_LINES` (300). The Ink controller passes `output` in the `CommandContext`: it prints the text as it is
   and keeps the full patch for Ctrl-O (`store.keepOutput`). The plain chat prints with `renderer.info`.
+- **`/languages` (0.16):** `runtime.knowledge.languageStatuses()` reports all registered language plugins
+  (built-in, user, project), their supported extensions, active/standby state, and file counts. Also reports
+  any warnings (such as unapproved project plugins). Runs immediately from the command palette.
 - **Interactive patch staging (0.14, `hunkStaging.ts`):** In the Ink approval view for file edits
   (`write_file`, `edit_file`), pressing `h` (or `p`) opens `HunkStagingView`. Users can review each diff hunk
   individually with color highlighting and a `[staged/total]` progress counter:

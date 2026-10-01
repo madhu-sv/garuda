@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.15.0.
+Garuda is a terminal coding agent. This is version 0.16.0.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -27,7 +27,8 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.13: network allowlist for commands (W6): presets or hosts, through Garuda's proxy, off by default | Done |
 | 0.14: dynamic sandbox probe, core modularization, background daemons (W3), interactive patch staging (W4) | Done |
 | 0.15: universal multi-language AST & code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done |
-| 0.16: team policy and audit log (W5) | Planned |
+| 0.16: dynamic language plugin system (Go & Rust reference plugins, ~/.garuda/languages/ & .garuda/languages/ discovery, SHA-256 hash pinning security, /languages command) | Done |
+| 0.17: Mixture-of-Experts (MoE) subagent dispatch, team policy & audit log (W5) | Planned |
 
 ## Use
 
@@ -396,17 +397,21 @@ Commands run in the scratch folders, in the OS sandbox when there is one (`--exe
 `pnpm startup` checks that startup takes less than 1 s (N3). The Anthropic SDK and the prompt library
 load on first use, not at startup.
 
-## Code index (local knowledge)
+## Code index and dynamic language plugins (local knowledge)
 
-Garuda keeps a local code index across TypeScript/JavaScript, Python, and Java (0.15).
+Garuda keeps a local code index with a dynamic language plugin architecture (0.16).
 It answers code questions on this machine, with zero native C++ compilation dependencies and no model call:
 
+- Built-in language plugins: TypeScript/JavaScript, Python, Java, Go, and Rust.
+- Dynamic plugin system:
+  - User plugins: Drop custom language experts in `~/.garuda/languages/<lang>.js`.
+  - Project plugins: Place project-specific language experts in `<root>/.garuda/languages/<lang>.js`. Project plugins require explicit SHA-256 hash approval in `~/.garuda/trust.json`, protecting against malicious repository code execution.
 - Tools for the agent (read-only, no approval), chosen with `"codeIndex"` in `.garuda/settings.json`:
   `"off"` (default), `"lookup"` (`find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`) or `"all"` (also `repo_map`).
-  `find_callers` traces structural invocation hierarchies across languages; `impact_analysis` computes blast radius, dependents, and discovers affected test suites; `ast_query` filters symbols by kind, container, and wildcards.
-- Chat commands for you: `/where X` (or `/defs X`), `/refs X`, `/callers X`, `/impact X`, `/map [folder]`.
+  `find_callers` traces structural invocation hierarchies across languages; `impact_analysis` computes blast radius, dependents, and discovers affected test suites (including Go `*_test.go` and Rust `*_test.rs`); `ast_query` filters symbols by kind, container, and wildcards.
+- Chat commands for you: `/where X` (or `/defs X`), `/refs X`, `/callers X`, `/impact X`, `/map [folder]`, and `/languages` (lists active language plugins, indexed file counts, and standby status).
 - The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
-  Pure AST parsers (`src/knowledge/python.ts`, `src/knowledge/java.ts`, `src/knowledge/typescript.ts`) run in-process and preserve single-binary distribution.
+  Pure AST parsers run in-process and preserve single-binary distribution.
 - Files follow `.gitignore`. Sensitive files are never indexed.
 
 ## Sessions, limits and context

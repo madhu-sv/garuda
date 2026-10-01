@@ -464,3 +464,19 @@ describe("a stopped turn (0.9)", () => {
     expect(model.remaining).toBe(0);
   });
 });
+
+describe("/languages (0.16)", () => {
+  it("lists language plugins and indexed file counts", async () => {
+    const root = project();
+    const runtime = await runtimeFor(root, new FakeModelClient([]));
+    const { run, said } = chat(runtime);
+    expect(await run("/languages")).toBe("done");
+    const output = said().at(-1) ?? "";
+    expect(output).toContain("Language plugins:");
+    expect(output).toContain("typescript (built-in): .ts, .tsx");
+    expect(output).toContain("1 file(s) indexed");
+    expect(output).toContain("python (built-in): .py — standby");
+    expect(output).toContain("go (built-in): .go — standby");
+    expect(output).toContain("rust (built-in): .rs — standby");
+  });
+});

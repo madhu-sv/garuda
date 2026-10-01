@@ -43,6 +43,7 @@ export const HELP = [
   "  /mcp       MCP servers: state, sandbox, network and tool count; /mcp logout <server>",
   "  /hooks     the active hooks",
   "  /lsp       language servers for diagnostics; /lsp install <typescript|python|java>",
+  "  /languages registered language plugins and indexed file counts",
   "  /commands  your custom commands and skills (~/.garuda, .garuda, .claude)",
   "  /agents    your custom agents and their tools (~/.garuda, .garuda, .claude)",
   "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles); /plan <task> plans it",
@@ -171,6 +172,8 @@ export async function runCommand(
     }
   } else if (command === "/lsp") {
     await lspCommand(runtime, renderer, text.slice(command.length).trim());
+  } else if (command === "/languages") {
+    await languagesCommand(runtime, renderer);
   } else if (command === "/undo" || command === "/redo") {
     const signal = new AbortController().signal;
     renderer.info(await (command === "/undo" ? runtime.undo(signal) : runtime.redo(signal)));
@@ -538,6 +541,34 @@ async function lookup(
   }
 }
 
+/** /languages: show registered language plugins, their file extensions, and indexed counts. */
+async function languagesCommand(runtime: Runtime, renderer: Renderer): Promise<void> {
+  const statuses = await runtime.knowledge.languageStatuses();
+  if (statuses.length === 0) {
+    renderer.info("No language plugins registered.");
+    return;
+  }
+
+  const lines: string[] = ["Language plugins:"];
+  for (const s of statuses) {
+    const extStr = s.extensions.join(", ");
+    const stateStr = s.active ? `${s.indexedFiles} file(s) indexed` : "standby (no matching files)";
+    const sourceBadge = s.source === "built-in" ? "built-in" : `${s.source} plugin`;
+    lines.push(`  • ${s.id} (${sourceBadge}): ${extStr} — ${stateStr}`);
+  }
+
+  const warnings = runtime.knowledge.getWarnings();
+  if (warnings.length > 0) {
+    lines.push("");
+    lines.push("Warnings:");
+    for (const w of warnings) {
+      lines.push(`  ⚠ ${w}`);
+    }
+  }
+
+  renderer.info(lines.join("\n"));
+}
+
 export function usageSummary(runtime: Runtime): string {
   const session = runtime.session;
   if (session === undefined) return "No session yet.";
@@ -633,6 +664,7 @@ const RUN_AT_ONCE = new Set([
   "usage",
   "session",
   "hooks",
+  "languages",
   "commands",
   "agents",
   "plan",

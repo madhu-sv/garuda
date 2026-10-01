@@ -100,3 +100,21 @@ export interface LanguageExpert {
     candidates: SymbolHit[];
   };
 }
+
+export type ExpertFactory = (root: string) => Promise<LanguageExpert> | LanguageExpert;
+
+export interface LanguagePlugin {
+  readonly id: string;
+  readonly extensions: readonly string[];
+  readonly source: "built-in" | "user" | "project";
+  readonly path?: string | undefined;
+  readonly factory: ExpertFactory;
+}
+
+export interface LanguageStatus {
+  readonly id: string;
+  readonly extensions: readonly string[];
+  readonly source: "built-in" | "user" | "project";
+  readonly indexedFiles: number;
+  readonly active: boolean;
+}

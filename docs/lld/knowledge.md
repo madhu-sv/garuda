@@ -1,8 +1,14 @@
-# Code index (`src/knowledge/`)
+# Code index and dynamic language plugins (`src/knowledge/`)
 
 ## Purpose
 
-Answer "where is X defined", "who uses X", "who calls X", "what is the blast radius and affected tests of changing X", and "what does each file export and import" on this machine, with no model call. Each language has its own expert. 0.15 ships the TypeScript/JavaScript, Python, and Java experts with zero native C++ compilation dependencies.
+Answer "where is X defined", "who uses X", "who calls X", "what is the blast radius and affected tests of changing X", and "what does each file export and import" on this machine, with no model call. Each language has its own expert.
+
+Version 0.16 introduces a **dynamic language plugin architecture** with:
+- Built-in reference plugins: TypeScript/JavaScript, Python, Java, Go, and Rust.
+- User plugins in `~/.garuda/languages/`.
+- Project plugins in `<root>/.garuda/languages/` secured by SHA-256 hash pinning in `~/.garuda/trust.json`.
+- Zero native C++ compilation dependencies, preserving instant sub-1s startup and single-binary packaging.
 
 ## Interfaces (`types.ts`)
 
@@ -15,6 +21,23 @@ interface LanguageExpert {
   findReferences(files, name, inFile, limit):
     { definition?: SymbolHit; references: ReferenceHit[]; candidates: SymbolHit[] };
 }
+
+interface LanguagePlugin {
+  readonly id: string;
+  readonly extensions: readonly string[];
+  readonly source: "built-in" | "user" | "project";
+  readonly path?: string;
+  readonly factory: ExpertFactory;
+}
+
+interface LanguageStatus {
+  readonly id: string;
+  readonly extensions: readonly string[];
+  readonly source: "built-in" | "user" | "project";
+  readonly indexedFiles: number;
+  readonly active: boolean;
+}
+
 interface SymbolHit { name; kind; path; line; container?; exported }
 interface ReferenceHit { path; line; text; isDefinition }
 interface CallerHit { callerName; callerKind; path; line; callLine; callText }
@@ -38,50 +61,65 @@ interface FileNode { path; exports: ExportEntry[]; imports: string[] }
 
 - Lists files with the same rules as `glob` (`.gitignore`), skips sensitive files, files over 1 MB, and
   stops at 5 000 files. Groups files by the expert that owns their extension.
+- `languageStatuses()`: reports all registered language plugins, their source, active/standby state, and file count.
 - `findSymbols(query, exact, limit = 50)`: asks every expert and merges.
 - `findReferences(name, inFile?, limit = 200)`: the first expert that finds the definition answers.
 - `findCallers(name, inFile?, limit = 50)`: traces invocation sites and resolves enclosing caller scope (class, method, function).
-- `impactAnalysis(target)`: computes blast radius, direct dependents, caller sites, risk classification (low/medium/high), and automatically discovers affected test suites (`*.test.ts`, `test_*.py`, `*Test.java`).
+- `impactAnalysis(target)`: computes blast radius, direct dependents, caller sites, risk classification (low/medium/high), and automatically discovers affected test suites (`*.test.ts`, `test_*.py`, `*Test.java`, `*_test.go`, `*_test.rs`).
 - `astQuery(options)`: structural query across indexed ASTs filtering by symbol kind, visibility, container, and wildcard patterns.
 - `repoMap(dir)`: file nodes; unchanged files (same content hash) come from the cache in
   `.garuda/index/code-graph.json` (versioned). The cache is rewritten after each map.
-- Experts load on first use (`DEFAULT_EXPERTS` are factories), so the index costs nothing at startup.
+- Experts load lazily on first use, so the index costs nothing at startup.
 
-## Language Experts
+## Built-in Language Plugins
 
-### TypeScript / JavaScript expert (`typescript.ts`)
-
-- Uses the TypeScript 6 language service. TypeScript 6 is the last compiler written in JavaScript, so it
-  fits in the single binary; TypeScript 7 is a native binary. The package alias is `ts6`, loaded with
-  `import()` (N3).
+### TypeScript / JavaScript (`typescript.ts`)
+- Uses the TypeScript 6 language service (`ts6` package alias).
 - Extensions: `.ts .tsx .mts .cts .js .jsx .mjs .cjs`.
-- Compiler options: the project's `tsconfig.json` when it exists (for `paths` and `baseUrl`), then `allowJs`,
-  no emit and no default library (the binary has no `lib.d.ts`; navigation does not need it).
-- `findReferences` follows imports, re-exports and renames, which grep cannot.
+- Follows imports, re-exports, and renames across files.
 
-### Python expert (`python.ts` — 0.15)
-
-- Pure TypeScript/JavaScript AST parser for Python source code.
+### Python (`python.ts`)
+- Pure AST parser for Python source code.
 - Extensions: `.py`.
-- Extracts `import`, `from ... import`, functions, async functions, classes, methods, constructors, variables, and constants.
-- Respects `__all__` export manifests and Python private naming conventions (`_single_underscore`).
-- Tracks class nesting and container scopes.
+- Extracts imports, functions, async functions, classes, methods, constructors, variables, and constants.
+- Respects `__all__` export manifests and private naming conventions (`_foo`).
 
-### Java expert (`java.ts` — 0.15)
-
-- Pure TypeScript/JavaScript AST parser for Java source code.
+### Java (`java.ts`)
+- Pure AST parser for Java source code.
 - Extensions: `.java`.
-- Extracts packages, imports (including static imports), classes, interfaces, records, enums, methods, constructors, and fields.
-- Tracks brace nesting depth to accurately associate member methods and fields with their enclosing class/record container.
+- Extracts packages, imports, classes, interfaces, records, enums, methods, constructors, and fields.
+- Tracks brace nesting depth for container resolution.
+
+### Go (`plugins/go.ts` — 0.16)
+- Pure AST parser for Go source code.
+- Extensions: `.go`.
+- Extracts packages, imports (single and block `import ( ... )`), structs, interfaces, type aliases.
+- Extracts functions and receiver methods (`func (r *Receiver) Method(...)`), setting receiver type as container.
+- Determines export status by capitalized identifier convention (`[A-Z]`).
+
+### Rust (`plugins/rust.ts` — 0.16)
+- Pure AST parser for Rust source code.
+- Extensions: `.rs`.
+- Extracts modules (`mod`), imports (`use`), structs, enums, traits, type aliases, free functions, and macros (`macro_rules!`).
+- Tracks `impl [Trait for] Type { ... }` blocks with brace depth stack to associate methods with their container type.
+- Identifies `pub` visibility for export status.
+
+## Plugin Discovery & Security (`plugins.ts`)
+
+- **Built-in Plugins**: Always available without file reads.
+- **User Plugins**: Loaded from `~/.garuda/languages/<name>.js`. Run under the user's trust.
+- **Project Plugins**: Loaded from `<root>/.garuda/languages/<name>.js`.
+  - Must be explicitly approved in `~/.garuda/trust.json` with a matching SHA-256 hash.
+  - Unapproved or modified project plugins are rejected with a warning to prevent arbitrary code execution from untrusted git checkouts.
 
 ## Use
 
 | Mode (`codeIndex` in settings) | Model tools | User commands |
 | --- | --- | --- |
-| `off` (default) | none | `/where`, `/defs`, `/refs`, `/callers`, `/impact`, `/map` |
+| `off` (default) | none | `/where`, `/defs`, `/refs`, `/callers`, `/impact`, `/map`, `/languages` |
 | `lookup` | `find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query` | same |
 | `all` | also `repo_map` | same |
 
 ## Tests
 
-`test/knowledge.experts.test.ts`, `test/codeIndex.test.ts`, `test/tools.test.ts`.
+`test/knowledge.plugins.test.ts`, `test/knowledge.experts.test.ts`, `test/codeIndex.test.ts`, `test/tools.test.ts`.

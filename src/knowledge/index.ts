@@ -1,17 +1,24 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
+import { TrustStore } from "../mcp/trust.js";
 import { isSensitive } from "../permissions/sensitive.js";
 import { listFiles } from "../tools/files.js";
 import { createJavaExpert } from "./java.js";
+import { createGoExpert } from "./plugins/go.js";
+import { createRustExpert } from "./plugins/rust.js";
+import { discoverPlugins } from "./plugins.js";
 import { createPythonExpert } from "./python.js";
 import type {
   AstQueryOptions,
   CallerHit,
   CallerResult,
+  ExpertFactory,
   FileNode,
   ImpactResult,
   LanguageExpert,
+  LanguagePlugin,
+  LanguageStatus,
   ReferenceHit,
   SymbolHit,
 } from "./types.js";
@@ -21,8 +28,11 @@ export type {
   AstQueryOptions,
   CallerHit,
   CallerResult,
+  ExpertFactory,
   FileNode,
   ImpactResult,
+  LanguagePlugin,
+  LanguageStatus,
   ReferenceHit,
   SymbolHit,
 } from "./types.js";
@@ -32,14 +42,20 @@ const GRAPH_VERSION = 1;
 const MAX_FILES = 5_000;
 const MAX_FILE_BYTES = 1024 * 1024;
 
-type ExpertFactory = (root: string) => Promise<LanguageExpert>;
-
 /** Experts that Garuda ships. Other languages add their own factory here. */
 export const DEFAULT_EXPERTS: readonly ExpertFactory[] = [
   createTypeScriptExpert,
   createPythonExpert,
   createJavaExpert,
+  createGoExpert,
+  createRustExpert,
 ];
+
+export interface KnowledgeIndexOptions {
+  readonly plugins?: readonly (LanguagePlugin | ExpertFactory)[];
+  readonly trust?: TrustStore;
+  readonly home?: string;
+}
 
 interface GraphCache {
   version: number;
@@ -53,12 +69,40 @@ interface GraphCache {
  * sensitive files (F20) are never indexed.
  */
 export class KnowledgeIndex {
-  private experts: LanguageExpert[] | undefined;
+  private customPlugins?: readonly (LanguagePlugin | ExpertFactory)[];
+  private trust?: TrustStore;
+  private home?: string;
+  private pluginExperts: Array<{ plugin: LanguagePlugin; expert: LanguageExpert }> | undefined;
+  private discoveryWarnings: string[] = [];
 
   constructor(
     readonly root: string,
-    private readonly factories: readonly ExpertFactory[] = DEFAULT_EXPERTS,
-  ) {}
+    optionsOrPlugins?: readonly (LanguagePlugin | ExpertFactory)[] | KnowledgeIndexOptions,
+  ) {
+    if (Array.isArray(optionsOrPlugins)) {
+      this.customPlugins = optionsOrPlugins;
+    } else if (optionsOrPlugins !== undefined) {
+      const opts = optionsOrPlugins as KnowledgeIndexOptions;
+      if (opts.plugins !== undefined) this.customPlugins = opts.plugins;
+      if (opts.trust !== undefined) this.trust = opts.trust;
+      if (opts.home !== undefined) this.home = opts.home;
+    }
+  }
+
+  getWarnings(): readonly string[] {
+    return this.discoveryWarnings;
+  }
+
+  async languageStatuses(): Promise<LanguageStatus[]> {
+    const groups = await this.byExpert();
+    return groups.map(({ plugin, files }) => ({
+      id: plugin.id,
+      extensions: plugin.extensions,
+      source: plugin.source,
+      indexedFiles: files.length,
+      active: files.length > 0,
+    }));
+  }
 
   async findSymbols(query: string, exact = false, limit = 50): Promise<SymbolHit[]> {
     const hits: SymbolHit[] = [];
@@ -290,8 +334,11 @@ export class KnowledgeIndex {
           lowerFile.includes(`${lowerStem}.spec.`) ||
           lowerFile.includes(`test_${lowerStem}.`) ||
           lowerFile.includes(`${lowerStem}test.`) ||
+          lowerFile.includes(`${lowerStem}_test.`) ||
           lowerFile.endsWith(`/${lowerStem}.test.ts`) ||
-          lowerFile.endsWith(`/${lowerStem}.test.js`)
+          lowerFile.endsWith(`/${lowerStem}.test.js`) ||
+          lowerFile.endsWith(`/${lowerStem}_test.go`) ||
+          lowerFile.endsWith(`/${lowerStem}_test.rs`)
         ) {
           affectedTestsSet.add(file);
         }
@@ -388,11 +435,60 @@ export class KnowledgeIndex {
     return nodes.sort((a, b) => a.path.localeCompare(b.path));
   }
 
+  private async ensurePlugins(): Promise<
+    Array<{ plugin: LanguagePlugin; expert: LanguageExpert }>
+  > {
+    if (this.pluginExperts) return this.pluginExperts;
+
+    let plugins: LanguagePlugin[];
+    if (this.customPlugins) {
+      plugins = [];
+      for (let i = 0; i < this.customPlugins.length; i++) {
+        const item = this.customPlugins[i];
+        if (typeof item === "function") {
+          const sample = await item(this.root);
+          plugins.push({
+            id: sample.id || `expert-${i}`,
+            extensions: sample.extensions,
+            source: "built-in",
+            factory: () => sample,
+          });
+        } else if (item) {
+          plugins.push(item);
+        }
+      }
+    } else {
+      const trust = this.trust ?? (await TrustStore.open(this.home));
+      const discovered = await discoverPlugins({
+        root: this.root,
+        home: this.home,
+        trust,
+        includeBuiltins: true,
+      });
+      this.discoveryWarnings = discovered.warnings;
+      plugins = discovered.plugins;
+    }
+
+    const pairs: Array<{ plugin: LanguagePlugin; expert: LanguageExpert }> = [];
+    for (const plugin of plugins) {
+      const expert = await plugin.factory(this.root);
+      pairs.push({ plugin, expert });
+    }
+    this.pluginExperts = pairs;
+    return pairs;
+  }
+
   /** Indexable files, grouped by the expert that handles their extension. */
-  private async byExpert(): Promise<Array<{ expert: LanguageExpert; files: string[] }>> {
-    this.experts ??= await Promise.all(this.factories.map((make) => make(this.root)));
+  private async byExpert(): Promise<
+    Array<{ plugin: LanguagePlugin; expert: LanguageExpert; files: string[] }>
+  > {
+    const pairs = await this.ensurePlugins();
     const all = await listFiles(this.root, "**/*", this.root);
-    const groups = this.experts.map((expert) => ({ expert, files: [] as string[] }));
+    const groups = pairs.map(({ plugin, expert }) => ({
+      plugin,
+      expert,
+      files: [] as string[],
+    }));
     let count = 0;
     for (const absolute of all.sort()) {
       const path = absolute
@@ -400,7 +496,8 @@ export class KnowledgeIndex {
         .split("\\")
         .join("/");
       if (path.startsWith(".garuda/") || isSensitive(path)) continue;
-      const group = groups.find((g) => g.expert.extensions.includes(extname(path)));
+      const ext = extname(path);
+      const group = groups.find((g) => g.expert.extensions.includes(ext));
       if (group === undefined) continue;
       const info = await stat(absolute).catch(() => undefined);
       if (info === undefined || info.size > MAX_FILE_BYTES) continue;
@@ -436,6 +533,8 @@ function isTestFile(filePath: string): boolean {
     lower.includes(".spec.") ||
     lower.endsWith("test.java") ||
     lower.endsWith("tests.java") ||
+    lower.endsWith("_test.go") ||
+    lower.endsWith("_test.rs") ||
     lower.startsWith("test_") ||
     lower.includes("/test_")
   );
