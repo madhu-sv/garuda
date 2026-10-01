@@ -130,6 +130,8 @@ describe.runIf(sandboxed && curl)("network allowlist in the runtime (0.13)", () 
     expect(first.prompt).toContain("Commands in the sandbox can reach these hosts");
     expect(first.prompt).toContain("npm: registry.npmjs.org");
     expect(first.prompt).toContain("Do not use outside_sandbox for them");
+    // Live test 2: for an unlisted host the model still went outside; the note covers it now.
+    expect(first.prompt).toContain("For any other host, also run the command in the sandbox");
     expect(first.result).toContain("403");
     expect(first.result).toMatch(
       /Garuda's network allowlist blocked other\.test:80: The user denied/,

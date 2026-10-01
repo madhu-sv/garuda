@@ -16,7 +16,8 @@ export function networkNote(entries: readonly string[]): string {
   return [
     "Commands in the sandbox can reach these hosts through Garuda's network proxy:",
     ...describeAllowlist(entries).map((line) => `  ${line}`),
-    "Run commands that need them in the sandbox, as usual (installs, builds, `npm view` and the like). Do not use outside_sandbox for them. Other hosts ask the user.",
+    "Run commands that need them in the sandbox, as usual (installs, builds, `npm view` and the like). Do not use outside_sandbox for them.",
+    "For any other host, also run the command in the sandbox: Garuda asks the user for that host, and the result says if it was blocked. Use outside_sandbox only when the sandbox blocks something else (a write outside the project).",
   ].join("\n");
 }
 

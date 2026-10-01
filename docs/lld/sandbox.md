@@ -117,7 +117,8 @@ deny-and-continue or a question); then the host is resolved and every address mu
 (`checkAddress`); the connection goes to the checked address (no rebinding). A refusal is `403` with the
 reason in the body; `takeBlocked()` gives the blocked hosts to the bash tool, which adds a note for the
 model. The proxy does not decrypt TLS. When the proxy starts, the runtime adds a note to the first prompt
-(`networkNote`) that names the hosts and asks the model to run those commands in the sandbox (live test:
+(`networkNote`) that names the hosts and asks the model to run those commands, and commands for other
+hosts (the proxy asks the user), in the sandbox (live test:
 without it the model asked for `outside_sandbox` at once, because the tool text says "no network").
 
 ## Selection (`index.ts`)
