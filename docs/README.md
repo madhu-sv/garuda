@@ -36,4 +36,4 @@ Low-level design documents:
 | Formatters (0.10) | `src/format/`, `afterWrite` in `src/tools/types.ts` | [format.md](lld/format.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
-The code, the tests and the commits use the same IDs. The documents describe version 0.14.0.
+The code, the tests and the commits use the same IDs. The documents describe version 0.15.0.

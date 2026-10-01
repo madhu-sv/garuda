@@ -36,7 +36,7 @@ permission engine and the sandbox, as for a typed prompt.
 
 ## Name clashes
 
-1. A built-in name (`/help`, `/new`, `/exit`, and since 0.6 `/sessions`, `/models`, `/export`, `/diff`, since 0.7 `/schedule`, `/jobs`, since 0.8 `/compact`, and since 0.9 `/details`, `/thinking` …)
+1. A built-in name (`/help`, `/new`, `/exit`, since 0.6 `/sessions`, `/models`, `/export`, `/diff`, since 0.7 `/schedule`, `/jobs`, since 0.8 `/compact`, since 0.9 `/details`, `/thinking`, and since 0.15 `/defs`, `/callers`, `/impact` …)
    always wins; a file with that name is skipped.
 2. A user command wins over a project command with the same name: a repository cannot replace a command
    that you trust.
