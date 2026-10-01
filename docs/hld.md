@@ -328,10 +328,10 @@ the changes directly.
 | Skills (0.5) | `~/.garuda/skills`, `~/.claude/skills`, `.garuda/skills`, `.claude/skills` | The `skill` tool and `/name`. |
 | Custom agents (0.5) | `~/.garuda/agents`, `~/.claude/agents`, `.garuda/agents`, `.claude/agents` | The `agent` tool and `/agents`. |
 | Custom slash commands (0.4) | `~/.garuda/commands`, `.garuda/commands` | `/name` prompts. |
-| Code index | `.garuda/settings.json` (`codeIndex`) | `find_symbol`, `find_references`, `repo_map`. |
+| Code index | `.garuda/settings.json` (`codeIndex`) | `find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`, `repo_map`. |
 | LSP diagnostics | `.garuda/settings.json` (`lsp`), `--lsp`, `~/.garuda/lsp.json` | Language server errors in edit results. |
 | Formatters (0.10) | `.garuda/settings.json` (`formatters`) | The project's formatter after each edit; off by default. |
-| Language experts | `src/knowledge/` (`LanguageExpert`) | Code index support for a language. |
+| Language experts | `src/knowledge/` (`LanguageExpert`) | Code index AST support for languages (TypeScript/JavaScript, Python, Java). |
 | Executors | `src/sandbox/` (`Executor`) | Another isolation technology. |
 | Session stores | `src/session/` (`SessionStore`) | Another place for sessions. |
 

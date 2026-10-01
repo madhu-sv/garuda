@@ -1,6 +1,6 @@
 {
   "name": "garuda",
-  "version": "0.14.0-dev",
+  "version": "0.15.0-dev",
   "description": "Garuda: a terminal coding agent.",
   "type": "module",
   "private": true,

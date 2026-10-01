@@ -36,10 +36,13 @@ describe("tool registry", () => {
     for (const spec of specs) expect(spec.inputSchema).toMatchObject({ type: "object" });
     const readOnly = defaultTools({ codeIndex: "all" }).filter((t) => t.readOnly);
     expect(readOnly.map((t) => t.name).sort()).toEqual([
+      "ast_query",
+      "find_callers",
       "find_references",
       "find_symbol",
       "glob",
       "grep",
+      "impact_analysis",
       "process_manager",
       "read_file",
       "repo_map",

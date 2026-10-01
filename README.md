@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.14.0.
+Garuda is a terminal coding agent. This is version 0.15.0.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -26,7 +26,8 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.12: benchmark your repo (eval tasks from the repo's own git history), output-limit recovery | Done |
 | 0.13: network allowlist for commands (W6): presets or hosts, through Garuda's proxy, off by default | Done |
 | 0.14: dynamic sandbox probe, core modularization, background daemons (W3), interactive patch staging (W4) | Done |
-| 0.15: team policy and audit log (W5) | Planned |
+| 0.15: universal multi-language AST & code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done |
+| 0.16: team policy and audit log (W5) | Planned |
 
 ## Use
 
@@ -397,17 +398,16 @@ load on first use, not at startup.
 
 ## Code index (local knowledge)
 
-For JS/TS, Garuda keeps a local code index. It answers code questions on this machine, with no model call:
+Garuda keeps a local code index across TypeScript/JavaScript, Python, and Java (0.15).
+It answers code questions on this machine, with zero native C++ compilation dependencies and no model call:
 
 - Tools for the agent (read-only, no approval), chosen with `"codeIndex"` in `.garuda/settings.json`:
-  `"off"` (default), `"lookup"` (`find_symbol`, `find_references`) or `"all"` (also `repo_map`).
-  The default is off because an A/B eval (hard suite, 3 runs per arm) showed the full set cost about
-  20% more with no fewer steps. `find_references` did help on "who uses X" tasks.
-- Chat commands for you: `/where X`, `/refs X`, `/map [folder]`.
+  `"off"` (default), `"lookup"` (`find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`) or `"all"` (also `repo_map`).
+  `find_callers` traces structural invocation hierarchies across languages; `impact_analysis` computes blast radius, dependents, and discovers affected test suites; `ast_query` filters symbols by kind, container, and wildcards.
+- Chat commands for you: `/where X` (or `/defs X`), `/refs X`, `/callers X`, `/impact X`, `/map [folder]`.
 - The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
-  References come from the TypeScript 6 language service, which loads on first use.
+  Pure AST parsers (`src/knowledge/python.ts`, `src/knowledge/java.ts`, `src/knowledge/typescript.ts`) run in-process and preserve single-binary distribution.
 - Files follow `.gitignore`. Sensitive files are never indexed.
-- Other languages come later, each with its own expert behind the `LanguageExpert` interface (`src/knowledge/`).
 
 ## Sessions, limits and context
 

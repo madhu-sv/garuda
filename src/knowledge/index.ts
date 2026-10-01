@@ -3,10 +3,29 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 import { isSensitive } from "../permissions/sensitive.js";
 import { listFiles } from "../tools/files.js";
-import type { FileNode, LanguageExpert, ReferenceHit, SymbolHit } from "./types.js";
+import { createJavaExpert } from "./java.js";
+import { createPythonExpert } from "./python.js";
+import type {
+  AstQueryOptions,
+  CallerHit,
+  CallerResult,
+  FileNode,
+  ImpactResult,
+  LanguageExpert,
+  ReferenceHit,
+  SymbolHit,
+} from "./types.js";
 import { createTypeScriptExpert } from "./typescript.js";
 
-export type { FileNode, ReferenceHit, SymbolHit } from "./types.js";
+export type {
+  AstQueryOptions,
+  CallerHit,
+  CallerResult,
+  FileNode,
+  ImpactResult,
+  ReferenceHit,
+  SymbolHit,
+} from "./types.js";
 
 export const GRAPH_FILE = ".garuda/index/code-graph.json";
 const GRAPH_VERSION = 1;
@@ -16,7 +35,11 @@ const MAX_FILE_BYTES = 1024 * 1024;
 type ExpertFactory = (root: string) => Promise<LanguageExpert>;
 
 /** Experts that Garuda ships. Other languages add their own factory here. */
-export const DEFAULT_EXPERTS: readonly ExpertFactory[] = [createTypeScriptExpert];
+export const DEFAULT_EXPERTS: readonly ExpertFactory[] = [
+  createTypeScriptExpert,
+  createPythonExpert,
+  createJavaExpert,
+];
 
 interface GraphCache {
   version: number;
@@ -61,6 +84,288 @@ export class KnowledgeIndex {
       }
     }
     return { references: [], candidates: [] };
+  }
+
+  async findCallers(name: string, inFile?: string, limit = 50): Promise<CallerResult> {
+    const { definition, references, candidates } = await this.findReferences(
+      name,
+      inFile,
+      limit * 4,
+    );
+    if (definition === undefined) {
+      return { callers: [], candidates };
+    }
+
+    const callSites = references.filter((r) => !r.isDefinition);
+    if (callSites.length === 0) {
+      return { definition, callers: [], candidates };
+    }
+
+    const sitesByFile = new Map<string, ReferenceHit[]>();
+    for (const site of callSites) {
+      const list = sitesByFile.get(site.path) ?? [];
+      list.push(site);
+      sitesByFile.set(site.path, list);
+    }
+
+    const byExpert = await this.byExpert();
+    const callers: CallerHit[] = [];
+
+    for (const [filePath, sites] of sitesByFile.entries()) {
+      const expertEntry = byExpert.find((e) => e.files.includes(filePath));
+      const fileSymbols = expertEntry
+        ? expertEntry.expert.findSymbols([filePath], "", false, 500)
+        : [];
+
+      const callableSymbols = fileSymbols.filter(
+        (s) =>
+          s.kind === "function" ||
+          s.kind === "method" ||
+          s.kind === "constructor" ||
+          s.kind === "class",
+      );
+
+      for (const site of sites) {
+        const enclosing = callableSymbols
+          .filter((s) => s.line <= site.line)
+          .sort((a, b) => b.line - a.line)[0];
+
+        const callerName = enclosing
+          ? enclosing.container
+            ? `${enclosing.container}.${enclosing.name}`
+            : enclosing.name
+          : "<module>";
+        const callerKind = enclosing ? enclosing.kind : "module";
+        const line = enclosing ? enclosing.line : 1;
+
+        callers.push({
+          callerName,
+          callerKind,
+          path: site.path,
+          line,
+          callLine: site.line,
+          callText: site.text,
+        });
+
+        if (callers.length >= limit) break;
+      }
+      if (callers.length >= limit) break;
+    }
+
+    return { definition, callers, candidates };
+  }
+
+  async impactAnalysis(target: string): Promise<ImpactResult> {
+    const cleanTarget = target.trim().replace(/^\.\//, "");
+    const byExpert = await this.byExpert();
+    const allFiles = byExpert.flatMap((e) => e.files);
+
+    let targetKind: "file" | "symbol" = "file";
+    let resolvedPath: string | undefined;
+
+    // 1. Try matching as file path
+    const fileMatch = allFiles.find((f) => f === cleanTarget || f.endsWith(`/${cleanTarget}`));
+
+    if (fileMatch) {
+      targetKind = "file";
+      resolvedPath = fileMatch;
+    } else {
+      // 2. Try matching as symbol
+      const symbols = await this.findSymbols(cleanTarget, true, 20);
+      if (symbols.length > 0) {
+        targetKind = "symbol";
+        resolvedPath = symbols[0]?.path;
+      } else {
+        // Try substring match on file path
+        const partialFile = allFiles.find((f) => f.includes(cleanTarget));
+        if (partialFile) {
+          targetKind = "file";
+          resolvedPath = partialFile;
+        }
+      }
+    }
+
+    if (!resolvedPath && targetKind === "symbol") {
+      return {
+        target,
+        targetKind: "symbol",
+        definitions: [],
+        dependentFiles: [],
+        callers: [],
+        affectedTests: [],
+        riskLevel: "low",
+        summary: `Target "${target}" was not found in the indexed codebase.`,
+      };
+    }
+
+    // 2. Definitions
+    let definitions: SymbolHit[] = [];
+    if (targetKind === "file" && resolvedPath !== undefined) {
+      const targetFilePath = resolvedPath;
+      const expertEntry = byExpert.find((e) => e.files.includes(targetFilePath));
+      definitions = expertEntry
+        ? expertEntry.expert.findSymbols([targetFilePath], "", false, 500)
+        : [];
+    } else {
+      definitions = await this.findSymbols(cleanTarget, true, 20);
+    }
+
+    // 3. Dependent Files & Callers
+    const dependentFilesSet = new Set<string>();
+    const callers: CallerHit[] = [];
+
+    if (targetKind === "symbol") {
+      const { references } = await this.findReferences(cleanTarget, resolvedPath, 200);
+      for (const ref of references) {
+        if (!ref.isDefinition && ref.path !== resolvedPath) {
+          dependentFilesSet.add(ref.path);
+        }
+      }
+      const callerRes = await this.findCallers(cleanTarget, resolvedPath, 50);
+      callers.push(...callerRes.callers);
+    } else if (resolvedPath !== undefined) {
+      const targetFilePath = resolvedPath;
+      // Find files importing this file directly
+      const nodes = await this.repoMap();
+      const baseNameWithoutExt = targetFilePath
+        .slice(targetFilePath.lastIndexOf("/") + 1)
+        .replace(/\.[^/.]+$/, "");
+
+      for (const node of nodes) {
+        if (node.path === targetFilePath) continue;
+        const importsTarget = node.imports.some(
+          (imp) =>
+            imp.includes(targetFilePath) ||
+            imp.includes(baseNameWithoutExt) ||
+            imp.endsWith(`/${baseNameWithoutExt}`),
+        );
+        if (importsTarget) {
+          dependentFilesSet.add(node.path);
+        }
+      }
+
+      // Check references to exported symbols of this file
+      const exportedSymbols = definitions.filter((s) => s.exported);
+      for (const sym of exportedSymbols.slice(0, 10)) {
+        const { references } = await this.findReferences(sym.name, targetFilePath, 100);
+        for (const ref of references) {
+          if (!ref.isDefinition && ref.path !== targetFilePath) {
+            dependentFilesSet.add(ref.path);
+          }
+        }
+        if (sym.kind === "function" || sym.kind === "method" || sym.kind === "class") {
+          const symCallers = await this.findCallers(sym.name, targetFilePath, 10);
+          for (const c of symCallers.callers) {
+            if (
+              !callers.some(
+                (existing) => existing.path === c.path && existing.callLine === c.callLine,
+              )
+            ) {
+              callers.push(c);
+            }
+          }
+        }
+      }
+    }
+
+    const dependentFiles = [...dependentFilesSet].sort();
+
+    // 4. Affected Tests Discovery
+    const affectedTestsSet = new Set<string>();
+    for (const dep of dependentFiles) {
+      if (isTestFile(dep)) {
+        affectedTestsSet.add(dep);
+      }
+    }
+
+    if (resolvedPath) {
+      const stem = resolvedPath.slice(resolvedPath.lastIndexOf("/") + 1).replace(/\.[^/.]+$/, "");
+
+      for (const file of allFiles) {
+        if (!isTestFile(file)) continue;
+        const lowerFile = file.toLowerCase();
+        const lowerStem = stem.toLowerCase();
+        if (
+          lowerFile.includes(`${lowerStem}.test.`) ||
+          lowerFile.includes(`${lowerStem}.spec.`) ||
+          lowerFile.includes(`test_${lowerStem}.`) ||
+          lowerFile.includes(`${lowerStem}test.`) ||
+          lowerFile.endsWith(`/${lowerStem}.test.ts`) ||
+          lowerFile.endsWith(`/${lowerStem}.test.js`)
+        ) {
+          affectedTestsSet.add(file);
+        }
+      }
+    }
+    const affectedTests = [...affectedTestsSet].sort();
+
+    // 5. Blast Radius & Risk Assessment
+    const totalImpact = dependentFiles.length + callers.length;
+    const riskLevel: "low" | "medium" | "high" =
+      totalImpact > 10 || dependentFiles.length > 5
+        ? "high"
+        : totalImpact > 3 || dependentFiles.length > 1
+          ? "medium"
+          : "low";
+
+    const summaryParts: string[] = [
+      `Target "${target}" (${targetKind}${resolvedPath ? `: ${resolvedPath}` : ""}) has ${riskLevel.toUpperCase()} blast radius.`,
+      `Direct dependents: ${dependentFiles.length} file(s). Known caller sites: ${callers.length}.`,
+    ];
+    if (affectedTests.length > 0) {
+      summaryParts.push(`Recommended test suite: ${affectedTests.join(", ")}`);
+    } else {
+      summaryParts.push("No direct test files found; verify impacted callers.");
+    }
+
+    return {
+      target,
+      targetKind,
+      ...(resolvedPath ? { resolvedPath } : {}),
+      definitions,
+      dependentFiles,
+      callers,
+      affectedTests,
+      riskLevel,
+      summary: summaryParts.join("\n"),
+    };
+  }
+
+  async astQuery(options: AstQueryOptions): Promise<SymbolHit[]> {
+    const byExpert = await this.byExpert();
+    const hits: SymbolHit[] = [];
+    const limit = options.limit ?? 50;
+
+    const prefix = options.pathPrefix;
+    for (const { expert, files } of byExpert) {
+      const targetFiles = prefix ? files.filter((f) => f.startsWith(prefix)) : files;
+
+      if (targetFiles.length === 0) continue;
+
+      const expertSymbols = expert.findSymbols(targetFiles, "", false, limit * 4);
+
+      for (const sym of expertSymbols) {
+        if (options.kind !== undefined && sym.kind.toLowerCase() !== options.kind.toLowerCase()) {
+          continue;
+        }
+        if (options.exported !== undefined && sym.exported !== options.exported) {
+          continue;
+        }
+        if (options.container !== undefined) {
+          if (!sym.container?.toLowerCase().includes(options.container.toLowerCase())) {
+            continue;
+          }
+        }
+        if (options.namePattern !== undefined) {
+          if (!matchPattern(sym.name, options.namePattern)) {
+            continue;
+          }
+        }
+        hits.push(sym);
+        if (hits.length >= limit) return hits;
+      }
+    }
+    return hits;
   }
 
   /** File nodes under `dir` (relative, default: the root). Unchanged files come from the cache. */
@@ -120,4 +425,27 @@ export class KnowledgeIndex {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, JSON.stringify(cache));
   }
+}
+
+function isTestFile(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return (
+    lower.includes("/test/") ||
+    lower.includes("/tests/") ||
+    lower.includes(".test.") ||
+    lower.includes(".spec.") ||
+    lower.endsWith("test.java") ||
+    lower.endsWith("tests.java") ||
+    lower.startsWith("test_") ||
+    lower.includes("/test_")
+  );
+}
+
+function matchPattern(name: string, pattern: string): boolean {
+  if (pattern.includes("*")) {
+    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+    const regex = new RegExp(`^${escaped}$`, "i");
+    return regex.test(name);
+  }
+  return name.toLowerCase().includes(pattern.toLowerCase());
 }

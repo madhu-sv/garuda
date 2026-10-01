@@ -24,6 +24,48 @@ export interface ReferenceHit {
   isDefinition: boolean;
 }
 
+export interface CallerHit {
+  callerName: string;
+  callerKind: string;
+  path: string;
+  line: number;
+  callLine: number;
+  callText: string;
+}
+
+export interface CallerResult {
+  definition?: SymbolHit | undefined;
+  callers: CallerHit[];
+  candidates: SymbolHit[];
+}
+
+export interface ImpactResult {
+  target: string;
+  targetKind: "file" | "symbol";
+  resolvedPath?: string | undefined;
+  definitions: SymbolHit[];
+  dependentFiles: string[];
+  callers: CallerHit[];
+  affectedTests: string[];
+  riskLevel: "low" | "medium" | "high";
+  summary: string;
+}
+
+export interface AstQueryOptions {
+  /** Filter by symbol kind, e.g. "function", "class", "method", "interface", "record", "variable" */
+  kind?: string | undefined;
+  /** Only exported symbols (true) or non-exported (false) */
+  exported?: boolean | undefined;
+  /** Enclosing class/interface/container name */
+  container?: string | undefined;
+  /** Substring or glob pattern (with * wildcards) for the symbol name */
+  namePattern?: string | undefined;
+  /** Limit search to a specific directory or file path prefix */
+  pathPrefix?: string | undefined;
+  /** Max results (default: 50) */
+  limit?: number | undefined;
+}
+
 export interface ExportEntry {
   name: string;
   kind: string;

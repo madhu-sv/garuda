@@ -117,7 +117,7 @@ flowchart TB
 | Init | `src/init/` | `garuda init` and `/init`: read other agents' files (read only), write new Garuda files after one yes, offer `git init`, give the prompt of the init turn. |
 | Format | `src/format/` | The project's formatter after edits (0.10): detect it from config files and binaries; the runtime runs it in the sandbox. |
 | LSP | `src/lsp/` | Language servers in the sandbox: find, install, start; errors of a changed file after an edit. |
-| Knowledge | `src/knowledge/` | Local code index: symbols, references, a code graph. No model call. |
+| Knowledge | `src/knowledge/` | Local multi-language code index (TS/JS, Python, Java): symbols, references, call graph, blast radius & impact analysis, AST queries. No model call. |
 | MCP | `src/mcp/` | Start local MCP servers in the sandbox, connect to remote ones (Streamable HTTP, OAuth), consent and pinning, tool adapters, text cleaning. |
 | Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown; web search through the user's backend (0.5); the config of Claude's search (0.6). |
 | Net | `src/net/` | Address checks (public, loopback) shared by web fetch and model providers. |

@@ -2,6 +2,8 @@ import { modelFacts, type Runtime } from "../../app/runtime.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { totalTokens, WEB_SEARCH_USD } from "../../model/pricing.js";
 import {
+  callersText,
+  findCallersTool,
   findReferencesTool,
   findSymbolText,
   findSymbolTool,
@@ -9,6 +11,7 @@ import {
   repoMapText,
   repoMapTool,
 } from "../../tools/codeTools.js";
+import { impactAnalysisText, impactAnalysisTool } from "../../tools/impactAnalysis.js";
 import type { ToolContext } from "../../tools/types.js";
 import { colorDiff } from "../approver.js";
 import type { Renderer } from "../renderer.js";
@@ -32,8 +35,11 @@ export const HELP = [
   "  /schedule  make the last plan a job that runs later: /schedule [HH:MM], then garuda run <id>",
   "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel|delete <id>; /jobs cancel night",
   "  /where X   where symbol X is defined (code index, no model call)",
+  "  /defs X    alias of /where X (definitions of X)",
   "  /refs X    every use of symbol X (code index, no model call)",
-  "  /map [dir] what each JS/TS file exports and imports",
+  "  /callers X who calls symbol X (code index, no model call)",
+  "  /impact X  blast radius and affected tests for file or symbol X",
+  "  /map [dir] what each code file exports and imports",
   "  /mcp       MCP servers: state, sandbox, network and tool count; /mcp logout <server>",
   "  /hooks     the active hooks",
   "  /lsp       language servers for diagnostics; /lsp install <typescript|python|java>",
@@ -133,7 +139,14 @@ export async function runCommand(
     await jobsCommand(runtime, renderer, text.slice(command.length).trim());
   } else if (command === "/export") {
     await exportCommand(runtime, renderer, text.slice(command.length).trim());
-  } else if (command === "/where" || command === "/refs" || command === "/map") {
+  } else if (
+    command === "/where" ||
+    command === "/defs" ||
+    command === "/refs" ||
+    command === "/callers" ||
+    command === "/impact" ||
+    command === "/map"
+  ) {
     await lookup(runtime, renderer, command, text.slice(command.length).trim());
   } else if (command === "/hooks") {
     const lines = runtime.hookLines();
@@ -501,17 +514,21 @@ async function lookup(
   arg: string,
 ): Promise<void> {
   if (command !== "/map" && arg === "") {
-    renderer.warn(`Usage: ${command} <symbol name>`);
+    renderer.warn(`Usage: ${command} <symbol or file name>`);
     return;
   }
   // The code tools need only the index from the context.
   const context = { knowledge: runtime.knowledge } as ToolContext;
   try {
     let text: string;
-    if (command === "/where") {
+    if (command === "/where" || command === "/defs") {
       text = findSymbolText(await findSymbolTool.run({ name: arg, exact: true }, context));
     } else if (command === "/refs") {
       text = referencesText(await findReferencesTool.run({ name: arg }, context));
+    } else if (command === "/callers") {
+      text = callersText(await findCallersTool.run({ name: arg }, context));
+    } else if (command === "/impact") {
+      text = impactAnalysisText(await impactAnalysisTool.run({ target: arg }, context));
     } else {
       text = repoMapText(await repoMapTool.run({ path: arg }, context));
     }

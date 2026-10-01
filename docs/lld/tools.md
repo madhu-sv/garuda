@@ -65,6 +65,9 @@ treats it as read-only.
 | `remember` | no | input | Appends one fact to `.garuda/memory.md` (max 8000 chars). The user approves each fact. Loads in the next session only (N2). |
 | `find_symbol` | yes | – | Code index: definitions (exact or fuzzy). Only when `codeIndex` is `lookup` or `all`. |
 | `find_references` | yes | – | Code index: every use, following imports. `lookup` or `all`. |
+| `find_callers` (0.15) | yes | – | Code index: invocation sites and enclosing caller scope (class, method, function). `lookup` or `all`. |
+| `impact_analysis` (0.15) | yes | target | Code index: blast radius, direct dependents, caller graph, risk level, and test suite discovery. `lookup` or `all`. |
+| `ast_query` (0.15) | yes | – | Code index: structural AST query filtering by kind, visibility, container, and wildcards. `lookup` or `all`. |
 | `repo_map` | yes | – | Code index: exports and imports per file; a folder summary above 30 files. `all` only. |
 | `web_fetch` | no | URL | See [web.md](web.md). Present unless `web.enabled` is false. |
 | `explore` | yes | – | A read-only subagent answers one question about the code. See [agents.md](agents.md). Only with `subagents.enabled: true` (off by default). |

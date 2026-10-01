@@ -1,11 +1,11 @@
 import { z } from "zod";
-import type { FileNode, ReferenceHit, SymbolHit } from "../knowledge/index.js";
+import type { CallerResult, FileNode, ReferenceHit, SymbolHit } from "../knowledge/index.js";
 import { joinWithinLimit } from "./limits.js";
 import type { Tool, ToolContext } from "./types.js";
 
 /**
- * Code tools backed by the local code index (JS/TS for now). They run on this machine,
- * need no approval, and understand imports and renames, so they are more exact than grep.
+ * Code tools backed by the local code index (JS/TS, Python, Java). They run on this machine,
+ * need no approval, and understand imports, symbols and references across languages.
  */
 
 function index(context: ToolContext) {
@@ -27,7 +27,7 @@ const findSymbolInput = z.object({
 
 export function findSymbolText(hits: SymbolHit[]): string {
   if (hits.length === 0) {
-    return "No definition found. The index covers JS/TS files; try grep for other files.";
+    return "No definition found. The index covers JS/TS, Python and Java files; try grep for other files.";
   }
   return joinWithinLimit(hits.map(where)).text;
 }
@@ -35,7 +35,7 @@ export function findSymbolText(hits: SymbolHit[]): string {
 export const findSymbolTool: Tool<z.infer<typeof findSymbolInput>, SymbolHit[]> = {
   name: "find_symbol",
   description: [
-    "Find where a function, class, method, variable or type is defined (JS/TS files).",
+    "Find where a function, class, method, variable or type is defined (JS/TS, Python, Java).",
     "Returns path:line, kind and whether it is exported. Faster and more exact than grep for definitions.",
   ].join("\n"),
   inputSchema: findSymbolInput,
@@ -79,7 +79,7 @@ export function referencesText({ definition, references, candidates }: Reference
 export const findReferencesTool: Tool<z.infer<typeof findReferencesInput>, ReferencesOutput> = {
   name: "find_references",
   description: [
-    "Find every use of a symbol: its definition, imports, calls and re-exports (JS/TS files).",
+    "Find every use of a symbol: its definition, imports, calls and re-exports (JS/TS, Python, Java).",
     "It follows imports and aliases, so it does not match other symbols with the same text.",
     "Use it to see who calls a function, to plan a rename, or to find unused code.",
   ].join("\n"),
@@ -89,6 +89,61 @@ export const findReferencesTool: Tool<z.infer<typeof findReferencesInput>, Refer
     return index(context).findReferences(name, path?.replace(/^\.\//, ""), 200);
   },
   toText: referencesText,
+};
+
+const findCallersInput = z.object({
+  name: z
+    .string()
+    .min(1)
+    .describe("The function, method, or class name to find callers of, for example runAgent."),
+  path: z
+    .string()
+    .optional()
+    .describe(
+      "The file path where the symbol is defined, when multiple files declare the same symbol name.",
+    ),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Maximum number of callers to return (default: 50)."),
+});
+
+export function callersText({ definition, callers, candidates }: CallerResult): string {
+  if (definition === undefined) {
+    return "No definition with this name. Check the name with find_symbol.";
+  }
+  if (callers.length === 0) {
+    return `${definition.name} (${definition.path}:${definition.line}) has no callers found in the codebase.`;
+  }
+  const lines = callers.map(
+    (c) =>
+      `${c.path}:${c.callLine}  ${c.callerName} (${c.callerKind}) calls ${definition.name}  →  ${c.callText.trim()}`,
+  );
+  const head = `${definition.name} is defined at ${definition.path}:${definition.line} (${definition.kind}). ${callers.length} caller site(s):`;
+  const others =
+    candidates.length > 1
+      ? `\n[${candidates.length} definitions have this name; this is the first. Pass path to choose: ${candidates
+          .slice(1, 6)
+          .map((c) => `${c.path}:${c.line}`)
+          .join(", ")}]`
+      : "";
+  return `${head}\n${joinWithinLimit(lines).text}${others}`;
+}
+
+export const findCallersTool: Tool<z.infer<typeof findCallersInput>, CallerResult> = {
+  name: "find_callers",
+  description: [
+    "Find all functions, methods, classes, or modules that invoke/call a given symbol (JS/TS, Python, Java).",
+    "Traces call sites and resolves enclosing caller scope. Faster and more structural than grep for call hierarchies.",
+  ].join("\n"),
+  inputSchema: findCallersInput,
+  readOnly: true,
+  async run({ name, path, limit = 50 }, context) {
+    return index(context).findCallers(name, path?.replace(/^\.\//, ""), limit);
+  },
+  toText: callersText,
 };
 
 const repoMapInput = z.object({
@@ -108,7 +163,7 @@ export const REPO_MAP_FILE_LIMIT = 30;
  * tokens than it saves. The model can then call repo_map again for one folder.
  */
 export function repoMapText(nodes: FileNode[]): string {
-  if (nodes.length === 0) return "No JS/TS files here.";
+  if (nodes.length === 0) return "No indexed code files here.";
   if (nodes.length > REPO_MAP_FILE_LIMIT) return folderSummary(nodes);
   const lines = nodes.map((n) => {
     const exports = n.exports.map((e) => `${e.name} (${e.kind})`).join(", ") || "-";
@@ -137,7 +192,7 @@ function folderSummary(nodes: FileNode[]): string {
 export const repoMapTool: Tool<z.infer<typeof repoMapInput>, FileNode[]> = {
   name: "repo_map",
   description: [
-    "Show the structure of the code. For a folder of up to 30 JS/TS files: each file with its exports and imports.",
+    "Show the structure of the code. For a folder of up to 30 code files: each file with its exports and imports (JS/TS, Python, Java).",
     "For a larger scope: one line per folder with its exported names. Then call it again for one folder.",
     "Use it in an unknown project to see where things are without reading every file.",
   ].join("\n"),

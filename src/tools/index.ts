@@ -1,9 +1,10 @@
 import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
 import { bashTool } from "./bash.js";
-import { findReferencesTool, findSymbolTool, repoMapTool } from "./codeTools.js";
+import { findCallersTool, findReferencesTool, findSymbolTool, repoMapTool } from "./codeTools.js";
 import { editFileTool } from "./editFile.js";
 import { globTool } from "./glob.js";
 import { grepTool } from "./grep.js";
+import { astQueryTool, impactAnalysisTool } from "./impactAnalysis.js";
 import { processManagerTool } from "./processManager.js";
 import { readFileTool } from "./readFile.js";
 import { rememberTool } from "./remember.js";
@@ -12,7 +13,7 @@ import type { AnyTool } from "./types.js";
 import { createWebFetchTool, type WebFetchOptions } from "./webFetch.js";
 import { writeFileTool } from "./writeFile.js";
 
-export { processManagerTool };
+export { astQueryTool, findCallersTool, impactAnalysisTool, processManagerTool };
 
 /** The read-only tools for a subagent: file search and reads, and the code index when it is on. */
 export function readOnlyTools(codeIndex: CodeIndexMode = DEFAULT_CODE_INDEX_MODE): AnyTool[] {
@@ -20,7 +21,9 @@ export function readOnlyTools(codeIndex: CodeIndexMode = DEFAULT_CODE_INDEX_MODE
     readFileTool,
     globTool,
     grepTool,
-    ...(codeIndex === "off" ? [] : [findSymbolTool, findReferencesTool]),
+    ...(codeIndex === "off"
+      ? []
+      : [findSymbolTool, findReferencesTool, findCallersTool, impactAnalysisTool, astQueryTool]),
     ...(codeIndex === "all" ? [repoMapTool] : []),
   ];
 }
@@ -43,7 +46,9 @@ export function defaultTools({
     readFileTool,
     globTool,
     grepTool,
-    ...(codeIndex === "off" ? [] : [findSymbolTool, findReferencesTool]),
+    ...(codeIndex === "off"
+      ? []
+      : [findSymbolTool, findReferencesTool, findCallersTool, impactAnalysisTool, astQueryTool]),
     ...(codeIndex === "all" ? [repoMapTool] : []),
     writeFileTool,
     editFileTool,
