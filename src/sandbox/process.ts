@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { OutputCapture } from "./capture.js";
+import { DaemonManager } from "./daemon.js";
 import type {
   ExecOptions,
   ExecPolicy,
@@ -26,6 +27,8 @@ export interface Launch {
 export abstract class ProcessExecutor implements Executor {
   abstract readonly name: string;
   abstract readonly isolation: Isolation;
+  /** Manages background daemon processes (0.14). */
+  readonly daemons: DaemonManager = new DaemonManager(this);
   /** Process group ids of running commands. */
   private readonly running = new Set<number>();
 
@@ -33,6 +36,7 @@ export abstract class ProcessExecutor implements Executor {
   protected abstract launch(argv: string[], policy: ExecPolicy): Launch;
 
   shutdown(): void {
+    this.daemons.shutdown();
     for (const pid of this.running) signalGroup(pid, "SIGKILL");
     this.running.clear();
   }

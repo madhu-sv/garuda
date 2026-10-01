@@ -21,12 +21,28 @@ const input = z.object({
     .describe(
       "Run outside the sandbox, with network and writes anywhere. The user must approve. Use it only after the sandbox blocked the command.",
     ),
+  is_daemon: z
+    .boolean()
+    .optional()
+    .describe(
+      "Run in the background as a daemon process (0.14). Returns immediately with daemonId and pid. Use process_manager to inspect logs or stop it.",
+    ),
 });
 
 type Input = z.infer<typeof input>;
 
 /** The command result plus short notes for the model about how it used bash. */
-export type BashOutput = ExecResult & { hints: string[] };
+export type BashOutput =
+  | (ExecResult & { hints: string[]; daemon?: undefined })
+  | {
+      daemon: {
+        id: string;
+        pid?: number | undefined;
+        command: string;
+        status: "started" | "running";
+      };
+      hints: string[];
+    };
 
 /** Programs that only read files. A command made only of these should use the file tools. */
 const READERS = new Set([
@@ -121,22 +137,26 @@ export const bashTool: Tool<Input, BashOutput> = {
     "Do not pipe into tail or head: the pipe hides the exit code, and long output is cut already.",
     "When Garuda has an OS sandbox, commands run in it with no approval: no network (or only the hosts on the user's network allowlist), writes only in the working root and temp folders.",
     "Otherwise the user must approve each command.",
+    "To run long-running servers or background tasks, set is_daemon: true. Use process_manager to check logs or stop them.",
   ].join("\n"),
   inputSchema: input,
   readOnly: false,
   runsCommands: true,
 
   // The user approves, and rules match, the command that will really run.
-  async describe({ command, outside_sandbox }, { root, executor }) {
+  async describe({ command, outside_sandbox, is_daemon }, { root, executor }) {
     const run = stripRootCd(command, root).command;
     const outside = outside_sandbox === true && executor?.isolation !== "none";
     return {
       target: { kind: "command", command: run, ...(outside ? { outsideSandbox: true } : {}) },
-      preview: run,
+      preview: is_daemon === true ? `[daemon] ${run}` : run,
     };
   },
 
-  async run({ command, timeout_ms, outside_sandbox }, { executor, permissions, signal, root }) {
+  async run(
+    { command, timeout_ms, outside_sandbox, is_daemon },
+    { executor, permissions, signal, root },
+  ) {
     if (executor === undefined) throw new Error("No executor is configured, so bash cannot run.");
     const sandboxed = executor.isolation !== "none" && outside_sandbox !== true;
     const policy = permissions.execPolicy(timeout_ms ?? BASH_DEFAULT_TIMEOUT_MS, {
@@ -144,6 +164,24 @@ export const bashTool: Tool<Input, BashOutput> = {
     });
     const { command: run, stripped } = stripRootCd(command, root);
     permissions.takeNetworkBlocks?.();
+
+    if (is_daemon === true) {
+      if (executor.daemons === undefined) {
+        throw new Error("This executor does not support background daemon processes.");
+      }
+      const daemon = executor.daemons.spawn(run, policy);
+      const hints = commandHints(run, stripped);
+      return {
+        daemon: {
+          id: daemon.id,
+          pid: daemon.pid,
+          command: daemon.command,
+          status: "started",
+        },
+        hints,
+      };
+    }
+
     const result = await executor.run(run, policy, { signal });
     const hints = commandHints(run, stripped);
     const network = sandboxed ? networkHint(permissions.takeNetworkBlocks?.() ?? []) : undefined;
@@ -158,6 +196,18 @@ export const bashTool: Tool<Input, BashOutput> = {
 
   toText(result) {
     const lines: string[] = [];
+    if ("daemon" in result && result.daemon !== undefined) {
+      lines.push(
+        `Daemon process started in background: ${result.daemon.id}${result.daemon.pid !== undefined ? ` (pid: ${result.daemon.pid})` : ""}.`,
+      );
+      lines.push(`Command: ${result.daemon.command}`);
+      lines.push(
+        `Use process_manager with daemonId "${result.daemon.id}" to inspect logs, check status, or stop it.`,
+      );
+      for (const hint of result.hints) lines.push(`[Garuda: ${hint}]`);
+      return lines.join("\n");
+    }
+
     if (result.timedOut) lines.push("The command timed out and was killed.");
     else if (result.aborted) lines.push("The command was stopped by the user.");
     lines.push(

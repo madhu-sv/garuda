@@ -13,7 +13,7 @@ import {
   loadCommands,
   parseCommandLine,
 } from "../commands/custom.js";
-import { COMPACTION_DEFAULTS, type CompactionResult, compactNow } from "../context/compact.js";
+import { type CompactionResult, compactNow } from "../context/compact.js";
 import { buildSystemPrompt, loadInstructions, loadMemory } from "../context/instructions.js";
 import {
   detectFormatters,
@@ -52,21 +52,12 @@ import { neutralizeTags } from "../mcp/sanitize.js";
 import { TrustStore } from "../mcp/trust.js";
 import {
   aliasModel,
-  knownModels,
   lookupModel,
   type ModelInfo,
   type Price,
   responseCost,
 } from "../model/pricing.js";
-import {
-  changeThinking,
-  fitThinking,
-  type ThinkingCaps,
-  type ThinkingChoice,
-  thinkingRequest,
-  thinkingText,
-  withoutThinking,
-} from "../model/thinking.js";
+import { fitThinking } from "../model/thinking.js";
 import type {
   Message,
   ModelClient,
@@ -83,17 +74,10 @@ import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
 import { FileTracker } from "../session/fileTracker.js";
-import { cleanTitle, type SessionSummary, summariseSession } from "../session/list.js";
+import type { SessionSummary } from "../session/list.js";
 import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
-import {
-  addSnapshot,
-  addUserMessage,
-  createSession,
-  redoTurn,
-  type Session,
-  undoTurn,
-} from "../session/session.js";
+import { addUserMessage, createSession, type Session } from "../session/session.js";
 import { newSessionId, type SessionStore } from "../session/store.js";
 import { loadSkills, type Skill, skillConsent } from "../skills/load.js";
 import { createSkillTool, skillText } from "../skills/tool.js";
@@ -101,18 +85,16 @@ import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import type { FormatSource } from "../tools/types.js";
 import { createWebSearchTool } from "../tools/webSearch.js";
-import { filesText, undoQuestion } from "../undo/question.js";
-import {
-  type FileStat,
-  SLOW_SNAPSHOT_MS,
-  SnapshotError,
-  SnapshotStore,
-  storeDir,
-} from "../undo/snapshots.js";
+import { type FileStat, SnapshotStore, storeDir } from "../undo/snapshots.js";
 import { VERSION } from "../version.js";
 import type { ClaudeSearchConfig, SearchConfig } from "../web/search.js";
 import { attachMentions } from "./mentions.js";
+import { ModelState, modelFacts } from "./modelState.js";
 import { networkConsent, networkHash, networkNote, nodeBinary } from "./network.js";
+import { deleteSession, findSession, listSessions, renameSession } from "./sessionManager.js";
+import { SnapshotError, UndoCoordinator } from "./undoCoordinator.js";
+
+export { modelFacts };
 
 /** A formatter that runs longer than this is stopped (0.10). */
 const FORMAT_TIMEOUT_MS = 20_000;
@@ -244,18 +226,10 @@ export const USER_COMMAND_NOTE_CHARS = 10_000;
 
 export class Runtime {
   readonly root: string;
-  /** The main model: set at start, changed by /models (0.6). */
-  private currentModelId: string;
-  private currentLimits: RunLimits;
-  private currentPrice: Price | undefined;
-  /** What the main model offers for /thinking (0.9), and the user's choice. */
-  private currentThinkingCaps: ThinkingCaps | undefined;
-  private thinkingChoice: ThinkingChoice = {};
+  readonly modelState: ModelState;
+  readonly undoCoordinator: UndoCoordinator;
   /** The detected formatters (0.10), on first use. */
   private formatters: Formatter[] | undefined;
-  private maxTokens: number | undefined;
-  /** How /models turns a spec into a client (0.6). Absent: /models cannot switch. */
-  private readonly modelChoices: RuntimeOptions["models"];
   readonly executor: Executor;
   /** Set when "auto" found no OS sandbox. The CLI shows it once. */
   readonly executorNotice: string | undefined;
@@ -272,7 +246,6 @@ export class Runtime {
   private readonly store: SessionStore;
   private readonly tools: ToolRegistry;
   private readonly onEvent: ((event: AgentEvent) => void) | undefined;
-  private model: ModelClient | (() => Promise<ModelClient>);
   private current: Session | undefined;
   private readonly approver: Approver;
   private readonly settings: Settings;
@@ -363,9 +336,6 @@ export class Runtime {
     this.onNotice = options.onNotice;
     this.networkOptions = options.network ?? {};
     this.root = options.root;
-    this.currentModelId = options.modelId;
-    this.model = options.model;
-    this.modelChoices = options.models;
     this.claudeSearchConfig = settings.web?.enabled === false ? undefined : options.search?.claude;
     this.store = options.store;
     this.onEvent = options.onEvent;
@@ -381,11 +351,8 @@ export class Runtime {
       }),
     );
     const info = options.modelInfo ?? lookupModel(options.modelId);
-    this.maxTokens = options.maxTokens;
-    this.currentPrice = settings.price ?? info.price;
-    this.currentThinkingCaps = info.thinking;
     const start = settings.thinking;
-    this.thinkingChoice = fitThinking(
+    const initialThinking = fitThinking(
       {
         ...(start?.enabled === undefined ? {} : { enabled: start.enabled }),
         ...(start?.effort === undefined ? {} : { effort: start.effort }),
@@ -393,13 +360,29 @@ export class Runtime {
       },
       info.thinking,
     ).choice;
-    this.currentLimits = {
-      maxSteps: settings.maxSteps ?? DEFAULT_MAX_STEPS,
-      tokenBudget: settings.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
-      contextWindow: settings.contextWindow ?? info.contextWindow,
-    };
+    this.modelState = new ModelState({
+      modelId: options.modelId,
+      model: options.model,
+      limits: {
+        maxSteps: settings.maxSteps ?? DEFAULT_MAX_STEPS,
+        tokenBudget: settings.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
+        contextWindow: settings.contextWindow ?? info.contextWindow,
+      },
+      price: settings.price ?? info.price,
+      thinkingCaps: info.thinking,
+      maxTokens: options.maxTokens,
+      choices: options.models,
+      settings,
+    });
+    this.modelState.thinkingChoice = initialThinking;
     this.executor = choice.executor;
     this.executorNotice = choice.notice;
+    this.undoCoordinator = new UndoCoordinator(
+      this.snapshots,
+      this.approver,
+      this.executor.isolation,
+      this.onNotice,
+    );
     this.permissions = new PermissionEngine({
       root: options.root,
       settings,
@@ -414,7 +397,7 @@ export class Runtime {
     if (settings.subagents?.enabled === true) {
       const sub = options.subagentModel;
       let subClient: ModelClient | undefined;
-      const subPrice = sub === undefined ? this.currentPrice : sub.info.price;
+      const subPrice = sub === undefined ? this.price : sub.info.price;
       this.exploreModel = sub?.spec ?? options.modelId;
       // Without --subagent-model, explore keeps the start model: /models changes only the main one.
       const startModel = options.model;
@@ -435,7 +418,7 @@ export class Runtime {
                     subClient ??= await sub.model();
                     return subClient;
                   },
-            contextWindow: sub?.info.contextWindow ?? this.currentLimits.contextWindow,
+            contextWindow: sub?.info.contextWindow ?? this.limits.contextWindow,
             ...(subPrice === undefined ? {} : { price: subPrice }),
           },
           tools: new ToolRegistry(readOnlyTools(this.codeIndex)),
@@ -461,21 +444,20 @@ export class Runtime {
 
   /** The main model spec, as the session records it. */
   get modelId(): string {
-    return this.currentModelId;
+    return this.modelState.modelId;
   }
 
   get limits(): RunLimits {
-    return this.currentLimits;
+    return this.modelState.limits;
   }
 
   get price(): Price | undefined {
-    return this.currentPrice;
+    return this.modelState.price;
   }
 
   /** The main model client, loaded on first use (N3). */
   private async client(): Promise<ModelClient> {
-    if (typeof this.model === "function") this.model = await this.model();
-    return this.model;
+    return this.modelState.client();
   }
 
   static async create(options: RuntimeOptions): Promise<Runtime> {
@@ -887,13 +869,7 @@ export class Runtime {
 
   /** The sessions of this project for /sessions (0.6), newest first, at most `max`. */
   async listSessions(max = 20): Promise<{ sessions: SessionSummary[]; total: number }> {
-    const all = await this.store.list();
-    const sessions: SessionSummary[] = [];
-    for (const { id, updated } of all.slice(0, max)) {
-      const records = await this.store.read(id).catch(() => undefined);
-      if (records !== undefined) sessions.push(summariseSession(id, updated, records));
-    }
-    return { sessions, total: all.length };
+    return listSessions(this.store, max);
   }
 
   /**
@@ -923,28 +899,18 @@ export class Runtime {
     const s = this.current;
     return {
       ok: true,
-      text: `Continuing session ${id} (${s.messages.length} messages, ${Math.round((s.contextTokens / this.currentLimits.contextWindow) * 100)}% of the context window). Read files again before you edit them.`,
+      text: `Continuing session ${id} (${s.messages.length} messages, ${Math.round((s.contextTokens / this.limits.contextWindow) * 100)}% of the context window). Read files again before you edit them.`,
     };
   }
 
   /** A number from the /sessions list, a session id, or the unique start of one. */
   private async findSession(ref: string): Promise<string | undefined> {
-    const all = await this.store.list();
-    return /^\d+$/.test(ref)
-      ? all[Number(ref) - 1]?.id
-      : (all.find((s) => s.id === ref) ?? onlyOne(all.filter((s) => s.id.startsWith(ref))))?.id;
+    return findSession(ref, this.store);
   }
 
   /** /sessions rename <n|id> <title> (0.8). */
   async renameSession(ref: string, title: string): Promise<{ ok: boolean; text: string }> {
-    const id = await this.findSession(ref);
-    if (id === undefined) {
-      return { ok: false, text: `There is no session "${ref}" in this project. Type /sessions.` };
-    }
-    const clean = cleanTitle(title);
-    if (clean === "") return { ok: false, text: "Give a title: /sessions rename <n|id> <title>." };
-    await this.store.setTitle(id, clean);
-    return { ok: true, text: `Session ${id} is now "${clean}".` };
+    return renameSession(ref, title, this.store);
   }
 
   /**
@@ -952,38 +918,14 @@ export class Runtime {
    * The open session cannot go.
    */
   async deleteSession(ref: string, signal: AbortSignal): Promise<{ ok: boolean; text: string }> {
-    const id = await this.findSession(ref);
-    if (id === undefined) {
-      return { ok: false, text: `There is no session "${ref}" in this project. Type /sessions.` };
-    }
-    if (id === this.current?.id) {
-      return {
-        ok: false,
-        text: `Session ${id} is open. Start a new one (/new) or open another first.`,
-      };
-    }
-    const records = await this.store.read(id);
-    const summary = summariseSession(id, new Date(), records);
-    const choice = await this.approver.ask(
-      {
-        tool: "sessions",
-        target: { kind: "input", json: "{}" },
-        preview: [
-          `Session ${id}`,
-          `"${summary.title}" · ${summary.turns} turn${summary.turns === 1 ? "" : "s"}`,
-          "The file and its subagent logs go for good. /undo cannot bring them back.",
-        ].join("\n"),
-        isolation: this.executor.isolation,
-        title: "Delete a session?",
-        question: "Delete it?",
-        choices: ["once", "deny"],
-        labels: { once: "Yes, delete it", deny: "No" },
-      },
+    return deleteSession(
+      ref,
       signal,
+      this.store,
+      this.current?.id,
+      this.approver,
+      this.executor.isolation,
     );
-    if (choice === "deny") return { ok: true, text: "Nothing changed." };
-    await this.store.remove(id);
-    return { ok: true, text: `Session ${id} is deleted.` };
   }
 
   /** The records of the current session, for /export (0.6). Redacted as on disk. */
@@ -993,15 +935,15 @@ export class Runtime {
    * a repo eval task stopped at max_tokens after thinking alone.
    */
   private outputTokens(): { maxTokens?: number } {
-    if (this.currentThinkingCaps?.mode === "always") {
+    if (this.modelState.thinkingCaps?.mode === "always") {
       return {
         maxTokens: thinkingMaxTokens(
-          this.maxTokens ?? DEFAULT_MAX_TOKENS,
+          this.modelState.maxTokens ?? DEFAULT_MAX_TOKENS,
           this.thinkingParams ?? {},
         ),
       };
     }
-    return this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens };
+    return this.modelState.maxTokens === undefined ? {} : { maxTokens: this.modelState.maxTokens };
   }
 
   async sessionRecords(): Promise<SessionRecord[] | undefined> {
@@ -1013,28 +955,7 @@ export class Runtime {
    * ~/.garuda/models.json. The main model is in the list, also when it is in neither.
    */
   modelList(): { spec: string; info: ModelInfo }[] {
-    const out: { spec: string; info: ModelInfo }[] = knownModels().map((m) => ({
-      spec: m.id,
-      info: m.info,
-    }));
-    for (const spec of this.modelChoices?.configured ?? []) {
-      if (out.some((m) => m.spec === spec)) continue;
-      try {
-        out.push({ spec, info: this.modelChoices?.resolve(spec).info ?? lookupModel(spec) });
-      } catch {
-        // A spec with an unknown provider: /models cannot use it, so it is not in the list.
-      }
-    }
-    if (!out.some((m) => m.spec === this.currentModelId)) {
-      out.unshift({
-        spec: this.currentModelId,
-        info: {
-          contextWindow: this.currentLimits.contextWindow,
-          ...(this.currentPrice === undefined ? {} : { price: this.currentPrice }),
-        },
-      });
-    }
-    return out;
+    return this.modelState.modelList();
   }
 
   /**
@@ -1043,60 +964,7 @@ export class Runtime {
    * start model. The prompt cache of the old model does not carry over.
    */
   async setModel(ref: string): Promise<{ ok: boolean; text: string }> {
-    const choices = this.modelChoices;
-    if (choices === undefined) return { ok: false, text: "This Garuda cannot switch models." };
-    const spec = /^\d+$/.test(ref)
-      ? this.modelList()[Number(ref) - 1]?.spec
-      : (aliasModel(ref) ?? ref);
-    if (spec === undefined) {
-      return { ok: false, text: `There is no model ${ref} in the list. Type /models.` };
-    }
-    if (spec === this.currentModelId) return { ok: true, text: `${spec} is already the model.` };
-    let resolved: ReturnType<typeof choices.resolve>;
-    let client: ModelClient;
-    try {
-      resolved = choices.resolve(spec);
-      client = await resolved.model();
-    } catch (error) {
-      return { ok: false, text: `Cannot use ${spec}: ${(error as Error).message}` };
-    }
-    this.model = client;
-    this.currentModelId = resolved.spec;
-    this.currentPrice = this.settings.price ?? resolved.info.price;
-    this.currentThinkingCaps = resolved.info.thinking;
-    const fitted = fitThinking(this.thinkingChoice, resolved.info.thinking);
-    this.thinkingChoice = fitted.choice;
-    this.currentLimits = {
-      ...this.currentLimits,
-      contextWindow: this.settings.contextWindow ?? resolved.info.contextWindow,
-    };
-    this.maxTokens = resolved.maxTokens;
-    const session = this.current;
-    // Thinking signatures belong to the model that wrote them (0.9): the new model starts without.
-    if (session !== undefined) session.messages = withoutThinking(session.messages);
-    session?.journal?.write({ type: "model", sessionId: session.id, ...this.startFields() });
-    const lines = [
-      `The model is now ${resolved.spec} (${modelFacts(this.currentLimits.contextWindow, this.currentPrice)}). The next turn uses it; the prompt cache starts again.`,
-    ];
-    if (
-      session !== undefined &&
-      session.contextTokens > this.currentLimits.contextWindow * COMPACTION_DEFAULTS.threshold
-    ) {
-      lines.push(
-        "The conversation is too large for this model's context window: Garuda compacts it before the next request.",
-      );
-    }
-    if (fitted.dropped.length > 0) {
-      lines.push(
-        `${resolved.spec} cannot use ${fitted.dropped.join(" and ")}: it goes back to the default.`,
-      );
-    }
-    if (this.currentPrice === undefined) {
-      lines.push(
-        `Garuda has no price for ${resolved.spec}. Set "price" for it in ~/.garuda/models.json to see cost.`,
-      );
-    }
-    return { ok: true, text: lines.join("\n") };
+    return this.modelState.setModel(ref, this.current, () => this.startFields());
   }
 
   /** Run one turn: the user's prompt, then the loop until it stops. */
@@ -1245,7 +1113,7 @@ export class Runtime {
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
       .trim();
-    const price = this.currentPrice;
+    const price = this.price;
     return price === undefined
       ? { text: answer }
       : { text: answer, costUsd: responseCost(response, price) };
@@ -1692,7 +1560,7 @@ export class Runtime {
     path: string | undefined,
     signal: AbortSignal,
   ): Promise<{ files: FileStat[]; patch: string; path?: string } | { problem: string }> {
-    const store = this.snapshots;
+    const store = this.undoCoordinator.store;
     if (store === undefined) {
       return {
         problem:
@@ -1743,29 +1611,12 @@ export class Runtime {
 
   /** True when turns get snapshots (0.4). */
   get undoEnabled(): boolean {
-    return this.snapshots !== undefined;
+    return this.undoCoordinator.enabled;
   }
 
   /** Snapshot the files before a turn. A failure turns undo off with a notice; the turn goes on. */
   private async snapshot(session: Session, prompt: string, signal: AbortSignal): Promise<void> {
-    const store = this.snapshots;
-    if (store === undefined) return;
-    const started = Date.now();
-    try {
-      const tree = await store.take(signal);
-      const ms = Date.now() - started;
-      addSnapshot(session, tree, prompt, ms);
-      if (ms > SLOW_SNAPSHOT_MS) {
-        this.snapshots = undefined;
-        this.onNotice?.(
-          `The undo snapshot took ${(ms / 1000).toFixed(1)} s, so undo is off for this session. Add big folders to .gitignore, or set "undo": { "enabled": false } in .garuda/settings.json.`,
-        );
-      }
-    } catch (error) {
-      if (signal.aborted) throw error;
-      this.snapshots = undefined;
-      this.onNotice?.(`Undo is off for this session: ${(error as Error).message}`);
-    }
+    return this.undoCoordinator.snapshot(session, prompt, signal);
   }
 
   /**
@@ -1798,39 +1649,22 @@ export class Runtime {
 
   /** The request fields for /thinking (0.9); undefined: the model's defaults. */
   private get thinkingParams(): ThinkingRequest | undefined {
-    return thinkingRequest(this.thinkingChoice, this.currentThinkingCaps);
+    return this.modelState.thinkingParams;
   }
 
   /** /thinking (0.9): the state line. */
   thinkingStatus(): string {
-    return thinkingText(this.thinkingChoice, this.currentThinkingCaps, this.currentModelId);
+    return this.modelState.thinkingStatus();
   }
 
   /** /thinking <word> (0.9): change the choice for this chat; the session records it. */
   setThinking(word: string): { ok: boolean; text: string } {
-    const change = changeThinking(
-      this.thinkingChoice,
-      word,
-      this.currentThinkingCaps,
-      this.currentModelId,
-    );
-    if (!change.ok) return change;
-    const before = JSON.stringify(this.thinkingParams ?? {});
-    this.thinkingChoice = change.choice;
-    this.current?.journal?.write({ type: "thinking", choice: change.choice });
-    const changed = JSON.stringify(this.thinkingParams ?? {}) !== before;
-    return {
-      ok: true,
-      text: changed
-        ? `${change.text} The next turn uses it; the prompt cache starts again.`
-        : change.text,
-    };
+    return this.modelState.setThinking(word, this.current);
   }
 
   /** A resumed session brings its last /thinking choice (0.9), as far as this model allows. */
   private adoptThinking(session: Session): void {
-    if (session.thinking === undefined) return;
-    this.thinkingChoice = fitThinking(session.thinking, this.currentThinkingCaps).choice;
+    this.modelState.adoptThinking(session);
   }
 
   /**
@@ -1844,7 +1678,7 @@ export class Runtime {
     const session = this.current;
     if (session === undefined) return undefined;
     const model = await this.client();
-    const price = this.currentPrice;
+    const price = this.price;
     let costUsd: number | undefined;
     const result = await compactNow(
       session,
@@ -1867,73 +1701,12 @@ export class Runtime {
    * of the conversation. Returns the text for the user.
    */
   async undo(signal: AbortSignal): Promise<string> {
-    return this.undoRedo("undo", signal);
+    return this.undoCoordinator.undo(this.current, this.pendingNotes, signal);
   }
 
   /** /redo (0.4): bring back the last undone turn: its files and its messages. */
   async redo(signal: AbortSignal): Promise<string> {
-    return this.undoRedo("redo", signal);
-  }
-
-  private async undoRedo(kind: "undo" | "redo", signal: AbortSignal): Promise<string> {
-    try {
-      return kind === "undo" ? await this.undoNow(signal) : await this.redoNow(signal);
-    } catch (error) {
-      if (!(error instanceof SnapshotError)) throw error;
-      return `The ${kind} failed, and no file changed: ${error.message}`;
-    }
-  }
-
-  private async undoNow(signal: AbortSignal): Promise<string> {
-    const store = this.snapshots;
-    if (store === undefined) return "Undo is off for this session.";
-    const session = this.current;
-    const point = session?.undo.points.at(-1);
-    if (session === undefined || point === undefined) return "There is no turn to undo.";
-    const now = await store.take(signal);
-    const changes = await store.changes(now, point.tree, signal);
-    const choice = await this.approver.ask(
-      undoQuestion("undo", point.prompt, changes, point.conversation, this.executor.isolation),
-      signal,
-    );
-    if (choice === "deny") return "Nothing changed.";
-    await store.restore(now, point.tree, signal);
-    undoTurn(session, now);
-    if (!point.conversation) {
-      this.pendingNotes.push(
-        `The user undid the turn "${point.prompt}": its file changes are gone. Read files again before you edit them.`,
-      );
-    }
-    return `Undid "${point.prompt}": ${filesText(changes)}${point.conversation ? "; the conversation went back too" : ""}. /redo brings it back.`;
-  }
-
-  private async redoNow(signal: AbortSignal): Promise<string> {
-    const store = this.snapshots;
-    if (store === undefined) return "Undo is off for this session.";
-    const session = this.current;
-    const entry = session?.undo.redo.at(-1);
-    if (session === undefined || entry === undefined) return "There is nothing to redo.";
-    const now = await store.take(signal);
-    const changes = await store.changes(now, entry.after, signal);
-    const choice = await this.approver.ask(
-      undoQuestion(
-        "redo",
-        entry.point.prompt,
-        changes,
-        entry.removed.length > 0,
-        this.executor.isolation,
-      ),
-      signal,
-    );
-    if (choice === "deny") return "Nothing changed.";
-    await store.restore(now, entry.after, signal);
-    redoTurn(session);
-    if (entry.removed.length === 0) {
-      this.pendingNotes.push(
-        `The user redid the turn "${entry.point.prompt}": its file changes are back. Read files again before you edit them.`,
-      );
-    }
-    return `Redid "${entry.point.prompt}": ${filesText(changes)}.`;
+    return this.undoCoordinator.redo(this.current, this.pendingNotes, signal);
   }
 
   /** Record a turn that ended with no result: Ctrl-C ("interrupted") or an error. */
@@ -1955,8 +1728,8 @@ export class Runtime {
     const session = createSession(this.root, id, this.store.open(id));
     session.journal?.write({ type: "start", sessionId: id, ...this.startFields() });
     // A /thinking choice carries into a new session (0.9); the record lets a resume find it.
-    if (Object.keys(this.thinkingChoice).length > 0) {
-      session.journal?.write({ type: "thinking", choice: this.thinkingChoice });
+    if (Object.keys(this.modelState.thinkingChoice).length > 0) {
+      session.journal?.write({ type: "thinking", choice: this.modelState.thinkingChoice });
     }
     this.current = session;
     return session;
@@ -1972,25 +1745,6 @@ export class Runtime {
       limits: this.limits,
     };
   }
-}
-
-function onlyOne<T>(items: readonly T[]): T | undefined {
-  return items.length === 1 ? items[0] : undefined;
-}
-
-/** "1.0M context, $4/$20 per M tokens" for /models. */
-export function modelFacts(contextWindow: number, price: Price | undefined): string {
-  const window =
-    contextWindow >= 1_000_000
-      ? `${(contextWindow / 1_000_000).toFixed(1)}M`
-      : `${Math.round(contextWindow / 1_000)}k`;
-  const cost =
-    price === undefined
-      ? "price unknown"
-      : price.input === 0 && price.output === 0
-        ? "free"
-        : `$${price.input}/$${price.output} per M tokens`;
-  return `${window} context, ${cost}`;
 }
 
 /** The text of the last assistant message that has text: the plan of a plan-mode turn. */

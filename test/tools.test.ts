@@ -21,13 +21,14 @@ function call(name: string, input: unknown) {
 }
 
 describe("tool registry", () => {
-  it("ships seven tools by default (code index off), all with JSON schemas", () => {
+  it("ships eight tools by default (code index off), all with JSON schemas", () => {
     const specs = registry.specs();
     expect(specs.map((s) => s.name)).toEqual([
       "bash",
       "edit_file",
       "glob",
       "grep",
+      "process_manager",
       "read_file",
       "remember",
       "write_file",
@@ -39,6 +40,7 @@ describe("tool registry", () => {
       "find_symbol",
       "glob",
       "grep",
+      "process_manager",
       "read_file",
       "repo_map",
     ]);

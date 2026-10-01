@@ -51,9 +51,17 @@ export function findOsSandbox(): OsSandbox {
 function detect(platform: NodeJS.Platform): OsSandbox {
   const fix = 'Set "executor": "host" in .garuda/settings.json to hide this notice.';
   if (platform === "darwin") {
-    return existsSync(SANDBOX_EXEC)
-      ? { executor: new SeatbeltExecutor() }
-      : { problem: `${SANDBOX_EXEC} is missing.`, fix };
+    if (!existsSync(SANDBOX_EXEC)) {
+      return { problem: `${SANDBOX_EXEC} is missing.`, fix };
+    }
+    // sandbox-exec can be present but blocked, for example in a nested sandbox or container.
+    const probe = spawnSync(SANDBOX_EXEC, ["-p", "(version 1)(allow default)", "--", "true"], {
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    if (probe.status === 0) return { executor: new SeatbeltExecutor() };
+    const why = (probe.stderr || probe.error?.message || "unknown error").trim().split("\n")[0];
+    return { problem: `sandbox-exec cannot start a sandbox here (${why}).`, fix };
   }
   if (platform === "linux") {
     const bwrap = onPath("bwrap");

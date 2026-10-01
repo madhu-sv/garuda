@@ -4,6 +4,8 @@
  * OS sandbox (0.2). All pass the same contract tests.
  */
 
+import type { DaemonInfo, DaemonManager, DaemonStatus } from "./daemon.js";
+
 /** How strongly an executor enforces its policy. The permission engine reads this. */
 export type Isolation = "none" | "os" | "container";
 
@@ -88,6 +90,8 @@ export interface Executor {
   /** Config value that selects this executor, for example "host". */
   readonly name: string;
   readonly isolation: Isolation;
+  /** Manages background daemon processes (0.14). */
+  readonly daemons?: DaemonManager | undefined;
   /** Run `command` with bash. Never throws for a failed command: check exitCode. */
   run(command: string, policy: ExecPolicy, options?: ExecOptions): Promise<ExecResult>;
   /**
@@ -102,3 +106,5 @@ export interface Executor {
    */
   shutdown(): void;
 }
+
+export type { DaemonInfo, DaemonManager, DaemonStatus };

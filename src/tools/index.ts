@@ -4,12 +4,15 @@ import { findReferencesTool, findSymbolTool, repoMapTool } from "./codeTools.js"
 import { editFileTool } from "./editFile.js";
 import { globTool } from "./glob.js";
 import { grepTool } from "./grep.js";
+import { processManagerTool } from "./processManager.js";
 import { readFileTool } from "./readFile.js";
 import { rememberTool } from "./remember.js";
 import { todoWriteTool } from "./todo.js";
 import type { AnyTool } from "./types.js";
 import { createWebFetchTool, type WebFetchOptions } from "./webFetch.js";
 import { writeFileTool } from "./writeFile.js";
+
+export { processManagerTool };
 
 /** The read-only tools for a subagent: file search and reads, and the code index when it is on. */
 export function readOnlyTools(codeIndex: CodeIndexMode = DEFAULT_CODE_INDEX_MODE): AnyTool[] {
@@ -45,6 +48,7 @@ export function defaultTools({
     writeFileTool,
     editFileTool,
     bashTool,
+    processManagerTool,
     rememberTool,
     ...(web === undefined ? [] : [createWebFetchTool(web)]),
     ...(todo ? [todoWriteTool] : []),
