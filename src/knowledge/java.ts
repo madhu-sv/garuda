@@ -218,33 +218,51 @@ export function parseJava(relPath: string, content: string): ParsedJavaFile {
       continue;
     }
 
-    // 3. Methods & Constructors
+    // 3. Methods & Constructors (only valid inside class/interface/record/enum container)
     // e.g. public void doSomething(...) { or public MyClass(...) {
-    const methodMatch = trimmed.match(
-      /(?:public|protected|private|static|final|synchronized|abstract|\s)*(?:<[^>]+>\s+)?([a-zA-Z0-9_<>[\], ]+)\s+([a-zA-Z0-9_]+)\s*\([^)]*\)\s*(?:throws\s+[^{]+)?\s*[{;]/,
-    );
-    if (methodMatch?.[1] && methodMatch[2]) {
-      const returnTypeOrName = methodMatch[1].trim();
-      const methodName = methodMatch[2].trim();
+    if (currentContainer !== undefined && !trimmed.includes("=") && !trimmed.startsWith("throw ")) {
+      const methodMatch = trimmed.match(
+        /(?:public|protected|private|static|final|synchronized|abstract|\s)*(?:<[^>]+>\s+)?([a-zA-Z0-9_<>[\], ]+)\s+([a-zA-Z0-9_]+)\s*\([^)]*\)\s*(?:throws\s+[^{]+)?\s*[{;]/,
+      );
+      if (methodMatch?.[1] && methodMatch[2]) {
+        const returnTypeOrName = methodMatch[1].trim();
+        const methodName = methodMatch[2].trim();
 
-      // Avoid matching control structures (if, while, for, switch, catch)
-      const controlKeywords = new Set(["if", "while", "for", "switch", "catch", "return"]);
-      if (!controlKeywords.has(methodName) && !controlKeywords.has(returnTypeOrName)) {
-        const isConstructor = currentContainer !== undefined && methodName === currentContainer;
-        const kind = isConstructor ? "constructor" : "method";
-        const isPublicOrProtected = /\b(public|protected)\b/.test(trimmed);
+        // Avoid matching control structures and statements
+        const controlKeywords = new Set([
+          "if",
+          "while",
+          "for",
+          "switch",
+          "catch",
+          "return",
+          "new",
+          "throw",
+          "assert",
+          "super",
+          "this",
+          "import",
+          "package",
+        ]);
 
-        symbols.push({
-          name: methodName,
-          kind,
-          path: relPath,
-          line: i + 1,
-          ...(currentContainer ? { container: currentContainer } : {}),
-          exported: isPublicOrProtected,
-        });
+        if (
+          !controlKeywords.has(methodName) &&
+          !controlKeywords.has(returnTypeOrName) &&
+          !returnTypeOrName.includes("new ") &&
+          !methodName.includes(".")
+        ) {
+          const isConstructor = methodName === currentContainer;
+          const kind = isConstructor ? "constructor" : "method";
+          const isPublicOrProtected = /\b(public|protected)\b/.test(trimmed);
 
-        if (isPublicOrProtected && currentContainer === undefined) {
-          exports.push({ name: methodName, kind, line: i + 1 });
+          symbols.push({
+            name: methodName,
+            kind,
+            path: relPath,
+            line: i + 1,
+            container: currentContainer,
+            exported: isPublicOrProtected,
+          });
         }
       }
     }
