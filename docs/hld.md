@@ -133,6 +133,63 @@ sequenceDiagram
   Reg-->>Main: tool result, usage added to the session
 ```
 
+### Mixture-of-Experts language specialist subagents (0.17)
+
+When `moe.enabled` is on (or `subagents.enabled: true`), the orchestrator can call `delegate_expert`.
+The task is routed via `inferLanguage` to a language specialist (Go, Rust, Python, Java, TypeScript),
+which spawns an isolated child subagent with language-specific AST tools, test runners (`cargo test`, `go test ./...`,
+`pytest`, `mvn test`, `pnpm test`), and idiomatic prompt rules. Details: [lld/agents.md](lld/agents.md).
+
+```mermaid
+sequenceDiagram
+  participant Main as Main loop
+  participant Reg as ToolRegistry
+  participant Moe as delegate_expert tool
+  participant Router as inferLanguage
+  participant Child as Specialist child loop
+  participant Tools as Specialist tools (AST, tests, edits)
+  Main->>Reg: delegate_expert(language, task, files)
+  Reg->>Moe: run
+  Moe->>Router: infer language from task / file extensions
+  Router-->>Moe: specialist (e.g. rust, go)
+  Moe->>Child: runAgent(specialist prompt, scoped tools, limits)
+  loop up to 20 steps
+    Child->>Tools: AST queries, read_file, cargo/go test, edit_file
+    Tools-->>Child: results
+  end
+  Child-->>Moe: specialist answer, calls, SubagentReport
+  Moe-->>Reg: [Specialist Report] + usage report
+  Reg-->>Main: tool result, child usage added to session
+```
+
+### Custom subagents (0.5)
+
+Markdown files in `~/.garuda/agents/` or `.garuda/agents/` define custom subagents in Claude Code format.
+The `agent` tool runs the custom agent in an isolated child session with its allowed tool subset.
+
+```mermaid
+sequenceDiagram
+  participant Main as Main loop
+  participant Reg as ToolRegistry
+  participant Ag as agent tool
+  participant Consent as agentConsent
+  participant Child as Custom agent loop
+  participant Tools as Configured tools
+  Main->>Reg: agent(name, prompt)
+  Reg->>Ag: run
+  opt project agent on first use
+    Ag->>Consent: ask user (show prompt & tools, pin hash)
+  end
+  Ag->>Child: runAgent(agent prompt, allowed tools, limits)
+  loop up to maxTurns
+    Child->>Tools: tool calls (sandboxed)
+    Tools-->>Child: results
+  end
+  Child-->>Ag: answer, calls, SubagentReport
+  Ag-->>Reg: [agent <name>: N steps] + report
+  Reg-->>Main: tool result, usage added to session
+```
+
 ### Formatting and diagnostics after an edit (0.4, 0.10)
 
 With formatters on (0.10, opt-in), `edit_file` and `write_file` run the project's formatter in the OS

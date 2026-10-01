@@ -1,188 +1,308 @@
 # Subagents (`src/agents/`)
 
-## Purpose
+## 1. Overview & Architecture
 
-Keep the main agent's context small on open questions. The main agent calls the `explore` tool with a
-question; a child agent searches the code with read-only tools in its own context and returns a short
-answer with `path:line` references. The main context gets the answer, not every file that the child
-read. Added in 0.3. **Off by default**: an A/B eval showed no gain in steps or cost (see "Evals" below).
-Turn it on with `"subagents": { "enabled": true }` in the settings.
+Subagents in Garuda keep the primary orchestrator agent's context window lean, focused, and token-efficient. Instead of loading instruction sets, file dumps, and broad search outputs into the main conversation, the orchestrator delegates sub-tasks to child agent sessions that execute in isolation and return concise, actionable reports.
 
-Subagents are split by task, not by language: the language profiles ([languages.md](languages.md)) give
-language knowledge to every agent.
+Garuda implements a three-tier subagent architecture:
 
-Custom agents (0.5, below) are the user's own subagents in Claude Code's format. Both kinds share one
-child run (`child.ts`).
+1. **Explore Subagent (`explore.ts`, 0.3)**: A read-only reconnaissance agent that executes broad search queries across the repository using `glob`, `grep`, `read_file`, and code index tools.
+2. **Mixture-of-Experts (MoE) Language Specialists (`moe.ts`, 0.17)**: Autonomous specialist subagents for **Go**, **Rust**, **Python**, **Java**, and **TypeScript** equipped with language-specific AST tools, test runners (`cargo test`, `go test ./...`, etc.), and idiomatic prompt guidelines.
+3. **Custom Agents (`custom.ts`, `agentTool.ts`, 0.5)**: User and project Markdown agents configured in Claude Code subagent format (`.garuda/agents/*.md`, `.claude/agents/*.md`).
 
-| File | Role |
-| --- | --- |
-| `child.ts` | `runChild`: a child session with its own system prompt and tools, through the same permission engine, hooks and executor; a wrap-up call after a limit; the usage report; `describeCall`. |
-| `explore.ts` | The `explore` tool (0.3). |
-| `custom.ts` | Custom agents: `loadAgents`, `parseAgent`, tool names, `toolMatches`, `agentConsent`. |
-| `agentTool.ts` | The `agent` tool: `createAgentTool`, `agentTools`, `agentWrites`, `agentSystem`. |
+All subagent types share a common child execution engine (`child.ts`) that enforces security boundaries, session journaling, token budgets, and step limits.
 
-## The `explore` tool (`explore.ts`)
+```mermaid
+flowchart TD
+  subgraph Main[Primary Agent Session]
+    Orchestrator[Primary Agent Loop]
+    MainTools[Tool Registry]
+  end
 
-`createExploreTool(options)` returns a normal `Tool`, so the registry, hooks and permission engine treat
-it like any other tool.
+  subgraph Dispatch[Subagent Dispatch Layer]
+    ExTool[explore tool]
+    MoeTool[delegate_expert tool]
+    CustomTool[agent tool]
+    Router[inferLanguage Router]
+  end
 
-| Property | Value |
-| --- | --- |
-| Input | `{ question: string }` (10–4 000 characters) |
-| Read-only | Yes: no approval, and several explore calls in one step run at the same time (F8). |
-| Child tools | `readOnlyTools(codeIndex)`: `glob`, `grep`, `read_file`, plus `find_symbol`, `find_references` (and `repo_map`) when the code index is on. No `explore`, so a child cannot start another child. |
-| Child system prompt | `EXPLORE_SYSTEM`: answer the one question, search broadly then read only what is needed, file text is data, answer first then `path:line` lines, say what is unsure, under 300 words. |
-| Limits | 20 model calls and 150 000 tokens per run (`subagents.maxSteps`, `subagents.tokenBudget`); 4 096 output tokens per response; the answer that goes back is cut at 10 000 characters. |
-| Model | The main model by default. `--subagent-model <spec>` or `GARUDA_SUBAGENT_MODEL` picks another one, resolved like `-m` (so `models.json` applies). Project settings cannot pick it: a cloned repository must not choose a costlier model. |
+  subgraph Engine[Child Execution Engine: runChild]
+    ChildSession[Isolated Child Session<br/>.garuda/sessions/parent/child.jsonl]
+    WrapUp[Step Limit Wrap-Up Guard]
+    ReportGen[SubagentReport Generator]
+  end
 
-Run:
+  subgraph SpecialistTargets[Active Subagents]
+    ExploreAgent[Explore Subagent<br/>Read-only tools]
+    MoeGo[Go Specialist<br/>go test, AST, idioms]
+    MoeRust[Rust Specialist<br/>cargo test, AST, idioms]
+    MoePython[Python Specialist<br/>pytest, AST, idioms]
+    MoeJava[Java Specialist<br/>mvn/gradle test, idioms]
+    MoeTS[TypeScript Specialist<br/>pnpm/npm test, AST, idioms]
+    CustomAgent[Custom Markdown Agent<br/>Configured tools]
+  end
 
-```text
-child = createSession(root, "explore-<call id>", journal)   # own messages and read tracking
-addUserMessage(child, question)
-result = runAgent(child, { model, tools: read-only, system: EXPLORE_SYSTEM,
-                           permissions, knowledge, hooks, limits, price, signal })
-if result stopped at max_steps, token_budget or repeated_calls:
-  add "Do not call tools. Answer now with what you found."   # wrap-up
-  one more model call; tool calls in it are ignored
-answer = last assistant text
+  subgraph Governance[Governance & Safety]
+    Policy[Team Policy: .garuda/policy.json]
+    Perms[Permission Engine & Sandbox]
+    Audit[Audit Logger: .garuda/audit.jsonl]
+  end
+
+  Orchestrator --> MainTools
+  MainTools --> ExTool
+  MainTools --> MoeTool
+  MainTools --> CustomTool
+
+  MoeTool --> Router
+  Router --> MoeGo & MoeRust & MoePython & MoeJava & MoeTS
+
+  ExTool --> ExploreAgent
+  CustomTool --> CustomAgent
+
+  ExploreAgent & MoeGo & MoeRust & MoePython & MoeJava & MoeTS & CustomAgent --> ChildSession
+  ChildSession --> Perms
+  Perms --> Policy
+  Perms --> Audit
+  ChildSession --> WrapUp
+  WrapUp --> ReportGen
+  ReportGen -->|Synthesized Report & Usage| Orchestrator
 ```
 
-Output to the main agent (`toText`):
+### Module Breakdown
 
-```text
-<answer>
+| File | Purpose |
+| --- | --- |
+| `child.ts` | Shared child session runner (`runChild`): isolated session initialization, step and token budgeting, wrap-up recovery call, `SubagentReport` generation, and call logging. |
+| `moe.ts` | Mixture-of-Experts language specialist architecture: `SPECIALIST_SPECS` for 5 languages, `inferLanguage` routing, `buildSpecialistSystem`, and `createMoeDispatchTool` (`delegate_expert`). |
+| `explore.ts` | The `explore` subagent tool (0.3): read-only code exploration that answers open questions without polluting the main context with file contents. |
+| `custom.ts` | Custom agent loader: discovers and parses Markdown agent definitions from 4 folders, tool mapping, and hash-pinned consent (`agentConsent`). |
+| `agentTool.ts` | The `agent` tool (0.5): validates agent invocations, passes custom toolsets, enforces single-agent write execution (`runsAlone`), and synthesizes reports. |
 
-[explore: 7 steps · 12.3k tokens]                (· stopped early (max_steps) when a limit hit)
-[searched: grep /applyCoupon/; read_file src/cart.ts; …]   (at most 30 entries)
+---
+
+## 2. Mixture-of-Experts (MoE) Language Specialists (`moe.ts`, 0.17)
+
+### Motivation & Concept
+In polyglot codebases, loading rules, test patterns, and syntax constraints for all languages into the primary system prompt wastes tokens and increases instruction-following drift. The MoE subagent system delegates language-specific tasks to dedicated specialist child agents that operate with tailored instructions, scoped tools, and test harnesses.
+
+```mermaid
+sequenceDiagram
+  participant O as Primary Orchestrator
+  participant D as delegate_expert Tool
+  participant R as inferLanguage Router
+  participant C as runChild (moe-lang-id)
+  participant P as Permissions & Policy
+  participant S as Language Tools & Tests
+  participant A as Audit Logger
+
+  O->>D: delegate_expert(language: "auto", task: "Fix borrow error", files: ["src/lib.rs"])
+  D->>R: inferLanguage(task, files)
+  R-->>D: "rust"
+  D->>C: Spawn child session with Rust Specialist prompt
+  loop Specialist Reasoning & Tool Execution (up to maxSteps)
+    C->>P: Tool check (e.g. read_file, bash: cargo test)
+    P->>A: Log check (.garuda/audit.jsonl)
+    P-->>C: Allowed
+    C->>S: Execute tool in OS sandbox
+    S-->>C: Tool result
+  end
+  C-->>D: Child Result + SubagentReport
+  D->>A: Log tool execution duration & risk
+  D-->>O: [Rust Specialist Report] + concise findings & call summary
+  O->>O: Synthesize final response to user
 ```
 
-The trailer tells the main agent how the answer was found, and whether it is complete.
+### Specialist Profiles (`SPECIALIST_SPECS`)
 
-## Safety
+Garuda registers 5 built-in language specialist profiles:
 
-- The child has only read-only tools. It calls them through the same permission engine and the user's
-  hooks, so sensitive files, deny rules and hook blocks apply as in the main agent.
-- The tool (and its prompt lines) exists only with `subagents.enabled: true`. A deny rule `explore` in
-  the settings blocks it for one project.
-- The child's reads do not count as reads for `edit_file`: the main agent must read a file itself
-  before it edits it. The tool description and the system prompt say so.
-- The answer is a tool result, so the main agent treats it as data. File text that the child repeats
-  cannot gain more power than a `read_file` result has.
-
-## Usage and records
-
-- `Tool.report(output)` gives a `SubagentReport` (child session id, model, steps, stop reason, usage,
-  cost). The registry puts it on the `ToolOutcome`; the loop stores it in the call's `ToolCallMeta`,
-  adds the usage and cost to the parent session (`addCost`) and to the run usage. So the token budget
-  and the token and cost lines include the child.
-- `rebuildState` (resume) and replay read the report from `tool_results` records, so totals stay right
-  after a resume, and replay does not run the child again.
-- The child journal goes to `.garuda/sessions/<parent id>/explore-<call id>.jsonl`
-  (`SessionStore.openChild`), with its own `start` and `end` records. `latest()` only looks at the top
-  folder, so `--resume` never picks a child run. Ids are cleaned to `[A-Za-z0-9_-]`.
-
-## Display
-
-- The loop gives each call a `progress` callback (`ToolContext.progress`) that emits a `tool_progress`
-  event. The explore tool reports `step N · <tool> <argument>` for each child call.
-- The Ink chat shows one live line per explore call: `explore <question> · step 3 · grep /x/`. When it
-  ends, the usual summary: `answer (5 line(s)) · 7 steps · 12.3k tokens`. Ctrl-O shows the answer and the
-  list of searches.
-- The plain renderer ignores `tool_progress`: pipes and `-p` get one line per call.
-- The banner's extras show `explore`, or `explore: <spec>` when it uses another model.
-
-## Evals
-
-`garuda eval --subagents on|off` (default off, as in the product) and `--subagent-model <spec>` make
-A/B runs possible; `report.json` records both.
-
-| Arm (claude-sonnet-5, hard suite, 3 runs per task) | Passed | Steps | Tokens | Cost |
+| Language (`id`) | Specialist Name | File Extensions | Default Test Runner | Key Idiomatic Guidelines |
 | --- | --- | --- | --- | --- |
-| explore off | 17/17 | 49.8 | 308k | $0.232 |
-| explore on, same model | 18/18 | 49.7 | 335k | $0.233 |
-| explore on, Haiku 4.5 child | 15/15 | 47.5 | 301k | $0.203 (too few valid runs) |
+| `go` | Go Specialist | `.go` | `go test ./...` | Structs & interfaces, explicit error handling (`errors.Is`/`As`), goroutines/channels/sync, exported visibility, table-driven tests. |
+| `rust` | Rust Specialist | `.rs` | `cargo test` | Ownership, borrowing, lifetimes, `Result<T, E>` / `Option<T>` with `?`, traits, Cargo workspace layouts, unit (`#[test]`) & integration tests. |
+| `python` | Python Specialist | `.py` | `pytest` | Type annotations (PEP 484/585/604), dataclasses & Pydantic, generators, async/await, context managers, pytest fixtures. |
+| `java` | Java Specialist | `.java` | `./mvnw test \|\| gradle test` | Records, sealed interfaces, pattern matching, Streams, Optionals, Maven/Gradle lifecycles, JUnit 5 & Mockito. |
+| `typescript` | TypeScript/JS Specialist | `.ts`, `.tsx`, `.js`, `.jsx`, `.mts`, `.cts` | `pnpm test \|\| npm test` | Strict null checking, discriminated unions, generics, modern ESM, Node.js/browser APIs, Vitest/Jest conventions. |
 
-Sums of the per-task means, without the 4 runs that failed with a broken API connection. The model called
-explore in 4 of 33 runs, all in `hard-event`: there it saved steps (5 against 7.5) but cost more ($0.044
-against $0.027), because the child read many files at the full model price. The benefit that explore aims
-at — a small context in long chats on large repositories — does not show in tasks of 5 to 12 steps.
+### Automatic Language Inference (`inferLanguage`)
+When `language: "auto"` is passed, `inferLanguage(task, files)` inspects the relevant file extensions first (`.go` → `go`, `.rs` → `rust`, etc.). If no files are given, keyword pattern matching inspects the task string (e.g. `cargo`, `lifetime`, `goroutine`, `pytest`, `pom.xml`, `vitest`). If ambiguous, it defaults to `typescript`.
 
-Decision: off by default, as for the code index. Measure again with a larger repository or a suite of
-long, open tasks.
+### Scoped Toolset (`ALLOWED_TOOLS`)
+Specialists receive only tools relevant to code inspection, AST queries, edits, and builds:
+- Read tools: `read_file`, `glob`, `grep`.
+- AST & Index tools: `find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`, `repo_map`.
+- Write & build tools: `edit_file`, `write_file`, `bash`.
+- **Excluded**: Recursive subagents (`delegate_expert`, `explore`, `agent`) are strictly prohibited to prevent nesting loops.
 
-## Custom agents (`custom.ts`, `agentTool.ts`, 0.5)
+### Configuration
+Turned on via project settings (`.garuda/settings.json`):
+```json
+{
+  "moe": {
+    "enabled": true,
+    "maxSteps": 20,
+    "tokenBudget": 150000
+  }
+}
+```
+*(Also automatically active if `"subagents": { "enabled": true }` is set and `moe` is not explicitly disabled).*
 
-### Files
+---
 
-Markdown files in Claude Code's subagent format, read where they are:
+## 3. The `explore` Subagent (`explore.ts`, 0.3)
 
-| Folder | Source | Trust |
+`createExploreTool(options)` creates a read-only child agent for broad code reconnaissance.
+
+```mermaid
+sequenceDiagram
+  participant Main as Primary Agent
+  participant Reg as ToolRegistry
+  participant Ex as explore Tool
+  participant Child as Child Loop (runChild)
+  participant RO as Read-Only Tools
+
+  Main->>Reg: explore(question: "Where is token budget enforced?")
+  Reg->>Ex: run
+  Ex->>Child: runAgent(child session, EXPLORE_SYSTEM, limits)
+  loop Up to 20 steps
+    Child->>RO: glob, grep, read_file, find_symbol
+    RO-->>Child: Results
+    Child-->>Main: tool_progress event ("step N · grep /tokenBudget/")
+  end
+  Child-->>Ex: Answer + wrap-up if limit reached
+  Ex-->>Reg: [explore: 6 steps · 11.2k tokens] + citation list
+  Reg-->>Main: Concise answer with path:line citations
+```
+
+### Key Properties
+- **Read-Only**: Executes strictly without user prompts; parallel explore calls in a single turn run concurrently.
+- **Tools**: `readOnlyTools(codeIndex)`: `glob`, `grep`, `read_file`, `find_symbol`, `find_references`, `repo_map`.
+- **System Prompt (`EXPLORE_SYSTEM`)**: Instructs the child to search broadly first, read only essential lines, cite files as `path:line`, and keep responses under 300 words.
+- **Safety**: Child reads do **not** satisfy `read_file` prerequisites for `edit_file` in the parent agent: the main agent must read a file directly before modifying it.
+
+---
+
+## 4. Custom Subagents (`custom.ts`, `agentTool.ts`, 0.5)
+
+Users can define custom subagents using Markdown files compatible with Claude Code's format:
+
+```mermaid
+flowchart LR
+  subgraph Discovery[Agent Discovery Order]
+    UserGaruda["~/.garuda/agents/*.md (Trusted)"]
+    UserClaude["~/.claude/agents/*.md (Trusted)"]
+    ProjectGaruda[".garuda/agents/*.md (Needs Consent)"]
+    ProjectClaude[".claude/agents/*.md (Needs Consent)"]
+  end
+
+  subgraph ConflictResolution[Precedence Engine]
+    Precedence{Name Clash?}
+    UserWins[User Agent Wins]
+    ProjectWins[Project Agent Used]
+  end
+
+  subgraph ConsentFlow[Project Agent Consent]
+    CheckTrust{Hash in trust.json?}
+    PromptUser[Ask User: Show Tools & Prompt]
+    PinHash[Pin SHA-256 to trust.json]
+  end
+
+  UserGaruda --> Precedence
+  UserClaude --> Precedence
+  ProjectGaruda --> Precedence
+  ProjectClaude --> Precedence
+
+  Precedence -- "User exists" --> UserWins
+  Precedence -- "Project only" --> CheckTrust
+  CheckTrust -- "Known hash" --> ProjectWins
+  CheckTrust -- "New / Changed" --> PromptUser
+  PromptUser -- "Approved" --> PinHash
+  PinHash --> ProjectWins
+```
+
+### Folder Discovery & Trust Hierarchy
+
+| Folder | Source | Trust Level |
 | --- | --- | --- |
-| `~/.garuda/agents/*.md` | user | trusted |
-| `~/.claude/agents/*.md` | user (Claude Code) | trusted |
-| `<root>/.garuda/agents/*.md` | project | asks at first use |
-| `<root>/.claude/agents/*.md` | project (Claude Code) | asks at first use |
+| `~/.garuda/agents/*.md` | User | Trusted (runs immediately) |
+| `~/.claude/agents/*.md` | User (Claude Code) | Trusted (runs immediately) |
+| `<root>/.garuda/agents/*.md` | Project | Asks consent on first use; pinned by SHA-256 |
+| `<root>/.claude/agents/*.md` | Project (Claude Code) | Asks consent on first use; pinned by SHA-256 |
 
-On a name clash the first in the table wins, with a notice. **This differs from Claude Code**, where a
-project agent wins over a user agent: in Garuda a repository cannot replace an agent that the user trusts
-(the same rule as for skills and commands). At most 50 agents; files up to 50 000 characters; project
-files may not be symbolic links.
+*Security Rule: User agents always take precedence over project agents. A repository cannot shadow or replace an agent the user trusts.*
 
-| Key | Use in Garuda |
-| --- | --- |
-| `name` | Required. Letters, digits, `-`, `_` (up to 64; no `:`). |
-| `description` | Required. When to use the agent; the main model sees it. Cut at 1 024 characters. |
-| `tools` | A list (`Read, Grep` or a YAML list). Claude Code names map to Garuda's (`Read` → read_file, `Edit`/`MultiEdit` → edit_file, `Write` → write_file, `Bash` → bash, `Grep`, `Glob`, `WebFetch`, `WebSearch` (0.6), `Skill`, `TodoWrite`); Garuda names and MCP patterns (`mcp__server`, `mcp__server__tool`, `mcp__*`) work too. A part in brackets (`Bash(git *)`) is left out with a notice: Garuda's rules decide. **Omitted: read-only tools only** (read_file, glob, grep, the code index tools, skill). |
-| `disallowedTools` | Removed from the list. |
-| `model` | User agents only: `inherit`, `haiku`/`sonnet`/`opus`/`fable` (the newest known id of that family, when the main model is a Claude model), or a model id that goes through the same providers as `-m` (`~/.garuda/models.json`). A project file cannot pick a model (cost, provider): notice, then the default. Default: `--subagent-model`, else the main model. |
-| `maxTurns` | Model calls per run (up to 100). Default: `subagents.maxSteps` (20). |
-| others | Left out with a notice: `permissionMode`, `mcpServers`, `memory`, `isolation`, `skills`. Ignored: `color`, `hooks` and other maps. |
+### Custom Agent Frontmatter Spec
+```markdown
+---
+name: security-auditor
+description: Audits code for SQL injection, CSRF, and secret leaks
+tools: Read, Grep, Glob
+maxTurns: 15
+---
+You are an expert application security auditor...
+```
 
-The body is the agent's instructions. Project text is cleaned and Garuda's markers are neutralized.
+- `tools`: Claude Code names map directly to Garuda tools (`Read` → `read_file`, `Edit` → `edit_file`, etc.). Omitted tools default to read-only.
+- `runsAlone`: If any custom agent has write permissions, `agent` tool runs exclusively without concurrent tool execution.
 
-### The `agent` tool
+---
 
-Only when at least one agent exists (and `agents.enabled` is not false). Input: `agent` (a name from the
-list) and `prompt` (the task, with all context: the child does not see the conversation). The description
-lists `- name: description` for each agent, fixed per session (N2); the system prompt gets two lines.
+## 5. Child Execution Engine (`child.ts`)
 
-A call:
+`runChild(run: ChildRun, context: ToolContext)` powers all subagent types:
 
-1. Picks the tools: the agent's list matched against the main registry at call time (so MCP tools of the
-   first turn are there), minus `disallowedTools`, never `agent` or `explore` (no nesting).
-2. A project agent asks once (`agentConsent`: its tools and full instructions; "remember" pins the file's
-   SHA-256 in `~/.garuda/trust.json`, `agents[root][name]`). "No" gives an error result.
-3. Runs `runChild` with the system prompt `agentSystem` (who it is, report format, text is data, paths)
-   and then the agent's instructions; the same permission engine (plan mode holds), hooks and executor
-   (bash in the sandbox); limits from `subagents` or `maxTurns`; the child journal
-   `.garuda/sessions/<id>/agent-<name>-<call id>.jsonl`.
-4. With Claude's web search on for the session (0.6) and `web_search` in the agent's tools, the child
-   gets the server tool (`ChildRun.serverTools`) when its model can run it; the consent shows it as
-   `web_search (Claude)`, and each search is a `[calls: web_search (Claude) <query>]` entry.
-5. Returns the answer (cut at 20 000 characters) with `[agent <name>: N steps · Xk tokens]` and
-   `[calls: …]`. The usage counts for the session, like explore.
+1. **Session Isolation**: Spawns a dedicated child session ID (e.g. `moe-rust-1`, `explore-2`, `agent-reviewer-1`) stored at `.garuda/sessions/<parent-id>/<child-id>.jsonl`.
+2. **Limit Guardrails**:
+   - `maxSteps`: Model turns limit (default 20, max 200).
+   - `tokenBudget`: Input, output, and cache tokens cap (default 150,000).
+3. **Wrap-Up Recovery**: When a child hits its step or token limit, `runChild` injects a wrap-up prompt (`WRAP_UP`) and executes one final model call with tools disabled so the subagent can summarize what it discovered and what remains open.
+4. **Usage Accounting**: Emits a `SubagentReport` attached to the tool's `ToolOutcome`. The primary orchestrator adds child token usage and cost to the parent session totals.
 
-The tool is read-only for the permission engine (it changes nothing itself; each child call is checked).
-When any agent may write (a tool outside the read-only set), the tool has `runsAlone`: the loop never runs
-it in parallel with other calls, so two agents never edit at the same time.
+---
 
-`/agents` lists the agents with their tools, model and file. The banner shows `N agents`; JSON output has
-`agents` in `system/init`.
+## 6. Observability & User Interface
 
-No general-purpose agent: it stays off until an A/B eval shows a gain (as explore did not).
+### Start Banner Integration
+The CLI startup banner provides dedicated, aligned rows for active capabilities:
 
-## Tests
+```text
+╭────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ✦ Garuda 0.17.0 · a terminal coding agent                                                          │
+│                                                                                                    │
+│   model      claude-sonnet-5                                                                       │
+│   sandbox    seatbelt · no network                                                                 │
+│   folder     ~/dev/garuda                                                                          │
+│   subagents  explore · 5 MoE experts (Go, Rust, Python, Java, TS)                                  │
+│   agents     1 agent (bug-finder)                                                                  │
+│   skills     1 skill (commit)                                                                      │
+│   tools      TypeScript · 1 MCP server · web_fetch · web_search: Claude + fallback                 │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
 
-`test/agents.test.ts`: the format (lists, brackets, unknown tools, maxTurns, disallowedTools, left-out
-keys); bad files; a project model left out; aliases; the four folders, user over project, links; default
-read-only tools, no nesting, MCP patterns, `agentWrites`; a turn with a read-only agent (its own prompt and
-tools, the report, usage, the child file, `/agents`); a write agent that edits through the approver and
-runs alone; plan mode for the child; a project agent's question and "No"; a model alias through the CLI's
-resolver; no tool without files or with `enabled: false`.
+### Slash Commands
+- **`/experts`**: Lists all 5 MoE language specialists, their test commands, supported extensions, and indexed file counts.
+- **`/agents`**: Lists configured custom subagents, their sources (`user` / `project`), allowed tools, and model targets.
+- **`/session`**: Displays the active session ID, log path, and a consolidated capability inventory (subagents, agents, skills, tools) with cross-reference tips.
+- **`/audit`**: Displays policy status and recent `.garuda/audit.jsonl` events, including subagent tool runs, risk levels, and durations (`durationMs`).
 
-`test/explore.test.ts`: a full turn with a separate child model (only read-only tools; unknown and
-sensitive calls fail; the answer and trailer reach the main agent; progress events; usage and cost in
-the session, the run and after resume; the child file and the report in the parent record); the main
-model as default with a wrap-up after the step limit; off by default, `subagents.enabled: false` and a deny rule; input
-validation; the chat's live line and summaries; settings.
+---
+
+## 7. Security, Team Policy & Audit Containment
+
+Subagent execution is strictly governed by Garuda's enterprise security layers:
+
+```mermaid
+flowchart TD
+  ChildCall[Subagent Tool Call] --> Step0{Team Policy Check<br/>.garuda/policy.json}
+  Step0 -- "Policy denial (disallowed command, denied path)" --> Reject[Policy Denied: by policy]
+  Step0 -- "Pass" --> Perms{Permission Engine<br/>Sensitive paths, protected git}
+  Perms -- "Denied / Ask required" --> Reject
+  Perms -- "Pass" --> Sandbox[Execute inside OS Sandbox]
+  Sandbox --> Duration[Record Duration]
+  Duration --> AuditLog[Append Event to .garuda/audit.jsonl]
+  Reject --> AuditLog
+```
+
+- **Team Policy Enforcement (`.garuda/policy.json`)**: Evaluated at Step 0 before any subagent tool runs. If a policy forbids a path or command, the subagent is blocked immediately with `decision: "by: policy"`.
+- **Audit Trail (`.garuda/audit.jsonl`)**: Every subagent authorization check and tool execution is recorded with timestamp, session ID, tool name, risk level (`low`, `medium`, `high`, `critical`), duration in ms, and error status.
+- **Snapshot & Worktree Isolation**: Child runs never contaminate undo snapshot diffs (`SNAPSHOT_EXCLUDES`) or scheduled job git branches (`NEVER_COMMIT`).

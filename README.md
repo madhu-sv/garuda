@@ -421,6 +421,7 @@ Garuda features an autonomous Mixture-of-Experts (MoE) dispatch architecture for
 - **Specialist profiles**: Dedicated subagents for Go, Rust, Python, Java, and TypeScript equipped with language-idiomatic prompts, toolchain testing commands (`cargo test`, `go test ./...`, `pytest`, `mvn test`, `pnpm test`), and scoped AST tools.
 - **Dynamic delegation**: The primary orchestrator agent can invoke `delegate_expert({ language, task, files })` to dispatch complex language-specific tasks to child subagents. The child subagent runs with full AST code tools, executes language tests, and returns a synthesized report without cluttering the primary context window.
 - **Chat command**: `/experts` lists all available language specialists, their active test commands, and their active status / indexed file counts.
+- **Banner & Observability**: The startup banner features a dedicated `subagents` row (`subagents: explore · 5 MoE experts (Go, Rust, Python, Java, TS)`). In session, `/session` provides a full breakdown of active subagents, agents, skills, and tools.
 - **Configuration**: Enable with `"moe": { "enabled": true }` or `"subagents": { "enabled": true }` in `.garuda/settings.json`.
 
 ## Team policy and structured audit log (0.17, W5)
@@ -894,7 +895,7 @@ Notes:
 | `src/app/` | `Runtime`: settings, executor, permissions and session for one process. The CLI and the evals share it |
 | `src/cli/` | Entry point, chat mode, renderer, terminal approver, `garuda eval` |
 | `src/evals/` | The eval suites (basic, hard, java, python), the shopkit repo generator, toolchain checks and the runner |
-| `src/agents/` | The explore subagent: a read-only child agent loop behind one tool |
+| `src/agents/` | Subagent execution (`child.ts`): the explore subagent (0.3), custom agents (0.5), and Mixture-of-Experts language specialists (0.17) |
 | `src/lang/` | Language profiles: build and test commands, prompt notes and sandbox caches for Maven, Gradle and Python projects |
 | `src/knowledge/` | The code index: `KnowledgeIndex`, `LanguageExpert`, the TypeScript/JavaScript expert |
 | `scripts/` | Build helpers. `package.mjs` makes the standalone binary |

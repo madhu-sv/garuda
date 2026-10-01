@@ -113,7 +113,7 @@ flowchart TB
 | Session | `src/session/` | The conversation in memory, the JSONL journal, resume, redaction, read tracking, the session list (0.6), titles and delete (0.8). |
 | Context | `src/context/` | System prompt, instruction files (`AGENTS.md`, `CLAUDE.md`, `GARUDA.md`), project memory, compaction. |
 | Commands | `src/commands/` | Custom slash commands: load, expand, consent for project commands. |
-| Agents | `src/agents/` | Child runs: the explore subagent (0.3) and custom agents (0.5, Claude Code's format, the `agent` tool). |
+| Agents | `src/agents/` | Child runs: the explore subagent (0.3), custom agents (0.5, Claude Code's format, the `agent` tool), and Mixture-of-Experts language specialists (0.17, Go, Rust, Python, Java, TypeScript via `delegate_expert`). |
 | Skills | `src/skills/` | Load Agent Skills folders (Garuda's and Claude Code's); the `skill` tool; consent for project skills; `/name`. |
 | Undo | `src/undo/` | Snapshots of the project before each turn in a git store of Garuda's own; `/undo` and `/redo`. |
 | Init | `src/init/` | `garuda init` and `/init`: read other agents' files (read only), write new Garuda files after one yes, offer `git init`, give the prompt of the init turn. |
@@ -124,7 +124,7 @@ flowchart TB
 | Web | `src/web/` | Fetch one page with SSRF protection and turn HTML into Markdown; web search through the user's backend (0.5); the config of Claude's search (0.6). |
 | Net | `src/net/` | Address checks (public, loopback) shared by web fetch and model providers. |
 | Hooks | `src/hooks/` | Run the user's commands before and after tool calls. |
-| Subagents | `src/agents/` | The explore tool: a child agent loop with read-only tools, its own session and limits, that answers one question. |
+| Subagents | `src/agents/` | Child agent execution (`child.ts`): explore (0.3), custom agents (0.5), and MoE specialists (0.17) with isolated sessions, limits, reports, and `/experts`. |
 | Language profiles | `src/lang/` | Find the build tool from marker files (Maven, Gradle, Python): test commands, prompt notes, package caches for the sandbox. |
 | Jobs | `src/jobs/` | Scheduled jobs (0.7): the job file, the base commit and worktree on a job branch, the commit and the report. `garuda run` in the CLI runs a job with its approval list and an engine that denies instead of asking. The launchd agent (macOS) starts a job with nobody at the terminal; a job may use the Batch API until its finish-by time. Proof of work (0.11): tests before and after, risk flags, a principal-engineer review, a verdict. The night shift (0.11): a queue per project, `garuda night` runs it (up to 3 at a time) and writes one digest. |
 | Evals | `src/evals/` | Eval tasks (Node, Java, Python), the generated "shopkit" repository, the repo suite from the project's git history (0.12), toolchain checks, the runner and the report. |
@@ -249,7 +249,7 @@ All state is in files. There is no server and no database.
 | Chat UI | Ink, loaded only for a chat on a terminal | Rich UI without slowing `-p`, pipes and evals. |
 | Sessions | JSONL files behind `SessionStore` | Simple, readable, append-only; replaceable later. |
 | Java and Python support | Language profiles (marker files, offline commands, cache allowlist) and eval suites; no per-language subagents | Each language needs a toolchain and the right commands, not a different agent. The evals measure it. |
-| Subagents | Task-based (explore first), a tool of the main agent, same model by default, off by default | A child context keeps the main context small; one tool fits the loop, permissions and records with no new paths. The A/B eval showed no gain in steps or cost, so it is opt-in. |
+| Mixture-of-Experts Subagents (0.17) | Three tiers: task-based `explore` (0.3), custom agents (0.5), and MoE language specialists (0.17, Go, Rust, Python, Java, TypeScript) via `delegate_expert` | Autonomous child agents run idiomatic language testing and AST refactors in isolated sessions, keeping the primary orchestrator context window lean and preventing cross-language prompt drift. |
 | Plan mode | Enforced by the permission engine and a read-only sandbox; the system prompt does not change; a note in the user message explains the mode | A prompt alone cannot stop a write; a fixed prompt keeps the cache. |
 | Todo tool | `todo_write`, stateless (the list lives in the conversation), off by default | The A/B eval (hard suite) showed no gain: the model never called it in 5–13-step tasks. |
 | LSP diagnostics | Real language servers (TypeScript 7 `tsc --lsp`, pyright, jdtls), errors only, in the edit result; PATH or a pinned managed install; off by default | The model sees type errors at the edit, with no extra tool call. Real servers give the same errors as the build. The first A/B eval (hard suite) showed no gain: the model made no type errors to catch. Off by default. |
