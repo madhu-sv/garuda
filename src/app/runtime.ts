@@ -1360,6 +1360,68 @@ export class Runtime {
       out.push(`${this.skillList.length} skill${this.skillList.length === 1 ? "" : "s"}`);
     if (this.exploreModel !== undefined)
       out.push(this.exploreModel === this.modelId ? "explore" : `explore: ${this.exploreModel}`);
+    if (this.tools.get("delegate_expert") !== undefined) out.push("5 experts");
+    return out;
+  }
+
+  /** Available subagents summary, for the start banner and /session. */
+  subagentsSummary(): string[] {
+    const out: string[] = [];
+    if (this.exploreModel !== undefined) {
+      out.push(this.exploreModel === this.modelId ? "explore" : `explore: ${this.exploreModel}`);
+    }
+    if (this.tools.get("delegate_expert") !== undefined) {
+      out.push("5 MoE experts (Go, Rust, Python, Java, TS)");
+    }
+    return out;
+  }
+
+  /** Custom agents summary, for the start banner and /session. */
+  agentsSummary(): string[] {
+    if (this.agentList.length === 0) return [];
+    if (this.agentList.length === 1 && this.agentList[0] !== undefined) {
+      return [`1 agent (${this.agentList[0].name})`];
+    }
+    const names = this.agentList
+      .slice(0, 3)
+      .map((a) => a.name)
+      .join(", ");
+    const more = this.agentList.length > 3 ? "…" : "";
+    return [`${this.agentList.length} agents (${names}${more})`];
+  }
+
+  /** Skills summary, for the start banner and /session. */
+  skillsSummary(): string[] {
+    if (this.skillList.length === 0) return [];
+    if (this.skillList.length === 1 && this.skillList[0] !== undefined) {
+      return [`1 skill (${this.skillList[0].name})`];
+    }
+    const names = this.skillList
+      .slice(0, 3)
+      .map((s) => s.name)
+      .join(", ");
+    const more = this.skillList.length > 3 ? "…" : "";
+    return [`${this.skillList.length} skills (${names}${more})`];
+  }
+
+  /** Tools and integrations summary, for the start banner and /session. */
+  toolsSummary(): string[] {
+    const out: string[] = this.profiles.map((p) => p.label);
+    const servers = this.mcpServers.filter((s) => s.def.enabled).length;
+    if (servers > 0) out.push(`${servers} MCP server${servers === 1 ? "" : "s"}`);
+    const hooks = this.hookConfig.user.length + this.hookConfig.project.length;
+    if (hooks > 0) out.push(`${hooks} hook${hooks === 1 ? "" : "s"}`);
+    if (this.tools.get("web_fetch") !== undefined) out.push("web_fetch");
+    if (this.claudeSearchConfig !== undefined) {
+      out.push(
+        this.tools.get("web_search") === undefined
+          ? "web_search: Claude"
+          : "web_search: Claude + fallback",
+      );
+    } else if (this.tools.get("web_search") !== undefined) out.push("web_search");
+    if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
+    if (this.lspEnabled) out.push("LSP");
+    if (this.selectedMode === "plan") out.push("plan mode");
     return out;
   }
 

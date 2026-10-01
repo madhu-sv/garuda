@@ -52,4 +52,25 @@ describe("start banner", () => {
     expect(colorLevel({ isTTY: true }, { NO_COLOR: "1", COLORTERM: "truecolor" })).toBe("none");
     expect(colorLevel({ isTTY: false }, { COLORTERM: "truecolor" })).toBe("none");
   });
+
+  it("shows distinct subagents, agents, skills, and tools labels when provided", () => {
+    const categorized = {
+      version: "0.17.0",
+      model: "claude-sonnet-5",
+      sandbox: "seatbelt · no network",
+      root: "/Users/m/dev/garuda",
+      subagents: ["explore", "5 MoE experts (Go, Rust, Python, Java, TS)"],
+      agents: ["1 agent (bug-finder)"],
+      skills: ["1 skill (commit)"],
+      tools: ["1 MCP server", "web_fetch", "web_search: Claude"],
+      extras: [],
+      ink: true,
+    };
+    const out = banner(categorized, { columns: 120, color: "none", home: "/Users/m" });
+    expect(out).toContain("│   subagents  explore · 5 MoE experts (Go, Rust, Python, Java, TS)");
+    expect(out).toContain("│   agents     1 agent (bug-finder)");
+    expect(out).toContain("│   skills     1 skill (commit)");
+    expect(out).toContain("│   tools      1 MCP server · web_fetch · web_search: Claude");
+    expect(out).not.toContain("extras");
+  });
 });

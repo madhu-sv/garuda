@@ -18,6 +18,14 @@ export interface BannerInfo {
   extras: string[];
   /** The Ink chat has a queue and Esc; the plain chat does not. */
   ink: boolean;
+  /** Available subagents (explore, MoE specialists) for dedicated banner label. */
+  subagents?: string[] | undefined;
+  /** Custom agents for dedicated banner label. */
+  agents?: string[] | undefined;
+  /** Skills for dedicated banner label. */
+  skills?: string[] | undefined;
+  /** Tools and integrations for dedicated banner label. */
+  tools?: string[] | undefined;
 }
 
 export interface BannerOptions {
@@ -77,10 +85,33 @@ function card(info: BannerInfo, options: BannerOptions, c: Painter): string[] {
     ["sandbox", info.sandbox],
     ["folder", folder],
   ];
-  if (info.extras.length > 0) rows.push(["extras", info.extras.join(" · ")]);
+
+  const hasCategorized =
+    (info.subagents !== undefined && info.subagents.length > 0) ||
+    (info.agents !== undefined && info.agents.length > 0) ||
+    (info.skills !== undefined && info.skills.length > 0) ||
+    (info.tools !== undefined && info.tools.length > 0);
+
+  if (hasCategorized) {
+    if (info.subagents !== undefined && info.subagents.length > 0) {
+      rows.push(["subagents", info.subagents.join(" · ")]);
+    }
+    if (info.agents !== undefined && info.agents.length > 0) {
+      rows.push(["agents", info.agents.join(" · ")]);
+    }
+    if (info.skills !== undefined && info.skills.length > 0) {
+      rows.push(["skills", info.skills.join(" · ")]);
+    }
+    if (info.tools !== undefined && info.tools.length > 0) {
+      rows.push(["tools", info.tools.join(" · ")]);
+    }
+  } else if (info.extras.length > 0) {
+    rows.push(["extras", info.extras.join(" · ")]);
+  }
 
   // The card fits the terminal: at most columns - 2 wide, values cut from the start.
-  const labelWidth = 9; // "sandbox" plus two spaces
+  const maxLabel = Math.max(...rows.map(([label]) => label.length));
+  const labelWidth = Math.max(9, maxLabel + 2);
   const prefix = 2 + labelWidth;
   const natural = Math.max(title.length, ...rows.map(([, v]) => prefix + v.length));
   const inner = Math.max(20, Math.min(natural + 1, options.columns - 4));

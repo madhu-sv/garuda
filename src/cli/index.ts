@@ -472,6 +472,10 @@ async function start(options: Options, program: Command): Promise<number> {
         : `${runtime.executor.name} · no network`,
     root,
     extras: runtime.extras(),
+    subagents: runtime.subagentsSummary(),
+    agents: runtime.agentsSummary(),
+    skills: runtime.skillsSummary(),
+    tools: runtime.toolsSummary(),
     ink: ink !== undefined,
   };
   let startBanner = banner(bannerInfo, {

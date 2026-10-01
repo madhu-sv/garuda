@@ -106,7 +106,20 @@ export async function runCommand(
   } else if (command === "/usage") renderer.info(usageSummary(runtime));
   else if (command === "/session") {
     const id = runtime.session?.id;
-    renderer.info(id === undefined ? "No session yet." : `Session ${id}\n${sessionPath(id)}`);
+    if (id === undefined) {
+      renderer.info("No session yet.");
+    } else {
+      const lines = [`Session ${id}`, sessionPath(id)];
+      const sub = runtime.subagentsSummary();
+      if (sub.length > 0) lines.push(`Subagents: ${sub.join(" · ")} (see /experts)`);
+      const ag = runtime.agentsSummary();
+      if (ag.length > 0) lines.push(`Agents:    ${ag.join(" · ")} (see /agents)`);
+      const sk = runtime.skillsSummary();
+      if (sk.length > 0) lines.push(`Skills:    ${sk.join(" · ")} (see /commands)`);
+      const tl = runtime.toolsSummary();
+      if (tl.length > 0) lines.push(`Tools:     ${tl.join(" · ")}`);
+      renderer.info(lines.join("\n"));
+    }
   } else if (command === "/sessions") {
     await sessionsCommand(
       runtime,
