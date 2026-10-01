@@ -1,12 +1,21 @@
 import { sep } from "node:path";
+import type { AuditLogger } from "../audit/logger.js";
 import type { ProfileAccess } from "../lang/profiles.js";
 import type { ExecPolicy, Isolation, NetworkProxyPolicy } from "../sandbox/types.js";
+import {
+  isCommandDisallowedByPolicy,
+  isHostBlockedByPolicy,
+  isPathDeniedByPolicy,
+  isSandboxRequiredByPolicy,
+  type TeamPolicy,
+} from "./policy.js";
 import { formatRule, type Rule, ruleMatches } from "./rules.js";
 import { sandboxPaths } from "./sandboxPaths.js";
 import { isProtectedFromWrites, isSensitive } from "./sensitive.js";
 import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 import type {
   AgentMode,
+  ApprovalChoice,
   Approver,
   CallTarget,
   PermissionDecision,
@@ -35,6 +44,8 @@ export interface PermissionEngineOptions {
   root: string;
   approver: Approver;
   settings?: Settings;
+  policy?: TeamPolicy;
+  auditLogger?: AuditLogger;
   /** Isolation of the executor in use. With an OS sandbox, commands inside it need no approval. */
   isolation?: Isolation;
   /** Package caches and environment variables for the project's language profiles (0.3). */
@@ -77,6 +88,8 @@ export class PermissionEngine implements PermissionGate {
   private readonly root: string;
   private readonly approver: Approver;
   private readonly settings: Settings;
+  private readonly policy: TeamPolicy | undefined;
+  private readonly auditLogger: AuditLogger | undefined;
   private readonly isolation: Isolation;
   private readonly access: ProfileAccess;
   private readonly mode: () => AgentMode;
@@ -89,6 +102,8 @@ export class PermissionEngine implements PermissionGate {
     this.root = options.root;
     this.approver = options.approver;
     this.settings = options.settings ?? DEFAULT_SETTINGS;
+    this.policy = options.policy;
+    this.auditLogger = options.auditLogger;
     this.isolation = options.isolation ?? "none";
     this.access = options.access ?? { writePaths: [], envAllow: [] };
     this.mode = options.mode ?? (() => "build");
@@ -96,9 +111,87 @@ export class PermissionEngine implements PermissionGate {
   }
 
   async check(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision> {
+    const { decision, userChoice } = await this.evaluateCheck(request, signal);
+    await this.auditLogger?.logPermissionDecision({
+      tool: request.tool,
+      ...(request.info?.target === undefined ? {} : { target: request.info.target }),
+      readOnly: request.readOnly,
+      decision,
+      ...(userChoice === undefined ? {} : { userChoice }),
+    });
+    return decision;
+  }
+
+  private async evaluateCheck(
+    request: PermissionRequest,
+    signal: AbortSignal,
+  ): Promise<{ decision: PermissionDecision; userChoice?: ApprovalChoice }> {
     const { tool, info } = request;
     const target = info?.target;
     const allowRule = this.settings.allow.find((r) => ruleMatches(r, tool, target, "allow"));
+
+    if (this.policy !== undefined) {
+      if (target?.kind === "command") {
+        const sandboxViolation = isSandboxRequiredByPolicy(
+          this.policy,
+          target.outsideSandbox === true,
+        );
+        if (sandboxViolation.disallowed) {
+          return {
+            decision: {
+              allowed: false,
+              by: "policy",
+              reason:
+                sandboxViolation.reason ??
+                "Running commands outside the sandbox is disallowed by team policy.",
+            },
+          };
+        }
+        const cmdViolation = isCommandDisallowedByPolicy(this.policy, target.command);
+        if (cmdViolation.disallowed) {
+          return {
+            decision: {
+              allowed: false,
+              by: "policy",
+              reason: cmdViolation.reason ?? "Command disallowed by team policy.",
+            },
+          };
+        }
+      }
+      if (target?.kind === "path") {
+        const pathViolation = isPathDeniedByPolicy(this.policy, target.path);
+        if (pathViolation.denied) {
+          return {
+            decision: {
+              allowed: false,
+              by: "policy",
+              reason: pathViolation.reason ?? "Path disallowed by team policy.",
+            },
+          };
+        }
+      }
+      if (target?.kind === "url") {
+        const hostViolation = isHostBlockedByPolicy(this.policy, target.host);
+        if (hostViolation.blocked) {
+          return {
+            decision: {
+              allowed: false,
+              by: "policy",
+              reason: hostViolation.reason ?? "Host blocked by team policy.",
+            },
+          };
+        }
+        if (this.policy.network?.strictAllowlist === true && allowRule === undefined) {
+          return {
+            decision: {
+              allowed: false,
+              by: "policy",
+              reason: `Host "${target.host}" is not on the network allowlist and strict policy prohibits user overrides.`,
+            },
+          };
+        }
+      }
+    }
 
     if (target?.kind === "path" && isSensitive(target.path)) {
       // Only a rule with a pattern lifts the block. A bare "read_file" rule does not.
@@ -107,44 +200,50 @@ export class PermissionEngine implements PermissionGate {
       );
       if (!named) {
         return {
-          allowed: false,
-          by: "sensitive",
-          reason: `${target.path} is a sensitive file. Add "${tool}(${target.path})" to permissions.allow in .garuda/settings.json to allow it.`,
+          decision: {
+            allowed: false,
+            by: "sensitive",
+            reason: `${target.path} is a sensitive file. Add "${tool}(${target.path})" to permissions.allow in .garuda/settings.json to allow it.`,
+          },
         };
       }
     }
 
     if (target?.kind === "path" && !request.readOnly && isProtectedFromWrites(target.path)) {
-      return { allowed: false, by: "rule", reason: `${target.path} is inside .git/.` };
+      return {
+        decision: { allowed: false, by: "rule", reason: `${target.path} is inside .git/.` },
+      };
     }
 
     const denyRule = this.settings.deny.find((r) => ruleMatches(r, tool, target, "deny"));
     if (denyRule !== undefined) {
       return {
-        allowed: false,
-        by: "rule",
-        reason: `A deny rule blocks this call: ${formatRule(denyRule)}.`,
+        decision: {
+          allowed: false,
+          by: "rule",
+          reason: `A deny rule blocks this call: ${formatRule(denyRule)}.`,
+        },
       };
     }
 
     if (this.mode() === "plan" && !request.readOnly) {
-      return this.planDecision(tool, target, allowRule !== undefined);
+      return { decision: this.planDecision(tool, target, allowRule !== undefined) };
     }
 
-    if (request.readOnly) return { allowed: true, by: "read_only" };
+    if (request.readOnly) return { decision: { allowed: true, by: "read_only" } };
     if (target?.kind === "command" && !target.outsideSandbox && this.isolation !== "none") {
-      return { allowed: true, by: "sandbox" };
+      return { decision: { allowed: true, by: "sandbox" } };
     }
     const mustAsk = target?.kind === "url" && target.alwaysAsk === true;
-    if (allowRule !== undefined && !mustAsk) return { allowed: true, by: "rule" };
+    if (allowRule !== undefined && !mustAsk) return { decision: { allowed: true, by: "rule" } };
     if (!mustAsk && this.sessionRules.some((r) => ruleMatches(r, tool, target, "allow"))) {
-      return { allowed: true, by: "session" };
+      return { decision: { allowed: true, by: "session" } };
     }
 
     const asked: CallTarget = target ?? { kind: "input", json: "{}" };
     if (this.unattended !== undefined) {
       this.unattended.onDeny?.(tool, asked);
-      return { allowed: false, by: "unattended", reason: this.unattended.reason };
+      return { decision: { allowed: false, by: "unattended", reason: this.unattended.reason } };
     }
     const choice = await this.approver.ask(
       {
@@ -158,13 +257,16 @@ export class PermissionEngine implements PermissionGate {
     );
     if (choice === "deny") {
       return {
-        allowed: false,
-        by: "user",
-        reason: "The user denied this call. Do not retry it. Ask the user what to do instead.",
+        decision: {
+          allowed: false,
+          by: "user",
+          reason: "The user denied this call. Do not retry it. Ask the user what to do instead.",
+        },
+        userChoice: choice,
       };
     }
     if (choice === "session") this.sessionRules.push(sessionRule(tool, asked));
-    return { allowed: true, by: "user" };
+    return { decision: { allowed: true, by: "user" }, userChoice: choice };
   }
 
   /**
@@ -254,9 +356,11 @@ function sessionRule(tool: string, target: CallTarget): Rule {
   return { tool };
 }
 
-function describeTarget(target: CallTarget): string {
+export function describeTarget(target: CallTarget): string {
   if (target.kind === "path") return target.path;
-  if (target.kind === "command") return target.command;
+  if (target.kind === "command") {
+    return target.outsideSandbox ? `[outside sandbox] ${target.command}` : target.command;
+  }
   if (target.kind === "url") return target.url;
   return target.json;
 }

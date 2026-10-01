@@ -20,7 +20,7 @@ interface PermissionGate {
 }
 type PermissionDecision =
   | { allowed: true; by: "read_only" | "sandbox" | "rule" | "session" | "user" }
-  | { allowed: false; by: "rule" | "sensitive" | "user"; reason };
+  | { allowed: false; by: "rule" | "sensitive" | "user" | "unattended" | "policy"; reason };
 
 interface Approver { ask(request: ApprovalRequest, signal): Promise<"once" | "session" | "deny"> }
 interface ApprovalRequest { tool; target; preview; isolation; title?; question?; choices?; labels? }
@@ -38,6 +38,7 @@ Order of checks — the first match decides:
 
 | # | Check | Result |
 | --- | --- | --- |
+| 0 | Team Policy violation (`.garuda/policy.json` guardrails: disallowed commands, require sandbox, deny paths, blocked hosts, strict allowlist) (0.17) | deny (`by: "policy"`) |
 | 1 | Path target is sensitive and no allow rule *with a pattern* names it (F20) | deny |
 | 2 | A write to a path inside `.git/` | deny |
 | 3 | A deny rule matches (F19) | deny |
@@ -46,6 +47,8 @@ Order of checks — the first match decides:
 | 5 | Command target, not `outsideSandbox`, and the executor has isolation | allow (`sandbox`) |
 | 6 | An allow rule or a session rule matches, and the target is not an `alwaysAsk` URL | allow |
 | 7 | Otherwise | ask the user (F18) |
+
+Every permission check and tool execution is asynchronously streamed to `.garuda/audit.jsonl` by `AuditLogger` (0.17). Inspect with `/audit`.
 
 ### Plan mode (0.4)
 

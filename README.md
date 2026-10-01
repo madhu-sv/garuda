@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.16.0.
+Garuda is a terminal coding agent. This is version 0.17.0.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -28,7 +28,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.14: dynamic sandbox probe, core modularization, background daemons (W3), interactive patch staging (W4) | Done |
 | 0.15: universal multi-language AST & code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done |
 | 0.16: dynamic language plugin system (Go & Rust reference plugins, ~/.garuda/languages/ & .garuda/languages/ discovery, SHA-256 hash pinning security, /languages command) | Done |
-| 0.17: Mixture-of-Experts (MoE) subagent dispatch, team policy & audit log (W5) | Planned |
+| 0.17: Mixture-of-Experts (MoE) subagent dispatch, team policy & audit log (W5) | Done |
 
 ## Use
 
@@ -413,6 +413,32 @@ It answers code questions on this machine, with zero native C++ compilation depe
 - The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
   Pure AST parsers run in-process and preserve single-binary distribution.
 - Files follow `.gitignore`. Sensitive files are never indexed.
+
+## Mixture-of-Experts (MoE) subagent dispatch and /experts (0.17)
+
+Garuda features an autonomous Mixture-of-Experts (MoE) dispatch architecture for polyglot codebases:
+
+- **Specialist profiles**: Dedicated subagents for Go, Rust, Python, Java, and TypeScript equipped with language-idiomatic prompts, toolchain testing commands (`cargo test`, `go test ./...`, `pytest`, `mvn test`, `pnpm test`), and scoped AST tools.
+- **Dynamic delegation**: The primary orchestrator agent can invoke `delegate_expert({ language, task, files })` to dispatch complex language-specific tasks to child subagents. The child subagent runs with full AST code tools, executes language tests, and returns a synthesized report without cluttering the primary context window.
+- **Chat command**: `/experts` lists all available language specialists, their active test commands, and their active status / indexed file counts.
+- **Configuration**: Enable with `"moe": { "enabled": true }` or `"subagents": { "enabled": true }` in `.garuda/settings.json`.
+
+## Team policy and structured audit log (0.17, W5)
+
+For enterprise governance, security guardrails, and compliance, Garuda enforces hard team policies and continuous structured audit logging:
+
+- **Team policy (`.garuda/policy.json`)**: Administrative guardrails that override local developer settings and interactive prompts:
+  - `disallowedCommands`: Command patterns strictly forbidden across all runs (e.g. `["rm -rf *", "git push *--force*", "curl * | sh"]`). Any compound command containing a disallowed part is immediately rejected.
+  - `requireSandbox`: When `true`, prevents commands from running outside the OS sandbox.
+  - `denyPaths`: Patterns of sensitive paths forbidden from read/write (e.g. `["**/.env*", "**/id_rsa*"]`).
+  - `allowedModels`: Allowlist of LLM models permitted for use in the organization.
+  - `network`: Domain restrictions (`blockedHosts`, `strictAllowlist`).
+  - `limits`: Global caps on `maxSteps` and `tokenBudget`.
+- **Structured audit log (`.garuda/audit.jsonl`)**: Append-only tamper-evident audit record capturing:
+  - Every authorization decision (`allow_readonly`, `allow_sandbox`, `deny_policy`, `deny_user`, etc.).
+  - Security risk classification (`low`, `medium`, `high`, `critical`).
+  - Tool execution duration in milliseconds and error status.
+- **Chat command**: `/audit` displays active policy rules and recent audit events. Use `/audit stats` for totals, `/audit denials` for security blocks, or `/audit <n>` for recent events.
 
 ## Sessions, limits and context
 

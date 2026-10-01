@@ -95,7 +95,7 @@ function globToRegExp(glob: string): RegExp {
 
 // Commands.
 
-function commandMatches(pattern: string, command: string): boolean {
+export function commandMatches(pattern: string, command: string): boolean {
   const regex = normalize(pattern).split("*").map(escapeRegExp).join(".*");
   return new RegExp(`^${regex}$`, "s").test(normalize(command));
 }

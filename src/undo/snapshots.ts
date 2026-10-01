@@ -22,7 +22,13 @@ import type { ExecPolicy, Executor } from "../sandbox/types.js";
  */
 
 /** Paths that are never in a snapshot: Garuda's own records and caches, and the project's .git. */
-export const SNAPSHOT_EXCLUDES = [".git", ".garuda/sessions/", ".garuda/index/", ".garuda/evals/"];
+export const SNAPSHOT_EXCLUDES = [
+  ".git",
+  ".garuda/sessions/",
+  ".garuda/index/",
+  ".garuda/evals/",
+  ".garuda/audit.jsonl",
+];
 /** A project with more files than this gets no snapshots (the first `git add` would be too slow). */
 export const MAX_SNAPSHOT_FILES = 50_000;
 /** A snapshot that takes longer than this turns undo off for the session. */

@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.16.0-dev. This document describes the parts of Garuda, their dependencies, the trust
+Version 0.17.0-dev. This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -18,6 +18,7 @@ flowchart LR
   garuda -->|stdio, in the sandbox| mcp[Local MCP servers]
   garuda -->|HTTPS GET, approved hosts| web[(Web pages)]
   garuda -->|JSONL| sessions[(.garuda/sessions)]
+  garuda -->|JSONL| audit[(.garuda/audit.jsonl)]
   garuda <-->|trust.json, mcp.json, hooks.json| home[(~/.garuda)]
 ```
 
@@ -45,7 +46,7 @@ flowchart TB
   end
   subgraph App[Application layer]
     runtime[app/Runtime]
-    agents[agents: explore, custom agents, child run]
+    agents[agents: explore, custom agents, MoE specialists, child run]
     init[init: set-up and migration]
     evals[evals: runner, suites]
   end
@@ -56,7 +57,8 @@ flowchart TB
   end
   subgraph Capabilities[Capability layer]
     tools[tools: registry and built-in tools]
-    permissions[permissions: engine, rules, settings, sandbox paths]
+    permissions[permissions: engine, rules, settings, policy, sandbox paths]
+    audit[audit: structured audit logger]
     knowledge[knowledge: code index, language experts]
     mcp[mcp: client, trust, sanitizing]
     web[web: SSRF-safe fetch, search backends]

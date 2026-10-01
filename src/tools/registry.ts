@@ -86,9 +86,19 @@ export class ToolRegistry implements ToolRunner {
       if (!decision.allowed) {
         return { content: `Permission denied: ${decision.reason}`, isError: true, denied: true };
       }
+      const startTime = Date.now();
       const output: unknown = await tool.run(parsed.data, context);
+      const durationMs = Date.now() - startTime;
       const content = tool.toText ? tool.toText(output) : String(output);
       const outcome = { content, isError: tool.isError?.(output) === true };
+      if (context.audit !== undefined) {
+        await context.audit.logToolExecution({
+          tool: tool.name,
+          ...(info?.target === undefined ? {} : { target: info.target }),
+          durationMs,
+          isError: outcome.isError,
+        });
+      }
       const final =
         context.hooks === undefined
           ? outcome
@@ -99,6 +109,13 @@ export class ToolRegistry implements ToolRunner {
     } catch (error) {
       if (context.signal.aborted) throw error;
       const message = error instanceof Error ? error.message : String(error);
+      if (context.audit !== undefined) {
+        await context.audit.logToolExecution({
+          tool: call.name,
+          durationMs: 0,
+          isError: true,
+        });
+      }
       return { content: `Error: ${call.name} failed: ${message}`, isError: true };
     }
   }

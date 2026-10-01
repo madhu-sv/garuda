@@ -132,6 +132,14 @@ const schema = z.strictObject({
       tokenBudget: z.number().int().min(10_000).optional(),
     })
     .optional(),
+  /** Mixture-of-Experts language specialist subagent dispatch (0.17). */
+  moe: z
+    .strictObject({
+      enabled: z.boolean().optional(),
+      maxSteps: z.number().int().min(1).max(200).optional(),
+      tokenBudget: z.number().int().min(10_000).optional(),
+    })
+    .optional(),
   model: z
     .strictObject({
       contextWindow: z.number().int().min(10_000).optional(),
@@ -164,6 +172,7 @@ export interface Settings {
   contextWindow?: number;
   price?: Price;
   subagents?: { enabled?: boolean; maxSteps?: number; tokenBudget?: number };
+  moe?: { enabled?: boolean; maxSteps?: number; tokenBudget?: number };
   todo?: { enabled: boolean };
   lsp?: { enabled: boolean };
   undo?: { enabled: boolean };
@@ -189,6 +198,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     model = {},
     codeIndex,
     subagents,
+    moe,
     todo,
     lsp,
     undo,
@@ -277,6 +287,15 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
             ...(subagents.enabled === undefined ? {} : { enabled: subagents.enabled }),
             ...(subagents.maxSteps === undefined ? {} : { maxSteps: subagents.maxSteps }),
             ...(subagents.tokenBudget === undefined ? {} : { tokenBudget: subagents.tokenBudget }),
+          },
+        }),
+    ...(moe === undefined
+      ? {}
+      : {
+          moe: {
+            ...(moe.enabled === undefined ? {} : { enabled: moe.enabled }),
+            ...(moe.maxSteps === undefined ? {} : { maxSteps: moe.maxSteps }),
+            ...(moe.tokenBudget === undefined ? {} : { tokenBudget: moe.tokenBudget }),
           },
         }),
   };

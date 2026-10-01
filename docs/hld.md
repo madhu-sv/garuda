@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.16.0-dev. This document shows how the parts work together. The component documents in
+Version 0.17.0-dev. This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -332,6 +332,8 @@ the changes directly.
 | LSP diagnostics | `.garuda/settings.json` (`lsp`), `--lsp`, `~/.garuda/lsp.json` | Language server errors in edit results. |
 | Formatters (0.10) | `.garuda/settings.json` (`formatters`) | The project's formatter after each edit; off by default. |
 | Language experts & plugins (0.16) | `~/.garuda/languages/`, `.garuda/languages/` | Code index AST support for languages (TS/JS, Python, Java, Go, Rust, and custom plugins). |
+| MoE language specialists (0.17) | `.garuda/settings.json` (`moe`), built-in | Subagent delegation tool `delegate_expert` and `/experts`. |
+| Team policy & audit log (0.17, W5) | `.garuda/policy.json`, `.garuda/audit.jsonl` | Enterprise guardrails and structured tamper-evident audit logging, with `/audit`. |
 | Executors | `src/sandbox/` (`Executor`) | Another isolation technology. |
 | Session stores | `src/session/` (`SessionStore`) | Another place for sessions. |
 

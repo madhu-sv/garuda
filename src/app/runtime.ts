@@ -5,6 +5,8 @@ import { createAgentTool } from "../agents/agentTool.js";
 import type { ChildModel } from "../agents/child.js";
 import { agentConsent, type CustomAgent, loadAgents } from "../agents/custom.js";
 import { createExploreTool, DEFAULT_EXPLORE_LIMITS } from "../agents/explore.js";
+import { createMoeDispatchTool } from "../agents/moe.js";
+import { AuditLogger } from "../audit/logger.js";
 import { BUILTIN_COMMANDS } from "../commands/builtins.js";
 import {
   type CustomCommand,
@@ -69,6 +71,7 @@ import { expandAllowlist, hostAllowed, NETWORK_PORTS } from "../net/allowlist.js
 import type { NetworkProxy, ProxyDecision } from "../net/proxy.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
+import { isModelAllowedByPolicy, loadPolicy, type TeamPolicy } from "../permissions/policy.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
@@ -131,6 +134,8 @@ export interface RuntimeOptions {
   resume?: true | string;
   /** Default: read .garuda/settings.json in the root. */
   settings?: Settings;
+  /** Team security policy (0.17). Default: read .garuda/policy.json in the root. */
+  policy?: TeamPolicy;
   onEvent?: (event: AgentEvent) => void;
   /** Warnings for the user outside a tool call, for example from MCP servers. */
   onNotice?: (text: string) => void;
@@ -247,6 +252,10 @@ export class Runtime {
   readonly codeIndex: CodeIndexMode;
   /** The explore subagent's model spec, or undefined when explore is off (0.3). */
   readonly exploreModel: string | undefined;
+  /** Team security policy (0.17). */
+  readonly policy: TeamPolicy | undefined;
+  /** Structured audit logger (0.17). */
+  readonly auditLogger: AuditLogger;
   private readonly permissions: PermissionEngine;
   private readonly store: SessionStore;
   private readonly tools: ToolRegistry;
@@ -320,7 +329,11 @@ export class Runtime {
     mcpServers: ServerConfig[],
     hookConfig: { user: Hook[]; project: Hook[]; home: string },
     profiles: LanguageProfile[],
+    policy?: TeamPolicy,
+    auditLogger?: AuditLogger,
   ) {
+    this.policy = policy;
+    this.auditLogger = auditLogger ?? new AuditLogger(options.root);
     this.hookConfig = hookConfig;
     this.profiles = profiles;
     this.lspOptions = options.lsp ?? {};
@@ -393,6 +406,8 @@ export class Runtime {
     this.permissions = new PermissionEngine({
       root: options.root,
       settings,
+      ...(policy === undefined ? {} : { policy }),
+      auditLogger: this.auditLogger,
       approver: options.approver,
       isolation: this.executor.isolation,
       access: profileAccess(profiles),
@@ -442,6 +457,61 @@ export class Runtime {
         }),
       );
     }
+    if (
+      settings.moe?.enabled === true ||
+      (settings.subagents?.enabled === true && settings.moe?.enabled !== false)
+    ) {
+      const sub = options.subagentModel;
+      let subClient: ModelClient | undefined;
+      const subPrice = sub === undefined ? this.price : sub.info.price;
+      const spec = sub?.spec ?? options.modelId;
+      const startModel = options.model;
+      let startClient: Promise<ModelClient> | undefined;
+
+      this.tools.register(
+        createMoeDispatchTool({
+          mainTools: () => this.tools,
+          model: async () => ({
+            spec,
+            client:
+              sub === undefined
+                ? () => {
+                    startClient ??= Promise.resolve(
+                      typeof startModel === "function" ? startModel() : startModel,
+                    );
+                    return startClient;
+                  }
+                : async () => {
+                    subClient ??= await sub.model();
+                    return subClient;
+                  },
+            contextWindow: sub?.info.contextWindow ?? this.limits.contextWindow,
+            ...(subPrice === undefined ? {} : { price: subPrice }),
+          }),
+          permissions: this.permissions,
+          knowledge: this.knowledge,
+          hooks: () => this.hookRunner,
+          executor: this.executor,
+          journal: (childId) =>
+            this.current === undefined ? undefined : this.store.openChild(this.current.id, childId),
+          limits: {
+            maxSteps:
+              settings.moe?.maxSteps ??
+              settings.subagents?.maxSteps ??
+              DEFAULT_EXPLORE_LIMITS.maxSteps,
+            tokenBudget:
+              settings.moe?.tokenBudget ??
+              settings.subagents?.tokenBudget ??
+              DEFAULT_EXPLORE_LIMITS.tokenBudget,
+          },
+          profiles: this.profiles,
+          serverTools: () =>
+            this.claudeSearch === "on" && this.claudeSearchConfig !== undefined
+              ? [this.claudeSearchSpec(this.claudeSearchConfig)]
+              : [],
+        }),
+      );
+    }
   }
 
   /** The notification settings for the chat (0.6); the CLI applies them. */
@@ -469,6 +539,30 @@ export class Runtime {
 
   static async create(options: RuntimeOptions): Promise<Runtime> {
     const settings = options.settings ?? (await loadSettings(options.root));
+    const policy = options.policy ?? (await loadPolicy(options.root));
+    if (policy !== undefined) {
+      const modelAllowed = isModelAllowedByPolicy(policy, options.modelId);
+      if (!modelAllowed.allowed) {
+        throw new Error(
+          modelAllowed.reason ?? `Model "${options.modelId}" is not permitted by team policy.`,
+        );
+      }
+      if (policy.limits?.maxSteps !== undefined) {
+        const policyMax = policy.limits.maxSteps;
+        settings.maxSteps =
+          settings.maxSteps === undefined ? policyMax : Math.min(settings.maxSteps, policyMax);
+      }
+      if (policy.limits?.tokenBudget !== undefined) {
+        const policyBudget = policy.limits.tokenBudget;
+        settings.tokenBudget =
+          settings.tokenBudget === undefined
+            ? policyBudget
+            : Math.min(settings.tokenBudget, policyBudget);
+      }
+    }
+    const auditLogger = new AuditLogger(options.root, {
+      ...(policy === undefined ? {} : { policy }),
+    });
     const choice = createExecutor(settings.executor);
     let mcpServers: ServerConfig[] = [];
     if (options.mcp !== false) {
@@ -535,6 +629,8 @@ export class Runtime {
       mcpServers,
       hookConfig,
       profiles,
+      policy,
+      auditLogger,
     );
     if (runtime.lspEnabled) {
       try {
@@ -982,6 +1078,7 @@ export class Runtime {
     await this.startNetwork(signal);
     await this.startMcp(signal);
     const session = this.ensureSession();
+    this.auditLogger.setSessionId(session.id);
     this.turnMode = this.selectedMode;
     // jdtls imports a Maven or Gradle project for a while: start it now, not at the first edit.
     if (this.lspEnabled && this.profiles.some((p) => p.id === "maven" || p.id === "gradle")) {
@@ -1011,6 +1108,7 @@ export class Runtime {
       permissions: this.permissions,
       executor: this.executor,
       knowledge: this.knowledge,
+      audit: this.auditLogger,
       ...(this.hookRunner === undefined ? {} : { hooks: this.hookRunner }),
       ...(serverTools.length === 0 ? {} : { serverTools }),
       ...(this.lspEnabled
@@ -1729,9 +1827,18 @@ export class Runtime {
     }
   }
 
+  get teamPolicy(): TeamPolicy | undefined {
+    return this.policy;
+  }
+
+  get audit(): AuditLogger {
+    return this.auditLogger;
+  }
+
   private ensureSession(): Session {
     if (this.current !== undefined) return this.current;
     const id = newSessionId();
+    this.auditLogger.setSessionId(id);
     const session = createSession(this.root, id, this.store.open(id));
     session.journal?.write({ type: "start", sessionId: id, ...this.startFields() });
     // A /thinking choice carries into a new session (0.9); the record lets a resume find it.

@@ -1,3 +1,4 @@
+import { SPECIALIST_SPECS } from "../../agents/moe.js";
 import { modelFacts, type Runtime } from "../../app/runtime.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { totalTokens, WEB_SEARCH_USD } from "../../model/pricing.js";
@@ -44,6 +45,8 @@ export const HELP = [
   "  /hooks     the active hooks",
   "  /lsp       language servers for diagnostics; /lsp install <typescript|python|java>",
   "  /languages registered language plugins and indexed file counts",
+  "  /experts   MoE language specialist subagents and their active status",
+  "  /audit     team security policy and recent audit trail; /audit [n|denials|stats]",
   "  /commands  your custom commands and skills (~/.garuda, .garuda, .claude)",
   "  /agents    your custom agents and their tools (~/.garuda, .garuda, .claude)",
   "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles); /plan <task> plans it",
@@ -174,6 +177,10 @@ export async function runCommand(
     await lspCommand(runtime, renderer, text.slice(command.length).trim());
   } else if (command === "/languages") {
     await languagesCommand(runtime, renderer);
+  } else if (command === "/experts") {
+    await expertsCommand(runtime, renderer);
+  } else if (command === "/audit") {
+    await auditCommand(runtime, renderer, text.slice(command.length).trim());
   } else if (command === "/undo" || command === "/redo") {
     const signal = new AbortController().signal;
     renderer.info(await (command === "/undo" ? runtime.undo(signal) : runtime.redo(signal)));
@@ -569,6 +576,110 @@ async function languagesCommand(runtime: Runtime, renderer: Renderer): Promise<v
   renderer.info(lines.join("\n"));
 }
 
+/** /experts: show configured MoE language specialists and their status. */
+async function expertsCommand(runtime: Runtime, renderer: Renderer): Promise<void> {
+  const statuses = await runtime.knowledge.languageStatuses();
+  const lines: string[] = ["Mixture-of-Experts (MoE) Language Specialists:"];
+  const specialistEntries = Object.values(SPECIALIST_SPECS);
+
+  for (const spec of specialistEntries) {
+    const status = statuses.find((s) => s.id === spec.id);
+    const active = status?.active ?? false;
+    const count = status?.indexedFiles ?? 0;
+    const badge = active ? `${count} file(s) active` : "standby";
+    lines.push(`  • ${spec.name} (${spec.id}): ${badge}`);
+    lines.push(`    test command: ${spec.testCommand}`);
+  }
+
+  renderer.info(lines.join("\n"));
+}
+
+/** /audit: show team security policy and recent audit trail. /audit [n|denials|stats] */
+async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): Promise<void> {
+  const policy = runtime.teamPolicy;
+  const lines: string[] = [];
+
+  if (policy === undefined) {
+    lines.push("Team Policy: none (.garuda/policy.json not configured)");
+  } else {
+    lines.push("Team Policy: active (.garuda/policy.json)");
+    if (policy.requireSandbox === true) {
+      lines.push("  • Require Sandbox: enabled (all bash commands must run sandboxed)");
+    }
+    if (policy.disallowedCommands && policy.disallowedCommands.length > 0) {
+      const sample = policy.disallowedCommands.slice(0, 3).join(", ");
+      const extra = policy.disallowedCommands.length > 3 ? "…" : "";
+      lines.push(
+        `  • Disallowed Commands: ${policy.disallowedCommands.length} pattern(s) (${sample}${extra})`,
+      );
+    }
+    if (policy.denyPaths && policy.denyPaths.length > 0) {
+      const sample = policy.denyPaths.slice(0, 3).join(", ");
+      const extra = policy.denyPaths.length > 3 ? "…" : "";
+      lines.push(`  • Deny Paths: ${policy.denyPaths.length} pattern(s) (${sample}${extra})`);
+    }
+    if (policy.allowedModels && policy.allowedModels.length > 0) {
+      lines.push(`  • Allowed Models: ${policy.allowedModels.join(", ")}`);
+    }
+    if (policy.network?.blockedHosts && policy.network.blockedHosts.length > 0) {
+      lines.push(`  • Blocked Hosts: ${policy.network.blockedHosts.join(", ")}`);
+    }
+    if (policy.network?.strictAllowlist === true) {
+      lines.push("  • Network: strict allowlist enforced (no interactive exceptions)");
+    }
+  }
+
+  if (arg === "stats") {
+    const stats = await runtime.audit.getStats();
+    lines.push("");
+    lines.push("Audit Statistics:");
+    lines.push(`  Total Events:      ${stats.total}`);
+    lines.push(`  Allowed:           ${stats.allowed}`);
+    lines.push(`  Denied / Blocked:  ${stats.denied}`);
+    lines.push(`  Policy Blocks:     ${stats.policyBlocked}`);
+    lines.push(`  Critical Risk:     ${stats.criticalCount}`);
+    renderer.info(lines.join("\n"));
+    return;
+  }
+
+  const isDenials = arg === "denials";
+  const limit = /^\d+$/.test(arg) ? Number.parseInt(arg, 10) : 10;
+  const events = await runtime.audit.readEvents({
+    limit,
+    ...(isDenials ? { denialsOnly: true } : {}),
+  });
+
+  lines.push("");
+  if (events.length === 0) {
+    lines.push(
+      isDenials ? "No denied or blocked audit events found." : "No audit events recorded yet.",
+    );
+  } else {
+    lines.push(
+      isDenials
+        ? `Recent Security Denials / Policy Blocks (last ${events.length}):`
+        : `Recent Audit Events (last ${events.length}):`,
+    );
+    for (const e of events) {
+      const time = e.timestamp.slice(11, 19);
+      const badge =
+        e.decision === "deny_policy"
+          ? "BLOCK"
+          : !e.allowed
+            ? "DENY "
+            : e.isError
+              ? "ERROR"
+              : "ALLOW";
+      const targetStr = e.target ? ` · ${e.target}` : "";
+      const reasonStr = e.reason ? ` (${e.reason})` : "";
+      const durStr = e.durationMs !== undefined ? ` [${e.durationMs}ms]` : "";
+      lines.push(`  [${time}] ${badge} (${e.risk}) ${e.tool}${targetStr}${durStr}${reasonStr}`);
+    }
+  }
+
+  renderer.info(lines.join("\n"));
+}
+
 export function usageSummary(runtime: Runtime): string {
   const session = runtime.session;
   if (session === undefined) return "No session yet.";
@@ -665,6 +776,8 @@ const RUN_AT_ONCE = new Set([
   "session",
   "hooks",
   "languages",
+  "experts",
+  "audit",
   "commands",
   "agents",
   "plan",

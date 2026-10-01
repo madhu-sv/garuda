@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { AuditLogger } from "../audit/logger.js";
 import type { KnowledgeIndex } from "../knowledge/index.js";
 import type { ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { CallInfo, PermissionGate } from "../permissions/types.js";
@@ -29,6 +30,8 @@ export interface ToolContext {
   diagnostics?: DiagnosticsSource;
   /** Formats a file that a tool just wrote (0.10). Absent when formatters are off. */
   format?: FormatSource;
+  /** Structured audit logger (0.17). Absent when audit is off. */
+  audit?: AuditLogger;
 }
 
 /**

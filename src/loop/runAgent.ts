@@ -1,3 +1,4 @@
+import type { AuditLogger } from "../audit/logger.js";
 import { compactIfNeeded } from "../context/compact.js";
 import type { KnowledgeIndex } from "../knowledge/index.js";
 import { type Price, responseCost, totalTokens } from "../model/pricing.js";
@@ -79,6 +80,8 @@ export interface AgentDeps {
   diagnostics?: DiagnosticsSource;
   /** The project's formatter after edits (0.10). */
   format?: FormatSource;
+  /** Structured audit logger (0.17). */
+  audit?: AuditLogger;
   maxTokens?: number;
   /** Stop after this many model calls in one run (F6). */
   maxSteps?: number;
@@ -233,6 +236,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       ...(deps.hooks === undefined ? {} : { hooks: deps.hooks }),
       ...(deps.diagnostics === undefined ? {} : { diagnostics: deps.diagnostics }),
       ...(deps.format === undefined ? {} : { format: deps.format }),
+      ...(deps.audit === undefined ? {} : { audit: deps.audit }),
     };
     const { results, meta } = await runTools(calls, deps, context, emit);
     addToolResults(session, results, meta);
