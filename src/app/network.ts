@@ -11,6 +11,15 @@ export function networkHash(entries: readonly string[]): string {
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
+/** The note for the model (0.13): which hosts commands in the sandbox can reach. */
+export function networkNote(entries: readonly string[]): string {
+  return [
+    "Commands in the sandbox can reach these hosts through Garuda's network proxy:",
+    ...describeAllowlist(entries).map((line) => `  ${line}`),
+    "Run commands that need them in the sandbox, as usual (installs, builds, `npm view` and the like). Do not use outside_sandbox for them. Other hosts ask the user.",
+  ].join("\n");
+}
+
 /** The question before the proxy starts: the project's list, with each preset's hosts. */
 export function networkConsent(
   entries: readonly string[],

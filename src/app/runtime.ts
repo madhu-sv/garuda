@@ -112,7 +112,7 @@ import {
 import { VERSION } from "../version.js";
 import type { ClaudeSearchConfig, SearchConfig } from "../web/search.js";
 import { attachMentions } from "./mentions.js";
-import { networkConsent, networkHash, nodeBinary } from "./network.js";
+import { networkConsent, networkHash, networkNote, nodeBinary } from "./network.js";
 
 /** A formatter that runs longer than this is stopped (0.10). */
 const FORMAT_TIMEOUT_MS = 20_000;
@@ -1532,6 +1532,9 @@ export class Runtime {
       this.onNotice?.(
         `Network for commands: ${entries.join(", ")}, through Garuda's proxy. Other hosts ask.`,
       );
+      // Live test (0.13): the model ran `npm view` outside the sandbox at once, because the tool
+      // text says the sandbox has no network. Tell it which hosts work in the sandbox.
+      this.pendingNotes.push(networkNote(entries));
     })();
     try {
       await this.networkStarted;

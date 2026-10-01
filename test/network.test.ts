@@ -110,7 +110,8 @@ describe.runIf(sandboxed && curl)("network allowlist in the runtime (0.13)", () 
     await runtime.runTurn("go", AbortSignal.timeout(30_000));
     const allowlist = runtime.networkAllowlist();
     await runtime.close();
-    return { result: lastResult(model.requests[1]), notices, allowlist };
+    const prompt = JSON.stringify(model.requests[0]?.messages.at(-1)?.content ?? []);
+    return { result: lastResult(model.requests[1]), notices, allowlist, prompt };
   }
 
   it("asks once for the project's list; an unlisted host asks; a denied host gets 403 and a hint", async () => {
@@ -125,6 +126,10 @@ describe.runIf(sandboxed && curl)("network allowlist in the runtime (0.13)", () 
       "Network for commands: npm, allowed.test, through Garuda's proxy. Other hosts ask.",
     );
     expect(first.allowlist).toEqual(["npm", "allowed.test"]);
+    // The model learns which hosts work in the sandbox (live test: it went outside at once).
+    expect(first.prompt).toContain("Commands in the sandbox can reach these hosts");
+    expect(first.prompt).toContain("npm: registry.npmjs.org");
+    expect(first.prompt).toContain("Do not use outside_sandbox for them");
     expect(first.result).toContain("403");
     expect(first.result).toMatch(
       /Garuda's network allowlist blocked other\.test:80: The user denied/,
@@ -147,6 +152,7 @@ describe.runIf(sandboxed && curl)("network allowlist in the runtime (0.13)", () 
       "Network for commands: off (you said no). Commands have no network.",
     );
     expect(run.allowlist).toEqual([]);
+    expect(run.prompt).not.toContain("Commands in the sandbox can reach");
     expect(run.result).not.toContain("network allowlist blocked");
   }, 60_000);
 

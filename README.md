@@ -481,7 +481,8 @@ the sandbox reach named hosts through Garuda's own proxy, with no question:
 - Presets: `npm`, `pypi`, `maven`, `go`, `cargo`, `github` (each names its registry hosts). A host with
   `*.` matches its subdomains. Only ports 80 and 443.
 - Off by default. The first turn shows the list and asks; "remember" pins it to the list in
-  `~/.garuda/trust.json`, so a changed list asks again.
+  `~/.garuda/trust.json`, so a changed list asks again. The model then gets a note that names the hosts,
+  so it runs those commands in the sandbox and does not ask to leave it.
 - A host that is not on the list asks you (once, this session, or no); `network(host)` in
   `permissions.allow` or `permissions.deny` answers for good. Jobs and evals deny it and say which host.
 - Commands get `HTTP_PROXY` and `HTTPS_PROXY`: npm, pnpm, yarn, pip, cargo, go, git and curl use them;
