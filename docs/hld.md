@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.13.0. This document shows how the parts work together. The component documents in
+Version 0.14.0-dev. This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -292,6 +292,21 @@ the other backend is the fallback. Details: [lld/web.md](lld/web.md).
 model), shows a preview and writes new files only after one yes; it offers `git init`; then it runs an
 init turn whose prompt depends on the folder: read the code and write `AGENTS.md`, or ask what to build.
 Details: [lld/init.md](lld/init.md).
+
+### Background daemons (0.14)
+
+Long-running dev servers and build processes run in the background with `bash(is_daemon: true)`. The
+tool returns immediately with `{ daemonId, pid, command, status: "started" }`. The companion
+`process_manager` tool provides `list`, `logs` (with line count and stdout/stderr stream filtering),
+`status` and `kill`. `DaemonManager` in `src/sandbox/daemon.ts` streams lines into a circular log buffer
+and terminates all background process trees cleanly when Garuda shuts down.
+
+### Interactive patch staging (0.14)
+
+When file modifications are presented for approval in the Ink chat, pressing `h` enters interactive
+hunk-by-hunk review. The user steps through individual hunks with colored diffs: `y` to stage, `n` to
+skip, `a` to stage all, `d` to discard all, and arrows to navigate. Approving with staged hunks applies
+the changes directly.
 
 ## 8. Context management
 

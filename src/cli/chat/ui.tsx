@@ -1,6 +1,7 @@
 import { Box, Static, Text, useInput, usePaste } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { focusEvent } from "../focus.js";
+import type { HunkStagingState } from "./hunkStaging.js";
 import { PALETTE_ROWS, type PaletteState, paletteWindow } from "./palette.js";
 import type { ChatState, ChatStore, Item } from "./store.js";
 
@@ -33,11 +34,15 @@ export function App({ store }: { store: ChatStore }) {
             <Text color="cyan">{frame}</Text> Working… (Ctrl-C stops)
           </Text>
         )}
-        {state.approval !== undefined && (
+        {state.approval !== undefined && state.approval.hunkReview !== undefined && (
+          <HunkStagingView staging={state.approval.hunkReview} />
+        )}
+        {state.approval !== undefined && state.approval.hunkReview === undefined && (
           <ApprovalView
             question={state.approval.request.question ?? "Allow?"}
             choices={state.approval.choices}
             selected={state.approval.selected}
+            hasHunks={state.approval.request.preview.includes("@@")}
           />
         )}
         {state.queue.map((line, i) => (
@@ -77,14 +82,51 @@ function ItemView({ item }: { item: Item }) {
   }
 }
 
+export function HunkStagingView({ staging }: { staging: HunkStagingState }) {
+  const current = staging.hunks[staging.currentHunk];
+  if (!current) return null;
+  const total = staging.hunks.length;
+  const stagedCount = staging.hunks.filter((h) => h.staged).length;
+
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Box justifyContent="space-between">
+        <Text bold color="cyan">
+          Hunk {staging.currentHunk + 1} of {total} · {staging.file}
+        </Text>
+        <Text dimColor>
+          [{stagedCount}/{total} staged]
+        </Text>
+      </Box>
+      <Text color="cyan">{current.header}</Text>
+      <Box flexDirection="column" paddingLeft={1}>
+        {current.lines.map((line, i) => {
+          const color = line.startsWith("+") ? "green" : line.startsWith("-") ? "red" : undefined;
+          return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: diff lines can be identical
+            <Text key={i} {...(color ? { color } : {})}>
+              {line}
+            </Text>
+          );
+        })}
+      </Box>
+      <Text dimColor>
+        [y] stage hunk · [n] skip · [a] stage all · [d] discard all · [←/→] prev/next · [Esc] back
+      </Text>
+    </Box>
+  );
+}
+
 function ApprovalView({
   question,
   choices,
   selected,
+  hasHunks = false,
 }: {
   question: string;
   choices: { choice: string; label: string }[];
   selected: number;
+  hasHunks?: boolean;
 }) {
   return (
     <Box flexDirection="column" marginTop={1}>
@@ -95,17 +137,23 @@ function ApprovalView({
           {i + 1}. {c.label}
         </Text>
       ))}
-      <Text dimColor>{approvalKeys(choices.map((c) => c.choice))}</Text>
+      <Text dimColor>
+        {approvalKeys(
+          choices.map((c) => c.choice),
+          hasHunks,
+        )}
+      </Text>
     </Box>
   );
 }
 
 /** The key hint under the choices: numbers, and the letter for each choice shown. */
-export function approvalKeys(choices: readonly string[]): string {
+export function approvalKeys(choices: readonly string[], hasHunks = false): string {
   const letters: Record<string, string> = { once: "y", session: "a", deny: "n or Esc" };
   const numbers = choices.map((_, i) => i + 1).join(" ");
   const keys = choices.map((c, i) => `${letters[c] ?? "?"} = ${i + 1}`).join(" · ");
-  return `↑↓ and Enter, or ${numbers} · ${keys}`;
+  const hunksHint = hasHunks ? " · h = stage hunks" : "";
+  return `↑↓ and Enter, or ${numbers} · ${keys}${hunksHint}`;
 }
 
 function PaletteView({ palette }: { palette: PaletteState }) {
@@ -236,6 +284,16 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     return;
   }
   if (state.approval !== undefined) {
+    if (state.approval.hunkReview !== undefined) {
+      if (key.leftArrow || key.upArrow) store.moveHunk(-1);
+      else if (key.rightArrow || key.downArrow) store.moveHunk(1);
+      else if (input === "y" || key.return) store.stageHunk(true);
+      else if (input === "n") store.stageHunk(false);
+      else if (input === "a") store.stageAllHunks();
+      else if (input === "d") store.discardAllHunks();
+      else if (key.escape || input === "q") store.closeHunkReview();
+      return;
+    }
     if (key.upArrow) store.moveApproval(-1);
     else if (key.downArrow) store.moveApproval(1);
     else if (key.return) store.choose();
@@ -245,6 +303,7 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     } else if (input === "y") store.choose("once");
     else if (input === "a") store.choose("session");
     else if (input === "n" || key.escape) store.choose("deny");
+    else if (input === "h" || input === "p") store.startHunkReview();
     return;
   }
   if (key.ctrl) {

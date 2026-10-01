@@ -11,6 +11,14 @@ import {
   todoLines,
 } from "../renderer.js";
 import type { Interruptible } from "../turn.js";
+import {
+  createHunkStaging,
+  discardAllHunks,
+  type HunkStagingState,
+  navigateHunk,
+  stageAllRemaining,
+  stageCurrentHunk,
+} from "./hunkStaging.js";
 import { type EditAction, type EditorState, edit, emptyEditor, submit } from "./lineEditor.js";
 import { ansi, type Paint, renderMarkdown, takeBlocks } from "./markdown.js";
 import { filterPalette, type PaletteEntry, type PaletteState } from "./palette.js";
@@ -45,6 +53,8 @@ export interface PendingApproval {
   choices: { choice: ApprovalChoice; label: string }[];
   /** The highlighted choice. */
   selected: number;
+  /** Active interactive hunk staging, if user entered hunk review mode (0.14). */
+  hunkReview?: HunkStagingState | undefined;
 }
 
 export const APPROVAL_CHOICES: readonly { choice: ApprovalChoice; label: string }[] = [
@@ -538,6 +548,61 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     if (approval === undefined || this.answer === undefined) return;
     if (choice !== undefined && !approval.choices.some((c) => c.choice === choice)) return;
     this.answer(choice ?? approval.choices[approval.selected]?.choice ?? "deny");
+  }
+
+  /** Enter interactive hunk-by-hunk staging if the approval preview contains diff hunks (0.14). */
+  startHunkReview(): boolean {
+    const approval = this.state.approval;
+    if (approval === undefined) return false;
+    const fallback =
+      approval.request.target.kind === "path" ? approval.request.target.path : "diff";
+    const hunkReview = createHunkStaging(approval.request.preview, fallback);
+    if (hunkReview === undefined) return false;
+    this.update({ approval: { ...approval, hunkReview } });
+    return true;
+  }
+
+  /** Exit hunk staging back to standard approval choice view. */
+  closeHunkReview(): void {
+    const approval = this.state.approval;
+    if (approval === undefined || approval.hunkReview === undefined) return;
+    this.update({ approval: { ...approval, hunkReview: undefined } });
+  }
+
+  /** Stage or unstage the current hunk in hunk review mode. */
+  stageHunk(staged: boolean): void {
+    const approval = this.state.approval;
+    if (approval === undefined || approval.hunkReview === undefined) return;
+    const { finished, hasStaged } = stageCurrentHunk(approval.hunkReview, staged);
+    if (finished) {
+      this.choose(hasStaged ? "once" : "deny");
+    } else {
+      this.update({ approval: { ...approval, hunkReview: { ...approval.hunkReview } } });
+    }
+  }
+
+  /** Stage all remaining hunks and approve. */
+  stageAllHunks(): void {
+    const approval = this.state.approval;
+    if (approval === undefined || approval.hunkReview === undefined) return;
+    stageAllRemaining(approval.hunkReview);
+    this.choose("once");
+  }
+
+  /** Discard all hunks and deny. */
+  discardAllHunks(): void {
+    const approval = this.state.approval;
+    if (approval === undefined || approval.hunkReview === undefined) return;
+    discardAllHunks(approval.hunkReview);
+    this.choose("deny");
+  }
+
+  /** Navigate between hunks in hunk review mode. */
+  moveHunk(delta: number): void {
+    const approval = this.state.approval;
+    if (approval === undefined || approval.hunkReview === undefined) return;
+    navigateHunk(approval.hunkReview, delta);
+    this.update({ approval: { ...approval, hunkReview: { ...approval.hunkReview } } });
   }
 }
 

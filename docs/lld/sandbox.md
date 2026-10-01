@@ -30,6 +30,7 @@ interface ExecPolicy {
 interface Executor {
   readonly name: string;    // host | seatbelt | bwrap
   readonly isolation: Isolation;
+  readonly daemons?: DaemonManager;                                   // background process manager (0.14)
   run(command, policy, { signal?, env? }): Promise<ExecResult>;       // bash -c, captured
   start(argv, policy, env?): RunningProcess;                           // no shell, piped stdio
   shutdown(): void;         // kill everything now; runs in the "exit" handler
@@ -137,9 +138,28 @@ the host. The Linux bridge is tested in the cloud (bubblewrap, curl through the 
 | `os` | The OS sandbox, or an error. |
 | `host` | `HostExecutor`. |
 
-`findOsSandbox()` (cached per process): on macOS, `/usr/bin/sandbox-exec` must exist; on Linux, `bwrap`
-must be on `PATH` and a probe (`bwrap --ro-bind / / --dev /dev --unshare-net … true`) must succeed,
-because user namespaces can be off.
+`findOsSandbox()` (cached per process):
+- On macOS, `/usr/bin/sandbox-exec` must exist, and an active probe (`probeSeatbelt()`) running
+  `/usr/bin/sandbox-exec -p '(version 1) (allow default)' /bin/sh -c 'true'` must succeed. In nested
+  sandboxes or environments where Seatbelt invocation is blocked by the kernel (error 71 `EX_OSPERM`),
+  the probe detects this and falls back to `HostExecutor` with an informative notice.
+- On Linux, `bwrap` must be on `PATH` and a probe (`bwrap --ro-bind / / --dev /dev --unshare-net … true`)
+  must succeed, because user namespaces can be off.
+
+## Background daemons (`daemon.ts`, 0.14)
+
+Long-running dev servers, watchers, and support processes can be launched via `bash` with `is_daemon: true`.
+
+- `DaemonManager` tracks background processes started during the session.
+- Subprocesses lead their own detached process groups (`detached: true`).
+- Standard output and standard error are captured in a rolling circular buffer (`DaemonLogBuffer`, up to 1 MB per daemon).
+- Child processes are tracked: PID, command, arguments, cwd, start time, exit code/signal, and status (`running`, `exited`, `killed`).
+- Operations via `DaemonManager`:
+  - `start(command, argv, policy, env?)`: Launches the daemon process and returns its descriptor.
+  - `list()`: Returns status and summaries of active and recent daemons.
+  - `logs(id, maxBytes?)`: Retrieves tail logs from the daemon's ring buffer.
+  - `kill(id, signal?)`: Sends SIGTERM, followed by SIGKILL after 2 s to the entire process group.
+- Clean shutdown: `Executor.shutdown()` calls `DaemonManager.shutdown()`, ensuring no dangling child processes or orphaned dev servers survive after Garuda exits.
 
 ## Tests
 
@@ -148,6 +168,8 @@ environment allowlist, output cap, timeout, `shutdown()`, and process-tree kill 
 `test/hostExecutor.test.ts` runs it for the host; `test/sandbox.test.ts` runs it for the machine's OS
 sandbox, plus real checks: writes outside the root fail, protected paths stay read-only, denied reads
 fail, no network, and `sandbox: false` isolates nothing. The Seatbelt tests run only on macOS.
+`test/daemon.test.ts` (0.14) tests daemon launch, log capture, output streaming, status reporting, kill,
+and executor shutdown cleanup.
 `test/networkProxy.test.ts` (0.13) tests the allowlist, the proxy (tunnel, 403 with the reason, IP
 literals, private addresses, plain http) and curl through the machine's OS sandbox with and without the
 proxy; `test/network.test.ts` the runtime (consent, pinning, questions, ports), evals and jobs.

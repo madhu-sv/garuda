@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.13.0. This document describes the parts of Garuda, their dependencies, the trust
+Version 0.14.0-dev. This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -28,7 +28,7 @@ flowchart LR
 | N1 | Provider-neutral model access | The loop sees only the `ModelClient` interface. `anthropic.ts` (the only module with the Anthropic SDK) and `openaiCompatible.ts` (plain fetch) are the adapters. |
 | N2 | Prompt caching | The system prompt and the tool list stay the same bytes for a whole session. Cache breakpoints on the system prompt, the last tool and the last message. |
 | N3 | Start in less than 1 s | Heavy modules load with `import()` on first use: the SDK, inquirer, Ink and React, TypeScript 6, the MCP SDK, the HTML converter. `--version` takes about 240 ms. |
-| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0). |
+| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0, 636 at 0.14.0). |
 | N5 | Measured quality | `garuda eval` runs fixed tasks in scratch folders and reports pass rate, steps, tokens and cost. |
 | N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). |
 | N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. The user's own editor (Ctrl-G, 0.6) runs on the real terminal through `src/sandbox/terminal.ts`, never through a tool. |
@@ -273,3 +273,8 @@ All state is in files. There is no server and no database.
 | Network allowlist (0.13) | Presets or hosts in settings; a local proxy (HTTP CONNECT) that checks the host; the OS sandbox lets commands reach only the proxy (Seatbelt: localhost; bubblewrap: a node bridge into the network namespace over a Unix socket); off by default | Installs and builds need a registry, not the internet. A proxy by host name works with every tool that reads HTTP(S)_PROXY and needs no TLS interception; the sandbox makes the proxy the only way out. Live test (macOS, npm on the list): `npm view` ran in the sandbox with no question; an unlisted host asked, and a denial gave the command a 403. The model needs a note that names the hosts, or it asks to leave the sandbox. |
 | Output limit (0.12) | A model that always thinks gets 16,384 output tokens by default; a cut-off response keeps its text, the model is asked to go on with 32,000, up to 3 times | Thinking counts toward `max_tokens`: at 8,192 a Sonnet 5 turn ended after thinking alone. Measured on 3 repo tasks × 3: no cost rise, 9/9 passed. |
 | Night shift (0.11) | One queue per project; each job as its own `garuda run` process, up to 3 at a time; one digest; one launchd agent for the queue | Worktrees keep parallel jobs apart, and a process per job keeps a crash or a slow batch from stopping the others; the Batch API's waits make one-at-a-time nights too long. |
+| Sandbox capability probe (0.14) | Active Seatbelt execution probe on macOS at startup to detect nested sandboxes (error 71 `EX_OSPERM`); graceful fallback to `HostExecutor` | Seatbelt binary can be present but blocked by the macOS kernel inside nested sandboxes or containers; an active probe prevents unexpected crashes at startup. |
+| Background daemons (0.14) | `is_daemon: true` on `bash` tool, companion `process_manager` tool (`list`, `logs`, `status`, `kill`); streaming line-by-line circular buffer | Long-running servers and background tasks should not block turns; `DaemonManager` in sandbox maintains process trees and lifecycle with zero orphan leaks on shutdown. |
+| Interactive patch staging (0.14) | Ink chat hunk-by-hunk diff review (`[h]` key); stage (`y`), skip (`n`), stage all (`a`), discard (`d`) | Allows fine-grained interactive control over model-proposed file edits instead of an all-or-nothing prompt. |
+| Loop and runtime modularization (0.14) | Extracted `limits`, `loopDetector`, `callModel`, `toolRunner`, `modelState`, `sessionManager`, `undoCoordinator` | Keeps core files small (<300 lines) and strictly enforces exactOptionalPropertyTypes and architectural boundaries. |
+

@@ -274,6 +274,15 @@ interface ChatState {
   prints the list (`A`/`M`/`D`, `+`/`−` counts, "binary") and the colored patch (`colorDiff`), cut at
   `DIFF_LINES` (300). The Ink controller passes `output` in the `CommandContext`: it prints the text as it is
   and keeps the full patch for Ctrl-O (`store.keepOutput`). The plain chat prints with `renderer.info`.
+- **Interactive patch staging (0.14, `hunkStaging.ts`):** In the Ink approval view for file edits
+  (`write_file`, `edit_file`), pressing `h` (or `p`) opens `HunkStagingView`. Users can review each diff hunk
+  individually with color highlighting and a `[staged/total]` progress counter:
+  - `y` or Enter stages the current hunk and advances.
+  - `n` skips the current hunk without staging.
+  - `a` stages all remaining hunks in one keypress.
+  - `d` discards/skips all remaining hunks.
+  - `←`/`→`/`↑`/`↓` navigates between hunks without modifying staging state.
+  - `q` or Esc exits hunk review back to standard approval mode.
 - **Type-ahead at start:** keys typed before raw mode arrive as one chunk with `\n` (cooked mode);
   `typeAhead` treats each line end as Enter. Bracketed paste (`usePaste`) inserts text and never submits.
 - **Ctrl-C:** busy → `onInterrupt`; idle with text → clear the line; idle and empty → exit on a second
@@ -284,5 +293,6 @@ interface ChatState {
 `test/notifyDiff.test.ts` (0.6: notification channel, bytes, rules and wiring; `/diff`),
 `test/focus.test.tsx` (0.6: focus codes, terminals, a quiet notifier while focused, the codes in real Ink input),
 `test/chat.test.tsx` (markdown, editor, store, type-ahead, Ink integration with `ink-testing-library`),
+`test/hunkStaging.test.tsx` (0.14: hunk parser, staging state transitions, interactive keyboard navigation),
 `test/m5.acceptance.test.ts` (plain chat and `-p`), `test/cli.test.ts`. The cloud workspace also
 drives the Ink chat in a real pseudo-terminal for smoke tests.

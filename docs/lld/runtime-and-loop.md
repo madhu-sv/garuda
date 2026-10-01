@@ -176,6 +176,23 @@ the repo eval live test: 1 of 9 runs stopped at step 3 with `max_tokens` after t
 Defaults: `DEFAULT_MAX_STEPS = 50`, `DEFAULT_MAX_TOKENS = 8192`, `DEFAULT_TOKEN_BUDGET = 20 000 000`,
 `REPEAT_LIMIT = 3`.
 
+## Core modularization (0.14)
+
+In 0.14, the core agent loop and runtime coordinators were decomposed into cohesive single-responsibility modules:
+
+- **Loop modularization (`src/loop/`):**
+  - `runAgent.ts`: High-level loop orchestrator (< 300 lines).
+  - `callModel.ts`: Model invocation, response streaming, server tools resolution, and transient error backoff retries.
+  - `events.ts`: Structured agent lifecycle event dispatcher.
+  - `limits.ts`: Step limit and token budget checks, context window exhaustion detection, and output-limit recovery.
+  - `loopDetector.ts`: Repeated tool call detection preventing infinite loops.
+  - `toolRunner.ts`: Tool execution pipeline, read-only call parallelization, progress tracking, and execution metadata capture.
+
+- **Runtime coordinator extraction (`src/app/`):**
+  - `modelState.ts` (`ModelState`): Dynamic model switching, pricing lookup, context window sizing, and `/thinking` controls.
+  - `sessionManager.ts` (`SessionManager`): Session lifecycle, resume, rename, and permanent deletion.
+  - `undoCoordinator.ts` (`UndoCoordinator`): Git-backed filesystem snapshotting before turns, `/undo`, `/redo`, and `/diff`.
+
 ## Replay (`loop/replay.ts`)
 
 `replaySession(records, tools)` plays a recorded session with no API calls:

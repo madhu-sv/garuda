@@ -1,6 +1,6 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.13.0.
+Garuda is a terminal coding agent. This is version 0.14.0.
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -25,7 +25,8 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.11: night shift (a queue of overnight jobs, one digest, a launchd agent) and proof of work (tests before and after, risk flags, a principal-engineer review) | Done |
 | 0.12: benchmark your repo (eval tasks from the repo's own git history), output-limit recovery | Done |
 | 0.13: network allowlist for commands (W6): presets or hosts, through Garuda's proxy, off by default | Done |
-| 0.14: team policy and audit log (W5) | Planned |
+| 0.14: dynamic sandbox probe, core modularization, background daemons (W3), interactive patch staging (W4) | Done |
+| 0.15: team policy and audit log (W5) | Planned |
 
 ## Use
 
@@ -167,7 +168,7 @@ Set the context window, price and output limit per model, and add providers, in 
   Keys typed before the chat is ready are kept too.
 - Ctrl-O prints the full output of the last tool call. ↑ and ↓ browse earlier inputs.
 - Approvals show the full diff or command in the scrollback. Answer with ↑↓ and Enter, or
-  y (once), a (session), n or Esc (deny).
+  y (once), a (session), n or Esc (deny). For file edits, press `h` (or `p`) to review and stage hunks individually (0.14).
 - `GARUDA_PLAIN=1` turns Ink off. Pipes, `-p`, the evals and the standalone binary always use plain output.
 - Notifications: when an approval waits during a task, and when a task that ran 10 s or longer ends, Garuda
   tells you. In iTerm2, Ghostty and WezTerm it sends a desktop notification (the OSC 9 escape code); in other
@@ -467,6 +468,9 @@ Settings:
   with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again.
 - `sandbox.writePaths` and `sandbox.denyRead` add paths. `~/` is the home folder; other relative paths
   start at the root.
+- Dynamic macOS sandbox probe (0.14): Garuda actively probes `/usr/bin/sandbox-exec`. In environments
+  where nested Seatbelt profiles are blocked by the kernel (error 71 `EX_OSPERM`), it falls back gracefully
+  to `HostExecutor` with an explanatory notice instead of crashing.
 - On Linux, install bubblewrap (`sudo apt install bubblewrap`). Some systems block the user namespaces
   that it needs; Garuda then falls back to the host and says why.
 
@@ -497,6 +501,15 @@ the sandbox reach named hosts through Garuda's own proxy, with no question:
   `garuda eval --network npm,pypi` measures a suite with the list.
 - Limit on Linux: a protected path that does not exist yet (for example `.git/hooks` in a folder with no
   `.git`) is not protected.
+
+### Background daemons (0.14)
+
+Long-running dev servers, watchers, and build processes can run as background daemons:
+
+- Commands can run with `is_daemon: true` via the `bash` tool: the process starts detached and returns immediately with its PID and process ID.
+- Background daemons capture stdout and stderr into a circular buffer (up to 1 MB).
+- The `process_manager` tool enables inspecting background processes: `list` (show running and recent daemons), `logs` (tail output), `status` (PID, uptime, exit code), and `kill` (SIGTERM/SIGKILL process tree).
+- On Garuda exit, all active daemons are cleanly shut down.
 
 ## Custom agents
 
@@ -843,9 +856,9 @@ Notes:
 | `src/loop/` | `runAgent(session, deps)`: the agent loop, limits, loop guard; `replaySession` |
 | `src/context/` | Compaction, the system prompt, and the loader of AGENTS.md, CLAUDE.md and GARUDA.md |
 | `src/commands/` | Custom slash commands |
-| `src/tools/` | `Tool<I, O>`, the registry, and the tools: `read_file`, `glob`, `grep`, `write_file`, `edit_file`, `bash` |
+| `src/tools/` | `Tool<I, O>`, the registry, and the tools: `read_file`, `glob`, `grep`, `write_file`, `edit_file`, `bash`, `process_manager` |
 | `src/permissions/` | Path guard (F15), rules, sensitive paths, settings, and the permission engine (F17–F20) |
-| `src/sandbox/` | `Executor` interface, `ExecPolicy`, `HostExecutor`, `SeatbeltExecutor`, `BwrapExecutor`. The only place that starts processes (N8) |
+| `src/sandbox/` | `Executor` interface, `ExecPolicy`, `HostExecutor`, `SeatbeltExecutor`, `BwrapExecutor`, `DaemonManager`. The only place that starts processes (N8) |
 | `src/session/` | Session state, records, `SessionStore` (JSONL files), resume, redaction, read tracking |
 | `src/app/` | `Runtime`: settings, executor, permissions and session for one process. The CLI and the evals share it |
 | `src/cli/` | Entry point, chat mode, renderer, terminal approver, `garuda eval` |
