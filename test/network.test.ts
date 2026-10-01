@@ -140,6 +140,8 @@ describe.runIf(sandboxed && curl)("network allowlist in the runtime (0.13)", () 
     const again = new Scripted([]);
     const second = await turn(root, home, again, curlCode("http://allowed.test:8080/"));
     expect(again.requests).toEqual([]);
+    // One notice per session, also when the list is pinned (live test showed it twice).
+    expect(second.notices.filter((t) => t.startsWith("Network for commands"))).toHaveLength(1);
     expect(second.result).toMatch(/blocked allowed\.test:8080: only ports 80 and 443/);
   }, 60_000);
 
