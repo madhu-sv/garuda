@@ -17,7 +17,13 @@ import type { Job, JobResult } from "./job.js";
 export const LINK_CANDIDATES = ["node_modules", ".venv", "venv"];
 
 /** Garuda's own files, never part of the job's commit. */
-const NEVER_COMMIT = [".garuda/sessions", ".garuda/index", ".garuda/evals", ".garuda/jobs"];
+const NEVER_COMMIT = [
+  ".garuda/sessions",
+  ".garuda/index",
+  ".garuda/evals",
+  ".garuda/jobs",
+  ".garuda/audit.jsonl",
+];
 
 export function worktreeDir(root: string, id: string, home: string = homedir()): string {
   const hash = createHash("sha256").update(root).digest("hex").slice(0, 8);
