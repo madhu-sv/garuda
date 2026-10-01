@@ -88,6 +88,7 @@ export function buildSystemPrompt(
     hooks = false,
     languages,
     explore = false,
+    moe = false,
     todo = false,
     lsp = false,
     skills = false,
@@ -103,6 +104,8 @@ export function buildSystemPrompt(
     languages?: string | undefined;
     /** The explore subagent is available (0.3). */
     explore?: boolean;
+    /** The delegate_expert subagent tool is available (0.17). */
+    moe?: boolean;
     /** The todo_write tool is available (0.4). */
     todo?: boolean;
     /** Edit results carry language server errors (0.4). */
@@ -134,6 +137,13 @@ export function buildSystemPrompt(
           "which files must change), call explore: a subagent searches in its own context and returns a short",
           "answer with path:line references. You can run several explore calls at once for separate questions.",
           "For one known file, use read_file. Read a file yourself before you edit it.",
+        ]
+      : []),
+    ...(moe
+      ? [
+          "For language-specific tasks (idiomatic architecture, refactoring, testing or AST investigation in Go,",
+          "Rust, Python, Java, or TypeScript), call delegate_expert: a specialized subagent executes in its own context",
+          "with deep language tooling and returns an actionable report.",
         ]
       : []),
     "Use edit_file to change a file and write_file to create one. Read the file with read_file first:",

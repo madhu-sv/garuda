@@ -615,6 +615,9 @@ export class Runtime {
         hooks: hookConfig.user.length + hookConfig.project.length > 0,
         languages: profileNotes(profiles),
         explore: settings.subagents?.enabled === true,
+        moe:
+          settings.moe?.enabled === true ||
+          (settings.subagents?.enabled === true && settings.moe?.enabled !== false),
         todo: settings.todo?.enabled === true,
         lsp: options.lsp?.enabled ?? settings.lsp?.enabled === true,
         skills: skills.some((s) => s.modelInvocable),
