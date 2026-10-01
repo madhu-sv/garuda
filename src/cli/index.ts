@@ -33,7 +33,8 @@ import { runTurnInTerminal, type TurnOutcome } from "./turn.js";
  *   garuda -p "task" --output-format json|stream-json   the same, as JSON for scripts (0.5)
  *   garuda --resume [id]        continue a session (chat, or one task with -p)
  *   garuda --replay <id|file>   replay a session with no API calls
- *   garuda eval                 run the eval tasks (N5); --from-git builds the repo suite (0.12)
+ *   garuda eval                 run the eval tasks (N5); --from-git builds the repo suite (0.12);
+ *                               --network opens the allowlist for sandboxed commands (0.13)
  *   garuda lsp [install <lang>] language servers for diagnostics (0.4)
  *   garuda init                 set up this folder, then chat (0.5): same as /init
  *   garuda run <job> [--at HH:MM]  run a scheduled job, unattended (0.7)

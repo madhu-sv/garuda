@@ -121,6 +121,12 @@ model. The proxy does not decrypt TLS. When the proxy starts, the runtime adds a
 hosts (the proxy asks the user), in the sandbox (live test:
 without it the model asked for `outside_sandbox` at once, because the tool text says "no network").
 
+Live test (0.13, macOS, Seatbelt, `"allow": ["npm"]`): the consent showed the npm hosts and "remember"
+pinned the list (a new chat only showed the notice); `npm view lodash version` ran in the sandbox through
+the proxy with no question; `curl -sI https://example.com` asked "Let a command reach example.com?", and
+after a denial curl ended with exit code 56 (the proxy's 403) and the model named the two ways to allow
+the host. The Linux bridge is tested in the cloud (bubblewrap, curl through the proxy).
+
 ## Selection (`index.ts`)
 
 `createExecutor(name)` with `name` from settings:

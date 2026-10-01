@@ -339,7 +339,7 @@ command shows its text and asks the first time, like project hooks. See [command
 
 ## 11. Quality
 
-- About 600 unit and acceptance tests, all with the fake model.
+- About 620 unit and acceptance tests, all with the fake model.
 - Contract tests run every executor (host, Seatbelt, bubblewrap) through the same suite.
 - Architecture tests enforce the dependency rules.
 - Evals: a basic suite (10 tasks), a hard suite (6 tasks on a generated repo of about 107 files), and
