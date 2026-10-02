@@ -145,7 +145,9 @@ Turned on via project settings (`.garuda/settings.json`):
   }
 }
 ```
-*(Also automatically active if `"subagents": { "enabled": true }` is set and `moe` is not explicitly disabled).*
+Off by default; only `moe.enabled: true` turns it on (`subagents` alone does not, merge gate). `delegate_expert`
+has `runsAlone: true`: two specialist calls never run at the same time, because a specialist can
+write files (G05).
 
 ---
 

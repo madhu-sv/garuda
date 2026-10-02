@@ -44,6 +44,17 @@ interface DaemonEntry {
 }
 
 export const DEFAULT_MAX_LOG_LINES = 2_000;
+/** Longest kept line; a longer one is cut (merge gate: memory had no limit). */
+export const MAX_LOG_LINE_CHARS = 4_000;
+/** Most text kept while no newline comes (progress bars with \r, binary output). */
+export const MAX_PENDING_CHARS = 64_000;
+/** Most characters that `logs` returns at once (into the model's context). */
+export const MAX_LOGS_CHARS = 30_000;
+
+const cut = (line: string) =>
+  line.length <= MAX_LOG_LINE_CHARS
+    ? line
+    : `${line.slice(0, MAX_LOG_LINE_CHARS)}… [${line.length - MAX_LOG_LINE_CHARS} more chars]`;
 
 export class DaemonManager {
   private nextId = 1;
@@ -79,7 +90,12 @@ export class DaemonManager {
         (stream === "stdout" ? entry.stdoutRemainder : entry.stderrRemainder) +
         chunk.toString("utf8");
       const lines = text.split("\n");
-      const remainder = lines.pop() ?? "";
+      let remainder = lines.pop() ?? "";
+      // No newline for a long time: keep it as a (cut) line, so memory stays bounded.
+      if (remainder.length > MAX_PENDING_CHARS) {
+        lines.push(remainder);
+        remainder = "";
+      }
       if (stream === "stdout") entry.stdoutRemainder = remainder;
       else entry.stderrRemainder = remainder;
 
@@ -88,7 +104,7 @@ export class DaemonManager {
         if (entry.logs.length >= entry.maxBufferLines) {
           entry.logs.shift();
         }
-        entry.logs.push({ timestamp: now, stream, line });
+        entry.logs.push({ timestamp: now, stream, line: cut(line) });
       }
     };
 
@@ -99,12 +115,20 @@ export class DaemonManager {
       // Flush any remainders
       if (entry.stdoutRemainder.length > 0) {
         if (entry.logs.length >= entry.maxBufferLines) entry.logs.shift();
-        entry.logs.push({ timestamp: Date.now(), stream: "stdout", line: entry.stdoutRemainder });
+        entry.logs.push({
+          timestamp: Date.now(),
+          stream: "stdout",
+          line: cut(entry.stdoutRemainder),
+        });
         entry.stdoutRemainder = "";
       }
       if (entry.stderrRemainder.length > 0) {
         if (entry.logs.length >= entry.maxBufferLines) entry.logs.shift();
-        entry.logs.push({ timestamp: Date.now(), stream: "stderr", line: entry.stderrRemainder });
+        entry.logs.push({
+          timestamp: Date.now(),
+          stream: "stderr",
+          line: cut(entry.stderrRemainder),
+        });
         entry.stderrRemainder = "";
       }
 
@@ -155,7 +179,19 @@ export class DaemonManager {
 
     const limit = options.lines ?? 50;
     const sliced = limit <= 0 ? filtered : filtered.slice(-limit);
-    return sliced.map((log) => `[${log.stream}] ${log.line}`);
+    // Newest lines win when the total is too long for the model's context.
+    const out: string[] = [];
+    let size = 0;
+    for (const log of [...sliced].reverse()) {
+      const line = `[${log.stream}] ${log.line}`;
+      if (size + line.length > MAX_LOGS_CHARS) {
+        out.push(`[garuda] … ${sliced.length - out.length} older line(s) left out`);
+        break;
+      }
+      size += line.length + 1;
+      out.push(line);
+    }
+    return out.reverse();
   }
 
   kill(id: string): { ok: boolean; message: string } {

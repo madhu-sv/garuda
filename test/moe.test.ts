@@ -141,4 +141,20 @@ describe("MoE Runtime and /experts command integration", () => {
     expect(output).toContain("Java Specialist (java):");
     expect(output).toContain("TypeScript/JavaScript Specialist (typescript):");
   });
+
+  it("subagents alone do not turn MoE on (merge gate: it needs moe.enabled)", async () => {
+    const root = join(base, "proj3");
+    const runtime = await Runtime.create({
+      root,
+      modelId: "claude-sonnet-5",
+      model: async () => new FakeModelClient([]),
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host", subagents: { enabled: true } }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    expect(runtime.toolNames()).not.toContain("delegate_expert");
+  });
 });

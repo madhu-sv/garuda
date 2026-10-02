@@ -3,13 +3,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import type { ToolUseBlock } from "../src/model/types.js";
+import { MAX_LOG_LINE_CHARS, MAX_LOGS_CHARS } from "../src/sandbox/daemon.js";
 import { HostExecutor } from "../src/sandbox/host.js";
 import type { ExecPolicy } from "../src/sandbox/types.js";
-import { bashTool } from "../src/tools/bash.js";
+import { createBashTool } from "../src/tools/bash.js";
 import { processManagerTool } from "../src/tools/processManager.js";
 import { ToolRegistry } from "../src/tools/registry.js";
 import { toolContext } from "./helpers.js";
 
+const bashTool = createBashTool({ daemons: true });
 const root = realpathSync(mkdtempSync(join(tmpdir(), "garuda-daemon-test-")));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
@@ -287,5 +289,71 @@ describe("bash tool and process_manager integration", () => {
     executor.shutdown();
     const s2Final = await call("process_manager", { action: "status", daemonId: id2 });
     expect(s2Final.content).toContain("Status: stopped");
+  });
+});
+
+describe("daemons: bounded memory and shutdown (merge gate)", () => {
+  it("cuts long lines, keeps text with no newline bounded, and caps what logs returns", async () => {
+    const executor = new HostExecutor();
+    // 200,000 characters with no newline, then a 10,000-character line.
+    const daemon = executor.daemons.spawn(
+      "head -c 200000 /dev/zero | tr '\\0' x; echo; head -c 10000 /dev/zero | tr '\\0' y; echo; sleep 5",
+      policy(),
+    );
+    await waitFor(() =>
+      (executor.daemons.logs(daemon.id, { lines: 0 }) ?? []).some((l) => l.includes("yyyy")),
+    );
+    const lines = executor.daemons.logs(daemon.id, { lines: 0 }) ?? [];
+    for (const line of lines) expect(line.length).toBeLessThan(MAX_LOG_LINE_CHARS + 100);
+    expect(lines.join("\n").length).toBeLessThanOrEqual(MAX_LOGS_CHARS + 200);
+    expect(lines.some((l) => l.includes("more chars]"))).toBe(true);
+    executor.daemons.shutdown();
+  }, 15_000);
+
+  it("Runtime.close stops running daemons, so a -p run can exit", async () => {
+    const { Runtime } = await import("../src/app/runtime.js");
+    const { FakeModelClient } = await import("../src/model/fake.js");
+    const { AutoApprover } = await import("../src/permissions/autoApprover.js");
+    const { parseSettings } = await import("../src/permissions/settings.js");
+    const { FileSessionStore } = await import("../src/session/store.js");
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake",
+      model: new FakeModelClient([]),
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host", daemons: { enabled: true } }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    const daemons = runtime.executor.daemons;
+    if (daemons === undefined) throw new Error("no daemons");
+    const started = daemons.spawn("sleep 30", policy());
+    expect(daemons.get(started.id)?.status).toBe("running");
+    await runtime.close();
+    expect(daemons.get(started.id)?.status).toBe("stopped");
+    const pid = started.pid as number;
+    await waitFor(() => {
+      try {
+        process.kill(pid, 0);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+  }, 15_000);
+
+  it("daemons are off by default: bash has no is_daemon and refuses it", async () => {
+    const plain = createBashTool();
+    expect(
+      JSON.stringify(plain.inputSchema.safeParse({ command: "x", is_daemon: true }).data),
+    ).not.toContain("is_daemon");
+    await expect(
+      plain.run(
+        { command: "true", is_daemon: true },
+        toolContext(root, { executor: new HostExecutor() }),
+      ),
+    ).rejects.toThrow(/daemons\.enabled/);
   });
 });

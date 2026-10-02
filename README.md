@@ -423,7 +423,9 @@ Garuda features an autonomous Mixture-of-Experts (MoE) dispatch architecture for
 - **Dynamic delegation**: The primary orchestrator agent can invoke `delegate_expert({ language, task, files })` to dispatch complex language-specific tasks to child subagents. The child subagent runs with full AST code tools, executes language tests, and returns a synthesized report without cluttering the primary context window.
 - **Chat command**: `/experts` lists all available language specialists, their active test commands, and their active status / indexed file counts.
 - **Banner & Observability**: The startup banner features a dedicated `subagents` row (`subagents: explore · 5 MoE experts (Go, Rust, Python, Java, TS)`). In session, `/session` provides a full breakdown of active subagents, agents, skills, and tools.
-- **Configuration**: Enable with `"moe": { "enabled": true }` or `"subagents": { "enabled": true }` in `.garuda/settings.json`.
+- **Configuration**: off by default (no measured gain yet). Turn it on with `"moe": { "enabled": true }` in
+  `.garuda/settings.json`; `subagents` alone does not turn it on. One `delegate_expert` call runs at a
+  time, because a specialist can write files (merge gate, G05).
 
 ## Team policy and structured audit log (0.17, W5)
 
@@ -551,14 +553,19 @@ the sandbox reach named hosts through Garuda's own proxy, with no question:
 - Limit on Linux: a protected path that does not exist yet (for example `.git/hooks` in a folder with no
   `.git`) is not protected.
 
-### Background daemons (0.14)
+### Background daemons (0.14, off by default)
 
-Long-running dev servers, watchers, and build processes can run as background daemons:
+Dev servers and watchers can run in the background. This is off by default (no measured gain yet).
+Turn it on with `"daemons": { "enabled": true }` in `.garuda/settings.json`.
 
-- Commands can run with `is_daemon: true` via the `bash` tool: the process starts detached and returns immediately with its PID and process ID.
-- Background daemons capture stdout and stderr into a circular buffer (up to 1 MB).
-- The `process_manager` tool enables inspecting background processes: `list` (show running and recent daemons), `logs` (tail output), `status` (PID, uptime, exit code), and `kill` (SIGTERM/SIGKILL process tree).
-- On Garuda exit, all active daemons are cleanly shut down.
+- With the setting on, `bash` takes `is_daemon: true`: the command starts through the same executor
+  (the same sandbox and approval as any command) and the tool returns at once with a `daemonId`.
+- The `process_manager` tool has `list`, `status`, `logs` (`lines`, `stream`) and `kill` for daemons
+  that Garuda started in this session. It cannot touch other processes, so it runs without a question.
+- Logs are kept in memory: the newest 2,000 lines per daemon, at most 4,000 characters per line, and
+  `logs` returns at most 30,000 characters (the newest lines).
+- When the session closes, Garuda stops every running daemon (SIGTERM to the process group, then
+  SIGKILL).
 
 ## Custom agents
 

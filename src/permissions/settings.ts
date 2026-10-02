@@ -132,6 +132,11 @@ const schema = z.strictObject({
       tokenBudget: z.number().int().min(10_000).optional(),
     })
     .optional(),
+  /**
+   * Background processes (0.14): bash is_daemon and the process_manager tool. Off by default
+   * (merge gate): no measured gain yet, and they add tools and long-lived processes.
+   */
+  daemons: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** Mixture-of-Experts language specialist subagent dispatch (0.17). */
   moe: z
     .strictObject({
@@ -173,6 +178,7 @@ export interface Settings {
   price?: Price;
   subagents?: { enabled?: boolean; maxSteps?: number; tokenBudget?: number };
   moe?: { enabled?: boolean; maxSteps?: number; tokenBudget?: number };
+  daemons?: { enabled: boolean };
   todo?: { enabled: boolean };
   lsp?: { enabled: boolean };
   undo?: { enabled: boolean };
@@ -205,6 +211,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     codeIndex,
     subagents,
     moe,
+    daemons,
     todo,
     lsp,
     undo,
@@ -295,6 +302,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
             ...(subagents.tokenBudget === undefined ? {} : { tokenBudget: subagents.tokenBudget }),
           },
         }),
+    ...(daemons?.enabled === undefined ? {} : { daemons: { enabled: daemons.enabled } }),
     ...(moe === undefined
       ? {}
       : {

@@ -401,6 +401,7 @@ export class Runtime {
         codeIndex: this.codeIndex,
         ...(web.enabled ? { web: { allowLocalhost: web.allowLocalhost } } : {}),
         todo: settings.todo?.enabled === true,
+        daemons: settings.daemons?.enabled === true,
       }),
     );
     const info = options.modelInfo ?? lookupModel(options.modelId);
@@ -492,10 +493,9 @@ export class Runtime {
         }),
       );
     }
-    if (
-      settings.moe?.enabled === true ||
-      (settings.subagents?.enabled === true && settings.moe?.enabled !== false)
-    ) {
+    // MoE only when the settings turn it on (merge gate): no measured gain yet, and it must not ride
+    // along with subagents.enabled (that mixed it into the explore A/B results).
+    if (settings.moe?.enabled === true) {
       const sub = options.subagentModel;
       let subClient: ModelClient | undefined;
       const subPrice = sub === undefined ? this.price : sub.info.price;
@@ -645,9 +645,7 @@ export class Runtime {
         hooks: hookConfig.user.length + hookConfig.project.length > 0,
         languages: profileNotes(profiles),
         explore: settings.subagents?.enabled === true,
-        moe:
-          settings.moe?.enabled === true ||
-          (settings.subagents?.enabled === true && settings.moe?.enabled !== false),
+        moe: settings.moe?.enabled === true,
         todo: settings.todo?.enabled === true,
         lsp: options.lsp?.enabled ?? settings.lsp?.enabled === true,
         skills: skills.some((s) => s.modelInvocable),
@@ -1547,6 +1545,9 @@ export class Runtime {
 
   /** Stop the MCP and language servers. The CLI calls it before it exits. */
   async close(): Promise<void> {
+    // Background processes end with the runtime (merge gate): a running daemon kept `garuda -p`
+    // and jobs from exiting, because its pipes held Node's event loop.
+    this.executor.daemons?.shutdown();
     await Promise.all([this.mcp?.close(), this.lspManager?.close(), this.networkProxy?.close()]);
   }
 

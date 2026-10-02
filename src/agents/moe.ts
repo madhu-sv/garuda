@@ -230,6 +230,8 @@ export function createMoeDispatchTool(
     ].join(" "),
     inputSchema,
     readOnly: true,
+    // A specialist can edit files and run commands: two at once could write the same files (G05).
+    runsAlone: true,
     async run(input, context) {
       const lang: MoeLanguage =
         input.language === "auto" ? inferLanguage(input.task, input.files) : input.language;

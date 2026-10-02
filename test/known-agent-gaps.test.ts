@@ -165,7 +165,7 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
     expect(outcome.content).not.toContain("deniedMarker");
   });
 
-  knownGap("G05 writable specialist children must not execute mutations concurrently", async () => {
+  it("G05 writable specialist children must not execute mutations concurrently", async () => {
     const root = folder();
     let active = 0;
     let peak = 0;

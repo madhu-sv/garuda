@@ -1,5 +1,5 @@
 import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
-import { bashTool } from "./bash.js";
+import { createBashTool } from "./bash.js";
 import { findCallersTool, findReferencesTool, findSymbolTool, repoMapTool } from "./codeTools.js";
 import { editFileTool } from "./editFile.js";
 import { globTool } from "./glob.js";
@@ -36,11 +36,14 @@ export function defaultTools({
   codeIndex = DEFAULT_CODE_INDEX_MODE,
   web,
   todo = false,
+  daemons = false,
 }: {
   codeIndex?: CodeIndexMode;
   web?: WebFetchOptions;
   /** todo_write (0.4). Off by default until an A/B eval decides. */
   todo?: boolean;
+  /** bash is_daemon and process_manager (0.14). Off by default (merge gate). */
+  daemons?: boolean;
 } = {}): AnyTool[] {
   return [
     readFileTool,
@@ -52,8 +55,8 @@ export function defaultTools({
     ...(codeIndex === "all" ? [repoMapTool] : []),
     writeFileTool,
     editFileTool,
-    bashTool,
-    processManagerTool,
+    createBashTool({ daemons }),
+    ...(daemons ? [processManagerTool] : []),
     rememberTool,
     ...(web === undefined ? [] : [createWebFetchTool(web)]),
     ...(todo ? [todoWriteTool] : []),

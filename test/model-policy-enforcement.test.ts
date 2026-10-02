@@ -235,6 +235,8 @@ describe("G01 model policy enforcement", () => {
         executor: "host",
         undo: { enabled: false },
         subagents: { enabled: true },
+        // MoE needs its own switch since the merge gate.
+        moe: { enabled: true },
       }),
       subagentModel: { spec: selectedModel, model: provider.factory, info: modelInfo },
     });

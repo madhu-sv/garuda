@@ -136,6 +136,8 @@ A tool's `CallInfo` may carry a `title` (0.5): the engine passes it to the appro
   "network": { "allow": ["npm", "pypi", "api.example.com"] },
   "web": { "enabled": true, "allowLocalhost": false },
   "subagents": { "enabled": true, "maxSteps": 20, "tokenBudget": 150000 },
+  "moe": { "enabled": false },
+  "daemons": { "enabled": false },
   "todo": { "enabled": true },
   "lsp": { "enabled": true },
   "undo": { "enabled": false },
@@ -150,6 +152,9 @@ A tool's `CallInfo` may carry a `title` (0.5): the engine passes it to the appro
 ```
 
 A missing file gives the defaults; a broken file is an error that names the file.
+
+`moe` and `daemons` (0.14–0.17) are off by default, like every feature with no measured gain.
+`subagents.enabled` does not turn MoE on.
 
 `network.allow` (0.13): presets (`NETWORK_PRESETS` in `src/net/allowlist.ts`) or host patterns; any other
 entry is an error. The engine's `setNetwork(handle)` adds `proxy` to sandboxed command policies (not to

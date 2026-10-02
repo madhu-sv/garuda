@@ -585,7 +585,7 @@ async function replay(target: string, store: FileSessionStore): Promise<number> 
   const records = existsSync(target)
     ? parseRecords(readFileSync(target, "utf8"))
     : await store.read(target);
-  const report = await replaySession(records, new ToolRegistry(defaultTools()));
+  const report = await replaySession(records, new ToolRegistry(defaultTools({ daemons: true })));
   const summary = `${report.runs} run(s), ${report.steps} step(s), ${report.toolCalls} tool call(s)`;
   if (report.matches) {
     process.stdout.write(`Replay matches the recording: ${summary}.\n`);

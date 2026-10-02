@@ -1,8 +1,8 @@
 # Known agent gaps: issue register (M0)
 
 Original M0 status: all nine issue groups were open, with twelve intended strict failures.
-Current repair status: G01, G03 and two of the three G07 scenarios are resolved; G02, G04 to G06,
-the G07 child outcome, G08 and G09 remain open, with eight intended strict failures (merge gate,
+Current repair status: G01, G03, G05 and two of the three G07 scenarios are resolved; G02, G04, G06,
+the G07 child outcome, G08 and G09 remain open, with seven intended strict failures (merge gate,
 2026-10-02).
 This is component evidence, not a complete adversarial
 security audit. Expectations are acceptance contracts proposed in the roadmap; their failure does
@@ -65,6 +65,10 @@ calls a controlled mutating `write_file` probe. Expected: peak active mutations 
 peak is two and both fixture writes complete. The two writes use different temporary files; this
 proves concurrent admission, not a particular lost-update outcome. Follow-up: same-file races,
 read-only child capabilities, plan mode, independent file scopes and cancellation/process cleanup.
+
+Resolved (merge gate): `delegate_expert` has `runsAlone: true`, so the scheduler runs specialist
+calls one at a time (peak one). The G05 assertion is an ordinary test. MoE is also off unless
+`moe.enabled` is true. Not covered yet: a future parallel mode with separate file scopes.
 
 ## G06 Child budget and synthesis
 

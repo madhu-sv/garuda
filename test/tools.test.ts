@@ -21,20 +21,25 @@ function call(name: string, input: unknown) {
 }
 
 describe("tool registry", () => {
-  it("ships eight tools by default (code index off), all with JSON schemas", () => {
+  it("ships seven tools by default (code index off, no daemons), all with JSON schemas", () => {
     const specs = registry.specs();
     expect(specs.map((s) => s.name)).toEqual([
       "bash",
       "edit_file",
       "glob",
       "grep",
-      "process_manager",
       "read_file",
       "remember",
       "write_file",
     ]);
     for (const spec of specs) expect(spec.inputSchema).toMatchObject({ type: "object" });
-    const readOnly = defaultTools({ codeIndex: "all" }).filter((t) => t.readOnly);
+    // Background processes are opt-in (merge gate): no is_daemon in bash, no process_manager.
+    const bash = specs.find((s) => s.name === "bash");
+    expect(JSON.stringify(bash)).not.toContain("is_daemon");
+    const withDaemons = new ToolRegistry(defaultTools({ daemons: true })).specs();
+    expect(withDaemons.map((s) => s.name)).toContain("process_manager");
+    expect(JSON.stringify(withDaemons.find((s) => s.name === "bash"))).toContain("is_daemon");
+    const readOnly = defaultTools({ codeIndex: "all", daemons: true }).filter((t) => t.readOnly);
     expect(readOnly.map((t) => t.name).sort()).toEqual([
       "ast_query",
       "find_callers",

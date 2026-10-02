@@ -350,13 +350,14 @@ model), shows a preview and writes new files only after one yes; it offers `git 
 init turn whose prompt depends on the folder: read the code and write `AGENTS.md`, or ask what to build.
 Details: [lld/init.md](lld/init.md).
 
-### Background daemons (0.14)
+### Background daemons (0.14, off by default)
 
-Long-running dev servers and build processes run in the background with `bash(is_daemon: true)`. The
-tool returns immediately with `{ daemonId, pid, command, status: "started" }`. The companion
-`process_manager` tool provides `list`, `logs` (with line count and stdout/stderr stream filtering),
-`status` and `kill`. `DaemonManager` in `src/sandbox/daemon.ts` streams lines into a circular log buffer
-and terminates all background process trees cleanly when Garuda shuts down.
+With `daemons.enabled: true`, `bash(is_daemon: true)` starts a long-running command through the
+executor and returns `{ daemonId, pid, command, status }` at once. The companion `process_manager`
+tool provides `list`, `status`, `logs` (line count and stdout/stderr filter) and `kill`.
+`DaemonManager` in `src/sandbox/daemon.ts` keeps a capped in-memory log per daemon, and
+`Runtime.close()` stops all running daemons. Without the setting, neither the parameter nor the tool
+is offered to the model.
 
 ### Interactive patch staging (0.14)
 

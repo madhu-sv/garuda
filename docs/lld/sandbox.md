@@ -148,18 +148,23 @@ the host. The Linux bridge is tested in the cloud (bubblewrap, curl through the 
 
 ## Background daemons (`daemon.ts`, 0.14)
 
-Long-running dev servers, watchers, and support processes can be launched via `bash` with `is_daemon: true`.
+Only with `daemons.enabled: true` (off by default). Then `bash` accepts `is_daemon: true` and the
+`process_manager` tool is registered.
 
-- `DaemonManager` tracks background processes started during the session.
-- Subprocesses lead their own detached process groups (`detached: true`).
-- Standard output and standard error are captured in a rolling circular buffer (`DaemonLogBuffer`, up to 1 MB per daemon).
-- Child processes are tracked: PID, command, arguments, cwd, start time, exit code/signal, and status (`running`, `exited`, `killed`).
-- Operations via `DaemonManager`:
-  - `start(command, argv, policy, env?)`: Launches the daemon process and returns its descriptor.
-  - `list()`: Returns status and summaries of active and recent daemons.
-  - `logs(id, maxBytes?)`: Retrieves tail logs from the daemon's ring buffer.
-  - `kill(id, signal?)`: Sends SIGTERM, followed by SIGKILL after 2 s to the entire process group.
-- Clean shutdown: `Executor.shutdown()` calls `DaemonManager.shutdown()`, ensuring no dangling child processes or orphaned dev servers survive after Garuda exits.
+- `DaemonManager` is created by the executor and tracks the daemons of this session only.
+- A daemon starts with `executor.start(["bash", "-c", command], policy, env)`: the same sandbox and
+  environment rules as any command. Its stdin is closed at once.
+- Each daemon has an id (`daemon_1`, …), the PID, the command, start and end time, exit code or
+  signal, and a status: `running`, `stopped` or `failed`.
+- Output is split into lines and kept in memory: the newest `DEFAULT_MAX_LOG_LINES` (2,000) lines,
+  each cut at `MAX_LOG_LINE_CHARS` (4,000). Text with no newline is kept as a line when it passes
+  `MAX_PENDING_CHARS` (64,000), so memory stays bounded.
+- API: `spawn(command, policy, {env?, maxBufferLines?})`, `list()`, `get(id)`,
+  `logs(id, {lines?, stream?})` (default 50 lines; at most `MAX_LOGS_CHARS`, 30,000 characters, newest
+  lines first kept), `kill(id)` and `shutdown()`.
+- `kill` and `shutdown` call `RunningProcess.stop()`: SIGTERM to the process group, then SIGKILL
+  after the grace time.
+- `Runtime.close()` calls `executor.daemons?.shutdown()`, so no daemon outlives the session.
 
 ## Tests
 
@@ -168,8 +173,8 @@ environment allowlist, output cap, timeout, `shutdown()`, and process-tree kill 
 `test/hostExecutor.test.ts` runs it for the host; `test/sandbox.test.ts` runs it for the machine's OS
 sandbox, plus real checks: writes outside the root fail, protected paths stay read-only, denied reads
 fail, no network, and `sandbox: false` isolates nothing. The Seatbelt tests run only on macOS.
-`test/daemon.test.ts` (0.14) tests daemon launch, log capture, output streaming, status reporting, kill,
-and executor shutdown cleanup.
+`test/daemon.test.ts` (0.14) tests daemon launch, log capture, status, kill, the log caps, that the
+setting is off by default, and that `Runtime.close()` stops a running daemon.
 `test/networkProxy.test.ts` (0.13) tests the allowlist, the proxy (tunnel, 403 with the reason, IP
 literals, private addresses, plain http) and curl through the machine's OS sandbox with and without the
 proxy; `test/network.test.ts` the runtime (consent, pinning, questions, ports), evals and jobs.
