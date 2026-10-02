@@ -8,3 +8,4 @@ coverage/
 dist-sea/
 bin/
 Claude*/
+output/
