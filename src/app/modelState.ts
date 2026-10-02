@@ -16,6 +16,7 @@ import {
   withoutThinking,
 } from "../model/thinking.js";
 import type { ModelClient, ThinkingRequest } from "../model/types.js";
+import { assertModelAllowedByPolicy, type TeamPolicy } from "../permissions/policy.js";
 import type { Settings } from "../permissions/settings.js";
 import type { RunLimits, StartRecord } from "../session/records.js";
 import type { Session } from "../session/session.js";
@@ -54,6 +55,7 @@ export interface ModelStateOptions {
   maxTokens?: number | undefined;
   choices?: ModelChoices | undefined;
   settings: Settings;
+  policy?: TeamPolicy | undefined;
 }
 
 export class ModelState {
@@ -66,6 +68,7 @@ export class ModelState {
   choices: ModelChoices | undefined;
   private model: ModelClient | (() => Promise<ModelClient>);
   private readonly settings: Settings;
+  private readonly policy: TeamPolicy | undefined;
 
   constructor(options: ModelStateOptions) {
     this.modelId = options.modelId;
@@ -76,9 +79,11 @@ export class ModelState {
     this.maxTokens = options.maxTokens;
     this.choices = options.choices;
     this.settings = options.settings;
+    this.policy = options.policy;
   }
 
   async client(): Promise<ModelClient> {
+    assertModelAllowedByPolicy(this.policy, this.modelId);
     if (typeof this.model === "function") this.model = await this.model();
     return this.model;
   }
@@ -149,11 +154,13 @@ export class ModelState {
     if (spec === undefined) {
       return { ok: false, text: `There is no model ${ref} in the list. Type /models.` };
     }
-    if (spec === this.modelId) return { ok: true, text: `${spec} is already the model.` };
     let resolved: ReturnType<typeof choices.resolve>;
     let client: ModelClient;
     try {
+      assertModelAllowedByPolicy(this.policy, spec);
+      if (spec === this.modelId) return { ok: true, text: `${spec} is already the model.` };
       resolved = choices.resolve(spec);
+      assertModelAllowedByPolicy(this.policy, resolved.spec);
       client = await resolved.model();
     } catch (error) {
       return { ok: false, text: `Cannot use ${spec}: ${(error as Error).message}` };

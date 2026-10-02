@@ -71,7 +71,7 @@ import { expandAllowlist, hostAllowed, NETWORK_PORTS } from "../net/allowlist.js
 import type { NetworkProxy, ProxyDecision } from "../net/proxy.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
-import { isModelAllowedByPolicy, loadPolicy, type TeamPolicy } from "../permissions/policy.js";
+import { assertModelAllowedByPolicy, loadPolicy, type TeamPolicy } from "../permissions/policy.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
@@ -393,6 +393,7 @@ export class Runtime {
       maxTokens: options.maxTokens,
       choices: options.models,
       settings,
+      policy,
     });
     this.modelState.thinkingChoice = initialThinking;
     this.executor = choice.executor;
@@ -437,6 +438,7 @@ export class Runtime {
                     return startClient;
                   }
                 : async () => {
+                    assertModelAllowedByPolicy(this.policy, sub.spec);
                     subClient ??= await sub.model();
                     return subClient;
                   },
@@ -482,6 +484,7 @@ export class Runtime {
                     return startClient;
                   }
                 : async () => {
+                    assertModelAllowedByPolicy(this.policy, sub.spec);
                     subClient ??= await sub.model();
                     return subClient;
                   },
@@ -540,13 +543,8 @@ export class Runtime {
   static async create(options: RuntimeOptions): Promise<Runtime> {
     const settings = options.settings ?? (await loadSettings(options.root));
     const policy = options.policy ?? (await loadPolicy(options.root));
+    assertModelAllowedByPolicy(policy, options.modelId);
     if (policy !== undefined) {
-      const modelAllowed = isModelAllowedByPolicy(policy, options.modelId);
-      if (!modelAllowed.allowed) {
-        throw new Error(
-          modelAllowed.reason ?? `Model "${options.modelId}" is not permitted by team policy.`,
-        );
-      }
       if (policy.limits?.maxSteps !== undefined) {
         const policyMax = policy.limits.maxSteps;
         settings.maxSteps =
@@ -772,10 +770,12 @@ export class Runtime {
     const main = (): ChildModel => {
       const sub = this.subagentModelOption;
       if (sub !== undefined) {
+        assertModelAllowedByPolicy(this.policy, sub.spec);
         let client: Promise<ModelClient> | undefined;
         return {
           spec: sub.spec,
           client: () => {
+            assertModelAllowedByPolicy(this.policy, sub.spec);
             client ??= sub.model();
             return client as Promise<ModelClient>;
           },
@@ -796,15 +796,18 @@ export class Runtime {
       // An alias names a Claude model; with another provider, the main model does the work.
       return Promise.resolve(main());
     }
+    assertModelAllowedByPolicy(this.policy, spec);
     let cached = this.agentModels.get(spec);
     if (cached === undefined) {
       cached = (async (): Promise<ChildModel> => {
         if (resolve === undefined) throw new Error(`Garuda cannot use the model "${spec}" here.`);
         const resolved = resolve(spec);
+        assertModelAllowedByPolicy(this.policy, resolved.spec);
         let client: Promise<ModelClient> | undefined;
         return {
           spec: resolved.spec,
           client: () => {
+            assertModelAllowedByPolicy(this.policy, resolved.spec);
             client ??= resolved.model();
             return client as Promise<ModelClient>;
           },

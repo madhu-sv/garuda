@@ -185,11 +185,16 @@ for (const [name, command, env] of checks) {
             ),
         )
         .map((test) => test.title);
+      const resolvedScenarios = expected.resolvedScenarios ?? [];
+      status.resolved = assertions
+        .filter((test) => test.status === "passed" && resolvedScenarios.includes(test.title))
+        .map((test) => test.title);
       status.evidenceValid =
         result.error === undefined &&
-        result.status === 1 &&
-        assertions.length === expected.scenarios.length &&
-        expected.scenarios.every((title) => status.reproduced.includes(title));
+        result.status === (expected.scenarios.length > 0 ? 1 : 0) &&
+        assertions.length === expected.scenarios.length + resolvedScenarios.length &&
+        expected.scenarios.every((title) => status.reproduced.includes(title)) &&
+        resolvedScenarios.every((title) => status.resolved.includes(title));
       status.safetyGate = "blocked: reproduced open contracts are not safety passes";
       if (!status.evidenceValid) failed = true;
     } catch {

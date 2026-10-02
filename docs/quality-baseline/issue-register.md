@@ -1,7 +1,8 @@
 # Known agent gaps: issue register (M0)
 
-Status as of this baseline: all nine issue groups are open. The twelve strict scenarios fail at their
-intended assertions on the current runtime. This is component evidence, not a complete adversarial
+Original M0 status: all nine issue groups were open, with twelve intended strict failures.
+Current repair status: G01 is resolved; G02 to G09 remain open, with eleven intended strict failures.
+This is component evidence, not a complete adversarial
 security audit. Expectations are acceptance contracts proposed in the roadmap; their failure does
 not imply the earlier v0.17 requirements already promised every stronger guarantee.
 
@@ -14,9 +15,15 @@ ultimately reject prohibited effects while retaining allowed neighbouring operat
 Priority P0, milestone M1, owner runtime maintainer. Source: `src/app/modelState.ts` and
 `src/app/runtime.ts`. Start with a policy allowing only the initial fake-model ID; request
 `forbidden/model` through `Runtime.setModel`. Expected: rejection before provider creation.
-Observed: `ok: true`. Model clients are fake and no data is transmitted. Startup allowlisting is
-already covered by separate policy helpers. Follow-up: prove denied provider factory invocation
-count is zero and exercise CLI switching, resume and child model selection.
+Original observation: `ok: true`. Repair status: resolved in the model-policy enforcement patch.
+The requested and resolved IDs are checked before provider construction. The original G01 assertion
+now passes as an ordinary test. `test/model-policy-enforcement.test.ts` verifies forbidden provider
+factory count zero, unchanged model/session/journal after denial, `/models` names/aliases/numbers,
+policy loaded from disk, allowed wildcard switching, startup, resume and session switching, custom
+agent selection and resolver remapping, exploration and specialist child models. Allowed child
+requests and the existing non-Claude alias fallback retain positive coverage. All clients are fake.
+Policy is loaded at runtime creation; hot reload and retroactive revocation during in-flight requests
+are not introduced by this repair. Remaining milestone M1 work is G02 to G04.
 
 ## G02 Network allowlist policy precedence
 

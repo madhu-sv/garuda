@@ -1,10 +1,9 @@
 {
-  "version": 1,
+  "version": 2,
   "suite": "test/known-agent-gaps.test.ts",
   "status": "open",
   "semantics": "Expected failures are reproduced gaps, not safety passes. Promote to ordinary tests when fixed.",
   "scenarios": [
-    "G01 model switching must reject a model forbidden by team policy",
     "G02 proxy allowlist must not override a team blocked host",
     "G03 requireSandbox must reject a command on an executor with no isolation",
     "G04 grep must not expose a policy-denied ordinary source file",
@@ -18,7 +17,6 @@
     "G09 entry-file approval must not trust a changed imported dependency"
   ],
   "failurePatterns": {
-    "G01 model switching must reject a model forbidden by team policy": "expected true to be false",
     "G02 proxy allowlist must not override a team blocked host": "expected true to be false",
     "G03 requireSandbox must reject a command on an executor with no isolation": "expected true to be false",
     "G04 grep must not expose a policy-denied ordinary source file": "not to contain 'deniedMarker'",
@@ -30,5 +28,6 @@
     "G08 a module-level Python reference must not be attributed to the preceding function": "expected 'helper' to be '<module>'",
     "G08 an unresolved impact target must not be labelled low risk": "not to be 'low'",
     "G09 entry-file approval must not trust a changed imported dependency": "expected true to be false"
-  }
+  },
+  "resolvedScenarios": ["G01 model switching must reject a model forbidden by team policy"]
 }

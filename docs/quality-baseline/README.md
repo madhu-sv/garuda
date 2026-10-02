@@ -35,18 +35,21 @@ accepting a baseline; never relabel missing prerequisites as passes.
 
 ## Open contracts are not passes
 
-`test/known-agent-gaps.test.ts` contains twelve desired-behaviour assertions for G01 to G09. Normally Vitest
-uses `it.fails` so these tracked defects do not make unrelated harness development impossible.
+`test/known-agent-gaps.test.ts` contains twelve desired-behaviour assertions for G01 to G09.
+G01 now runs as an ordinary passing test after the model-policy repair. The remaining eleven use
+`it.fails` so tracked defects do not make unrelated harness development impossible.
 Vitest can count expected failures in its reported pass total; that number must not be cited as
 successful safety coverage. The baseline script separately reruns them in strict mode and identifies
-all twelve as open. Run that suite directly to see the red assertions:
+the eleven remaining assertions as open and G01 as resolved. Run that suite directly:
 
 ```sh
 GARUDA_GAP_REPRO_STRICT=1 pnpm exec vitest run test/known-agent-gaps.test.ts
 ```
 
 Exit 1 is expected on this baseline. As each contract is fixed, convert its registration from
-`knownGap` to ordinary `it`, remove its title from `known-gap-contracts.json`, and update the issue evidence.
+`knownGap` to ordinary `it`, move its title from `scenarios` to `resolvedScenarios` in
+`known-gap-contracts.json`, remove its failure pattern, and update the issue evidence. The capture
+requires both the named open reproductions and the named repaired contracts to match their status.
 The normal suite will flag an unexpectedly passing contract. Do not weaken the desired assertion to
 preserve an expected failure. If a different error causes it to fail, the reproduction is not valid.
 

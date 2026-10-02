@@ -67,7 +67,7 @@ async function runtime(
 }
 
 describe("Known agent gaps: policy, execution, audit, indexing and plugin trust", () => {
-  knownGap("G01 model switching must reject a model forbidden by team policy", async () => {
+  it("G01 model switching must reject a model forbidden by team policy", async () => {
     const app = await runtime(folder(), { allowedModels: [modelId] });
     try {
       const result = await app.setModel("forbidden/model");

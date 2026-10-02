@@ -189,6 +189,15 @@ export function isModelAllowedByPolicy(
   return { allowed: true };
 }
 
+/** Reject before constructing a provider client, for both parent and child model selection. */
+export function assertModelAllowedByPolicy(policy: TeamPolicy | undefined, modelId: string): void {
+  if (policy === undefined) return;
+  const decision = isModelAllowedByPolicy(policy, modelId);
+  if (!decision.allowed) {
+    throw new Error(decision.reason ?? `Model "${modelId}" is not permitted by team policy.`);
+  }
+}
+
 export function isHostBlockedByPolicy(
   policy: TeamPolicy,
   host: string,

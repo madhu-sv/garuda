@@ -51,3 +51,16 @@ No live API calls, model-performance trials or dependency downloads were perform
 The twenty regression task IDs are selected and the forty-task capability plan is a draft. M0
 neither implements all capability fixtures nor closes G01 to G09. P0 fixes and broader route coverage
 belong to the next milestones. This record is a harness baseline, not a release safety certificate.
+
+## G01 repair validation
+
+The model-policy enforcement repair promotes G01 to an ordinary passing test and leaves eleven
+open expected failures. Twenty additional fake-model integration cases exercise startup, direct
+and CLI switching, aliases and numeric selections, resolver remapping, project policy loading,
+session preservation and resumption, exploration, specialists and custom agents. Denied provider
+factories receive zero invocations; allowed paths still make the expected fake-model requests.
+
+The updated full suite contains 72 files and 717 tests: 705 ordinary passes, eleven expected
+failures and the same one opt-in Java skip. The contract inventory now names both open and resolved
+scenarios so capture can verify repaired assertions without dropping the remaining gap evidence.
+The release safety gate remains blocked; M1 G02 to G04 and the subsequent milestones remain open.
