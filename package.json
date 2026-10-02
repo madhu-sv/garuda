@@ -19,7 +19,8 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "package": "tsup && node scripts/package.mjs",
     "startup": "node scripts/startup.mjs",
-    "eval": "node dist/cli/index.js eval"
+    "eval": "node dist/cli/index.js eval",
+    "baseline:capture": "node scripts/capture-quality-baseline.mjs"
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {

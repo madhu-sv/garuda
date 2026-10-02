@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { KnowledgeIndex } from "../src/knowledge/index.js";
 import { GoExpert, parseGo } from "../src/knowledge/plugins/go.js";
@@ -388,12 +388,26 @@ func TestAdd(t *testing.T) {
     expect(structs.some((s) => s.name === "StockItem")).toBe(true);
   });
 
-  it("indexes external polyglot repository with all 5 languages", async () => {
-    const polyglotRoot = "/Users/madhusudhan/dev/garuda-polyglot";
-    const { existsSync } = await import("node:fs");
-    if (!existsSync(polyglotRoot)) return;
+  it("indexes a generated polyglot repository with all 5 languages", async () => {
+    const polyglotRoot = join(root, "polyglot");
+    const files: Record<string, string> = {
+      "src/billing/calc.go":
+        "package billing\n\ntype TaxCalculator struct {}\n\nfunc CalculateTax(amount int) int {\n return amount / 10\n}\n",
+      "src/billing/calc_test.go":
+        'package billing\n\nimport "testing"\n\nfunc TestCalculateTax(t *testing.T) {\n if CalculateTax(100) != 10 { t.Fail() }\n}\n',
+      "src/stock.rs": "pub struct StockItem {\n pub sku: String,\n}\n",
+      "src/cart.ts": "export function total(amount: number): number { return amount; }\n",
+      "src/cart.py": "def total(amount):\n    return amount\n",
+      "src/Cart.java":
+        "public class Cart {\n public int total(int amount) {\n  return amount;\n }\n}\n",
+    };
+    for (const [path, content] of Object.entries(files)) {
+      const target = join(polyglotRoot, path);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, content);
+    }
 
-    const index = new KnowledgeIndex(polyglotRoot);
+    const index = new KnowledgeIndex(polyglotRoot, { home: join(root, "empty-home") });
     const statuses = await index.languageStatuses();
     const activeLanguages = statuses.filter((s) => s.active).map((s) => s.id);
 

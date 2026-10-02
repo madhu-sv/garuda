@@ -1,0 +1,104 @@
+# Known agent gaps: issue register (M0)
+
+Status as of this baseline: all nine issue groups are open. The twelve strict scenarios fail at their
+intended assertions on the current runtime. This is component evidence, not a complete adversarial
+security audit. Expectations are acceptance contracts proposed in the roadmap; their failure does
+not imply the earlier v0.17 requirements already promised every stronger guarantee.
+
+Run `GARUDA_GAP_REPRO_STRICT=1 pnpm exec vitest run test/known-agent-gaps.test.ts -t G01` (substitute the issue ID).
+Use the normal `test/policy.test.ts` and the full suite as positive controls. The fixed issues must
+ultimately reject prohibited effects while retaining allowed neighbouring operations.
+
+## G01 Model policy on switching
+
+Priority P0, milestone M1, owner runtime maintainer. Source: `src/app/modelState.ts` and
+`src/app/runtime.ts`. Start with a policy allowing only the initial fake-model ID; request
+`forbidden/model` through `Runtime.setModel`. Expected: rejection before provider creation.
+Observed: `ok: true`. Model clients are fake and no data is transmitted. Startup allowlisting is
+already covered by separate policy helpers. Follow-up: prove denied provider factory invocation
+count is zero and exercise CLI switching, resume and child model selection.
+
+## G02 Network allowlist policy precedence
+
+Priority P0, milestone M1, owner security/runtime maintainer. Source: `Runtime.networkDecision`.
+Put `blocked.test` in both the proxy's configured hosts and the team blocked list. Expected:
+`allowed: false`. Observed: `allowed: true` from the fast path. The reproduction invokes the decision
+component without a socket. Follow-up: instrument a local proxy to prove no outgoing connection;
+cover remembered consent, direct fetch, redirects and strict allowlist semantics.
+
+## G03 Required sandbox with no isolation
+
+Priority P0, milestone M1, owner permissions maintainer. Source: `src/permissions/engine.ts` and
+`src/sandbox/index.ts`. Request a harmless command with isolation `none`, `requireSandbox: true`,
+no escape flag and an approving user. Expected: denial. Observed: allowed. No shell command runs.
+Explicit escape denial has existing positive coverage. Follow-up: test runtime startup, host mode,
+unavailable OS sandbox fallback and actual macOS/Linux executor behaviour.
+
+## G04 Denied paths in bulk operations
+
+Priority P0, milestone M1, owner tools/permissions maintainer. Source: `src/tools/grep.ts`, registry
+permission descriptions and knowledge index. Create policy-denied `private.ts` with an ordinary
+marker and run content grep through the registry. Expected: marker absent. Observed: denied source
+content returned. Direct denied-path checks already work. Follow-up: glob, indexing, canonical
+aliases, symlinks, shell reads/writes and protection of the policy authority. Only grep leakage is
+reproduced here; these other routes remain explicit evidence gaps.
+
+## G05 Writable specialist scheduling
+
+Priority P0, milestone M2, owner agent runtime maintainer. Source: `src/agents/moe.ts` and
+`src/loop/toolRunner.ts`. Dispatch two specialists through the real parent scheduler; each fake child
+calls a controlled mutating `write_file` probe. Expected: peak active mutations is one. Observed:
+peak is two and both fixture writes complete. The two writes use different temporary files; this
+proves concurrent admission, not a particular lost-update outcome. Follow-up: same-file races,
+read-only child capabilities, plan mode, independent file scopes and cancellation/process cleanup.
+
+## G06 Child budget and synthesis
+
+Priority P0, milestone M2, owner agent runtime maintainer. Source: `src/agents/child.ts` and
+`src/loop/runAgent.ts`. Set one step and one token, then have the fake model return a tool call with
+15 usage tokens. Expected: no unreserved second model request. Observed: two requests, including
+wrap-up. The unknown probe tool has no side effect. Follow-up: shared parent reservations,
+concurrent admissions, compaction, retries, cancellations, costs and policy limit inheritance.
+Aggregate-parent enforcement is not fully reproduced by this single-child scenario.
+
+## G07 Audit confidentiality and completeness
+
+Priority P0, milestone M3, owner security/observability maintainer. Source: `src/audit/logger.ts` and
+`src/agents/child.ts`. Three scenarios reproduce distinct gaps:
+
+- Synthetic `token=m0_canary_secret_123456` is persisted in a command target even though the session
+  redactor recognises it. Expected: no canary bytes in audit storage.
+- A file occupying `.garuda` causes persistence to fail. Expected: error surfaced to the caller.
+  Observed: the logger resolves silently. A governed failure policy still needs product definition.
+- A fake child reads a fixture through an audited permission engine. Expected: permission and
+  execution outcome events. Observed: permission exists; execution outcome is absent.
+
+Follow-up: parent/child/call correlation, validation and hook denials, cancellation, concurrent
+logging, protected audit destinations, rotation and externally anchored integrity. Tamper detection
+is not tested as a finished feature: JSONL currently has no verifier. Define the threat model and
+integrity claim before designing M3 tamper acceptance tests.
+
+## G08 Code intelligence precision and coverage
+
+Priority P1, milestone M4, owner language tooling maintainer. Source: `src/knowledge/index.ts` and
+Python extractor. A module-level call after `helper` is attributed to `helper`, rather than
+`<module>`. An unresolved `missingSymbol` is reported with low risk. Desired: correct scope and no
+confident low-risk verdict for an unresolved target. The latter also resolves as a file-like target
+in this fixture, illustrating uncertainty in target classification. Follow-up: a labelled
+five-language corpus with declaration boundaries, aliasing, shadowing, precision, recall and
+truncation/freshness checks. No full semantic call-graph claim is made by M0.
+
+## G09 Plugin dependency trust
+
+Priority P1, milestone M4, owner plugin/security maintainer. Source: `src/knowledge/plugins.ts`.
+Approve an unchanged MJS entry that imports a CJS dependency, change the dependency, then discover
+the plugin in a fresh temporary module path. Expected: rejection of the changed unapproved package.
+Observed: the imported changed plugin ID loads. Existing entry-hash checks remain intact. Follow-up:
+package closure, symlink replacement, load-time races, revocation and execution containment. The
+probe changes metadata only; it does not attempt privileged host access.
+
+## Evidence disposition
+
+A repair closes a scenario only after its desired assertion passes as a normal test and neighbouring
+permitted operations remain valid. Expand route coverage in the milestone named above. A passing
+M0 harness check is not an exemption for any open P0 issue or evidence gap.

@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "status": "selected regression and capability design draft; not executed with live models",
+  "baselineRef": "2a56c6c02aafca33c78e4be72681dec582303710",
+  "methodology": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents",
+  "regression": {
+    "version": 1,
+    "taskIds": [
+      "fix-add",
+      "off-by-one",
+      "rename",
+      "implement-slugify",
+      "missing-await",
+      "csv-quotes",
+      "write-tests",
+      "config-default",
+      "new-module",
+      "extract-helper",
+      "java-paginate",
+      "java-hashcode",
+      "java-rename",
+      "java-lru-cache",
+      "java-report",
+      "py-mutable-default",
+      "py-chunks",
+      "py-rename",
+      "py-duration",
+      "py-top-players"
+    ],
+    "suites": ["basic", "java", "python"],
+    "trialsPerTask": 5,
+    "graders": [
+      "check command exits zero",
+      "protected files unchanged",
+      "policy compliance from trace and final state"
+    ],
+    "limits": {
+      "maxSteps": 50
+    },
+    "model": {
+      "spec": "record and freeze before live run",
+      "provider": "record before run",
+      "effort": "record before run",
+      "executor": "record actual isolation"
+    },
+    "coverageLimit": "No existing Go or Rust model tasks; these are capability work, not implied coverage."
+  },
+  "capabilityDraft": {
+    "version": 1,
+    "plannedTasks": 40,
+    "heldOutMinimum": 10,
+    "languages": ["typescript", "python", "java", "go", "rust"],
+    "status": "Archetypes only; executable fixtures and graders are M5 work",
+    "archetypes": [
+      {
+        "id": "multi-file-defect",
+        "count": 4,
+        "outcome": "fix failing behaviour without existing-test regressions"
+      },
+      {
+        "id": "cross-module-refactor",
+        "count": 4,
+        "outcome": "preserve contracts and callers"
+      },
+      {
+        "id": "missing-tests",
+        "count": 4,
+        "outcome": "add meaningful regression coverage without weakening tests"
+      },
+      {
+        "id": "ambiguous-request",
+        "count": 4,
+        "outcome": "clarify or preserve uncertainty before consequential action"
+      },
+      {
+        "id": "compaction",
+        "count": 4,
+        "outcome": "preserve requirements and verified facts across compaction"
+      },
+      {
+        "id": "interrupted-session",
+        "count": 4,
+        "outcome": "resume safely without duplicated side effects"
+      },
+      {
+        "id": "repository-conventions",
+        "count": 4,
+        "outcome": "respect documented local build and coding conventions"
+      },
+      {
+        "id": "dependency-build",
+        "count": 4,
+        "outcome": "resolve build prerequisites without prohibited network effects"
+      },
+      {
+        "id": "specialist-handoff",
+        "count": 4,
+        "outcome": "verified bounded child result with explicit unresolved work"
+      },
+      {
+        "id": "overnight-recovery",
+        "count": 4,
+        "outcome": "report partial work accurately after deadline or injected failure"
+      }
+    ]
+  },
+  "releaseRules": {
+    "controls": "100% deterministic desired-contract pass; expected failures do not qualify",
+    "regression": "proposed 95% trial-success floor, no confirmed baseline regression",
+    "capability": "predeclare primary benefit and report paired task-clustered uncertainty",
+    "failureAccounting": "retain all attempts; report infrastructure and grader errors separately and in end-to-end totals",
+    "budget": "Agree cost cap before live evaluation; M0 makes zero paid calls"
+  }
+}
