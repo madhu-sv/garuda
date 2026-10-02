@@ -235,3 +235,24 @@ describe("Team Policy: PermissionEngine enforcement", () => {
     }
   });
 });
+
+describe("Team Policy: limits never change shared settings (merge gate)", () => {
+  it("returns a new object and leaves DEFAULT_SETTINGS and the caller's settings as they were", async () => {
+    const { withPolicyLimits } = await import("../src/app/runtime.js");
+    const { DEFAULT_SETTINGS } = await import("../src/permissions/settings.js");
+    const before = JSON.stringify(DEFAULT_SETTINGS);
+    const capped = withPolicyLimits(DEFAULT_SETTINGS, {
+      limits: { maxSteps: 3, tokenBudget: 1000 },
+    });
+    expect(capped).toMatchObject({ maxSteps: 3, tokenBudget: 1000 });
+    expect(JSON.stringify(DEFAULT_SETTINGS)).toBe(before);
+    expect(Object.isFrozen(DEFAULT_SETTINGS)).toBe(true);
+    const own = parseSettings({ limits: { maxSteps: 50, tokenBudget: 5000 } });
+    expect(withPolicyLimits(own, { limits: { maxSteps: 10 } })).toMatchObject({
+      maxSteps: 10,
+      tokenBudget: 5000,
+    });
+    expect(own.maxSteps).toBe(50);
+    expect(withPolicyLimits(own, undefined)).toBe(own);
+  });
+});

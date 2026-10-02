@@ -183,7 +183,13 @@ export interface Settings {
   formatters?: { enabled: boolean; commands: Record<string, FormatterSetting> };
 }
 
-export const DEFAULT_SETTINGS: Settings = { executor: "auto", allow: [], deny: [], envAllow: [] };
+/** Frozen: it is shared by every caller that has no settings file, so nobody may change it. */
+export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
+  executor: "auto",
+  allow: Object.freeze([]) as unknown as Settings["allow"],
+  deny: Object.freeze([]) as unknown as Settings["deny"],
+  envAllow: Object.freeze([]) as unknown as Settings["envAllow"],
+});
 
 export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
   const parsed = schema.safeParse(json);

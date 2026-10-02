@@ -108,6 +108,21 @@ const FORMAT_TIMEOUT_MS = 20_000;
 export const PLAN_NOTE =
   "Plan mode is on. Investigate and write a plan; do not change anything. File edits, file writes and remember are blocked, and bash runs in a sandbox that cannot write the project (temp folders only), so read-only commands and tests that write nothing in the project still work. End with a numbered plan: the files to change, the change in each, and how to test it. Then add a ```permissions block with one rule per line for the calls the build needs beyond the sandbox: edit_file(path) and write_file(path) for each file to change or create (globs such as src/** are fine), bash(command) for commands that need the network, and web_fetch(host) for pages. Commands that stay in the project (tests, builds) need no line.";
 
+/** The settings with the team policy's step and token limits applied (pure: a new object). */
+export function withPolicyLimits(settings: Settings, policy: TeamPolicy | undefined): Settings {
+  const limits = policy?.limits;
+  if (limits === undefined) return settings;
+  const min = (own: number | undefined, cap: number | undefined) =>
+    cap === undefined ? own : own === undefined ? cap : Math.min(own, cap);
+  const maxSteps = min(settings.maxSteps, limits.maxSteps);
+  const tokenBudget = min(settings.tokenBudget, limits.tokenBudget);
+  return {
+    ...settings,
+    ...(maxSteps === undefined ? {} : { maxSteps }),
+    ...(tokenBudget === undefined ? {} : { tokenBudget }),
+  };
+}
+
 /** What a line that starts with "/" means, when it is not a built-in command. */
 export type CommandResolution =
   | { kind: "none" }
@@ -541,23 +556,14 @@ export class Runtime {
   }
 
   static async create(options: RuntimeOptions): Promise<Runtime> {
-    const settings = options.settings ?? (await loadSettings(options.root));
     const policy = options.policy ?? (await loadPolicy(options.root));
     assertModelAllowedByPolicy(policy, options.modelId);
-    if (policy !== undefined) {
-      if (policy.limits?.maxSteps !== undefined) {
-        const policyMax = policy.limits.maxSteps;
-        settings.maxSteps =
-          settings.maxSteps === undefined ? policyMax : Math.min(settings.maxSteps, policyMax);
-      }
-      if (policy.limits?.tokenBudget !== undefined) {
-        const policyBudget = policy.limits.tokenBudget;
-        settings.tokenBudget =
-          settings.tokenBudget === undefined
-            ? policyBudget
-            : Math.min(settings.tokenBudget, policyBudget);
-      }
-    }
+    // A new object: the loaded settings may be the shared DEFAULT_SETTINGS, or the caller's own
+    // object. Changing either in place gave every later runtime in the process the policy's limits.
+    const settings = withPolicyLimits(
+      options.settings ?? (await loadSettings(options.root)),
+      policy,
+    );
     const auditLogger = new AuditLogger(options.root, {
       ...(policy === undefined ? {} : { policy }),
     });
