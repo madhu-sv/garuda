@@ -124,6 +124,11 @@ Observed: the imported changed plugin ID loads. Existing entry-hash checks remai
 package closure, symlink replacement, load-time races, revocation and execution containment. The
 probe changes metadata only; it does not attempt privileged host access.
 
+Mitigated, still open (merge gate): project plugins are not loaded by default, so a cloned repo
+cannot run plugin code. The gap stays in the opt-in path (`projectPlugins: true`), which the G09
+test uses. Close it with a consent flow that pins the whole import closure, or with plugins that
+run out of process in the sandbox.
+
 ## Evidence disposition
 
 A repair closes a scenario only after its desired assertion passes as a normal test and neighbouring

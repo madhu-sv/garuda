@@ -339,7 +339,14 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
     const trust = await TrustStore.open(home);
     await trust.setLanguageHash(root, "probe", createHash("sha256").update(code).digest("hex"));
     writeFileSync(join(plugins, "dependency.cjs"), 'exports.id = "changed";\n');
-    const result = await discoverPlugins({ root, home, trust, includeBuiltins: false });
+    // Project plugins are off by default (merge gate); the gap is in the opt-in path.
+    const result = await discoverPlugins({
+      root,
+      home,
+      trust,
+      includeBuiltins: false,
+      projectPlugins: true,
+    });
     expect(result.plugins.some((plugin) => plugin.id === "changed")).toBe(false);
   });
 });

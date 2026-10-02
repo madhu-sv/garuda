@@ -393,7 +393,7 @@ hunk (a cut preview has no `h`). Tests check the file on disk (`test/hunkApprova
 | Code index | `.garuda/settings.json` (`codeIndex`) | `find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`, `repo_map`. |
 | LSP diagnostics | `.garuda/settings.json` (`lsp`), `--lsp`, `~/.garuda/lsp.json` | Language server errors in edit results. |
 | Formatters (0.10) | `.garuda/settings.json` (`formatters`) | The project's formatter after each edit; off by default. |
-| Language experts & plugins (0.16) | `~/.garuda/languages/`, `.garuda/languages/` | Code index AST support for languages (TS/JS, Python, Java, Go, Rust, and custom plugins). |
+| Language experts & plugins (0.16) | `~/.garuda/languages/` (`.garuda/languages/` is not loaded, merge gate) | Code index AST support for languages (TS/JS, Python, Java, Go, Rust, and user plugins). |
 | MoE language specialists (0.17) | `.garuda/settings.json` (`moe`), built-in | Subagent delegation tool `delegate_expert` and `/experts`. |
 | Team policy & audit log (0.17, W5) | The managed policy file and `~/.garuda/policy.json` (never the project's), `~/.garuda/audit/<project>-<hash>/*.jsonl` | Team guardrails that a project cannot loosen; an audit log with redaction and a hash chain per file (tamper-evident, not tamper-proof), with `/audit` and `/audit verify`. |
 | Executors | `src/sandbox/` (`Executor`) | Another isolation technology. |

@@ -7,7 +7,7 @@ import { listFiles } from "../tools/files.js";
 import { createJavaExpert } from "./java.js";
 import { createGoExpert } from "./plugins/go.js";
 import { createRustExpert } from "./plugins/rust.js";
-import { discoverPlugins } from "./plugins.js";
+import { BUILTIN_PLUGINS, discoverPlugins } from "./plugins.js";
 import { createPythonExpert } from "./python.js";
 import type {
   AstQueryOptions,
@@ -54,6 +54,10 @@ export const DEFAULT_EXPERTS: readonly ExpertFactory[] = [
 export interface KnowledgeIndexOptions {
   readonly plugins?: readonly (LanguagePlugin | ExpertFactory)[];
   readonly trust?: TrustStore;
+  /**
+   * The home folder for user plugins (~/.garuda/languages). Absent: the built-in experts only, so
+   * a test or an eval never runs code from the real home folder.
+   */
   readonly home?: string;
 }
 
@@ -457,6 +461,8 @@ export class KnowledgeIndex {
           plugins.push(item);
         }
       }
+    } else if (this.home === undefined) {
+      plugins = [...BUILTIN_PLUGINS];
     } else {
       const trust = this.trust ?? (await TrustStore.open(this.home));
       const discovered = await discoverPlugins({

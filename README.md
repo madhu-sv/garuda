@@ -406,7 +406,10 @@ It answers code questions on this machine, with zero native C++ compilation depe
 - Built-in language plugins: TypeScript/JavaScript, Python, Java, Go, and Rust.
 - Dynamic plugin system:
   - User plugins: Drop custom language experts in `~/.garuda/languages/<lang>.js`.
-  - Project plugins: Place project-specific language experts in `<root>/.garuda/languages/<lang>.js`. Project plugins require explicit SHA-256 hash approval in `~/.garuda/trust.json`, protecting against malicious repository code execution.
+  - Project plugins (`<root>/.garuda/languages/`) are not loaded (merge gate). A plugin runs inside
+    Garuda's own process with no sandbox, there is no consent flow yet, and a hash pin of the entry file
+    does not cover the files it imports (G09). `/languages` names the plugins that were skipped.
+  - Tests and evals load the built-in experts only.
 - Tools for the agent (read-only, no approval), chosen with `"codeIndex"` in `.garuda/settings.json`:
   `"off"` (default), `"lookup"` (`find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`) or `"all"` (also `repo_map`).
   `find_callers` traces structural invocation hierarchies across languages; `impact_analysis` computes blast radius, dependents, and discovers affected test suites (including Go `*_test.go` and Rust `*_test.rs`); `ast_query` filters symbols by kind, container, and wildcards.

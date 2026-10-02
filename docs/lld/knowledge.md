@@ -7,7 +7,7 @@ Answer "where is X defined", "who uses X", "who calls X", "what is the blast rad
 Version 0.16 introduces a **dynamic language plugin architecture** with:
 - Built-in reference plugins: TypeScript/JavaScript, Python, Java, Go, and Rust.
 - User plugins in `~/.garuda/languages/`.
-- Project plugins in `<root>/.garuda/languages/` secured by SHA-256 hash pinning in `~/.garuda/trust.json`.
+- Project plugins in `<root>/.garuda/languages/`: not loaded (merge gate; see below).
 - Zero native C++ compilation dependencies, preserving instant sub-1s startup and single-binary packaging.
 
 ## Interfaces (`types.ts`)
@@ -106,11 +106,16 @@ interface FileNode { path; exports: ExportEntry[]; imports: string[] }
 
 ## Plugin Discovery & Security (`plugins.ts`)
 
-- **Built-in Plugins**: Always available without file reads.
-- **User Plugins**: Loaded from `~/.garuda/languages/<name>.js`. Run under the user's trust.
-- **Project Plugins**: Loaded from `<root>/.garuda/languages/<name>.js`.
-  - Must be explicitly approved in `~/.garuda/trust.json` with a matching SHA-256 hash.
-  - Unapproved or modified project plugins are rejected with a warning to prevent arbitrary code execution from untrusted git checkouts.
+- **Built-in plugins**: always available without file reads.
+- **User plugins**: loaded from `~/.garuda/languages/<name>.js` (or `.mjs`, `.ts`). They run in Garuda's own
+  process under the user's trust. `discoverPlugins` needs an explicit `home`. A `KnowledgeIndex` with no
+  `home` uses the built-in experts only. The runtime gives it a home only when `RuntimeOptions.languages`
+  is set (the CLI sets it; tests and evals do not), so a test never runs code from the real home folder.
+- **Project plugins** (`<root>/.garuda/languages/<name>.js`): not loaded (merge gate). A plugin runs in
+  Garuda's own process with no sandbox, no consent flow writes the pin yet, and the SHA-256 pin in
+  `~/.garuda/trust.json` covers only the entry file, not the files it imports (G09). Discovery adds a
+  warning that names the skipped files; `/languages` shows it. The pinned path stays behind
+  `discoverPlugins({ projectPlugins: true })` for tests and for a future consent flow.
 
 ## Use
 

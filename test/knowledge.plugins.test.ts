@@ -242,7 +242,7 @@ fn main() {
 
 describe("Plugin discovery and security pinning", () => {
   it("includes built-in plugins by default", async () => {
-    const { plugins, warnings } = await discoverPlugins({ root });
+    const { plugins, warnings } = await discoverPlugins({ root, home: join(root, "empty-home") });
     expect(warnings).toEqual([]);
     const ids = plugins.map((p) => p.id);
     expect(ids).toContain("typescript");
@@ -306,6 +306,7 @@ describe("Plugin discovery and security pinning", () => {
       root,
       home: fakeHome,
       trust,
+      projectPlugins: true,
     });
 
     expect(plugins.some((p) => p.id === "kotlin")).toBe(false);
@@ -319,10 +320,23 @@ describe("Plugin discovery and security pinning", () => {
       root,
       home: fakeHome,
       trust,
+      projectPlugins: true,
     });
     const kotlin = approvedResult.plugins.find((p) => p.id === "kotlin");
     expect(kotlin).toBeDefined();
     expect(kotlin?.source).toBe("project");
+
+    // Merge gate: by default a project plugin is not loaded, even with a pinned hash.
+    const byDefault = await discoverPlugins({ root, home: fakeHome, trust });
+    expect(byDefault.plugins.some((p) => p.id === "kotlin")).toBe(false);
+    expect(byDefault.warnings.join("\n")).toMatch(/kotlin\.js in \.garuda\/languages not loaded/);
+  });
+
+  it("a KnowledgeIndex with no home uses the built-in experts only", async () => {
+    const index = new KnowledgeIndex(join(root, "no-home-root"));
+    const ids = (await index.languageStatuses()).map((s) => s.id).sort();
+    expect(ids).toEqual(["go", "java", "python", "rust", "typescript"]);
+    expect(index.getWarnings()).toEqual([]);
   });
 });
 

@@ -320,6 +320,8 @@ async function start(options: Options, program: Command): Promise<number> {
     ...(job === undefined ? { undo: {} } : {}),
     // Skills from ~/.garuda/skills, ~/.claude/skills and the project (0.5).
     skills: {},
+    // User language plugins from ~/.garuda/languages (0.16); project plugins stay off.
+    languages: {},
     // Web search (0.5) and Claude's own search (0.6): only the user's search.json and environment.
     ...(searchConfig.config === undefined && searchConfig.claude === undefined
       ? {}

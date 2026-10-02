@@ -255,8 +255,8 @@ export interface RuntimeOptions {
     timeoutMs?: number;
   };
   /**
-   * Language plugins (0.16): ~/.garuda/languages/ and .garuda/languages/.
-   * `home` overrides the user's home directory (tests).
+   * Language plugins (0.16): user plugins from ~/.garuda/languages (`home` overrides the home
+   * folder). Absent: the built-in experts only (tests, evals). Project plugins are not loaded.
    */
   languages?: { home?: string };
 }
@@ -392,7 +392,7 @@ export class Runtime {
     this.onEvent = options.onEvent;
     this.system = system;
     this.knowledge = new KnowledgeIndex(options.root, {
-      ...(options.languages?.home !== undefined ? { home: options.languages.home } : {}),
+      ...(options.languages === undefined ? {} : { home: options.languages.home ?? homedir() }),
     });
     this.codeIndex = settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE;
     const web = settings.web ?? { enabled: true, allowLocalhost: false };

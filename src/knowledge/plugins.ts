@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { TrustStore } from "../mcp/trust.js";
@@ -46,16 +45,24 @@ export const BUILTIN_PLUGINS: readonly LanguagePlugin[] = [
 
 export interface PluginDiscoveryOptions {
   root: string;
-  home?: string | undefined;
+  /** The home folder whose ~/.garuda/languages is read. Required, so a test never reads the real one. */
+  home: string;
   trust?: TrustStore | undefined;
   includeBuiltins?: boolean | undefined;
+  /**
+   * Load project plugins (.garuda/languages) whose hash is pinned in trust.json. Off (merge gate):
+   * a plugin runs in Garuda's own process with no sandbox, no consent flow pins the hash yet, and
+   * the pin does not cover the files that the plugin imports (G09). Only tests turn it on.
+   */
+  projectPlugins?: boolean | undefined;
 }
 
 export async function discoverPlugins({
   root,
-  home = homedir(),
+  home,
   trust,
   includeBuiltins = true,
+  projectPlugins = false,
 }: PluginDiscoveryOptions): Promise<{
   plugins: LanguagePlugin[];
   warnings: string[];
@@ -84,7 +91,15 @@ export async function discoverPlugins({
 
   // 2. Project plugins: <root>/.garuda/languages/
   const projDir = join(root, ".garuda", "languages");
-  const projFiles = await safeReaddir(projDir);
+  const projFiles = (await safeReaddir(projDir)).filter(isPluginFile);
+  if (!projectPlugins) {
+    if (projFiles.length > 0) {
+      warnings.push(
+        `Project language plugin(s) ${projFiles.join(", ")} in .garuda/languages not loaded: project plugins are off until a consent flow also covers the files they import.`,
+      );
+    }
+    return { plugins, warnings };
+  }
 
   for (const filename of projFiles) {
     if (!isPluginFile(filename)) continue;
