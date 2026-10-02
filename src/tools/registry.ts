@@ -87,7 +87,16 @@ export class ToolRegistry implements ToolRunner {
         return { content: `Permission denied: ${decision.reason}`, isError: true, denied: true };
       }
       const startTime = Date.now();
-      const output: unknown = await tool.run(parsed.data, context);
+      // Partial approval (U0): the tool must apply only the accepted hunks.
+      const runContext =
+        decision.hunks === undefined
+          ? context
+          : {
+              ...context,
+              approvedHunks: decision.hunks,
+              ...(info?.preview === undefined ? {} : { approvedPreview: info.preview }),
+            };
+      const output: unknown = await tool.run(parsed.data, runContext);
       const durationMs = Date.now() - startTime;
       const content = tool.toText ? tool.toText(output) : String(output);
       const outcome = { content, isError: tool.isError?.(output) === true };

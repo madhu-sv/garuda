@@ -47,7 +47,8 @@ export function parseHunksFromDiff(
   let hunkIndex = 0;
 
   for (const line of lines) {
-    if (line.startsWith("--- ") || line.startsWith("+++ ")) {
+    // File headers come only before the first hunk: inside a hunk, "--- x" is a removed line "-- x".
+    if (current === null && (line.startsWith("--- ") || line.startsWith("+++ "))) {
       const match = /^[+-]{3}\s+[ab]\/(.+)$/.exec(line);
       if (match?.[1]) file = match[1];
       continue;

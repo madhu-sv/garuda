@@ -125,3 +125,12 @@ probe changes metadata only; it does not attempt privileged host access.
 A repair closes a scenario only after its desired assertion passes as a normal test and neighbouring
 permitted operations remain valid. Expand route coverage in the milestone named above. A passing
 M0 harness check is not an exemption for any open P0 issue or evidence gap.
+
+## U0 Selective hunk approval (from the hands-on review)
+
+Resolved (merge gate, 2026-10-02). Rejected hunks never reach the disk: the chat passes the accepted
+hunk numbers through `ApprovalRequest.selectHunks` and `PermissionDecision.hunks` to `edit_file`, which
+applies only those (`applyHunks`). Review is offered only when the preview shows every hunk. Effect
+tests in `test/hunkApproval.test.ts` check the file for n/y (the reproduction), y/n, y/y and n/n, and
+that nothing is written when the file changed during the review.
+

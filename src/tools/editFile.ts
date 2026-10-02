@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { displayPath, resolveInRoot } from "../permissions/pathGuard.js";
 import { writeFileAtomic } from "./atomicWrite.js";
-import { unifiedDiff } from "./diff.js";
+import { applyHunks, previewIsComplete, unifiedDiff } from "./diff.js";
 import { afterWrite, type Tool, type ToolContext } from "./types.js";
 
 const input = z.object({
@@ -42,21 +42,43 @@ export const editFileTool: Tool<Input> = {
   // Plan the edit before approval, so the user sees the real diff and a bad edit fails early.
   async describe(args, context) {
     const edit = await plan(args, context);
+    const preview = unifiedDiff(edit.shown, edit.before, edit.after);
     return {
       target: { kind: "path", path: edit.shown },
-      preview: unifiedDiff(edit.shown, edit.before, edit.after),
+      preview,
+      // Hunk-by-hunk approval only when the user sees every hunk (U0).
+      ...(previewIsComplete(preview) ? { hunks: true as const } : {}),
     };
   },
 
   async run(args, context) {
     // Plan again: the file can change while the user decides.
     const edit = await plan(args, context);
-    await writeFileAtomic(edit.absolute, edit.after, { createOnly: false });
-    context.files.record(edit.absolute, edit.after);
-    return afterWrite(`Edited ${edit.shown}.`, context, {
+    let text = edit.after;
+    let note = "";
+    const accepted = context.approvedHunks;
+    if (accepted !== undefined) {
+      // U0: write only the hunks the user accepted, and only if the change is still the one they
+      // saw (the same preview); else write nothing.
+      const preview = unifiedDiff(edit.shown, edit.before, edit.after);
+      if (context.approvedPreview !== undefined && preview !== context.approvedPreview) {
+        throw new Error(
+          `${edit.shown} changed while the user reviewed the hunks. Nothing was written. Read the file again.`,
+        );
+      }
+      const total = (preview.match(/^@@ /gm) ?? []).length;
+      text = applyHunks(edit.before, edit.after, accepted);
+      const rejected = Array.from({ length: total }, (_, i) => i).filter(
+        (i) => !accepted.includes(i),
+      );
+      note = ` The user accepted ${accepted.length} of ${total} hunk(s) and rejected hunk(s) ${rejected.map((i) => i + 1).join(", ")}: only the accepted ones were written, so the file differs from your edit. Read it before you change it again.`;
+    }
+    await writeFileAtomic(edit.absolute, text, { createOnly: false });
+    context.files.record(edit.absolute, text);
+    return afterWrite(`Edited ${edit.shown}.${note}`, context, {
       absolute: edit.absolute,
       shown: edit.shown,
-      text: edit.after,
+      text,
     });
   },
 };

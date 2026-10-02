@@ -30,6 +30,10 @@ export interface ToolContext {
   diagnostics?: DiagnosticsSource;
   /** Formats a file that a tool just wrote (0.10). Absent when formatters are off. */
   format?: FormatSource;
+  /** The user accepted only these hunks of the preview (U0); the registry sets it per call. */
+  approvedHunks?: readonly number[];
+  /** The preview that the user reviewed with `approvedHunks`, to check the change is the same. */
+  approvedPreview?: string;
   /** Structured audit logger (0.17). Absent when audit is off. */
   audit?: AuditLogger;
 }

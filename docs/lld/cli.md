@@ -277,15 +277,18 @@ interface ChatState {
 - **`/languages` (0.16):** `runtime.knowledge.languageStatuses()` reports all registered language plugins
   (built-in, user, project), their supported extensions, active/standby state, and file counts. Also reports
   any warnings (such as unapproved project plugins). Runs immediately from the command palette.
-- **Interactive patch staging (0.14, `hunkStaging.ts`):** In the Ink approval view for file edits
-  (`write_file`, `edit_file`), pressing `h` (or `p`) opens `HunkStagingView`. Users can review each diff hunk
-  individually with color highlighting and a `[staged/total]` progress counter:
+- **Interactive patch staging (0.14, `hunkStaging.ts`; enforced in the merge gate, U0):** In the Ink
+  approval view of an `edit_file` call whose request has `selectHunks` (the tool can apply single hunks,
+  and the preview is complete), pressing `h` (or `p`) opens `HunkStagingView`:
   - `y` or Enter stages the current hunk and advances.
   - `n` skips the current hunk without staging.
   - `a` stages all remaining hunks in one keypress.
   - `d` discards/skips all remaining hunks.
   - `←`/`→`/`↑`/`↓` navigates between hunks without modifying staging state.
   - `q` or Esc exits hunk review back to standard approval mode.
+  At the end `finishHunkReview` answers: all staged → "once" (the whole edit); none → "deny"; some →
+  `request.selectHunks(ids)` then "once", and `edit_file` writes only those hunks. The parser treats
+  `---`/`+++` as file headers only before the first `@@`, so a removed `-- comment` line is kept.
 - **Type-ahead at start:** keys typed before raw mode arrive as one chunk with `\n` (cooked mode);
   `typeAhead` treats each line end as Enter. Bracketed paste (`usePaste`) inserts text and never submits.
 - **Ctrl-C:** busy → `onInterrupt`; idle with text → clear the line; idle and empty → exit on a second
@@ -296,6 +299,6 @@ interface ChatState {
 `test/notifyDiff.test.ts` (0.6: notification channel, bytes, rules and wiring; `/diff`),
 `test/focus.test.tsx` (0.6: focus codes, terminals, a quiet notifier while focused, the codes in real Ink input),
 `test/chat.test.tsx` (markdown, editor, store, type-ahead, Ink integration with `ink-testing-library`),
-`test/hunkStaging.test.tsx` (0.14: hunk parser, staging state transitions, interactive keyboard navigation),
+`test/hunkStaging.test.tsx` (0.14: hunk parser, staging state transitions, interactive keyboard navigation), `test/hunkApproval.test.ts` (U0: the file on disk after each choice),
 `test/m5.acceptance.test.ts` (plain chat and `-p`), `test/cli.test.ts`. The cloud workspace also
 drives the Ink chat in a real pseudo-terminal for smoke tests.

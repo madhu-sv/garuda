@@ -550,10 +550,13 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     this.answer(choice ?? approval.choices[approval.selected]?.choice ?? "deny");
   }
 
-  /** Enter interactive hunk-by-hunk staging if the approval preview contains diff hunks (0.14). */
+  /**
+   * Enter hunk-by-hunk review (0.14). Only when the tool can apply single hunks (the request has
+   * `selectHunks`, U0): otherwise the choice of hunks would not change what is written.
+   */
   startHunkReview(): boolean {
     const approval = this.state.approval;
-    if (approval === undefined) return false;
+    if (approval === undefined || approval.request.selectHunks === undefined) return false;
     const fallback =
       approval.request.target.kind === "path" ? approval.request.target.path : "diff";
     const hunkReview = createHunkStaging(approval.request.preview, fallback);
@@ -573,9 +576,9 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   stageHunk(staged: boolean): void {
     const approval = this.state.approval;
     if (approval === undefined || approval.hunkReview === undefined) return;
-    const { finished, hasStaged } = stageCurrentHunk(approval.hunkReview, staged);
+    const { finished } = stageCurrentHunk(approval.hunkReview, staged);
     if (finished) {
-      this.choose(hasStaged ? "once" : "deny");
+      this.finishHunkReview();
     } else {
       this.update({ approval: { ...approval, hunkReview: { ...approval.hunkReview } } });
     }
@@ -586,6 +589,24 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     const approval = this.state.approval;
     if (approval === undefined || approval.hunkReview === undefined) return;
     stageAllRemaining(approval.hunkReview);
+    this.finishHunkReview();
+  }
+
+  /**
+   * Answer from the staged hunks (U0): all staged = the whole change; none = deny; some = only those
+   * hunks, passed to the tool through `selectHunks`, so a rejected hunk never reaches the disk.
+   */
+  private finishHunkReview(): void {
+    const approval = this.state.approval;
+    if (approval === undefined || approval.hunkReview === undefined) return;
+    const staged = approval.hunkReview.hunks.filter((h) => h.staged).map((h) => h.id);
+    if (staged.length === 0) {
+      this.choose("deny");
+      return;
+    }
+    if (staged.length < approval.hunkReview.hunks.length) {
+      approval.request.selectHunks?.(staged);
+    }
     this.choose("once");
   }
 

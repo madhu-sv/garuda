@@ -247,6 +247,7 @@ export class PermissionEngine implements PermissionGate {
       this.unattended.onDeny?.(tool, asked);
       return { decision: { allowed: false, by: "unattended", reason: this.unattended.reason } };
     }
+    let accepted: readonly number[] | undefined;
     const choice = await this.approver.ask(
       {
         tool,
@@ -254,6 +255,13 @@ export class PermissionEngine implements PermissionGate {
         preview: info?.preview ?? describeTarget(asked),
         isolation: this.isolation,
         ...(info?.title === undefined ? {} : { title: info.title }),
+        ...(info?.hunks === true
+          ? {
+              selectHunks: (hunks: readonly number[]) => {
+                accepted = [...hunks];
+              },
+            }
+          : {}),
       },
       signal,
     );
@@ -268,6 +276,10 @@ export class PermissionEngine implements PermissionGate {
       };
     }
     if (choice === "session") this.sessionRules.push(sessionRule(tool, asked));
+    // Some hunks only (U0): the tool applies exactly these. Never with "session".
+    if (choice === "once" && accepted !== undefined) {
+      return { decision: { allowed: true, by: "user", hunks: accepted }, userChoice: choice };
+    }
     return { decision: { allowed: true, by: "user" }, userChoice: choice };
   }
 

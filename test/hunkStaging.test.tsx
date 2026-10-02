@@ -87,11 +87,16 @@ describe("hunkStaging parser and operations", () => {
 describe("Ink HunkStagingView and ChatStore integration", () => {
   const newStore = () => new ChatStore({ model: "fake", sandbox: "host" }, { paint: noColor });
 
+  /** Hunk selections that the store passed back (U0). */
+  let selected: (readonly number[])[] = [];
   const sampleRequest: ApprovalRequest = {
     tool: "edit_file",
     target: { kind: "path", path: "src/app.ts" },
     preview: sampleDiff,
     isolation: "none",
+    selectHunks: (hunks) => {
+      selected.push(hunks);
+    },
   };
 
   it("renders HunkStagingView with hunk info and colored lines", () => {
@@ -145,9 +150,37 @@ describe("Ink HunkStagingView and ChatStore integration", () => {
     await until(() => (ui.lastFrame() ?? "").includes("Hunk 2 of 2"));
 
     // Accept hunk 2
+    selected = [];
     ui.stdin.write("y");
     expect(await answer).toBe("once");
     expect(store.getState().approval).toBeUndefined();
+    // All hunks accepted: the whole change, no selection.
+    expect(selected).toEqual([]);
+  });
+
+  it("accepts some hunks: 'n' then 'y' answers once and passes only hunk 2 (U0)", async () => {
+    selected = [];
+    const store = newStore();
+    const answer = store.ask(sampleRequest, new AbortController().signal);
+    const ui = render(<App store={store} />);
+    await until(() => (ui.lastFrame() ?? "").includes("h = stage hunks"));
+    ui.stdin.write("h");
+    await until(() => (ui.lastFrame() ?? "").includes("Hunk 1 of 2"));
+    ui.stdin.write("n");
+    await until(() => (ui.lastFrame() ?? "").includes("Hunk 2 of 2"));
+    ui.stdin.write("y");
+    expect(await answer).toBe("once");
+    expect(selected).toEqual([[1]]);
+  });
+
+  it("offers no hunk review when the tool cannot apply single hunks", async () => {
+    const store = newStore();
+    const { selectHunks: _, ...plain } = sampleRequest;
+    store.ask(plain, new AbortController().signal);
+    const ui = render(<App store={store} />);
+    await until(() => (ui.lastFrame() ?? "").includes("1. Yes, once"));
+    expect(ui.lastFrame()).not.toContain("h = stage hunks");
+    expect(store.startHunkReview()).toBe(false);
   });
 
   it("discards all hunks with 'd' and denies", async () => {

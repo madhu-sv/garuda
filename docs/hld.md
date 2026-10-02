@@ -362,8 +362,12 @@ and terminates all background process trees cleanly when Garuda shuts down.
 
 When file modifications are presented for approval in the Ink chat, pressing `h` enters interactive
 hunk-by-hunk review. The user steps through individual hunks with colored diffs: `y` to stage, `n` to
-skip, `a` to stage all, `d` to discard all, and arrows to navigate. Approving with staged hunks applies
-the changes directly.
+skip, `a` to stage all, `d` to discard all, and arrows to navigate. At the end: all hunks staged =
+the whole edit; none = denied; some = the engine passes the accepted hunk numbers to `edit_file`
+(`PermissionDecision.hunks`, `ToolContext.approvedHunks`), which writes only those hunks
+(`applyHunks`) and tells the model which hunks were rejected. It writes nothing if the change is no
+longer the one reviewed. Review is offered only for `edit_file` and only when the preview shows every
+hunk (a cut preview has no `h`). Tests check the file on disk (`test/hunkApproval.test.ts`).
 
 ## 8. Context management
 

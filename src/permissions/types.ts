@@ -38,6 +38,11 @@ export interface CallInfo {
   preview?: string;
   /** The question's header, when the default for the target kind does not fit (0.5, web_search). */
   title?: string;
+  /**
+   * The preview is a complete unified diff whose hunks the tool can apply one by one (edit_file).
+   * The chat may then let the user accept some hunks; the tool gets them in `approvedHunks`.
+   */
+  hunks?: true;
 }
 
 export interface PermissionRequest {
@@ -47,7 +52,12 @@ export interface PermissionRequest {
 }
 
 export type PermissionDecision =
-  | { allowed: true; by: "read_only" | "sandbox" | "rule" | "session" | "user" }
+  | {
+      allowed: true;
+      by: "read_only" | "sandbox" | "rule" | "session" | "user";
+      /** The user accepted only these hunks of the preview (0-based, in diff order). */
+      hunks?: readonly number[];
+    }
   | { allowed: false; by: "rule" | "sensitive" | "user" | "unattended" | "policy"; reason: string };
 
 /** The permission check as the tools see it. The PermissionEngine implements it. */
@@ -83,6 +93,12 @@ export interface ApprovalRequest {
   choices?: readonly ApprovalChoice[];
   /** Labels that replace the default choice labels. */
   labels?: Partial<Record<ApprovalChoice, string>>;
+  /**
+   * Present when the preview's hunks can be accepted one by one. Before it answers "once", an
+   * approver that let the user pick hunks calls this with the accepted ones (0-based). Not called:
+   * the whole change.
+   */
+  selectHunks?: (accepted: readonly number[]) => void;
 }
 
 /** Asks the user. The CLI implements it with a prompt. Tests use AutoApprover. */

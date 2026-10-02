@@ -42,7 +42,7 @@ export function App({ store }: { store: ChatStore }) {
             question={state.approval.request.question ?? "Allow?"}
             choices={state.approval.choices}
             selected={state.approval.selected}
-            hasHunks={state.approval.request.preview.includes("@@")}
+            hasHunks={state.approval.request.selectHunks !== undefined}
           />
         )}
         {state.queue.map((line, i) => (

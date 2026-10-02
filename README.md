@@ -170,7 +170,8 @@ Set the context window, price and output limit per model, and add providers, in 
   Keys typed before the chat is ready are kept too.
 - Ctrl-O prints the full output of the last tool call. ↑ and ↓ browse earlier inputs.
 - Approvals show the full diff or command in the scrollback. Answer with ↑↓ and Enter, or
-  y (once), a (session), n or Esc (deny). For file edits, press `h` (or `p`) to review and stage hunks individually (0.14).
+  y (once), a (session), n or Esc (deny). For `edit_file`, press `h` (or `p`) to review hunks one by one (0.14): only the hunks you stage
+  are written, and the model is told which ones you rejected. A diff too long to show in full has no `h`.
 - `GARUDA_PLAIN=1` turns Ink off. Pipes, `-p`, the evals and the standalone binary always use plain output.
 - Notifications: when an approval waits during a task, and when a task that ran 10 s or longer ends, Garuda
   tells you. In iTerm2, Ghostty and WezTerm it sends a desktop notification (the OSC 9 escape code); in other
