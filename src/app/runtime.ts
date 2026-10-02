@@ -74,6 +74,7 @@ import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions
 import {
   assertModelAllowedByPolicy,
   ignoredProjectPolicy,
+  isHostBlockedByPolicy,
   type TeamPolicy,
 } from "../permissions/policy.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -392,6 +393,8 @@ export class Runtime {
     this.onEvent = options.onEvent;
     this.system = system;
     this.knowledge = new KnowledgeIndex(options.root, {
+      // G04: files that the team policy denies are not indexed (find_symbol, repo_map, …).
+      hidden: (path) => this.permissions.deniedByPolicy(path),
       ...(options.languages === undefined ? {} : { home: options.languages.home ?? homedir() }),
     });
     this.codeIndex = settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE;
@@ -1626,6 +1629,16 @@ export class Runtime {
   ): Promise<ProxyDecision> {
     if (!NETWORK_PORTS.includes(port)) {
       return { allowed: false, reason: `only ports ${NETWORK_PORTS.join(" and ")}` };
+    }
+    // G02: the team policy comes first. A host on the project's allowlist cannot pass a blocked host.
+    if (this.policy !== undefined) {
+      const blocked = isHostBlockedByPolicy(this.policy, host);
+      if (blocked.blocked) {
+        return {
+          allowed: false,
+          reason: (blocked.reason ?? "blocked by team policy").replace(/\.$/, ""),
+        };
+      }
     }
     if (hostAllowed(host, hosts)) return { allowed: true };
     const decision = await this.permissions.check(

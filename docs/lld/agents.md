@@ -72,7 +72,7 @@ flowchart TD
 
 | File | Purpose |
 | --- | --- |
-| `child.ts` | Shared child session runner (`runChild`): isolated session initialization, step and token budgeting, wrap-up recovery call, `SubagentReport` generation, and call logging. |
+| `child.ts` | Shared child session runner (`runChild`): isolated session initialization, step and token budgeting, wrap-up call when the budget has room (G06), `SubagentReport` generation, and call logging. |
 | `moe.ts` | Mixture-of-Experts language specialist architecture: `SPECIALIST_SPECS` for 5 languages, `inferLanguage` routing, `buildSpecialistSystem`, and `createMoeDispatchTool` (`delegate_expert`). |
 | `explore.ts` | The `explore` subagent tool (0.3): read-only code exploration that answers open questions without polluting the main context with file contents. |
 | `custom.ts` | Custom agent loader: discovers and parses Markdown agent definitions from 4 folders, tool mapping, and hash-pinned consent (`agentConsent`). |
@@ -257,7 +257,7 @@ You are an expert application security auditor...
 2. **Limit Guardrails**:
    - `maxSteps`: Model turns limit (default 20, max 200).
    - `tokenBudget`: Input, output, and cache tokens cap (default 150,000).
-3. **Wrap-Up Recovery**: When a child hits its step or token limit, `runChild` injects a wrap-up prompt (`WRAP_UP`) and executes one final model call with tools disabled so the subagent can summarize what it discovered and what remains open.
+3. **Wrap-Up Recovery**: When a child hits its step limit, its token limit or repeats a call, `runChild` adds a wrap-up prompt (`WRAP_UP`) and makes one more model call (tool calls in it are ignored), so the subagent can say what it found and what is still open. The call runs only when it fits in the budget that is left (G06): the tokens used so far, plus the context of the last response, plus the output limit, must not pass `tokenBudget`. With no room there is no call; the answer is the child's last text, or a note that says the budget ran out.
 4. **Usage Accounting**: Emits a `SubagentReport` attached to the tool's `ToolOutcome`. The primary orchestrator adds child token usage and cost to the parent session totals.
 
 ---
@@ -305,6 +305,6 @@ flowchart TD
   Reject --> AuditLog
 ```
 
-- **Team policy (the managed file and `~/.garuda/policy.json`)**: checked before any subagent tool runs. A denied command or path is refused with `by: policy`. `denyPaths` does not filter `grep` results yet (G04).
+- **Team policy (the managed file and `~/.garuda/policy.json`)**: checked before any subagent tool runs. A denied command or path is refused with `by: policy`. `grep`, `glob` and the code index skip files that `denyPaths` denies (G04).
 - **Audit Trail (`~/.garuda/audit/`)**: Every subagent authorization check is recorded with timestamp, session ID, tool name and risk level (`low`, `medium`, `high`, `critical`). The outcome of a tool run inside a subagent is not recorded yet (G07, open).
 - **Snapshot & Worktree Isolation**: Child runs never contaminate undo snapshot diffs (`SNAPSHOT_EXCLUDES`) or scheduled job git branches (`NEVER_COMMIT`).

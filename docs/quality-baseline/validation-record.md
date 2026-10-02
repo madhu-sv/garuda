@@ -64,6 +64,7 @@ The updated full suite contains 72 files and 717 tests: 705 ordinary passes, ele
 failures and the same one opt-in Java skip. The contract inventory now names both open and resolved
 scenarios so capture can verify repaired assertions without dropping the remaining gap evidence.
 The release safety gate remains blocked; M1 G02 to G04 and the subsequent milestones remain open.
+(Later: G03 was fixed in the merge gate, and G02, G04 and G06 after it. See below.)
 
 ## Merge gate validation (0.14.0-dev)
 
@@ -81,3 +82,11 @@ Seatbelt tests and the opt-in Java test). A CLI smoke test checked the policy no
 `policy.json`, the policy refusal, the eval refusal and a broken policy file. Not run here: macOS
 Seatbelt, a live model, and the hunk review in a real terminal. Run `pnpm check` on the Mac after
 `git am` and try one hunk review by hand before the merge.
+
+## G02, G04 and G06 (after the merge gate)
+
+Three fixes on top of the merge gate: the policy's blocked hosts come before the project's
+allowlist in the proxy (G02); grep, glob and the code index skip files that `denyPaths` denies (G04);
+a child's wrap-up call runs only when it fits in its token budget (G06). The three gap tests are
+ordinary tests, and `test/policyGaps.test.ts` adds positive controls. Run on Linux (Node v22.22.2),
+`pnpm check`: 74 test files, 745 tests: 735 passed, 4 expected failures and 6 skipped. Open: G07 child outcome, G08 (two), G09.

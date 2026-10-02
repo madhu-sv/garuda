@@ -59,6 +59,8 @@ export interface KnowledgeIndexOptions {
    * a test or an eval never runs code from the real home folder.
    */
   readonly home?: string;
+  /** Root-relative paths that are never indexed (team policy denyPaths, G04). */
+  readonly hidden?: (path: string) => boolean;
 }
 
 interface GraphCache {
@@ -76,6 +78,7 @@ export class KnowledgeIndex {
   private customPlugins?: readonly (LanguagePlugin | ExpertFactory)[];
   private trust?: TrustStore;
   private home?: string;
+  private hidden: (path: string) => boolean = () => false;
   private pluginExperts: Array<{ plugin: LanguagePlugin; expert: LanguageExpert }> | undefined;
   private discoveryWarnings: string[] = [];
 
@@ -90,6 +93,7 @@ export class KnowledgeIndex {
       if (opts.plugins !== undefined) this.customPlugins = opts.plugins;
       if (opts.trust !== undefined) this.trust = opts.trust;
       if (opts.home !== undefined) this.home = opts.home;
+      if (opts.hidden !== undefined) this.hidden = opts.hidden;
     }
   }
 
@@ -501,7 +505,7 @@ export class KnowledgeIndex {
         .slice(this.root.length + 1)
         .split("\\")
         .join("/");
-      if (path.startsWith(".garuda/") || isSensitive(path)) continue;
+      if (path.startsWith(".garuda/") || isSensitive(path) || this.hidden(path)) continue;
       const ext = extname(path);
       const group = groups.find((g) => g.expert.extensions.includes(ext));
       if (group === undefined) continue;

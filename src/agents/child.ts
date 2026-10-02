@@ -5,7 +5,7 @@ import {
   runAgent,
   usableServerTools,
 } from "../loop/runAgent.js";
-import { type Price, responseCost } from "../model/pricing.js";
+import { type Price, responseCost, totalTokens } from "../model/pricing.js";
 import { serverCallText } from "../model/serverTools.js";
 import {
   addUsage,
@@ -77,6 +77,9 @@ export interface ChildResult {
 const WRAP_UP =
   "You reached the limit of this run. Do not call tools. Answer now with what you found and did, and say what is still open.";
 
+const NO_ROOM =
+  "The subagent stopped at its limit with no room in its token budget for a final answer. Give it a narrower task or a larger budget.";
+
 export async function runChild(run: ChildRun, context: ToolContext): Promise<ChildResult> {
   const { journal, limits } = run;
   const session = createSession(context.root, run.id, journal);
@@ -124,7 +127,14 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
   let usage: Usage = result.usage;
   let steps = result.steps;
   let answer = lastText(session.messages);
-  if (stoppedEarly(result.stopReason)) {
+  // G06: the wrap-up call is one more request, so it must fit in the budget that is left. It costs
+  // at least the context of the last response plus its output limit. No room: no call.
+  const reserve = session.contextTokens + run.maxTokens;
+  const wrapUpFits = totalTokens(result.usage) + reserve <= limits.tokenBudget;
+  if (stoppedEarly(result.stopReason) && !wrapUpFits) {
+    answer = answer || NO_ROOM;
+    journal?.write({ type: "end", stopReason: "no_wrap_up", steps });
+  } else if (stoppedEarly(result.stopReason)) {
     // One more call with no tool use, so the run still gives an answer.
     context.progress?.("writing the answer");
     addUserMessage(session, WRAP_UP);

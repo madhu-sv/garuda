@@ -68,7 +68,7 @@ export const grepTool: Tool<Input, GrepOutput> = {
   inputSchema: input,
   readOnly: true,
 
-  async run(args, { root, signal }) {
+  async run(args, { root, signal, permissions }) {
     const mode = args.mode ?? "files";
     const max = args.maxResults ?? LIMITS.grepResults;
     const context = mode === "content" ? (args.context ?? 0) : 0;
@@ -98,7 +98,9 @@ export const grepTool: Tool<Input, GrepOutput> = {
         break;
       }
       // Sensitive files are never searched (F20). read_file with an allow rule can still read them.
-      if (isSensitive(displayPath(root, file))) continue;
+      // Team policy denyPaths (G04): neither the content nor the name of such a file is shown.
+      const shownPath = displayPath(root, file);
+      if (isSensitive(shownPath) || permissions.deniedByPolicy(shownPath)) continue;
       const info = await stat(file).catch(() => undefined);
       if (info === undefined || !info.isFile() || info.size > LIMITS.grepFileBytes) continue;
       const buffer = await readFile(file);
@@ -112,7 +114,7 @@ export const grepTool: Tool<Input, GrepOutput> = {
       });
       if (hits.length === 0) continue;
 
-      const shown = displayPath(root, file);
+      const shown = shownPath;
       if (mode === "files") {
         out.push(shown);
         results++;

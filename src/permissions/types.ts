@@ -65,6 +65,12 @@ export interface PermissionGate {
   check(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision>;
   /** The policy for one command (N8). The engine builds it. */
   execPolicy(timeoutMs: number, options?: { sandbox?: boolean }): ExecPolicy;
+  /**
+   * True when the team policy denies this root-relative path (`denyPaths`). Tools that read many
+   * files (grep, glob, the code index) skip such files, so their content and names stay hidden (G04).
+   * Required, so a wrapper (a subagent's gate) cannot drop the filter by mistake.
+   */
+  deniedByPolicy(path: string): boolean;
   /** The network allowlist (0.13): hosts that the proxy blocked since the last call. */
   takeNetworkBlocks?(): { host: string; port: number; reason: string }[];
 }

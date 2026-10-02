@@ -315,8 +315,10 @@ export function isHostBlockedByPolicy(
   if (!policy.network?.blockedHosts || policy.network.blockedHosts.length === 0) {
     return { blocked: false };
   }
+  // "Blocked.Test." and "blocked.test" are the same host (hostMatches ignores case).
+  const name = host.replace(/^\[|\]$/g, "").replace(/\.$/, "");
   for (const pattern of policy.network.blockedHosts) {
-    if (hostMatches(pattern, host)) {
+    if (hostMatches(pattern, name)) {
       return {
         blocked: true,
         pattern,

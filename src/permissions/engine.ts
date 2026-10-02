@@ -303,6 +303,10 @@ export class PermissionEngine implements PermissionGate {
     return allowed && !mustAsk ? { allowed: true, by: "rule" } : deny;
   }
 
+  deniedByPolicy(path: string): boolean {
+    return this.policy !== undefined && isPathDeniedByPolicy(this.policy, path).denied;
+  }
+
   /**
    * The policy for one command. `readOnlyRoot` (plan mode, language servers): the project is
    * read-only; temp folders and package caches stay writable.

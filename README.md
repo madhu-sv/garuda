@@ -34,7 +34,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
 log, hunk approval U0, daemons, MoE, project plugins), and features with no measured gain are off by
-default (MoE, daemons). The open gaps G02, G04, G06, G07 (child outcome), G08 and G09 are listed in
+default (MoE, daemons). G02, G04 and G06 are fixed too. The open gaps G07 (child outcome), G08 and G09 are listed in
 [docs/quality-baseline/issue-register.md](docs/quality-baseline/issue-register.md). The section
 headings below keep the branch labels (0.14–0.17).
 
@@ -454,12 +454,14 @@ A team policy sets limits that a project cannot loosen, and an audit log records
     `["rm -rf *", "git push *--force*"]`). A compound command is denied when one of its parts matches.
   - `requireSandbox`: When `true`, no command runs outside the OS sandbox: `outside_sandbox` is
     denied, and on a machine with no OS sandbox every command is denied.
-  - `denyPaths`: path patterns that file tools may not read or write (for example `["**/.env*"]`).
-    Not yet applied to `grep` results, and not checked for `glob`, the code index or shell commands
-    (G04, open).
+  - `denyPaths`: root-relative path patterns that the agent may not read or write (for example
+    `["**/.env*", "secret/**"]`). File tools refuse them; `grep`, `glob` and the code index skip them
+    (no content, no name). Not covered: shell commands (`cat` in `bash`) and a symbolic link with
+    another name.
   - `allowedModels`: Allowlist of LLM models permitted for use in the organization.
-  - `network`: `blockedHosts` and `strictAllowlist`. Open gap: a host in the project's network allowlist
-    can still pass the proxy when the policy blocks it (G02).
+  - `network`: `blockedHosts` (`*.example.com` for subdomains) and `strictAllowlist`. A blocked host
+    stays blocked for `web_fetch` and for sandboxed commands, also when the project's
+    `network.allow` lists it.
   - `limits`: Global caps on `maxSteps` and `tokenBudget`.
 - **Structured audit log** (`~/.garuda/audit/<project>-<hash>/`, one file per Garuda process): on in
   the chat, `-p` and jobs (a job writes under its main checkout's folder, so the log outlives the

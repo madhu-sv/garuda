@@ -1,8 +1,8 @@
 # Known agent gaps: issue register (M0)
 
 Original M0 status: all nine issue groups were open, with twelve intended strict failures.
-Current repair status: G01, G03, G05 and two of the three G07 scenarios are resolved; G02, G04, G06,
-the G07 child outcome, G08 and G09 remain open, with seven intended strict failures (merge gate,
+Current repair status: G01 to G06 and two of the three G07 scenarios are resolved; the G07 child
+outcome, G08 and G09 remain open, with four intended strict failures (after the merge gate,
 2026-10-02).
 This is component evidence, not a complete adversarial
 security audit. Expectations are acceptance contracts proposed in the roadmap; their failure does
@@ -25,7 +25,7 @@ policy loaded from disk, allowed wildcard switching, startup, resume and session
 agent selection and resolver remapping, exploration and specialist child models. Allowed child
 requests and the existing non-Claude alias fallback retain positive coverage. All clients are fake.
 Policy is loaded at runtime creation; hot reload and retroactive revocation during in-flight requests
-are not introduced by this repair. Remaining milestone M1 work is G02 to G04.
+are not introduced by this repair. Remaining milestone M1 work was G02 to G04 (all resolved since).
 
 ## G02 Network allowlist policy precedence
 
@@ -34,6 +34,12 @@ Put `blocked.test` in both the proxy's configured hosts and the team blocked lis
 `allowed: false`. Observed: `allowed: true` from the fast path. The reproduction invokes the decision
 component without a socket. Follow-up: instrument a local proxy to prove no outgoing connection;
 cover remembered consent, direct fetch, redirects and strict allowlist semantics.
+
+Resolved: `networkDecision` checks the policy's `blockedHosts` first, before the fast path for
+listed hosts. The host name is compared without case and without a trailing dot. `web_fetch` was
+already denied by the engine. The G02 assertion is an ordinary test; `test/policyGaps.test.ts` adds
+other spellings and the positive control (a listed host that is not blocked passes). Not covered
+yet: an end-to-end proxy test with a socket, and redirects.
 
 ## G03 Required sandbox with no isolation
 
@@ -57,6 +63,13 @@ content returned. Direct denied-path checks already work. Follow-up: glob, index
 aliases, symlinks, shell reads/writes and protection of the policy authority. Only grep leakage is
 reproduced here; these other routes remain explicit evidence gaps.
 
+Resolved for the bulk tools: `PermissionGate.deniedByPolicy(path)` (required, so a subagent's gate
+cannot drop it) tells `grep` (all modes) and `glob` to skip a denied file, and the runtime gives the
+code index the same filter, so `find_symbol`, `repo_map` and the other index tools do not see it.
+The G04 assertion is an ordinary test; `test/policyGaps.test.ts` checks grep, glob and the index with
+positive controls. Still open: shell commands (`cat` through `bash` reads the file; the OS sandbox
+does not get `denyPaths`), symbolic links with another name, and `@path` or `/where` typed by the user.
+
 ## G05 Writable specialist scheduling
 
 Priority P0, milestone M2, owner agent runtime maintainer. Source: `src/agents/moe.ts` and
@@ -78,6 +91,12 @@ Priority P0, milestone M2, owner agent runtime maintainer. Source: `src/agents/c
 wrap-up. The unknown probe tool has no side effect. Follow-up: shared parent reservations,
 concurrent admissions, compaction, retries, cancellations, costs and policy limit inheritance.
 Aggregate-parent enforcement is not fully reproduced by this single-child scenario.
+
+Resolved for the single child: `runChild` makes the wrap-up call only when it fits in the budget
+that is left (tokens used + the last context size + the output limit ≤ `tokenBudget`). Otherwise the
+answer is the child's last text or a note that the budget ran out. The G06 assertion is an ordinary
+test; `test/policyGaps.test.ts` keeps the positive control (with room, the wrap-up runs). Still open:
+a budget shared by the parent and its children, and parallel children.
 
 ## G07 Audit confidentiality and completeness
 

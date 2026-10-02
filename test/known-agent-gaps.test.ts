@@ -113,7 +113,7 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
     }
   });
 
-  knownGap("G02 proxy allowlist must not override a team blocked host", async () => {
+  it("G02 proxy allowlist must not override a team blocked host", async () => {
     const app = await runtime(folder(), { network: { blockedHosts: ["blocked.test"] } });
     try {
       // Component seam: no socket, DNS or HTTP effect. Full proxy route remains a follow-up.
@@ -149,7 +149,7 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
     expect(result.allowed).toBe(false);
   });
 
-  knownGap("G04 grep must not expose a policy-denied ordinary source file", async () => {
+  it("G04 grep must not expose a policy-denied ordinary source file", async () => {
     const root = folder();
     writeFileSync(join(root, "private.ts"), "export const deniedMarker = 1;\n");
     const permissions = new PermissionEngine({
@@ -226,7 +226,7 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
     expect(peak).toBe(1);
   });
 
-  knownGap("G06 child budget exhaustion must not start an unreserved wrap-up request", async () => {
+  it("G06 child budget exhaustion must not start an unreserved wrap-up request", async () => {
     const root = folder();
     const model = new FakeModelClient([reply([toolUse("noop", {})]), reply([text("wrap-up")])]);
     // max_steps forces synthesis after the first request has already exceeded tokenBudget.

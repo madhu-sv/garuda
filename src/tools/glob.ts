@@ -28,11 +28,14 @@ export const globTool: Tool<z.infer<typeof input>, GlobOutput> = {
   inputSchema: input,
   readOnly: true,
 
-  async run({ pattern, path = "." }, { root }) {
+  async run({ pattern, path = "." }, { root, permissions }) {
     const base = await resolveInRoot(root, path);
     if (!(await isDirectory(base))) throw new Error(`${path} is not a folder.`);
 
-    const paths = await listFiles(base, pattern, root);
+    // Team policy denyPaths (G04): a denied file is not listed.
+    const paths = (await listFiles(base, pattern, root)).filter(
+      (p) => !permissions.deniedByPolicy(displayPath(root, p)),
+    );
     const withTimes = await Promise.all(
       paths.map(async (p) => ({ p, mtime: (await stat(p).catch(() => undefined))?.mtimeMs ?? 0 })),
     );

@@ -59,8 +59,8 @@ change, `it.fails` accepted any thrown error, so only the strict run could see s
 
 All probes use fake models, synthetic canary values and temporary roots that are removed afterwards.
 No real blocked host is contacted, and no destructive command is executed. A test-only component
-seam exercises the private proxy decision method for G02; it deliberately does not claim HTTP
-end-to-end coverage. The concurrency test delays a controlled temporary-file mutation to make the
+seam exercises the private proxy decision method for G02 (now fixed); it deliberately does not
+claim HTTP end-to-end coverage. The concurrency test delays a controlled temporary-file mutation to make the
 scheduling overlap observable without risking application files.
 
 ## Portable polyglot fixture
