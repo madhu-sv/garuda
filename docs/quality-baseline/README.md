@@ -51,7 +51,11 @@ Exit 1 is expected on this baseline. As each contract is fixed, convert its regi
 `known-gap-contracts.json`, remove its failure pattern, and update the issue evidence. The capture
 requires both the named open reproductions and the named repaired contracts to match their status.
 The normal suite will flag an unexpectedly passing contract. Do not weaken the desired assertion to
-preserve an expected failure. If a different error causes it to fail, the reproduction is not valid.
+preserve an expected failure. If a different error causes it to fail, the reproduction is not valid,
+and the normal suite now says so too: `knownGap` counts a failure as expected only when it is an
+`AssertionError` whose message contains the scenario's `failurePatterns` text. Any other error (a
+TypeError after a rename, a setup failure, another assertion) makes `pnpm check` fail. Before this
+change, `it.fails` accepted any thrown error, so only the strict run could see such a regression.
 
 All probes use fake models, synthetic canary values and temporary roots that are removed afterwards.
 No real blocked host is contacted, and no destructive command is executed. A test-only component

@@ -39,7 +39,43 @@ function folder() {
 }
 const signal = new AbortController().signal;
 const modelId = "claude-sonnet-5";
-const knownGap = process.env.GARUDA_GAP_REPRO_STRICT === "1" ? it : it.fails;
+/** The intended assertion text of each open gap (docs/quality-baseline/known-gap-contracts.json). */
+const contracts = z
+  .object({ failurePatterns: z.record(z.string(), z.string()) })
+  .parse(
+    JSON.parse(
+      readFileSync(
+        new URL("../docs/quality-baseline/known-gap-contracts.json", import.meta.url),
+        "utf8",
+      ),
+    ),
+  );
+
+/**
+ * An open gap. In strict mode it is an ordinary test (it fails). Otherwise it is `it.fails`, but
+ * only the INTENDED assertion counts as the expected failure: any other error (a TypeError after a
+ * rename, a setup failure, a different assertion) is swallowed, so the body "passes" and `it.fails`
+ * reports it. Before this, `it.fails` passed on any thrown error and hid real regressions.
+ */
+function knownGap(name: string, body: () => Promise<void>): void {
+  if (process.env.GARUDA_GAP_REPRO_STRICT === "1") {
+    it(name, body);
+    return;
+  }
+  const pattern = contracts.failurePatterns[name];
+  if (pattern === undefined) throw new Error(`No failure pattern for "${name}"`);
+  it.fails(name, async () => {
+    try {
+      await body();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isAssertion = error instanceof Error && error.name === "AssertionError";
+      if (isAssertion && message.includes(pattern)) throw error;
+      // Not the intended failure: let `it.fails` report this test.
+      return;
+    }
+  });
+}
 async function runtime(
   root: string,
   policy: NonNullable<Parameters<typeof Runtime.create>[0]["policy"]>,
