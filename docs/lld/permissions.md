@@ -54,7 +54,12 @@ Order of checks — the first match decides:
 | 6 | An allow rule or a session rule matches, and the target is not an `alwaysAsk` URL | allow |
 | 7 | Otherwise | ask the user (F18) |
 
-Every permission check and tool execution is asynchronously streamed to `.garuda/audit.jsonl` by `AuditLogger` (0.17). Inspect with `/audit`.
+Every permission check, and every tool run of the main agent, goes to the audit log by `AuditLogger`
+(0.17): `~/.garuda/audit/<project>-<hash>/<time>-<pid>-<random>.jsonl` (`auditDirFor`), one file per
+process, written in order (a queue), targets and reasons redacted, each line chained by `seq`, `prev`
+and `hash`; `verifyAuditFile` checks a file. The runtime writes it only when the caller passes
+`audit: { dir }` (the CLI does); a write failure is an error when the policy sets `audit.enabled:
+true`, else one notice. Inspect with `/audit`, `/audit verify`.
 
 ### Plan mode (0.4)
 

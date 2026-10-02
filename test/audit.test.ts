@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { Runtime } from "../src/app/runtime.js";
-import { AuditLogger } from "../src/audit/logger.js";
+import { AuditLogger, auditDirFor, verifyAuditFile } from "../src/audit/logger.js";
 import { runCommand } from "../src/cli/chat/commands.js";
 import type { Renderer } from "../src/cli/renderer.js";
 import type { AgentEvent } from "../src/loop/runAgent.js";
@@ -63,7 +63,7 @@ describe("AuditLogger: core logging and querying", () => {
       risk: "critical",
     });
 
-    const fileContent = readFileSync(join(root, ".garuda", "audit.jsonl"), "utf8");
+    const fileContent = readFileSync(logger.filePath, "utf8");
     const lines = fileContent.trim().split("\n");
     expect(lines).toHaveLength(2);
 
@@ -120,9 +120,9 @@ describe("AuditLogger: core logging and querying", () => {
 
   it("gracefully tolerates corrupt lines in audit.jsonl", async () => {
     const root = join(base, "logger-corrupt");
-    mkdirSync(join(root, ".garuda"), { recursive: true });
+    mkdirSync(root, { recursive: true });
     writeFileSync(
-      join(root, ".garuda", "audit.jsonl"),
+      join(root, "20261001T120000-1-aaaaaa.jsonl"),
       '{"id":"1","timestamp":"2026-10-01T12:00:00Z","tool":"read_file","allowed":true,"decision":"allow_readonly","risk":"low"}\ncorrupt json line\n{"id":"2","timestamp":"2026-10-01T12:00:01Z","tool":"bash","allowed":false,"decision":"deny_user","risk":"high"}\n',
     );
 
@@ -251,6 +251,7 @@ describe("/audit chat slash command", () => {
       hooks: false,
       policy,
       policySources: ["/etc/garuda/policy.json"],
+      audit: { dir: join(root, "audit") },
     });
 
     // Log some events
@@ -302,5 +303,91 @@ describe("/audit chat slash command", () => {
     expect(denialsOut).toContain("Recent Security Denials / Policy Blocks");
     expect(denialsOut).toContain("BLOCK (critical) bash · rm -rf /");
     expect(denialsOut).not.toContain("read_file");
+  });
+});
+
+describe("Audit log: hash chain, redaction, location, failures (merge gate)", () => {
+  it("chains each line to the one before; verify names the first changed line", async () => {
+    const dir = join(base, "chain");
+    const logger = new AuditLogger(dir);
+    for (const tool of ["read_file", "bash", "edit_file"]) {
+      await logger.log({ tool, decision: "executed", allowed: true, risk: "low" });
+    }
+    expect(await verifyAuditFile(logger.filePath)).toEqual({ ok: true, lines: 3 });
+    const lines = readFileSync(logger.filePath, "utf8").trim().split("\n");
+    const first = JSON.parse(lines[0] as string);
+    expect(first).toMatchObject({ seq: 1, prev: "0".repeat(64) });
+    expect(JSON.parse(lines[1] as string).prev).toBe(first.hash);
+
+    // Change one field of line 2: the chain breaks there.
+    const changed = [...lines];
+    changed[1] = (changed[1] as string).replace('"bash"', '"curl"');
+    writeFileSync(logger.filePath, `${changed.join("\n")}\n`);
+    expect(await verifyAuditFile(logger.filePath)).toEqual({
+      ok: false,
+      line: 2,
+      why: "the hash does not match the line",
+    });
+    // Remove line 2: line 3 no longer follows line 1.
+    writeFileSync(logger.filePath, `${[lines[0], lines[2]].join("\n")}\n`);
+    expect((await verifyAuditFile(logger.filePath)).ok).toBe(false);
+  });
+
+  it("redacts secrets in targets and reasons, and writes into the given folder only", async () => {
+    const dir = join(base, "redact");
+    const env = { MY_API_KEY: "sk-test-1234567890abcdef" };
+    const logger = new AuditLogger(dir, { env });
+    await logger.logToolExecution({
+      tool: "bash",
+      target: {
+        kind: "command",
+        command:
+          "curl -H 'Authorization: Bearer sk-test-1234567890abcdef' https://x.example token=abc123456789",
+      },
+      durationMs: 1,
+      isError: false,
+    });
+    const text = readFileSync(logger.filePath, "utf8");
+    expect(text).not.toContain("sk-test-1234567890abcdef");
+    expect(text).not.toContain("abc123456789");
+    expect(logger.filePath.startsWith(dir)).toBe(true);
+  });
+
+  it("keys the folder by project under ~/.garuda/audit", () => {
+    expect(auditDirFor("/work/my app", "/home/u")).toMatch(
+      /^\/home\/u\/\.garuda\/audit\/my_app-[0-9a-f]{8}$/,
+    );
+    expect(auditDirFor("/a/x", "/h")).not.toBe(auditDirFor("/b/x", "/h"));
+  });
+
+  it("a failed write: a notice once by default, an error when the policy makes the log mandatory", async () => {
+    const blocker = join(base, "blocked-file");
+    writeFileSync(blocker, "not a folder");
+    const notices: string[] = [];
+    const soft = new AuditLogger(join(blocker, "audit"), { onError: (m) => notices.push(m) });
+    await soft.log({ tool: "a", decision: "executed", allowed: true, risk: "low" });
+    await soft.log({ tool: "b", decision: "executed", allowed: true, risk: "low" });
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatch(/could not be written .* Garuda goes on without it\.$/);
+    const hard = new AuditLogger(join(blocker, "audit"), { policy: { audit: { enabled: true } } });
+    await expect(
+      hard.log({ tool: "a", decision: "executed", allowed: true, risk: "low" }),
+    ).rejects.toThrow(/could not be written/);
+  });
+
+  it("a runtime with no audit option writes no audit file", async () => {
+    const root = join(base, "no-audit");
+    mkdirSync(root, { recursive: true });
+    const runtime = await Runtime.create({
+      root,
+      modelId: "test-model",
+      model: new FakeModelClient([reply([text("ok")])]),
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(join(root, ".garuda", "sessions")),
+      mcp: false,
+      hooks: false,
+    });
+    await runtime.runTurn("hi", signal);
+    expect(await runtime.audit.files()).toEqual([]);
   });
 });

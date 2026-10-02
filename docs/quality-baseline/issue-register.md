@@ -1,8 +1,9 @@
 # Known agent gaps: issue register (M0)
 
 Original M0 status: all nine issue groups were open, with twelve intended strict failures.
-Current repair status: G01 and G03 are resolved; G02 and G04 to G09 remain open, with ten intended
-strict failures (merge gate, 2026-10-02).
+Current repair status: G01, G03 and two of the three G07 scenarios are resolved; G02, G04 to G06,
+the G07 child outcome, G08 and G09 remain open, with eight intended strict failures (merge gate,
+2026-10-02).
 This is component evidence, not a complete adversarial
 security audit. Expectations are acceptance contracts proposed in the roadmap; their failure does
 not imply the earlier v0.17 requirements already promised every stronger guarantee.
@@ -90,6 +91,15 @@ Follow-up: parent/child/call correlation, validation and hook denials, cancellat
 logging, protected audit destinations, rotation and externally anchored integrity. Tamper detection
 is not tested as a finished feature: JSONL currently has no verifier. Define the threat model and
 integrity claim before designing M3 tamper acceptance tests.
+
+Merge gate (2026-10-02): the first two scenarios are resolved and are ordinary tests. Targets and
+reasons pass the session redactor. A write failure throws when the team policy sets
+`audit.enabled: true` (the governed failure policy), else one notice. The log moved out of the
+project to `~/.garuda/audit/<project>-<hash>/`, one file per process, and each line is chained
+(`seq`, `prev`, `hash`); `verifyAuditFile` and `/audit verify` detect a changed, removed or inserted
+line. Integrity claim: tamper-evident against edits of single lines, not tamper-proof (a writer can
+rebuild the chain; external anchoring is still open). The third scenario (child execution outcome)
+stays open.
 
 ## G08 Code intelligence precision and coverage
 

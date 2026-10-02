@@ -1,5 +1,6 @@
 import { SPECIALIST_SPECS } from "../../agents/moe.js";
 import { modelFacts, type Runtime } from "../../app/runtime.js";
+import { verifyAuditFile } from "../../audit/logger.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { totalTokens, WEB_SEARCH_USD } from "../../model/pricing.js";
 import {
@@ -46,7 +47,7 @@ export const HELP = [
   "  /lsp       language servers for diagnostics; /lsp install <typescript|python|java>",
   "  /languages registered language plugins and indexed file counts",
   "  /experts   MoE language specialist subagents and their active status",
-  "  /audit     team security policy and recent audit trail; /audit [n|denials|stats]",
+  "  /audit     team security policy and recent audit trail; /audit [n|denials|stats|verify]",
   "  /commands  your custom commands and skills (~/.garuda, .garuda, .claude)",
   "  /agents    your custom agents and their tools (~/.garuda, .garuda, .claude)",
   "  /plan      plan mode: read and plan, change nothing (Shift+Tab toggles); /plan <task> plans it",
@@ -607,7 +608,7 @@ async function expertsCommand(runtime: Runtime, renderer: Renderer): Promise<voi
   renderer.info(lines.join("\n"));
 }
 
-/** /audit: show team security policy and recent audit trail. /audit [n|denials|stats] */
+/** /audit: show team security policy and recent audit trail. /audit [n|denials|stats|verify] */
 async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): Promise<void> {
   const policy = runtime.teamPolicy;
   const lines: string[] = [];
@@ -643,6 +644,27 @@ async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): 
     if (policy.network?.strictAllowlist === true) {
       lines.push("  • Network: strict allowlist enforced (no interactive exceptions)");
     }
+  }
+
+  if (arg === "verify") {
+    // Check each file's hash chain (merge gate): a changed, removed or inserted line shows here.
+    const files = await runtime.audit.files();
+    lines.push("", `Audit files: ${runtime.audit.dir}`);
+    if (files.length === 0) lines.push("  none yet");
+    let broken = 0;
+    for (const file of files) {
+      const result = await verifyAuditFile(file);
+      const name = file.slice(runtime.audit.dir.length + 1);
+      if (result.ok) {
+        lines.push(`  ok      ${name} (${result.lines} lines)`);
+      } else {
+        broken++;
+        lines.push(`  BROKEN  ${name}: line ${result.line}: ${result.why}`);
+      }
+    }
+    if (broken > 0) lines.push(`${broken} file(s) were changed after Garuda wrote them.`);
+    renderer.info(lines.join("\n"));
+    return;
   }
 
   if (arg === "stats") {

@@ -45,7 +45,7 @@ flowchart TD
   subgraph Governance[Governance & Safety]
     Policy[Team Policy: managed file + ~/.garuda/policy.json]
     Perms[Permission Engine & Sandbox]
-    Audit[Audit Logger: .garuda/audit.jsonl]
+    Audit[Audit Logger: ~/.garuda/audit/]
   end
 
   Orchestrator --> MainTools
@@ -101,7 +101,7 @@ sequenceDiagram
   D->>C: Spawn child session with Rust Specialist prompt
   loop Specialist Reasoning & Tool Execution (up to maxSteps)
     C->>P: Tool check (e.g. read_file, bash: cargo test)
-    P->>A: Log check (.garuda/audit.jsonl)
+    P->>A: Log check (~/.garuda/audit/)
     P-->>C: Allowed
     C->>S: Execute tool in OS sandbox
     S-->>C: Tool result
@@ -283,7 +283,7 @@ The CLI startup banner provides dedicated, aligned rows for active capabilities:
 - **`/experts`**: Lists all 5 MoE language specialists, their test commands, supported extensions, and indexed file counts.
 - **`/agents`**: Lists configured custom subagents, their sources (`user` / `project`), allowed tools, and model targets.
 - **`/session`**: Displays the active session ID, log path, and a consolidated capability inventory (subagents, agents, skills, tools) with cross-reference tips.
-- **`/audit`**: Displays policy status and recent `.garuda/audit.jsonl` events, including subagent tool runs, risk levels, and durations (`durationMs`).
+- **`/audit`**: Displays the policy files and recent audit events (risk levels, durations); `/audit verify` checks the hash chains.
 
 ---
 
@@ -299,10 +299,10 @@ flowchart TD
   Perms -- "Denied / Ask required" --> Reject
   Perms -- "Pass" --> Sandbox[Execute inside OS Sandbox]
   Sandbox --> Duration[Record Duration]
-  Duration --> AuditLog[Append Event to .garuda/audit.jsonl]
+  Duration --> AuditLog[Append Event to ~/.garuda/audit/]
   Reject --> AuditLog
 ```
 
 - **Team Policy Enforcement (the managed file and `~/.garuda/policy.json`)**: Evaluated at Step 0 before any subagent tool runs. If a policy forbids a path or command, the subagent is blocked immediately with `decision: "by: policy"`.
-- **Audit Trail (`.garuda/audit.jsonl`)**: Every subagent authorization check and tool execution is recorded with timestamp, session ID, tool name, risk level (`low`, `medium`, `high`, `critical`), duration in ms, and error status.
+- **Audit Trail (`~/.garuda/audit/`)**: Every subagent authorization check is recorded with timestamp, session ID, tool name and risk level (`low`, `medium`, `high`, `critical`). The outcome of a tool run inside a subagent is not recorded yet (G07, open).
 - **Snapshot & Worktree Isolation**: Child runs never contaminate undo snapshot diffs (`SNAPSHOT_EXCLUDES`) or scheduled job git branches (`NEVER_COMMIT`).

@@ -390,7 +390,7 @@ the changes directly.
 | Formatters (0.10) | `.garuda/settings.json` (`formatters`) | The project's formatter after each edit; off by default. |
 | Language experts & plugins (0.16) | `~/.garuda/languages/`, `.garuda/languages/` | Code index AST support for languages (TS/JS, Python, Java, Go, Rust, and custom plugins). |
 | MoE language specialists (0.17) | `.garuda/settings.json` (`moe`), built-in | Subagent delegation tool `delegate_expert` and `/experts`. |
-| Team policy & audit log (0.17, W5) | The managed policy file and `~/.garuda/policy.json` (never the project's), `.garuda/audit.jsonl` | Enterprise guardrails and structured tamper-evident audit logging, with `/audit`. |
+| Team policy & audit log (0.17, W5) | The managed policy file and `~/.garuda/policy.json` (never the project's), `~/.garuda/audit/<project>-<hash>/*.jsonl` | Team guardrails that a project cannot loosen; an audit log with redaction and a hash chain per file (tamper-evident, not tamper-proof), with `/audit` and `/audit verify`. |
 | Executors | `src/sandbox/` (`Executor`) | Another isolation technology. |
 | Session stores | `src/session/` (`SessionStore`) | Another place for sessions. |
 

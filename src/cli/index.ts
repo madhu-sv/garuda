@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Writable } from "node:stream";
 import { Command, Option } from "commander";
 import { Runtime } from "../app/runtime.js";
+import { auditDirFor } from "../audit/logger.js";
 import { BUILTIN_COMMANDS } from "../commands/builtins.js";
 import { replaySession } from "../loop/replay.js";
 import { DEFAULT_MAX_TOKENS } from "../loop/runAgent.js";
@@ -287,6 +288,9 @@ async function start(options: Options, program: Command): Promise<number> {
     root,
     modelId,
     ...(team === undefined ? {} : { policy: team.policy, policySources: team.sources }),
+    // The audit log lives in ~/.garuda/audit, keyed by the project (a job: its main checkout, not
+    // the worktree that is deleted after the job).
+    audit: { dir: auditDirFor(job?.job.root ?? root) },
     model:
       job?.job.batch === true && resolved.createBatch !== undefined
         ? () => jobBatchClient(job as NonNullable<typeof job>, resolved, renderer)

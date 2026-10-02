@@ -246,27 +246,28 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
     expect(model.requests.length).toBeLessThanOrEqual(1);
   });
 
-  knownGap("G07 audit targets must redact synthetic token assignments", async () => {
+  it("G07 audit targets must redact synthetic token assignments", async () => {
     const root = folder();
     const command = "echo token=m0_canary_secret_123456";
     expect(new Redactor({}).text(command)).not.toContain("m0_canary_secret_123456");
-    const audit = new AuditLogger(root);
+    const audit = new AuditLogger(root, { env: {} });
     await audit.logToolExecution({
       tool: "bash",
       target: { kind: "command", command },
       durationMs: 1,
       isError: false,
     });
-    expect(readFileSync(join(root, ".garuda", "audit.jsonl"), "utf8")).not.toContain(
-      "m0_canary_secret_123456",
-    );
+    expect(readFileSync(audit.filePath, "utf8")).not.toContain("m0_canary_secret_123456");
   });
 
-  knownGap("G07 mandatory audit persistence must surface a write failure", async () => {
+  it("G07 mandatory audit persistence must surface a write failure", async () => {
     const root = folder();
     writeFileSync(join(root, ".garuda"), "not a directory");
+    // Mandatory = the team policy turns the audit log on explicitly.
     await expect(
-      new AuditLogger(root).logToolExecution({ tool: "probe", durationMs: 1, isError: false }),
+      new AuditLogger(join(root, ".garuda", "audit"), {
+        policy: { audit: { enabled: true } },
+      }).logToolExecution({ tool: "probe", durationMs: 1, isError: false }),
     ).rejects.toThrow();
   });
 

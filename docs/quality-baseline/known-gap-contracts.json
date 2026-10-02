@@ -8,8 +8,6 @@
     "G04 grep must not expose a policy-denied ordinary source file",
     "G05 writable specialist children must not execute mutations concurrently",
     "G06 child budget exhaustion must not start an unreserved wrap-up request",
-    "G07 audit targets must redact synthetic token assignments",
-    "G07 mandatory audit persistence must surface a write failure",
     "G07 child execution must persist an outcome in addition to its permission decision",
     "G08 a module-level Python reference must not be attributed to the preceding function",
     "G08 an unresolved impact target must not be labelled low risk",
@@ -20,8 +18,6 @@
     "G04 grep must not expose a policy-denied ordinary source file": "not to contain 'deniedMarker'",
     "G05 writable specialist children must not execute mutations concurrently": "expected 2 to be 1",
     "G06 child budget exhaustion must not start an unreserved wrap-up request": "expected 2 to be less than or equal to 1",
-    "G07 audit targets must redact synthetic token assignments": "not to contain 'm0_canary_secret_123456'",
-    "G07 mandatory audit persistence must surface a write failure": "promise resolved",
     "G07 child execution must persist an outcome in addition to its permission decision": "expected false to be true",
     "G08 a module-level Python reference must not be attributed to the preceding function": "expected 'helper' to be '<module>'",
     "G08 an unresolved impact target must not be labelled low risk": "not to be 'low'",
@@ -29,6 +25,8 @@
   },
   "resolvedScenarios": [
     "G01 model switching must reject a model forbidden by team policy",
-    "G03 requireSandbox must reject a command on an executor with no isolation"
+    "G03 requireSandbox must reject a command on an executor with no isolation",
+    "G07 audit targets must redact synthetic token assignments",
+    "G07 mandatory audit persistence must surface a write failure"
   ]
 }

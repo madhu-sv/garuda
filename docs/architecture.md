@@ -18,7 +18,7 @@ flowchart LR
   garuda -->|stdio, in the sandbox| mcp[Local MCP servers]
   garuda -->|HTTPS GET, approved hosts| web[(Web pages)]
   garuda -->|JSONL| sessions[(.garuda/sessions)]
-  garuda -->|JSONL| audit[(.garuda/audit.jsonl)]
+  garuda -->|JSONL| audit[(~/.garuda/audit/)]
   garuda <-->|trust.json, mcp.json, hooks.json| home[(~/.garuda)]
 ```
 

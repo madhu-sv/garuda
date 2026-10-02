@@ -443,11 +443,19 @@ For enterprise governance, security guardrails, and compliance, Garuda enforces 
   - `allowedModels`: Allowlist of LLM models permitted for use in the organization.
   - `network`: Domain restrictions (`blockedHosts`, `strictAllowlist`).
   - `limits`: Global caps on `maxSteps` and `tokenBudget`.
-- **Structured audit log (`.garuda/audit.jsonl`)**: Append-only tamper-evident audit record capturing:
+- **Structured audit log** (`~/.garuda/audit/<project>-<hash>/`, one file per Garuda process): on in
+  the chat, `-p` and jobs (a job writes under its main checkout's folder, so the log outlives the
+  worktree); off in evals and tests; the team policy can turn it off (`audit.enabled: false`) or make it
+  mandatory (`audit.enabled: true`: a failed write then fails the call). Without a policy a failed write
+  gives one notice. It is not in the project, so the agent's own tools cannot edit it. Targets and
+  reasons pass the session redactor, so keys and tokens never reach the file. Each line has `seq`,
+  `prev` and `hash` (sha256): `/audit verify` shows a changed, removed or inserted line. This makes the
+  log tamper-evident, not tamper-proof: a user who can write the file can rewrite the whole chain.
+  Each line records:
   - Every authorization decision (`allow_readonly`, `allow_sandbox`, `deny_policy`, `deny_user`, etc.).
   - Security risk classification (`low`, `medium`, `high`, `critical`).
   - Tool execution duration in milliseconds and error status.
-- **Chat command**: `/audit` displays active policy rules and recent audit events. Use `/audit stats` for totals, `/audit denials` for security blocks, or `/audit <n>` for recent events.
+- **Chat command**: `/audit` displays active policy rules and recent audit events. Use `/audit stats` for totals, `/audit denials` for security blocks, `/audit verify` to check the hash chains, or `/audit <n>` for recent events. Not recorded yet: the tool outcomes inside a subagent run (only their permission decisions, G07).
 
 ## Sessions, limits and context
 

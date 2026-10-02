@@ -160,6 +160,12 @@ export interface RuntimeOptions {
   policy?: TeamPolicy;
   /** The files the policy came from, for /audit and messages. */
   policySources?: string[];
+  /**
+   * The audit log (merge gate): `dir` is the project's audit folder (the CLI passes
+   * auditDirFor(root) in ~/.garuda/audit). Absent: no audit log (tests, evals), so nothing is
+   * written outside the test's own folders. The team policy can still turn it off.
+   */
+  audit?: { dir: string };
   onEvent?: (event: AgentEvent) => void;
   /** Warnings for the user outside a tool call, for example from MCP servers. */
   onNotice?: (text: string) => void;
@@ -359,7 +365,8 @@ export class Runtime {
   ) {
     this.policy = policy;
     this.policySourceList = options.policySources ?? [];
-    this.auditLogger = auditLogger ?? new AuditLogger(options.root);
+    this.auditLogger =
+      auditLogger ?? new AuditLogger(options.audit?.dir ?? options.root, { enabled: false });
     this.hookConfig = hookConfig;
     this.profiles = profiles;
     this.lspOptions = options.lsp ?? {};
@@ -581,8 +588,10 @@ export class Runtime {
       options.settings ?? (await loadSettings(options.root)),
       policy,
     );
-    const auditLogger = new AuditLogger(options.root, {
+    const auditLogger = new AuditLogger(options.audit?.dir ?? options.root, {
       ...(policy === undefined ? {} : { policy }),
+      ...(options.audit === undefined ? { enabled: false } : {}),
+      ...(options.onNotice === undefined ? {} : { onError: options.onNotice }),
     });
     const choice = createExecutor(settings.executor);
     let mcpServers: ServerConfig[] = [];
