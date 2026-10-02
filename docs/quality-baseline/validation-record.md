@@ -64,3 +64,20 @@ The updated full suite contains 72 files and 717 tests: 705 ordinary passes, ele
 failures and the same one opt-in Java skip. The contract inventory now names both open and resolved
 scenarios so capture can verify repaired assertions without dropping the remaining gap evidence.
 The release safety gate remains blocked; M1 G02 to G04 and the subsequent milestones remain open.
+
+## Merge gate validation (0.14.0-dev)
+
+The merge gate adds seven commits on `model-policy-enforcement` (`39a7158`): policy limits copy the
+settings; an open gap counts only when its intended assertion fails; the team policy comes from the
+managed file and `~/.garuda` (G03 resolved); a redacted, hash-chained audit log under `~/.garuda/audit`
+(two G07 scenarios resolved); hunk approval writes only the accepted hunks (U0, tested on the file on
+disk); daemons and MoE are opt-in and `delegate_expert` runs alone (G05 resolved); project language
+plugins are not loaded and tests use the built-in experts (G09 mitigated, still open); and this
+version and documentation correction.
+
+Run on Linux (Node v22.22.2), `pnpm check`: 73 test files, 739 tests: 726 passed, 7 expected
+failures (the open gaps G02, G04, G06, G07 child outcome, G08 twice, G09) and 6 skipped (macOS-only
+Seatbelt tests and the opt-in Java test). A CLI smoke test checked the policy notice for a project
+`policy.json`, the policy refusal, the eval refusal and a broken policy file. Not run here: macOS
+Seatbelt, a live model, and the hunk review in a real terminal. Run `pnpm check` on the Mac after
+`git am` and try one hunk review by hand before the merge.

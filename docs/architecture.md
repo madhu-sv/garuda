@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.17.0-dev. This document describes the parts of Garuda, their dependencies, the trust
+Version 0.14.0-dev (the 0.14–0.17 branches after the merge gate). This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -29,7 +29,7 @@ flowchart LR
 | N1 | Provider-neutral model access | The loop sees only the `ModelClient` interface. `anthropic.ts` (the only module with the Anthropic SDK) and `openaiCompatible.ts` (plain fetch) are the adapters. |
 | N2 | Prompt caching | The system prompt and the tool list stay the same bytes for a whole session. Cache breakpoints on the system prompt, the last tool and the last message. |
 | N3 | Start in less than 1 s | Heavy modules load with `import()` on first use: the SDK, inquirer, Ink and React, TypeScript 6, the MCP SDK, the HTML converter. `--version` takes about 240 ms. |
-| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0, 636 at 0.14.0). |
+| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0; 739 at 0.14.0-dev: 726 pass, 7 open-gap expected failures, 6 skipped on Linux). |
 | N5 | Measured quality | `garuda eval` runs fixed tasks in scratch folders and reports pass rate, steps, tokens and cost. |
 | N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). |
 | N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. The user's own editor (Ctrl-G, 0.6) runs on the real terminal through `src/sandbox/terminal.ts`, never through a tool. |
@@ -280,5 +280,5 @@ All state is in files. There is no server and no database.
 | Sandbox capability probe (0.14) | Active Seatbelt execution probe on macOS at startup to detect nested sandboxes (error 71 `EX_OSPERM`); graceful fallback to `HostExecutor` | Seatbelt binary can be present but blocked by the macOS kernel inside nested sandboxes or containers; an active probe prevents unexpected crashes at startup. |
 | Background daemons (0.14) | Off by default (`daemons.enabled`). `is_daemon: true` on `bash`, companion `process_manager` tool (`list`, `logs`, `status`, `kill`); a capped in-memory line buffer; `Runtime.close()` stops all daemons | Long-running servers should not block turns. Off by default because no eval measured a gain; the caps keep a noisy daemon from filling memory or the model's context. |
 | Interactive patch staging (0.14) | Ink chat hunk-by-hunk diff review (`[h]` key); stage (`y`), skip (`n`), stage all (`a`), discard (`d`) | Fine-grained control over a model's edit. The selection is enforced: only accepted hunks reach the disk (merge gate, U0), and only when every hunk was shown. |
-| Loop and runtime modularization (0.14) | Extracted `limits`, `loopDetector`, `callModel`, `toolRunner`, `modelState`, `sessionManager`, `undoCoordinator` | Keeps core files small (<300 lines) and strictly enforces exactOptionalPropertyTypes and architectural boundaries. |
+| Loop and runtime modularization (0.14) | Extracted `limits`, `loopDetector`, `callModel`, `toolRunner`, `modelState`, `sessionManager`, `undoCoordinator` | Smaller loop files (each under 300 lines); `src/app/runtime.ts` is still large (about 2,000 lines) and is the next split. |
 

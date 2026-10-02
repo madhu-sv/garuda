@@ -1,6 +1,7 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.17.0.
+Garuda is a terminal coding agent. This is version 0.14.0-dev: the 0.14–0.17 branches after the merge gate
+(see the note under the status table).
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -25,10 +26,17 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.11: night shift (a queue of overnight jobs, one digest, a launchd agent) and proof of work (tests before and after, risk flags, a principal-engineer review) | Done |
 | 0.12: benchmark your repo (eval tasks from the repo's own git history), output-limit recovery | Done |
 | 0.13: network allowlist for commands (W6): presets or hosts, through Garuda's proxy, off by default | Done |
-| 0.14: dynamic sandbox probe, core modularization, background daemons (W3), interactive patch staging (W4) | Done |
-| 0.15: universal multi-language AST & code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done |
-| 0.16: dynamic language plugin system (Go & Rust reference plugins, ~/.garuda/languages/ & .garuda/languages/ discovery, SHA-256 hash pinning security, /languages command) | Done |
-| 0.17: Mixture-of-Experts (MoE) subagent dispatch, team policy & audit log (W5) | Done |
+| 0.14: sandbox launch probe, core modularization, background daemons (opt-in), interactive patch staging (W4) | In 0.14.0-dev |
+| 0.15: multi-language AST code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | In 0.14.0-dev |
+| 0.16: language plugins (Go and Rust built in, user plugins in ~/.garuda/languages, /languages; project plugins not loaded) | In 0.14.0-dev |
+| 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | In 0.14.0-dev |
+
+The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
+0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
+log, hunk approval U0, daemons, MoE, project plugins), and features with no measured gain are off by
+default (MoE, daemons). The open gaps G02, G04, G06, G07 (child outcome), G08 and G09 are listed in
+[docs/quality-baseline/issue-register.md](docs/quality-baseline/issue-register.md). The section
+headings below keep the branch labels (0.14–0.17).
 
 ## Use
 
@@ -432,7 +440,7 @@ Garuda features an autonomous Mixture-of-Experts (MoE) dispatch architecture for
 
 ## Team policy and structured audit log (0.17, W5)
 
-For enterprise governance, security guardrails, and compliance, Garuda enforces hard team policies and continuous structured audit logging:
+A team policy sets limits that a project cannot loosen, and an audit log records the permission decisions:
 
 - **Team policy**: guardrails that a project's settings cannot loosen. Garuda reads the managed file
   (`/Library/Application Support/Garuda/policy.json` on macOS, `/etc/garuda/policy.json` on Linux;
@@ -442,19 +450,23 @@ For enterprise governance, security guardrails, and compliance, Garuda enforces 
   file stops Garuda. A project's own `.garuda/policy.json` is ignored with a notice: a cloned repo
   could otherwise remove its own limits. The chat, `-p`, jobs, the night shift and `garuda eval` all
   use the policy. `/audit` names the files. The keys:
-  - `disallowedCommands`: Command patterns strictly forbidden across all runs (e.g. `["rm -rf *", "git push *--force*", "curl * | sh"]`). Any compound command containing a disallowed part is immediately rejected.
+  - `disallowedCommands`: command patterns that are denied in every run (for example
+    `["rm -rf *", "git push *--force*"]`). A compound command is denied when one of its parts matches.
   - `requireSandbox`: When `true`, no command runs outside the OS sandbox: `outside_sandbox` is
     denied, and on a machine with no OS sandbox every command is denied.
-  - `denyPaths`: Patterns of sensitive paths forbidden from read/write (e.g. `["**/.env*", "**/id_rsa*"]`).
+  - `denyPaths`: path patterns that file tools may not read or write (for example `["**/.env*"]`).
+    Not yet applied to `grep` results, and not checked for `glob`, the code index or shell commands
+    (G04, open).
   - `allowedModels`: Allowlist of LLM models permitted for use in the organization.
-  - `network`: Domain restrictions (`blockedHosts`, `strictAllowlist`).
+  - `network`: `blockedHosts` and `strictAllowlist`. Open gap: a host in the project's network allowlist
+    can still pass the proxy when the policy blocks it (G02).
   - `limits`: Global caps on `maxSteps` and `tokenBudget`.
 - **Structured audit log** (`~/.garuda/audit/<project>-<hash>/`, one file per Garuda process): on in
   the chat, `-p` and jobs (a job writes under its main checkout's folder, so the log outlives the
   worktree); off in evals and tests; the team policy can turn it off (`audit.enabled: false`) or make it
   mandatory (`audit.enabled: true`: a failed write then fails the call). Without a policy a failed write
   gives one notice. It is not in the project, so the agent's own tools cannot edit it. Targets and
-  reasons pass the session redactor, so keys and tokens never reach the file. Each line has `seq`,
+  reasons pass the session redactor, so known secret formats (keys, tokens, `password=…`) are removed. Each line has `seq`,
   `prev` and `hash` (sha256): `/audit verify` shows a changed, removed or inserted line. This makes the
   log tamper-evident, not tamper-proof: a user who can write the file can rewrite the whole chain.
   Each line records:
@@ -522,9 +534,9 @@ Settings:
   with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again.
 - `sandbox.writePaths` and `sandbox.denyRead` add paths. `~/` is the home folder; other relative paths
   start at the root.
-- Dynamic macOS sandbox probe (0.14): Garuda actively probes `/usr/bin/sandbox-exec`. In environments
-  where nested Seatbelt profiles are blocked by the kernel (error 71 `EX_OSPERM`), it falls back gracefully
-  to `HostExecutor` with an explanatory notice instead of crashing.
+- macOS sandbox probe (0.14): at startup Garuda runs `true` through `/usr/bin/sandbox-exec` once. When
+  that fails (for example in a nested sandbox), `auto` falls back to the host with a notice that gives
+  the first line of the error.
 - On Linux, install bubblewrap (`sudo apt install bubblewrap`). Some systems block the user namespaces
   that it needs; Garuda then falls back to the host and says why.
 

@@ -139,10 +139,10 @@ the host. The Linux bridge is tested in the cloud (bubblewrap, curl through the 
 | `host` | `HostExecutor`. |
 
 `findOsSandbox()` (cached per process):
-- On macOS, `/usr/bin/sandbox-exec` must exist, and an active probe (`probeSeatbelt()`) running
-  `/usr/bin/sandbox-exec -p '(version 1) (allow default)' /bin/sh -c 'true'` must succeed. In nested
-  sandboxes or environments where Seatbelt invocation is blocked by the kernel (error 71 `EX_OSPERM`),
-  the probe detects this and falls back to `HostExecutor` with an informative notice.
+- On macOS, `/usr/bin/sandbox-exec` must exist, and a probe
+  (`sandbox-exec -p '(version 1)(allow default)' -- true`) must succeed (0.14). It fails, for example,
+  in a nested sandbox; then `auto` uses `HostExecutor` with a notice that gives the first line of the
+  error.
 - On Linux, `bwrap` must be on `PATH` and a probe (`bwrap --ro-bind / / --dev /dev --unshare-net … true`)
   must succeed, because user namespaces can be off.
 

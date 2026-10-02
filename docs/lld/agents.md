@@ -269,7 +269,7 @@ The CLI startup banner provides dedicated, aligned rows for active capabilities:
 
 ```text
 ╭────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ ✦ Garuda 0.17.0 · a terminal coding agent                                                          │
+│ ✦ Garuda 0.14.0 · a terminal coding agent                                                          │
 │                                                                                                    │
 │   model      claude-sonnet-5                                                                       │
 │   sandbox    seatbelt · no network                                                                 │
@@ -291,7 +291,7 @@ The CLI startup banner provides dedicated, aligned rows for active capabilities:
 
 ## 7. Security, Team Policy & Audit Containment
 
-Subagent execution is strictly governed by Garuda's enterprise security layers:
+A subagent's tool calls pass the same checks as the main agent's:
 
 ```mermaid
 flowchart TD
@@ -299,12 +299,12 @@ flowchart TD
   Step0 -- "Policy denial (disallowed command, denied path)" --> Reject[Policy Denied: by policy]
   Step0 -- "Pass" --> Perms{Permission Engine<br/>Sensitive paths, protected git}
   Perms -- "Denied / Ask required" --> Reject
-  Perms -- "Pass" --> Sandbox[Execute inside OS Sandbox]
+  Perms -- "Pass" --> Sandbox[Run through the executor<br/>OS sandbox when available]
   Sandbox --> Duration[Record Duration]
   Duration --> AuditLog[Append Event to ~/.garuda/audit/]
   Reject --> AuditLog
 ```
 
-- **Team Policy Enforcement (the managed file and `~/.garuda/policy.json`)**: Evaluated at Step 0 before any subagent tool runs. If a policy forbids a path or command, the subagent is blocked immediately with `decision: "by: policy"`.
+- **Team policy (the managed file and `~/.garuda/policy.json`)**: checked before any subagent tool runs. A denied command or path is refused with `by: policy`. `denyPaths` does not filter `grep` results yet (G04).
 - **Audit Trail (`~/.garuda/audit/`)**: Every subagent authorization check is recorded with timestamp, session ID, tool name and risk level (`low`, `medium`, `high`, `critical`). The outcome of a tool run inside a subagent is not recorded yet (G07, open).
 - **Snapshot & Worktree Isolation**: Child runs never contaminate undo snapshot diffs (`SNAPSHOT_EXCLUDES`) or scheduled job git branches (`NEVER_COMMIT`).
