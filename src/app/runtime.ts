@@ -71,7 +71,11 @@ import { expandAllowlist, hostAllowed, NETWORK_PORTS } from "../net/allowlist.js
 import type { NetworkProxy, ProxyDecision } from "../net/proxy.js";
 import { PermissionEngine } from "../permissions/engine.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
-import { assertModelAllowedByPolicy, loadPolicy, type TeamPolicy } from "../permissions/policy.js";
+import {
+  assertModelAllowedByPolicy,
+  ignoredProjectPolicy,
+  type TeamPolicy,
+} from "../permissions/policy.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
@@ -149,8 +153,13 @@ export interface RuntimeOptions {
   resume?: true | string;
   /** Default: read .garuda/settings.json in the root. */
   settings?: Settings;
-  /** Team security policy (0.17). Default: read .garuda/policy.json in the root. */
+  /**
+   * Team security policy (0.17). The CLI loads it with loadTeamPolicy (the managed file and
+   * ~/.garuda/policy.json). Absent: no policy. The runtime never reads a project's policy file.
+   */
   policy?: TeamPolicy;
+  /** The files the policy came from, for /audit and messages. */
+  policySources?: string[];
   onEvent?: (event: AgentEvent) => void;
   /** Warnings for the user outside a tool call, for example from MCP servers. */
   onNotice?: (text: string) => void;
@@ -268,6 +277,7 @@ export class Runtime {
   /** The explore subagent's model spec, or undefined when explore is off (0.3). */
   readonly exploreModel: string | undefined;
   /** Team security policy (0.17). */
+  private readonly policySourceList: string[];
   readonly policy: TeamPolicy | undefined;
   /** Structured audit logger (0.17). */
   readonly auditLogger: AuditLogger;
@@ -348,6 +358,7 @@ export class Runtime {
     auditLogger?: AuditLogger,
   ) {
     this.policy = policy;
+    this.policySourceList = options.policySources ?? [];
     this.auditLogger = auditLogger ?? new AuditLogger(options.root);
     this.hookConfig = hookConfig;
     this.profiles = profiles;
@@ -556,7 +567,13 @@ export class Runtime {
   }
 
   static async create(options: RuntimeOptions): Promise<Runtime> {
-    const policy = options.policy ?? (await loadPolicy(options.root));
+    const policy = options.policy;
+    const ignored = ignoredProjectPolicy(options.root);
+    if (ignored !== undefined) {
+      options.onNotice?.(
+        `${ignored} is ignored: a team policy comes only from the managed file or ~/.garuda/policy.json, which a project cannot change.`,
+      );
+    }
     assertModelAllowedByPolicy(policy, options.modelId);
     // A new object: the loaded settings may be the shared DEFAULT_SETTINGS, or the caller's own
     // object. Changing either in place gave every later runtime in the process the policy's limits.
@@ -1903,6 +1920,11 @@ export class Runtime {
 
   get teamPolicy(): TeamPolicy | undefined {
     return this.policy;
+  }
+
+  /** The files of the team policy (managed first). */
+  get teamPolicySources(): readonly string[] {
+    return this.policySourceList;
   }
 
   get audit(): AuditLogger {

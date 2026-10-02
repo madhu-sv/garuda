@@ -132,9 +132,11 @@ export class PermissionEngine implements PermissionGate {
 
     if (this.policy !== undefined) {
       if (target?.kind === "command") {
+        // With no OS sandbox (isolation "none") every command runs on the host, so a required
+        // sandbox means no command at all (G03).
         const sandboxViolation = isSandboxRequiredByPolicy(
           this.policy,
-          target.outsideSandbox === true,
+          target.outsideSandbox === true || this.isolation === "none",
         );
         if (sandboxViolation.disallowed) {
           return {

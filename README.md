@@ -428,9 +428,17 @@ Garuda features an autonomous Mixture-of-Experts (MoE) dispatch architecture for
 
 For enterprise governance, security guardrails, and compliance, Garuda enforces hard team policies and continuous structured audit logging:
 
-- **Team policy (`.garuda/policy.json`)**: Administrative guardrails that override local developer settings and interactive prompts:
+- **Team policy**: guardrails that a project's settings cannot loosen. Garuda reads the managed file
+  (`/Library/Application Support/Garuda/policy.json` on macOS, `/etc/garuda/policy.json` on Linux;
+  an admin writes it) and `~/.garuda/policy.json`. Where both exist, the stricter value wins: lists of
+  denials add up, `requireSandbox` and `strictAllowlist` are on when either sets them, limits take the
+  lower value, and `allowedModels` and `audit` come from the managed file when it sets them. A broken
+  file stops Garuda. A project's own `.garuda/policy.json` is ignored with a notice: a cloned repo
+  could otherwise remove its own limits. The chat, `-p`, jobs, the night shift and `garuda eval` all
+  use the policy. `/audit` names the files. The keys:
   - `disallowedCommands`: Command patterns strictly forbidden across all runs (e.g. `["rm -rf *", "git push *--force*", "curl * | sh"]`). Any compound command containing a disallowed part is immediately rejected.
-  - `requireSandbox`: When `true`, prevents commands from running outside the OS sandbox.
+  - `requireSandbox`: When `true`, no command runs outside the OS sandbox: `outside_sandbox` is
+    denied, and on a machine with no OS sandbox every command is denied.
   - `denyPaths`: Patterns of sensitive paths forbidden from read/write (e.g. `["**/.env*", "**/id_rsa*"]`).
   - `allowedModels`: Allowlist of LLM models permitted for use in the organization.
   - `network`: Domain restrictions (`blockedHosts`, `strictAllowlist`).

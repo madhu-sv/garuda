@@ -1,7 +1,8 @@
 # Known agent gaps: issue register (M0)
 
 Original M0 status: all nine issue groups were open, with twelve intended strict failures.
-Current repair status: G01 is resolved; G02 to G09 remain open, with eleven intended strict failures.
+Current repair status: G01 and G03 are resolved; G02 and G04 to G09 remain open, with ten intended
+strict failures (merge gate, 2026-10-02).
 This is component evidence, not a complete adversarial
 security audit. Expectations are acceptance contracts proposed in the roadmap; their failure does
 not imply the earlier v0.17 requirements already promised every stronger guarantee.
@@ -40,6 +41,11 @@ Priority P0, milestone M1, owner permissions maintainer. Source: `src/permission
 no escape flag and an approving user. Expected: denial. Observed: allowed. No shell command runs.
 Explicit escape denial has existing positive coverage. Follow-up: test runtime startup, host mode,
 unavailable OS sandbox fallback and actual macOS/Linux executor behaviour.
+
+Resolved (merge gate): with `requireSandbox`, the engine treats isolation `none` like an escape, so
+every command is denied with "The team policy requires the OS sandbox". The G03 assertion is an
+ordinary test; `test/policy.test.ts` keeps the positive control (the same command is allowed with an
+OS sandbox). Not covered yet: a real host without Seatbelt or bubblewrap.
 
 ## G04 Denied paths in bulk operations
 

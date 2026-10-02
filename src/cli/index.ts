@@ -265,6 +265,16 @@ async function start(options: Options, program: Command): Promise<number> {
   // Web search (0.5): only the user's ~/.garuda/search.json and environment configure it.
   const searchConfig = await loadSearchConfig();
 
+  // Team policy: the managed file and ~/.garuda/policy.json, never the project (merge gate). The
+  // chat, -p, `garuda run` (a job) and the night shift (a `garuda run` per job) all start here.
+  const { loadTeamPolicy } = await import("../permissions/policy.js");
+  let team: Awaited<ReturnType<typeof loadTeamPolicy>>;
+  try {
+    team = await loadTeamPolicy();
+  } catch (error) {
+    program.error(`Team policy: ${(error as Error).message}`);
+  }
+
   const renderer = new PlainRenderer();
   const terminalApprover = new TerminalApprover();
   // A job has nobody to ask: every question (consents, approvals) gets "no".
@@ -276,6 +286,7 @@ async function start(options: Options, program: Command): Promise<number> {
   const runtime = await Runtime.create({
     root,
     modelId,
+    ...(team === undefined ? {} : { policy: team.policy, policySources: team.sources }),
     model:
       job?.job.batch === true && resolved.createBatch !== undefined
         ? () => jobBatchClient(job as NonNullable<typeof job>, resolved, renderer)

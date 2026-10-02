@@ -34,11 +34,17 @@ Approvers: `TerminalApprover` (inquirer), `ChatStore` (Ink), `AutoApprover` (tes
 
 ## Engine (`engine.ts`)
 
+The team policy (`src/permissions/policy.ts`): `loadTeamPolicy({ home?, managed? })` reads the managed
+file (`managedPolicyPath`) and `~/.garuda/policy.json` and merges them with `mergePolicies` (the stricter
+value wins). Only the CLI calls it (chat, `-p`, `garuda run`, `garuda eval`); the runtime takes the result
+as `options.policy` and never reads `<root>/.garuda/policy.json` (`ignoredProjectPolicy` gives a notice).
+A broken file is an error that names it.
+
 Order of checks — the first match decides:
 
 | # | Check | Result |
 | --- | --- | --- |
-| 0 | Team Policy violation (`.garuda/policy.json` guardrails: disallowed commands, require sandbox, deny paths, blocked hosts, strict allowlist) (0.17) | deny (`by: "policy"`) |
+| 0 | Team Policy violation (the managed file and `~/.garuda/policy.json`, never the project's: disallowed commands, require sandbox, deny paths, blocked hosts, strict allowlist) (0.17). With `requireSandbox`, isolation `none` counts as outside the sandbox, so every command is denied (G03). | deny (`by: "policy"`) |
 | 1 | Path target is sensitive and no allow rule *with a pattern* names it (F20) | deny |
 | 2 | A write to a path inside `.git/` | deny |
 | 3 | A deny rule matches (F19) | deny |

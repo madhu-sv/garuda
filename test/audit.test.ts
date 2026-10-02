@@ -232,14 +232,11 @@ describe("/audit chat slash command", () => {
   it("renders team policy status and recent audit entries", async () => {
     const root = join(base, "audit-command");
     mkdirSync(join(root, ".garuda"), { recursive: true });
-    writeFileSync(
-      join(root, ".garuda", "policy.json"),
-      JSON.stringify({
-        requireSandbox: true,
-        disallowedCommands: ["rm -rf *", "git push *--force*"],
-        denyPaths: ["**/.env*"],
-      }),
-    );
+    const policy = {
+      requireSandbox: true,
+      disallowedCommands: ["rm -rf *", "git push *--force*"],
+      denyPaths: ["**/.env*"],
+    };
 
     const model = new FakeModelClient([reply([text("ok")])]);
     const store = new FileSessionStore(join(root, ".garuda", "sessions"));
@@ -249,6 +246,11 @@ describe("/audit chat slash command", () => {
       model,
       approver: new AutoApprover("once"),
       store,
+      // Never the user's real ~/.garuda (merge gate: this test read real MCP and hook config).
+      mcp: false,
+      hooks: false,
+      policy,
+      policySources: ["/etc/garuda/policy.json"],
     });
 
     // Log some events
@@ -278,7 +280,7 @@ describe("/audit chat slash command", () => {
     // 1. Regular /audit
     await runCommand("/audit", ctx);
     const out = renderer.messages.join("\n");
-    expect(out).toContain("Team Policy: active (.garuda/policy.json)");
+    expect(out).toContain("Team Policy: active (/etc/garuda/policy.json)");
     expect(out).toContain("Require Sandbox: enabled");
     expect(out).toContain("Disallowed Commands: 2 pattern(s)");
     expect(out).toContain("Recent Audit Events");

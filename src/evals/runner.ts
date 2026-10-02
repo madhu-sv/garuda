@@ -9,6 +9,7 @@ import { type ModelInfo, totalTokens } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
 import { AutoApprover } from "../permissions/autoApprover.js";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
+import type { TeamPolicy } from "../permissions/policy.js";
 import { parseSettings } from "../permissions/settings.js";
 import { HostExecutor } from "../sandbox/host.js";
 import type { ExecutorName } from "../sandbox/index.js";
@@ -77,6 +78,8 @@ export interface EvalOptions {
   parallel?: number;
   /** Time limit per task. Default: EVAL_TASK_TIMEOUT_MS (the Batch API needs much more). */
   taskTimeoutMs?: number;
+  /** The team policy (merge gate): evals obey it as the chat does. Absent: none. */
+  policy?: TeamPolicy;
   /**
    * The network allowlist (0.13): presets and hosts that sandboxed commands may reach through
    * Garuda's proxy. Other hosts are denied (no question). Default: none, as in the product.
@@ -144,6 +147,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     // The user's own MCP servers must not change eval results.
     mcp: false,
     hooks: false,
+    ...(options.policy === undefined ? {} : { policy: options.policy }),
     commands: false,
     // The list comes from the eval command line: the user typed it.
     ...(options.network === undefined ? {} : { network: { approved: true } }),

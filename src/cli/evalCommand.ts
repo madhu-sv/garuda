@@ -205,6 +205,17 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       return 1;
     }
   }
+  // Team policy (merge gate): eval runs spend money too, so they obey the same model list.
+  const { assertModelAllowedByPolicy, loadTeamPolicy } = await import("../permissions/policy.js");
+  let team: Awaited<ReturnType<typeof loadTeamPolicy>>;
+  try {
+    team = await loadTeamPolicy();
+    assertModelAllowedByPolicy(team?.policy, resolved.spec);
+    if (sub !== undefined) assertModelAllowedByPolicy(team?.policy, sub.spec);
+  } catch (error) {
+    process.stderr.write(`Team policy: ${(error as Error).message}\n`);
+    return 1;
+  }
   const suite = options.suite ?? "basic";
   const suiteTasks =
     suite === "all" ? ALL_TASKS : suite === "repo" ? repoTasks : EVAL_SUITES[suite];
@@ -288,6 +299,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     tasks,
     {
       modelId: resolved.spec,
+      ...(team === undefined ? {} : { policy: team.policy }),
       model: () =>
         batchMode === "on" && createBatch !== undefined ? createBatch() : resolved.create(),
       // Batch responses carry their own price factor (half): the price stays the model's.

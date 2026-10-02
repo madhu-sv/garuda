@@ -43,7 +43,7 @@ flowchart TD
   end
 
   subgraph Governance[Governance & Safety]
-    Policy[Team Policy: .garuda/policy.json]
+    Policy[Team Policy: managed file + ~/.garuda/policy.json]
     Perms[Permission Engine & Sandbox]
     Audit[Audit Logger: .garuda/audit.jsonl]
   end
@@ -293,7 +293,7 @@ Subagent execution is strictly governed by Garuda's enterprise security layers:
 
 ```mermaid
 flowchart TD
-  ChildCall[Subagent Tool Call] --> Step0{Team Policy Check<br/>.garuda/policy.json}
+  ChildCall[Subagent Tool Call] --> Step0{Team Policy Check<br/>managed + ~/.garuda/policy.json}
   Step0 -- "Policy denial (disallowed command, denied path)" --> Reject[Policy Denied: by policy]
   Step0 -- "Pass" --> Perms{Permission Engine<br/>Sensitive paths, protected git}
   Perms -- "Denied / Ask required" --> Reject
@@ -303,6 +303,6 @@ flowchart TD
   Reject --> AuditLog
 ```
 
-- **Team Policy Enforcement (`.garuda/policy.json`)**: Evaluated at Step 0 before any subagent tool runs. If a policy forbids a path or command, the subagent is blocked immediately with `decision: "by: policy"`.
+- **Team Policy Enforcement (the managed file and `~/.garuda/policy.json`)**: Evaluated at Step 0 before any subagent tool runs. If a policy forbids a path or command, the subagent is blocked immediately with `decision: "by: policy"`.
 - **Audit Trail (`.garuda/audit.jsonl`)**: Every subagent authorization check and tool execution is recorded with timestamp, session ID, tool name, risk level (`low`, `medium`, `high`, `critical`), duration in ms, and error status.
 - **Snapshot & Worktree Isolation**: Child runs never contaminate undo snapshot diffs (`SNAPSHOT_EXCLUDES`) or scheduled job git branches (`NEVER_COMMIT`).

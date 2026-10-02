@@ -131,26 +131,23 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
     }
   });
 
-  knownGap(
-    "G03 requireSandbox must reject a command on an executor with no isolation",
-    async () => {
-      const permissions = new PermissionEngine({
-        root: folder(),
-        approver: new AutoApprover("once"),
-        isolation: "none",
-        policy: { requireSandbox: true },
-      });
-      const result = await permissions.check(
-        {
-          tool: "bash",
-          readOnly: false,
-          info: { target: { kind: "command", command: "echo harmless" } },
-        },
-        signal,
-      );
-      expect(result.allowed).toBe(false);
-    },
-  );
+  it("G03 requireSandbox must reject a command on an executor with no isolation", async () => {
+    const permissions = new PermissionEngine({
+      root: folder(),
+      approver: new AutoApprover("once"),
+      isolation: "none",
+      policy: { requireSandbox: true },
+    });
+    const result = await permissions.check(
+      {
+        tool: "bash",
+        readOnly: false,
+        info: { target: { kind: "command", command: "echo harmless" } },
+      },
+      signal,
+    );
+    expect(result.allowed).toBe(false);
+  });
 
   knownGap("G04 grep must not expose a policy-denied ordinary source file", async () => {
     const root = folder();

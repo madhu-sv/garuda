@@ -5,12 +5,15 @@ import { afterAll, describe, expect, it } from "vitest";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
 import {
+  ignoredProjectPolicy,
   isCommandDisallowedByPolicy,
   isHostBlockedByPolicy,
   isModelAllowedByPolicy,
   isPathDeniedByPolicy,
   isSandboxRequiredByPolicy,
-  loadPolicy,
+  loadTeamPolicy,
+  managedPolicyPath,
+  mergePolicies,
   parsePolicy,
   type TeamPolicy,
 } from "../src/permissions/policy.js";
@@ -67,20 +70,66 @@ describe("Team Policy: parsing and validation", () => {
     expect(() => parsePolicy({ disallowedCommands: "rm -rf" })).toThrow(/Invalid policy schema/);
   });
 
-  it("loads policy from .garuda/policy.json or returns undefined if missing", async () => {
-    const dir = join(base, "missing");
-    mkdirSync(dir, { recursive: true });
-    expect(await loadPolicy(dir)).toBeUndefined();
+  it("loads the managed file and ~/.garuda/policy.json, never the project's file", async () => {
+    const home = join(base, "home");
+    const managedDir = join(base, "managed");
+    const managed = join(managedDir, "policy.json");
+    mkdirSync(join(home, ".garuda"), { recursive: true });
+    mkdirSync(managedDir, { recursive: true });
+    expect(await loadTeamPolicy({ home, managed })).toBeUndefined();
 
-    const withPolicy = join(base, "with-policy");
-    mkdirSync(join(withPolicy, ".garuda"), { recursive: true });
     writeFileSync(
-      join(withPolicy, ".garuda", "policy.json"),
-      JSON.stringify({ disallowedCommands: ["curl * | sh"], requireSandbox: true }),
+      join(home, ".garuda", "policy.json"),
+      JSON.stringify({
+        disallowedCommands: ["curl * | sh"],
+        allowedModels: ["claude-*"],
+        limits: { maxSteps: 10 },
+      }),
     );
-    const loaded = await loadPolicy(withPolicy);
-    expect(loaded?.disallowedCommands).toEqual(["curl * | sh"]);
-    expect(loaded?.requireSandbox).toBe(true);
+    writeFileSync(
+      managed,
+      JSON.stringify({
+        disallowedCommands: ["git push *--force*"],
+        requireSandbox: true,
+        allowedModels: ["claude-sonnet-*"],
+        limits: { maxSteps: 30, tokenBudget: 5000 },
+      }),
+    );
+    const loaded = await loadTeamPolicy({ home, managed });
+    expect(loaded?.sources).toEqual([managed, join(home, ".garuda", "policy.json")]);
+    expect(loaded?.policy).toEqual({
+      disallowedCommands: ["curl * | sh", "git push *--force*"],
+      requireSandbox: true,
+      allowedModels: ["claude-sonnet-*"],
+      limits: { maxSteps: 10, tokenBudget: 5000 },
+    });
+
+    // A broken file stops Garuda and names the file (fail closed).
+    writeFileSync(managed, "{ nope");
+    await expect(loadTeamPolicy({ home, managed })).rejects.toThrow(managed);
+
+    // A project's own file is only reported, never read.
+    const project = join(base, "project");
+    mkdirSync(join(project, ".garuda"), { recursive: true });
+    expect(ignoredProjectPolicy(project)).toBeUndefined();
+    writeFileSync(join(project, ".garuda", "policy.json"), "{}");
+    expect(ignoredProjectPolicy(project)).toBe(join(project, ".garuda", "policy.json"));
+  });
+
+  it("knows the managed path per platform, and a merge is the stricter of the two", () => {
+    expect(managedPolicyPath("darwin")).toBe("/Library/Application Support/Garuda/policy.json");
+    expect(managedPolicyPath("linux")).toBe("/etc/garuda/policy.json");
+    expect(managedPolicyPath("win32")).toBeUndefined();
+    expect(mergePolicies(undefined, undefined)).toBeUndefined();
+    expect(
+      mergePolicies(
+        { network: { strictAllowlist: true }, audit: { enabled: false } },
+        { network: { blockedHosts: ["evil.example"] }, audit: { enabled: true } },
+      ),
+    ).toEqual({
+      network: { blockedHosts: ["evil.example"], strictAllowlist: true },
+      audit: { enabled: true },
+    });
   });
 });
 
@@ -170,8 +219,11 @@ describe("Team Policy: PermissionEngine enforcement", () => {
     expect(decision.allowed).toBe(false);
     if (!decision.allowed) {
       expect(decision.by).toBe("policy");
-      expect(decision.reason).toContain("outside the sandbox is disallowed by team policy");
+      expect(decision.reason).toContain("The team policy requires the OS sandbox");
     }
+    // In the sandbox it runs.
+    const inside = new PermissionEngine({ root: "/repo", approver, policy, isolation: "os" });
+    expect((await inside.check(request("bash", cmd("echo 123")), signal)).allowed).toBe(true);
   });
 
   it("policy denyPaths blocks file operations even if allow rule exists", async () => {

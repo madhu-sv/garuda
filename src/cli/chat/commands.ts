@@ -613,9 +613,12 @@ async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): 
   const lines: string[] = [];
 
   if (policy === undefined) {
-    lines.push("Team Policy: none (.garuda/policy.json not configured)");
+    lines.push("Team Policy: none (no managed policy file and no ~/.garuda/policy.json)");
   } else {
-    lines.push("Team Policy: active (.garuda/policy.json)");
+    const from = runtime.teamPolicySources;
+    lines.push(
+      `Team Policy: active (${from.length === 0 ? "given by the caller" : from.join(", ")})`,
+    );
     if (policy.requireSandbox === true) {
       lines.push("  • Require Sandbox: enabled (all bash commands must run sandboxed)");
     }

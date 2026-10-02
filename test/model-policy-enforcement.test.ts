@@ -8,6 +8,7 @@ import { noColor } from "../src/cli/chat/markdown.js";
 import { ChatStore } from "../src/cli/chat/store.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
+import { loadTeamPolicy } from "../src/permissions/policy.js";
 import { parseSettings } from "../src/permissions/settings.js";
 import { FileSessionStore } from "../src/session/store.js";
 
@@ -114,17 +115,21 @@ describe("G01 model policy enforcement", () => {
     }
   });
 
-  it("enforces the project policy loaded from disk during switching", async () => {
+  it("enforces the team policy loaded from ~/.garuda during switching", async () => {
     const root = project();
-    mkdirSync(join(root, ".garuda"), { recursive: true });
+    const home = project();
+    mkdirSync(join(home, ".garuda"), { recursive: true });
     writeFileSync(
-      join(root, ".garuda", "policy.json"),
+      join(home, ".garuda", "policy.json"),
       JSON.stringify({ allowedModels: [mainModelId] }),
     );
+    const team = await loadTeamPolicy({ home, managed: undefined });
+    if (team === undefined) throw new Error("no policy");
     const provider = choices();
     const app = await Runtime.create({
       root,
       modelId: mainModelId,
+      policy: team.policy,
       model: new FakeModelClient([]),
       models: provider,
       settings: parseSettings({ executor: "host", undo: { enabled: false } }),
