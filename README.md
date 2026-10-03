@@ -1,7 +1,7 @@
 # Garuda
 
-Garuda is a terminal coding agent. This is version 0.14.0-dev: the 0.14–0.17 branches after the merge gate
-(see the note under the status table).
+Garuda is a terminal coding agent. This is version 0.14.0: the 0.14–0.17 branches after the merge gate
+and Garuda's own review (see the notes under the status table).
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -26,10 +26,10 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.11: night shift (a queue of overnight jobs, one digest, a launchd agent) and proof of work (tests before and after, risk flags, a principal-engineer review) | Done |
 | 0.12: benchmark your repo (eval tasks from the repo's own git history), output-limit recovery | Done |
 | 0.13: network allowlist for commands (W6): presets or hosts, through Garuda's proxy, off by default | Done |
-| 0.14: sandbox launch probe, core modularization, background daemons (opt-in), interactive patch staging (W4) | In 0.14.0-dev |
-| 0.15: multi-language AST code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | In 0.14.0-dev |
-| 0.16: language plugins (Go and Rust built in, user plugins in ~/.garuda/languages, /languages; project plugins not loaded) | In 0.14.0-dev |
-| 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | In 0.14.0-dev |
+| 0.14: sandbox launch probe, core modularization, background daemons (opt-in), interactive patch staging (W4) | Done (0.14.0) |
+| 0.15: multi-language AST code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done (0.14.0) |
+| 0.16: language plugins (Go and Rust built in, user plugins in ~/.garuda/languages, /languages; project plugins not loaded) | Done (0.14.0) |
+| 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | Done (0.14.0) |
 
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
@@ -37,6 +37,22 @@ log, hunk approval U0, daemons, MoE, project plugins), and features with no meas
 default (MoE, daemons). G02 to G08 are fixed too. The open gap G09 is listed in
 [docs/quality-baseline/issue-register.md](docs/quality-baseline/issue-register.md). The section
 headings below keep the branch labels (0.14–0.17).
+
+Before the release, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
+permissions, tools, sandbox, audit, loop, agents), in plan mode. The high and the policy and audit
+findings are fixed (patches 0128–0141). Known limits in 0.14.0:
+
+- G09: project language plugins are not loaded (no consent flow for their imports yet).
+- Subagents: each child has its own step and token budget (capped by the team policy); it does not
+  take what the parent has left, and parallel `explore` calls each get one. A child that fails with
+  an error loses its usage from the session totals.
+- Audit log: lines cut from the end of a file, or a removed file, are not detected (no anchor outside
+  the file).
+- The compaction summary call has no retry after a dropped connection; send the message again.
+- On macOS, secret-named variables other than the provider API keys stay in Garuda's own environment.
+- Low findings of the tools review are open: a duplicate MCP tool name stops the start, the
+  web_fetch cache is not evicted, a slow regular expression in `grep` is not stopped inside a file.
+- The cli and extensions areas are not reviewed by Garuda yet.
 
 ## Use
 

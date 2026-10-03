@@ -90,3 +90,20 @@ allowlist in the proxy (G02); grep, glob and the code index skip files that `den
 a child's wrap-up call runs only when it fits in its token budget (G06). The three gap tests are
 ordinary tests, and `test/policyGaps.test.ts` adds positive controls. Run on Linux (Node v22.22.2),
 `pnpm check`: 74 test files, 745 tests: 735 passed, 4 expected failures and 6 skipped. Open: G07 child outcome, G08 (two), G09.
+
+## Garuda's own review and release (0.14.0)
+
+Garuda reviewed its own code with Fable 5.1 in plan mode, one area per run, with the docs and the
+known-gap tests left out of the copy (`garuda-live/review/run-review.sh`). Each finding was checked
+in the code before a fix, and each fix has a test that fails without it. Patches 0128–0141 fix the
+redactor and resume, project settings consent, symlinks and case in paths, the search setting,
+thinking summaries and the stream idle timeout, provider keys out of the environment, UTF-8 edits,
+MCP consent text, the hang on a background child, the sandbox process space (Linux) and app launch
+(macOS), the open tool call after Ctrl-C, the policy limits for subagents, `@path` checks, and the
+audit log (G07 resolved, hooks recorded and under the policy).
+
+Run on Linux (Node v22.22.2), `pnpm check`: 77 test files, 804 tests: 797 passed, 1 expected failure
+(G09) and 6 skipped (macOS-only Seatbelt tests and the opt-in Java test). Live on macOS (Seatbelt,
+2026-10-03): `open -a Calculator` and `osascript` Apple events are refused in the sandbox (error -54,
+-600); ordinary commands (`git status`, `node -e`) run as before. The known
+limits of 0.14.0 are listed in the README under the status table.

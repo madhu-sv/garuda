@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.14.0-dev (the 0.14–0.17 branches after the merge gate). This document shows how the parts work together. The component documents in
+Version 0.14.0 (the 0.14–0.17 branches after the merge gate and Garuda's own review). This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
