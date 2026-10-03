@@ -125,7 +125,11 @@ const FORMAT_TIMEOUT_MS = 20_000;
 export const PLAN_NOTE =
   "Plan mode is on. Investigate and write a plan; do not change anything. File edits, file writes and remember are blocked, and bash runs in a sandbox that cannot write the project (temp folders only), so read-only commands and tests that write nothing in the project still work. End with a numbered plan: the files to change, the change in each, and how to test it. Then add a ```permissions block with one rule per line for the calls the build needs beyond the sandbox: edit_file(path) and write_file(path) for each file to change or create (globs such as src/** are fine), bash(command) for commands that need the network, and web_fetch(host) for pages. Commands that stay in the project (tests, builds) need no line.";
 
-/** The settings with the team policy's step and token limits applied (pure: a new object). */
+/**
+ * The settings with the team policy's step and token limits applied (pure: a new object). The caps
+ * hold for every run: the main loop, and each subagent (explore, custom agents, MoE specialists)
+ * (0.14, review: a project's `subagents` or `moe` limits went past the policy).
+ */
 export function withPolicyLimits(settings: Settings, policy: TeamPolicy | undefined): Settings {
   const limits = policy?.limits;
   if (limits === undefined) return settings;
@@ -133,10 +137,38 @@ export function withPolicyLimits(settings: Settings, policy: TeamPolicy | undefi
     cap === undefined ? own : own === undefined ? cap : Math.min(own, cap);
   const maxSteps = min(settings.maxSteps, limits.maxSteps);
   const tokenBudget = min(settings.tokenBudget, limits.tokenBudget);
+  const subagents = {
+    ...settings.subagents,
+    maxSteps: min(
+      settings.subagents?.maxSteps ?? DEFAULT_EXPLORE_LIMITS.maxSteps,
+      limits.maxSteps,
+    ) as number,
+    tokenBudget: min(
+      settings.subagents?.tokenBudget ?? DEFAULT_EXPLORE_LIMITS.tokenBudget,
+      limits.tokenBudget,
+    ) as number,
+  };
+  // MoE limits fall back to the subagent limits (capped above) when the settings give none.
+  const moeSteps =
+    settings.moe?.maxSteps === undefined ? undefined : min(settings.moe.maxSteps, limits.maxSteps);
+  const moeTokens =
+    settings.moe?.tokenBudget === undefined
+      ? undefined
+      : min(settings.moe.tokenBudget, limits.tokenBudget);
   return {
     ...settings,
     ...(maxSteps === undefined ? {} : { maxSteps }),
     ...(tokenBudget === undefined ? {} : { tokenBudget }),
+    subagents,
+    ...(settings.moe === undefined
+      ? {}
+      : {
+          moe: {
+            ...settings.moe,
+            ...(moeSteps === undefined ? {} : { maxSteps: moeSteps }),
+            ...(moeTokens === undefined ? {} : { tokenBudget: moeTokens }),
+          },
+        }),
   };
 }
 
@@ -1267,7 +1299,13 @@ export class Runtime {
     const notes = [...this.pendingNotes.splice(0), ...(this.mcp?.takeNotes() ?? [])];
     if (this.turnMode === "plan") notes.unshift(PLAN_NOTE);
     // @path in the prompt (0.6): the files go with the message and count as read.
-    const mentions = await attachMentions(prompt, this.root, session.files);
+    const mentions = await attachMentions(prompt, this.root, session.files, async (shown) => {
+      const decision = await this.permissions.check(
+        { tool: "read_file", readOnly: true, info: { target: { kind: "path", path: shown } } },
+        signal,
+      );
+      return decision.allowed ? undefined : decision.reason;
+    });
     const lines = [
       ...mentions.attachments.map((a) => `Attached ${a.summary}.`),
       ...mentions.skipped.map((s) => `Not attached: ${s}.`),

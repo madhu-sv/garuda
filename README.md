@@ -156,7 +156,8 @@ Set the context window, price and output limit per model, and add providers, in 
   "Use Option as Meta"). Pasted text keeps its new lines and is never sent by itself.
 - `@path` attaches a file or folder: `fix the bug in @src/cart.ts`. The file's text goes with your
   message (numbered, up to 2,000 lines) and counts as read, so the model can edit it at once; a folder gives
-  its list of entries. The same rules as `read_file`: only files in the folder, no secrets (`.env`, keys).
+  its list of entries. The same rules as `read_file`: only files in the folder, no secrets (`.env`, keys),
+  and the same permission check (deny rules, the team policy's `denyPaths`, a link to a secret; 0.14).
   Garuda shows what it attached. A word after `@` that is not a path stays text.
 - `!command` runs a command yourself, like the bash tool: in the sandbox with no question, deny rules and
   hooks apply. You see the output, and it goes to the model with your next message. Esc stops it.
@@ -466,7 +467,8 @@ A team policy sets limits that a project cannot loosen, and an audit log records
   - `network`: `blockedHosts` (`*.example.com` for subdomains) and `strictAllowlist`. A blocked host
     stays blocked for `web_fetch` and for sandboxed commands, also when the project's
     `network.allow` lists it.
-  - `limits`: Global caps on `maxSteps` and `tokenBudget`.
+  - `limits`: Global caps on `maxSteps` and `tokenBudget`. They hold for each subagent run too
+    (explore, custom agents, MoE specialists), whatever the `subagents` or `moe` settings say (0.14).
 - **Structured audit log** (`~/.garuda/audit/<project>-<hash>/`, one file per Garuda process): on in
   the chat, `-p` and jobs (a job writes under its main checkout's folder, so the log outlives the
   worktree); off in evals and tests; the team policy can turn it off (`audit.enabled: false`) or make it

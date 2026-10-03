@@ -307,4 +307,20 @@ describe("Team Policy: limits never change shared settings (merge gate)", () => 
     expect(own.maxSteps).toBe(50);
     expect(withPolicyLimits(own, undefined)).toBe(own);
   });
+
+  it("caps the subagent and MoE limits too, also the defaults (0.14, review)", async () => {
+    const { withPolicyLimits } = await import("../src/app/runtime.js");
+    // A project's settings asked for far more than the policy allows.
+    const own = parseSettings({
+      subagents: { enabled: true, maxSteps: 100, tokenBudget: 50_000_000 },
+      moe: { enabled: true, maxSteps: 200, tokenBudget: 1_000_000_000 },
+    });
+    const capped = withPolicyLimits(own, { limits: { maxSteps: 5, tokenBudget: 1000 } });
+    expect(capped.subagents).toEqual({ enabled: true, maxSteps: 5, tokenBudget: 1000 });
+    expect(capped.moe).toEqual({ enabled: true, maxSteps: 5, tokenBudget: 1000 });
+    // No subagent settings: the defaults (20 steps, 150k tokens) are capped.
+    const plain = withPolicyLimits(parseSettings({}), { limits: { tokenBudget: 1000 } });
+    expect(plain.subagents).toEqual({ maxSteps: 20, tokenBudget: 1000 });
+    expect(plain.moe).toBeUndefined();
+  });
 });

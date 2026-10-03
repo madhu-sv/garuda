@@ -69,8 +69,10 @@ The G04 assertion is an ordinary test; `test/policyGaps.test.ts` checks grep, gl
 positive controls. Later (patch 0130, from Garuda's own review): the OS sandbox gets the denied files
 and folders (`policyDeniedPaths`, read and write), a symbolic link is checked as the file it reaches,
 and path patterns ignore case on macOS and Windows (`test/pathHoles.test.ts`, with `cat` in bwrap).
-Still open: a file created by a command after the profile was built (covered from the next command),
-`@path` or `/where` typed by the user, and a check-then-open race on links.
+Patch 0140 (Garuda's loop review): `@path` typed by the user runs the permission check of a
+`read_file` call, so deny rules, policy `denyPaths` and links to secrets are refused
+(`test/mentions.test.ts`). Still open: a file created by a command after the profile was built
+(covered from the next command), `/where` typed by the user, and a check-then-open race on links.
 
 ## G05 Writable specialist scheduling
 
@@ -97,8 +99,10 @@ Aggregate-parent enforcement is not fully reproduced by this single-child scenar
 Resolved for the single child: `runChild` makes the wrap-up call only when it fits in the budget
 that is left (tokens used + the last context size + the output limit ≤ `tokenBudget`). Otherwise the
 answer is the child's last text or a note that the budget ran out. The G06 assertion is an ordinary
-test; `test/policyGaps.test.ts` keeps the positive control (with room, the wrap-up runs). Still open:
-a budget shared by the parent and its children, and parallel children.
+test; `test/policyGaps.test.ts` keeps the positive control (with room, the wrap-up runs). Patch
+0140: the team policy's `limits` cap every child (explore, custom agents, MoE), and an agent file's
+`maxTurns` cannot raise the step limit. Still open: a budget shared by the parent and its children,
+and parallel children.
 
 ## G07 Audit confidentiality and completeness
 

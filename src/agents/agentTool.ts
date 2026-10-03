@@ -169,7 +169,12 @@ export function createAgentTool(options: AgentToolOptions): Tool<AgentInput, Age
           tools,
           model,
           permissions: options.permissions,
-          limits: { ...options.limits, maxSteps: agent.maxSteps ?? options.limits.maxSteps },
+          // The file's maxTurns can lower the step limit, never raise it (0.14, review): the user's
+          // settings and the team policy set the limit, not the project's agent file.
+          limits: {
+            ...options.limits,
+            maxSteps: Math.min(agent.maxSteps ?? options.limits.maxSteps, options.limits.maxSteps),
+          },
           maxTokens: DEFAULT_MAX_TOKENS,
           executor: options.executor,
           executorInfo: { name: options.executor.name, isolation: options.executor.isolation },

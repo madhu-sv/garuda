@@ -57,7 +57,9 @@ imports the CLI.
 4. `attachMentions(prompt, root, session.files)` (0.6, `app/mentions.ts`): each `@path` that is a file or
    folder in the root becomes a text block (a file numbered like read_file, ≤ 2 000 lines, recorded as read so
    `edit_file` works at once; a folder as its entry list, ≤ 200). Sensitive, binary, too large (10 MB) and
-   outside-root paths are skipped with a reason; at most 10 attachments and 150 000 characters. A `notice`
+   outside-root paths are skipped with a reason; so is a path that the permission check of a `read_file`
+   call refuses (0.14, review: deny rules, policy `denyPaths`, the real path of a symbolic link; the check is
+   audited like a tool call); at most 10 attachments and 150 000 characters. A `notice`
    event tells the user what was attached.
 5. `addUserMessage(session, prompt, notes, attachments)`: in plan mode the first note is `PLAN_NOTE` (what plan mode
    allows, and to end with a numbered plan and, since 0.7, a `permissions` block for `/schedule`), then the pending notes (undo, `!command` output, 0.9: a stopped turn from `recordStop("interrupted")`) and the MCP

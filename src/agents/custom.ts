@@ -263,6 +263,9 @@ export function agentConsent(
       ? `The project agent "${agent.name}" changed since you allowed it (${agent.shown}).`
       : `"${agent.name}" is a project agent from ${agent.shown}.`,
     `Its tools: ${tools.join(", ")}.`,
+    ...(agent.maxSteps === undefined
+      ? []
+      : [`Its step limit: ${agent.maxSteps} (at most your own).`]),
     "Its instructions:",
     "",
     ...agent.prompt.split("\n").map((line) => `  │ ${line}`),

@@ -38,7 +38,9 @@ The team policy (`src/permissions/policy.ts`): `loadTeamPolicy({ home?, managed?
 file (`managedPolicyPath`) and `~/.garuda/policy.json` and merges them with `mergePolicies` (the stricter
 value wins). Only the CLI calls it (chat, `-p`, `garuda run`, `garuda eval`); the runtime takes the result
 as `options.policy` and never reads `<root>/.garuda/policy.json` (`ignoredProjectPolicy` gives a notice).
-A broken file is an error that names it.
+A broken file is an error that names it. The policy's `limits` go through `withPolicyLimits`
+(`app/runtime.ts`): the main `maxSteps` and `tokenBudget`, and since 0.14 (review) also `subagents.*`
+(with the explore defaults when unset) and `moe.*`, so a project's settings cannot give a child more.
 
 Order of checks — the first match decides:
 

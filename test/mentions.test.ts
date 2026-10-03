@@ -129,6 +129,48 @@ describe("@path mentions (0.6)", () => {
   });
 });
 
+describe("@path and the permission check (0.14, review)", () => {
+  it("refuses a link to a sensitive file, a policy-denied path and a deny rule, like read_file", async () => {
+    const root = project({ "secrets/db.json": '{"pw":"x"}\n', "private/notes.md": "n\n" });
+    symlinkSync(join(root, ".env"), join(root, "notes.txt"));
+    const model = new FakeModelClient([
+      (request) => {
+        const sent = JSON.stringify(request.messages);
+        expect(sent).not.toContain("SECRET=1");
+        expect(sent).not.toContain('\\"pw\\"');
+        expect(sent).not.toContain("1\\tn");
+        expect(sent).toContain("# Demo");
+        return reply([text("OK.")]);
+      },
+    ]);
+    const events: AgentEvent[] = [];
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake",
+      model: async () => model,
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({
+        executor: "host",
+        permissions: { deny: ["read_file(private/**)"] },
+      }),
+      policy: { denyPaths: ["secrets/**"] },
+      mcp: false,
+      hooks: false,
+      profiles: [],
+      onEvent: (e) => events.push(e),
+    });
+    await runtime.runTurn("see @notes.txt @secrets/db.json @private/notes.md @README.md", signal());
+    expect(model.remaining).toBe(0);
+    const notice = events.find((e) => e.type === "notice");
+    const shown = notice?.type === "notice" ? notice.text : "";
+    expect(shown).toContain("Attached README.md");
+    expect(shown).toMatch(/Not attached: @notes\.txt: notes\.txt leads to \.env/);
+    expect(shown).toMatch(/Not attached: @secrets\/db\.json: .*polic/i);
+    expect(shown).toMatch(/Not attached: @private\/notes\.md: A deny rule/);
+  });
+});
+
 describe("!command (0.6)", () => {
   async function runtimeFor(
     root: string,

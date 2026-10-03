@@ -8,7 +8,8 @@ import { cutLine, joinWithinLimit, LIMITS, looksBinary, splitLines } from "../to
  * `@path` in a prompt (0.6): the user attaches a file or a folder. A file's text goes with the
  * message, numbered like read_file (at most 2 000 lines), and counts as read, so the model can edit
  * it at once. A folder gives its list of entries. The same rules as read_file apply: only paths in
- * the root, no sensitive files, no binary files. A word after "@" that is not a path stays text
+ * the root, no sensitive files, no binary files, and (0.14, review) the permission check of a
+ * read_file call: deny rules, the team policy's denyPaths, and the real path of a symbolic link. A word after "@" that is not a path stays text
  * (an e-mail address, a decorator, @someone).
  */
 
@@ -45,6 +46,8 @@ export async function attachMentions(
   prompt: string,
   root: string,
   files: FileTracker,
+  /** Why a read_file call on this path is refused, or undefined when it is allowed. */
+  denial: (shown: string) => Promise<string | undefined> = async () => undefined,
 ): Promise<MentionResult> {
   const attachments: Attachment[] = [];
   const skipped: string[] = [];
@@ -69,6 +72,11 @@ export async function attachMentions(
     }
     if (isSensitive(shown)) {
       skipped.push(`@${shown}: a sensitive file (read_file refuses it too)`);
+      continue;
+    }
+    const refused = await denial(shown);
+    if (refused !== undefined) {
+      skipped.push(`@${shown}: ${refused}`);
       continue;
     }
     const attachment = info.isDirectory()

@@ -244,6 +244,8 @@ maxTurns: 15
 You are an expert application security auditor...
 ```
 
+- `maxTurns`: lowers the step limit for this agent; it never raises the limit of the settings
+  (`subagents.maxSteps`, capped by the team policy) (0.14, review). The consent question shows it.
 - `tools`: Claude Code names map directly to Garuda tools (`Read` → `read_file`, `Edit` → `edit_file`, etc.). Omitted tools default to read-only.
 - `runsAlone`: If any custom agent has write permissions, `agent` tool runs exclusively without concurrent tool execution.
 
@@ -257,6 +259,8 @@ You are an expert application security auditor...
 2. **Limit Guardrails**:
    - `maxSteps`: Model turns limit (default 20, max 200).
    - `tokenBudget`: Input, output, and cache tokens cap (default 150,000).
+   - The team policy's `limits` cap both, for explore, custom agents and MoE (`withPolicyLimits`, 0.14,
+     review). Limit: each child has its own budget; it does not take what the parent has left.
 3. **Wrap-Up Recovery**: When a child hits its step limit, its token limit or repeats a call, `runChild` adds a wrap-up prompt (`WRAP_UP`) and makes one more model call (tool calls in it are ignored), so the subagent can say what it found and what is still open. The call runs only when it fits in the budget that is left (G06): the tokens used so far, plus the context of the last response, plus the output limit, must not pass `tokenBudget`. With no room there is no call; the answer is the child's last text, or a note that says the budget ran out.
 4. **Usage Accounting**: Emits a `SubagentReport` attached to the tool's `ToolOutcome`. The primary orchestrator adds child token usage and cost to the parent session totals.
 

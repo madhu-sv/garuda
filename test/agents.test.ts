@@ -245,6 +245,23 @@ describe("agents in the runtime (0.5)", () => {
     expect(agentsText(runtime)).toContain("read-only tools · ~/.claude/agents/math-checker.md");
   });
 
+  it("an agent file's maxTurns cannot raise the step limit of the settings (0.14, review)", async () => {
+    const { home, root } = setup({
+      ".claude/agents/long.md": agentMd("long", "Runs long.", "maxTurns: 50\n"),
+    });
+    const model = new FakeModelClient([
+      reply([toolUse("agent", { agent: "long", prompt: "Look around." }, "a1")]),
+      reply([toolUse("read_file", { path: "src/math.js" }, "c1")]),
+      reply([text("Done looking.")]),
+      reply([text("OK.")]),
+    ]);
+    const runtime = await runtimeFor(home, root, model, new Recorder(), {
+      settings: { subagents: { maxSteps: 1 } },
+    });
+    await runtime.runTurn("Go", signal());
+    expect(resultOf(model, 3)?.content).toContain("stopped early (max_steps)");
+  });
+
   it("an agent with write tools edits through the permission engine and runs alone", async () => {
     const { home, root } = setup({
       ".garuda/agents/fixer.md": agentMd("fixer", "Fixes bugs.", "tools: Read, Edit\n"),
