@@ -59,7 +59,7 @@ checks it again (schema, id, root, rules).
 | `queue` | In the project's night queue (0.11); `/schedule` sets it. |
 | `network` | The network allowlist (0.13) in effect in the chat at `/schedule` (the question shows it). The run uses it, not the project's current list, with no consent question; other hosts are denied and appear in the report's denied calls. Absent: no network. |
 | `test`, `review` | Proof of work (0.11): the test command run before and after (absent: none); the review (default true). |
-| `status`, `startedAt`, `endedAt`, `result` | `scheduled` → `running` → `done`, `stopped` (Ctrl-C) or `failed`; the result: stop reason, steps, tokens, cost, time, session, commit, files with line counts, denied calls, the agent's last answer. |
+| `status`, `error`, `startedAt`, `endedAt`, `result` | `scheduled` → `running` → `done`, `stopped` (Ctrl-C) or `failed`. A job never stays `running` with nothing running (0.14.1, review): when `garuda run` stops between `prepareJob` and `finishJob`, a process `exit` handler marks it `failed` (`failJobSync`, with `error`); after each night job process, `settleJob` does the same for a killed one. `links` are single folder names in the root; the result: stop reason, steps, tokens, cost, time, session, commit, files with line counts, denied calls, the agent's last answer. |
 
 ## Making a job (`/schedule [HH:MM]`)
 

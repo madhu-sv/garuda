@@ -71,7 +71,12 @@ export async function runQueue(
   jobs: readonly Job[],
   run: JobRunner,
   parallel: number,
-  report: { onStart?: (job: Job) => void; onEnd?: (job: Job, code: number | null) => void } = {},
+  report: {
+    onStart?: (job: Job) => void;
+    onEnd?: (job: Job, code: number | null) => void;
+    /** After each job process: check the job's file (0.14.1). */
+    settle?: (job: Job, code: number | null) => Promise<void>;
+  } = {},
 ): Promise<void> {
   let next = 0;
   const worker = async () => {
@@ -85,6 +90,7 @@ export async function runQueue(
       } catch {
         code = null;
       }
+      await report.settle?.(job, code).catch(() => {});
       report.onEnd?.(job, code);
     }
   };

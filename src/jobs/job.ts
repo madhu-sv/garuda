@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
@@ -109,8 +110,16 @@ const jobSchema = z.object({
     .min(1)
     .max(24 * 60)
     .optional(),
-  /** Ignored folders of the checkout (node_modules, .venv) that the worktree links to. */
-  links: z.array(z.string()),
+  /**
+   * Ignored folders of the checkout (node_modules, .venv) that the worktree links to. Each is one
+   * folder name in the root (0.14.1, review: ".." made the parent folder writable for the job).
+   */
+  links: z.array(
+    z
+      .string()
+      .regex(/^[^/\\]+$/, "a link is one folder name in the project")
+      .refine((name) => name !== "." && name !== "..", "a link is one folder name in the project"),
+  ),
   /**
    * Proof of work (0.11): the test command, run in the sandbox before and after the job (absent:
    * no tests), and the review of the diff (default true).
@@ -127,6 +136,8 @@ const jobSchema = z.object({
   /** The launchd agent that starts the job (macOS), while it is installed. */
   launchd: z.object({ label: z.string(), plist: z.string(), when: z.string() }).optional(),
   status: z.enum(JOB_STATUSES),
+  /** Why a job failed before its turn ended (0.14.1, review). */
+  error: z.string().max(2_000).optional(),
   startedAt: z.string().optional(),
   endedAt: z.string().optional(),
   result: resultSchema.optional(),
@@ -144,6 +155,36 @@ export function newJobId(now: Date = new Date()): string {
 
 export function jobPath(root: string, id: string): string {
   return join(root, JOBS_DIR, `${id}.json`);
+}
+
+/**
+ * Mark a job as failed, at once and synchronously (0.14.1, review). For the process "exit" event:
+ * when Garuda stops between `prepareJob` (status "running") and the end of the turn, the job no
+ * longer stays "running" with nothing running, which blocked `garuda run` and the night queue.
+ */
+export function failJobSync(job: Job, error: string): void {
+  job.status = "failed";
+  job.error = error.slice(0, 2_000);
+  job.endedAt = new Date().toISOString();
+  const dir = join(job.root, JOBS_DIR);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = jobPath(job.root, job.id);
+  const temp = `${file}.${process.pid}.tmp`;
+  writeFileSync(temp, `${JSON.stringify(job, null, 2)}\n`, { mode: 0o600 });
+  renameSync(temp, file);
+}
+
+/**
+ * After a job process ended: a job that is still "running" never finished (the process was
+ * killed, for example at the night shift's 24-hour limit). Mark it failed (0.14.1, review).
+ */
+export async function settleJob(root: string, id: string, exitCode: number | null): Promise<void> {
+  const job = await loadJob(root, id).catch(() => undefined);
+  if (job?.status !== "running") return;
+  failJobSync(
+    job,
+    `The job process ended (exit code ${exitCode ?? "none"}) before the job finished. See ${JOBS_DIR}/${id}.log.`,
+  );
 }
 
 /** Write the job file: a temp file, then a rename, so a crash never leaves half a file. */

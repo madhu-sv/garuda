@@ -284,6 +284,9 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     return;
   }
   if (state.approval !== undefined) {
+    // Keys typed for the next prompt must not answer a question that just appeared: "a" in "add a
+    // test" allowed the call for the session (0.14.1, review). Keys in the first moment are dropped.
+    if (!store.takesApprovalKeys()) return;
     if (state.approval.hunkReview !== undefined) {
       if (key.leftArrow || key.upArrow) store.moveHunk(-1);
       else if (key.rightArrow || key.downArrow) store.moveHunk(1);

@@ -47,6 +47,9 @@ export interface RunningTool {
   line: string;
 }
 
+/** Keys in this time after a question appears do not answer it (type-ahead). */
+export const APPROVAL_KEY_DELAY_MS = 400;
+
 export interface PendingApproval {
   request: ApprovalRequest;
   /** The choices (default three), with the request's own labels. */
@@ -55,6 +58,8 @@ export interface PendingApproval {
   selected: number;
   /** Active interactive hunk staging, if user entered hunk review mode (0.14). */
   hunkReview?: HunkStagingState | undefined;
+  /** When the question appeared (Date.now()): keys in the first moment are type-ahead. */
+  shownAt?: number;
 }
 
 export const APPROVAL_CHOICES: readonly { choice: ApprovalChoice; label: string }[] = [
@@ -120,10 +125,17 @@ export class ChatStore implements Renderer, Approver, Interruptible {
 
   constructor(
     status: Status,
-    options: { paint?: Paint; now?: () => number; history?: string[] } = {},
+    options: {
+      paint?: Paint;
+      now?: () => number;
+      history?: string[];
+      /** Keys in this time after a question appears do not answer it (type-ahead). */
+      approvalKeyDelayMs?: number;
+    } = {},
   ) {
     this.paint = options.paint ?? ansi;
     this.now = options.now ?? Date.now;
+    this.approvalKeyDelayMs = options.approvalKeyDelayMs ?? APPROVAL_KEY_DELAY_MS;
     this.state = {
       items: [],
       streaming: "",
@@ -492,7 +504,39 @@ export class ChatStore implements Renderer, Approver, Interruptible {
 
   // Approver.
 
+  /**
+   * One question at a time (0.14.1, review): calls in a parallel batch can both ask, and a second
+   * question replaced the first, whose call then waited forever. Now the second one waits.
+   */
   ask(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
+    // With no question open, ask at once (the preview shows now); else after the open ones.
+    const next =
+      this.asking === 0
+        ? this.askNow(request, signal)
+        : this.askQueue.then(() => this.askNow(request, signal));
+    this.asking++;
+    this.askQueue = next
+      .catch(() => {})
+      .finally(() => {
+        this.asking--;
+      });
+    return next;
+  }
+
+  /**
+   * False in the first moment after a question appears: keys typed for the next prompt must not
+   * answer it ("a" in "add a test" allowed the call for the session; 0.14.1, review).
+   */
+  takesApprovalKeys(): boolean {
+    const shownAt = this.state.approval?.shownAt;
+    return shownAt === undefined || this.now() - shownAt >= this.approvalKeyDelayMs;
+  }
+
+  private askQueue: Promise<unknown> = Promise.resolve();
+  private asking = 0;
+  private readonly approvalKeyDelayMs: number;
+
+  private askNow(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
     this.flushText();
     // The full preview goes to the scrollback; the live part only holds the choice.
     this.add({ kind: "output", text: `${header(request)}\n${colorPreview(request)}` });
@@ -531,7 +575,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
             ? `Yes, allow ${host} for this session`
             : c.label),
       }));
-      this.update({ approval: { request, choices, selected: 0 } });
+      this.update({ approval: { request, choices, selected: 0, shownAt: this.now() } });
     });
   }
 

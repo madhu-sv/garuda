@@ -13,6 +13,7 @@ import type { TeamPolicy } from "../permissions/policy.js";
 import { parseSettings } from "../permissions/settings.js";
 import { HostExecutor } from "../sandbox/host.js";
 import type { ExecutorName } from "../sandbox/index.js";
+import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { FileSessionStore } from "../session/store.js";
 import { writeFiles } from "./files.js";
 import { isProtectedPath } from "./projects.js";
@@ -207,10 +208,14 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   if (result.reason === undefined) {
     const changed = await changedFiles(root, before);
     // A project's own test suite can take longer than a small task's check.
+    const checkMs = task.repo === undefined ? 120_000 : REPO_CHECK_TIMEOUT_MS;
     const check = await runCheck(
       root,
       task.check,
-      task.repo === undefined ? undefined : REPO_CHECK_TIMEOUT_MS,
+      checkMs,
+      runtime.executor.isolation === "none"
+        ? undefined
+        : { executor: runtime.executor, policy: runtime.execPolicy(checkMs) },
     );
     if (changed.length > 0)
       result.reason = `The agent changed protected files: ${changed.join(", ")}.`;
@@ -246,23 +251,37 @@ export async function runEvals(
   return results;
 }
 
-/** Run a task's check in a folder. Exported for the task self-tests. */
+/**
+ * Run a task's check in a folder. Exported for the task self-tests, which run known solutions on
+ * the host. After an agent's turn, the check runs code that the agent wrote, so `sandboxed` gives
+ * the run's OS sandbox and its policy (0.14.1, review: the check ran on the host).
+ */
 export async function runCheck(
   root: string,
   command: string,
   timeoutMs = 120_000,
+  sandboxed?: { executor: Executor; policy: ExecPolicy },
 ): Promise<{ ok: boolean; output: string }> {
-  const r = await new HostExecutor().run(command, {
-    root,
-    sandbox: false,
-    writePaths: [root],
-    denyWritePaths: [],
-    denyReadPaths: [],
-    network: false,
-    envAllowlist: [...DEFAULT_ENV_ALLOWLIST, ...TOOLCHAIN_ENV],
-    timeoutMs,
-    maxOutputBytes: 4_000,
-  });
+  const envAllowlist = [...DEFAULT_ENV_ALLOWLIST, ...TOOLCHAIN_ENV];
+  const r =
+    sandboxed === undefined
+      ? await new HostExecutor().run(command, {
+          root,
+          sandbox: false,
+          writePaths: [root],
+          denyWritePaths: [],
+          denyReadPaths: [],
+          network: false,
+          envAllowlist,
+          timeoutMs,
+          maxOutputBytes: 4_000,
+        })
+      : await sandboxed.executor.run(command, {
+          ...sandboxed.policy,
+          envAllowlist: [...new Set([...sandboxed.policy.envAllowlist, ...TOOLCHAIN_ENV])],
+          timeoutMs,
+          maxOutputBytes: 4_000,
+        });
   const output = `${r.stdout.text}${r.stderr.text}`.trim();
   return { ok: r.exitCode === 0 && !r.timedOut, output };
 }

@@ -57,7 +57,7 @@ findings are fixed (patches 0128–0141). Known limits in 0.14.0:
 - (Fixed after 0.14.0: the low findings of the tools review, among them a duplicate MCP tool name
   that stopped the start, a web_fetch cache with no eviction, and a slow `grep` pattern that blocked
   Garuda.)
-- The cli and extensions areas are not reviewed by Garuda yet.
+- The extensions area is not reviewed by Garuda yet. (After 0.14.0: the cli area was reviewed, and its nine findings are fixed.)
 
 ## Use
 
@@ -428,7 +428,7 @@ Commits that change dependencies, binary files or more than 10 code files are sk
 candidate on this machine, with no sandbox, in git worktrees: your checkout does not change.
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).
-Commands run in the scratch folders, in the OS sandbox when there is one (`--executor auto|os|host`). Results and session files go to
+Commands, and the check after each task, run in the scratch folders, in the OS sandbox when there is one (`--executor auto|os|host`). Results and session files go to
 `.garuda/evals/<run-id>/`.
 
 `pnpm startup` checks that startup takes less than 1 s (N3). The Anthropic SDK and the prompt library

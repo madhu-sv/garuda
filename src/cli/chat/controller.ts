@@ -3,6 +3,7 @@ import { BUILTIN_COMMANDS } from "../../commands/builtins.js";
 import { listJobs } from "../../jobs/job.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { THINKING_WORDS } from "../../model/thinking.js";
+import { describeError } from "../errors.js";
 import type { Notifier } from "../notify.js";
 import { runTurnInTerminal } from "../turn.js";
 import { paletteEntries, runCommand } from "./commands.js";
@@ -73,6 +74,10 @@ export async function runChat(
           },
           signal: controller.signal,
         });
+      } catch (error) {
+        // A failed command shows its error; the chat goes on (0.14.1, review: it ended the chat).
+        result = "done";
+        if (!controller.signal.aborted) store.error(describeError(error));
       } finally {
         if (slow) {
           store.onInterrupt = () => {};

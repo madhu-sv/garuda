@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { nightCommand } from "../src/cli/nightCommand.js";
-import { type Job, loadJob, saveJob } from "../src/jobs/job.js";
+import { failJobSync, type Job, loadJob, saveJob } from "../src/jobs/job.js";
 import { nightDigest, nightQueue, processRunner, runQueue } from "../src/jobs/night.js";
 import { HostExecutor } from "../src/sandbox/host.js";
 
@@ -152,6 +152,37 @@ describe("the night shift (0.11)", () => {
     expect(lines.at(-1)).toMatch(/^The night queue is empty\./);
     expect(await nightCommand({ parallel: "11" }, renderer, async () => 0, root)).toBe(1);
     expect(await nightCommand({ at: "25:00" }, renderer, async () => 0, root)).toBe(1);
+  });
+
+  it("a job process that dies leaves no job marked running: the night marks it failed (0.14.1)", async () => {
+    const root = await project((r) => [job(r, "k1"), job(r, "k2")]);
+    const code = await nightCommand(
+      {},
+      renderer,
+      async (j) => {
+        // k1 is killed after prepareJob set "running"; k2 ends normally.
+        await saveJob({ ...j, status: j.id === "k1" ? "running" : "done" });
+        return j.id === "k1" ? null : 0;
+      },
+      root,
+    );
+    expect(code).toBe(0);
+    const killed = await loadJob(root, "k1");
+    expect(killed.status).toBe("failed");
+    expect(killed.error).toMatch(/ended \(exit code none\) before the job finished/);
+    expect((await loadJob(root, "k2")).status).toBe("done");
+  });
+
+  it("failJobSync marks a running job failed at once; a link must be one folder name (0.14.1)", async () => {
+    const root = await project((r) => [job(r, "f1", { status: "running" })]);
+    failJobSync(await loadJob(root, "f1"), "Garuda stopped before the job's turn finished.");
+    expect(await loadJob(root, "f1")).toMatchObject({ status: "failed", error: /stopped before/ });
+    await saveJob(job(root, "f2"));
+    const file = join(root, ".garuda", "jobs", "f2.json");
+    for (const bad of ["..", ".", "../x", "a/b"]) {
+      writeFileSync(file, JSON.stringify(job(root, "f2", { links: [bad] })));
+      await expect(loadJob(root, "f2")).rejects.toThrow(/one folder name/);
+    }
   });
 
   it("the process runner: garuda run <id> in the project, with this process's environment, output in the log", async () => {

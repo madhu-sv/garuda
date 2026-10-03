@@ -34,7 +34,9 @@ For each task (and each repeat):
    `wget*`), `mcp: false`, `hooks: false`, `web.enabled: false`, and the chosen executor and code index mode.
 4. `runTurn(prompt)` with a 10-minute limit.
 5. Pass when the protected files are unchanged and the check command (for example `node --test`) exits 0.
-   The check runs on the host with a 120 s limit (5 min for a repo task). A repo task's worktree is removed
+   The check runs code that the agent wrote, so it runs in the run's OS sandbox with the policy of
+   bash (0.14.1, review; on the host only with `--executor host` or no sandbox), with a 120 s limit
+   (5 min for a repo task). The task self-tests run known solutions on the host. A repo task's worktree is removed
    after the run (`git worktree remove`), unless `--keep`.
 6. Copy the session file to `.garuda/evals/<run-id>/<task>.jsonl` (`-2`, `-3` … for repeats).
 
@@ -112,8 +114,8 @@ a user can check a model, a setting or a Garuda version on the work they do.
    (Maven, Gradle, Go) run the whole suite. Only the task's files is faster, and other tests that fail on
    this machine do not hide the task. The command is saved per task as its check.
 3. Stop at `--max-tasks` (default 30). The test command is `--test-command`, else the one that jobs use
-   (`detectTestCommand`). Both runs are on the host, with no sandbox, as eval checks are; the output says
-   so. The user's checkout does not change.
+   (`detectTestCommand`). Both runs are on the host, with no sandbox (the project's own commits, not an
+   agent's code); the output says so. The user's checkout does not change.
 4. Save `.garuda/evals/repo-suite.json` (version 1: root, HEAD, test command; per task the commit, its
    parent, the subject, the prompt and the test files' content). Print the kept count and the skip
    reasons.

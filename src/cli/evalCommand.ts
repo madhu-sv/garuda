@@ -278,7 +278,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const where =
     executor.isolation === "none"
       ? "commands run on this machine with no sandbox"
-      : `commands run in the ${executor.name} sandbox`;
+      : `commands and the checks run in the ${executor.name} sandbox`;
   const parallel = Math.max(
     1,
     options.parallel ?? (batchMode === "on" ? Math.min(tasks.length, 20) : 1),

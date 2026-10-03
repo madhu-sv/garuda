@@ -160,12 +160,19 @@ flowchart LR
 
 ### ChatState
 
+Approvals (0.14.1, review): `header` and `colorPreview` (`cli/approver.ts`) show hidden characters
+(`visible`: controls as ␍ and ␛, invisible and bidirectional characters as [U+…]) and add a warning
+line, so a carriage return in a command cannot redraw what the user approves. Both approvers ask one
+question at a time (a queue), and the Ink chat drops keys in the first 400 ms after a question appears
+(`takesApprovalKeys`: type-ahead for the next prompt must not answer it). A failed `/command` shows its
+error and the chat goes on; Ctrl-C during a `!command` in the plain chat stops the command, not Garuda.
+
 ```ts
 interface ChatState {
   items: Item[];            // printed once: user, text, tool, note, output
   streaming: string;        // the open text block, plain
   running: RunningTool[];   // spinner lines
-  approval?: PendingApproval; // request, choices (with labels), selected
+  approval?: PendingApproval; // request, choices (with labels), selected, shownAt
   queue: string[];          // type-ahead
   editor: EditorState;
   busy: boolean;

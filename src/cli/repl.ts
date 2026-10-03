@@ -91,12 +91,17 @@ export async function runRepl(
     if (text.startsWith("!") && text.length > 1) {
       const controller = new AbortController();
       approver.onInterrupt = () => controller.abort();
+      // Ctrl-C stops the command, not Garuda: readline is closed between lines, so SIGINT had no
+      // handler and ended the chat (0.14.1, review).
+      const stop = () => controller.abort();
+      process.on("SIGINT", stop);
       try {
         const result = await runtime.runUserCommand(text.slice(1).trim(), controller.signal);
         renderer.info(`${result.text}\n(The output goes to the model with your next message.)`);
       } catch (error) {
         renderer.warn(controller.signal.aborted ? "Command stopped." : (error as Error).message);
       } finally {
+        process.off("SIGINT", stop);
         approver.onInterrupt = () => {};
       }
       continue;

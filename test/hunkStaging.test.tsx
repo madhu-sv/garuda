@@ -85,7 +85,8 @@ describe("hunkStaging parser and operations", () => {
 });
 
 describe("Ink HunkStagingView and ChatStore integration", () => {
-  const newStore = () => new ChatStore({ model: "fake", sandbox: "host" }, { paint: noColor });
+  const newStore = () =>
+    new ChatStore({ model: "fake", sandbox: "host" }, { paint: noColor, approvalKeyDelayMs: 0 });
 
   /** Hunk selections that the store passed back (U0). */
   let selected: (readonly number[])[] = [];

@@ -223,6 +223,7 @@ async function start(options: Options, program: Command): Promise<number> {
 
   // A scheduled job (0.7): the runtime works in the job's worktree; the session stays in this project.
   let job: import("./jobCommand.js").PreparedJob | undefined;
+  let jobGuard: (() => void) | undefined;
   if (options.job !== undefined) {
     const { prepareJob } = await import("./jobCommand.js");
     const prepared = await prepareJob(
@@ -236,6 +237,19 @@ async function start(options: Options, program: Command): Promise<number> {
     );
     if (typeof prepared === "number") return prepared;
     job = prepared;
+    // From here the job is "running". If Garuda stops before finishJob (a bad model setting, a
+    // broken team policy, an error), mark it failed on the way out (0.14.1, review).
+    const { failJobSync } = await import("../jobs/job.js");
+    const preparedJob = prepared;
+    jobGuard = () => {
+      if (preparedJob.job.status === "running") {
+        failJobSync(
+          preparedJob.job,
+          "Garuda stopped before the job's turn finished. The error is in the job's log or on the terminal.",
+        );
+      }
+    };
+    process.once("exit", jobGuard);
   }
   const root = job?.root ?? mainRoot;
 

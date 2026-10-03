@@ -81,7 +81,7 @@ import { gateProjectSettings } from "../permissions/projectSettings.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
-import type { Executor } from "../sandbox/types.js";
+import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { FileTracker } from "../session/fileTracker.js";
 import type { SessionSummary } from "../session/list.js";
 import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
@@ -1043,6 +1043,8 @@ export class Runtime {
     this.current = undefined;
     // Notes of the old session (a !command output, a stop note) do not go to the new one (0.14, review).
     this.pendingNotes.length = 0;
+    // A plan belongs to its session: /schedule after /new must not use the old one (0.14.1, review).
+    this.plan = undefined;
     this.claudeSearch = this.searchStart();
   }
 
@@ -1222,8 +1224,9 @@ export class Runtime {
       return { ok: false, text: (error as Error).message };
     }
     this.adoptThinking(this.current);
-    // Notes and approvals for the old session do not carry over; the process-wide ones do.
+    // Notes, approvals and the plan of the old session do not carry over; process-wide ones do.
     this.pendingNotes.length = 0;
+    this.plan = undefined;
     this.claudeSearch = this.searchStart();
     const s = this.current;
     return {
@@ -1409,6 +1412,11 @@ export class Runtime {
       signal,
     });
     return { ok: created.ok, text: created.text };
+  }
+
+  /** The sandbox policy of a command (bash's), for checks that Garuda itself runs (0.14.1). */
+  execPolicy(timeoutMs: number): ExecPolicy {
+    return this.permissions.execPolicy(timeoutMs);
   }
 
   /**

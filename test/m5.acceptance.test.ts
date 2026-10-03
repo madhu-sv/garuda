@@ -194,6 +194,38 @@ describe("M5 acceptance", () => {
     await runtime.close();
   });
 
+  it("plain chat: Ctrl-C stops a !command, and the chat goes on (0.14.1)", async () => {
+    const root = project("bang-ctrlc");
+    const marker = uniqueSleep();
+    const { runtime, renderer } = await runtimeFor(root, new FakeModelClient([]));
+    const input = new PassThrough();
+    const chat = runRepl(runtime, replApprover, renderer, (id) => id, noExit, {
+      input,
+      output: sink().stream,
+    });
+    input.write(`!sleep ${marker}\n`);
+    // The first command starts the runtime's parts (sandbox probe, snapshots): allow some time.
+    await waitUntil(
+      async () => process.listenerCount("SIGINT") > 0 && (await sleeping(marker, root)),
+      15_000,
+    );
+    process.emit("SIGINT");
+    // The command stops (its process is gone), and the chat reads the next line.
+    await waitUntil(async () => !(await sleeping(marker, root)));
+    input.end("/exit\n");
+    await chat;
+    expect(process.listenerCount("SIGINT")).toBe(0);
+  }, 30_000);
+
+  it("/new forgets the plan of the old session, so /schedule cannot use it (0.14.1)", async () => {
+    const root = project("plan-new");
+    const { runtime } = await runtimeFor(root, new FakeModelClient([]));
+    (runtime as unknown as { plan: unknown }).plan = { request: "r", plan: "p", sessionId: "old" };
+    expect(runtime.lastPlan).toBeDefined();
+    runtime.newSession();
+    expect(runtime.lastPlan).toBeUndefined();
+  });
+
   it("a second Ctrl-C during a turn exits at once", async () => {
     const root = project("ctrlc2");
     const pidFile = join(root, "sleep.pid");

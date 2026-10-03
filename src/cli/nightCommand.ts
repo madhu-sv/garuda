@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { hostCommand } from "../jobs/git.js";
-import { loadJob } from "../jobs/job.js";
+import { loadJob, settleJob } from "../jobs/job.js";
 import { type AgentEnv, defaultAgentEnv, nightSpec, removeSpec } from "../jobs/launchd.js";
 import {
   DEFAULT_NIGHT_PARALLEL,
@@ -94,6 +94,8 @@ async function runNight(
   await runQueue(queue, run, parallel, {
     onStart: (job) => renderer.info(`▶ ${job.id}: ${job.title}`),
     onEnd: (job, code) => renderer.info(`■ ${job.id} ended (exit code ${code ?? "none"})`),
+    // A job process that was killed leaves its job "running": mark it failed (0.14.1, review).
+    settle: (job, code) => settleJob(root, job.id, code),
   });
   const jobs = await Promise.all(queue.map((j) => loadJob(root, j.id).catch(() => j)));
   const digest = nightDigest(jobs, started, new Date());

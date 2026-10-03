@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import { formatReport, runCheck, runEvalTask, writeFiles } from "../src/evals/ru
 import { ALL_TASKS } from "../src/evals/suites.js";
 import { EVAL_TASKS } from "../src/evals/tasks.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
+import { findOsSandbox } from "../src/sandbox/index.js";
 
 describe("eval tasks (N5)", () => {
   it("has 10 tasks with unique ids", () => {
@@ -37,6 +38,39 @@ describe("eval tasks (N5)", () => {
       }
     });
   }
+});
+
+const osSandbox = findOsSandbox();
+
+describe.runIf("executor" in osSandbox)("eval checks run in the OS sandbox (0.14.1)", () => {
+  it("a check cannot read what the sandbox hides", async () => {
+    // The check runs code that the agent wrote. A fake home folder keeps the test off the user's
+    // own files: its .ssh is hidden in the sandbox, readable on the host.
+    const home = realpathSync(mkdtempSync(join(tmpdir(), "garuda-eval-home-")));
+    mkdirSync(join(home, ".ssh"));
+    writeFileSync(join(home, ".ssh", "probe"), "hidden\n");
+    const before = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      const result = await runEvalTask(
+        {
+          id: "probe",
+          title: "probe",
+          prompt: "Say done.",
+          files: { "README.md": "x\n" },
+          check: 'cat "$HOME/.ssh/probe"',
+          solution: {},
+        },
+        { modelId: "fake", model: () => new FakeModelClient([reply([text("done")])]) },
+      );
+      expect(result.passed).toBe(false);
+      expect(result.reason).toMatch(/The check failed/);
+    } finally {
+      if (before === undefined) delete process.env.HOME;
+      else process.env.HOME = before;
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("eval runner (N5)", () => {

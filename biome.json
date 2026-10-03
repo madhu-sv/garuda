@@ -57,7 +57,7 @@
       }
     },
     {
-      "includes": ["src/mcp/sanitize.ts"],
+      "includes": ["src/mcp/sanitize.ts", "src/cli/approver.ts"],
       "linter": {
         "rules": {
           "suspicious": {
