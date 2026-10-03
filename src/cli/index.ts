@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import { Command, Option } from "commander";
@@ -225,6 +226,7 @@ async function start(options: Options, program: Command): Promise<number> {
       new PlainRenderer(),
       undefined,
       { fromLaunchd: options.fromLaunchd === true },
+      homedir(),
     );
     if (typeof prepared === "number") return prepared;
     job = prepared;
@@ -322,6 +324,9 @@ async function start(options: Options, program: Command): Promise<number> {
     skills: {},
     // User language plugins from ~/.garuda/languages (0.16); project plugins stay off.
     languages: {},
+    // The project's settings that loosen safety: asked at startup when there is a terminal,
+    // pinned in ~/.garuda/trust.json (a job passes its own settings).
+    projectSettings: { home: homedir(), ask: process.stdin.isTTY === true },
     // Web search (0.5) and Claude's own search (0.6): only the user's search.json and environment.
     ...(searchConfig.config === undefined && searchConfig.claude === undefined
       ? {}

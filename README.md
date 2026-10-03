@@ -891,13 +891,22 @@ Put rules in `.garuda/settings.json` in the project. Deny rules always win.
 - A rule is `tool` (every call) or `tool(pattern)`.
 - File patterns are globs relative to the root. A name without `/` matches at any depth.
 - Command patterns use `*` for any text. Garuda splits a command at `;`, `&&`, `||`, `|` and `$(…)`.
-  A deny rule blocks the command when one part matches. An allow rule must match every part.
+  A deny rule blocks the command when one part matches, also behind `sudo`, `env` or `VAR=value`.
+  An allow rule must match every part as written: `bash(pnpm test*)` does not cover
+  `NODE_OPTIONS=… pnpm test` or `sudo pnpm test`.
 - Sensitive files (`.env*`, keys, `.npmrc`, `.aws/`, …) are blocked, also for reads.
   An allow rule that names the file, for example `read_file(.env.example)`, unblocks it.
 - Write tools never change files in `.git/`.
 - Commands see only these environment variables: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`,
   `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, `TZ`, plus the names in `env.allow`. API keys stay out.
 - With no terminal on stdin (a pipe or CI), Garuda cannot ask, so it denies calls that need approval.
+- The project's file comes with the repository, so its parts that loosen safety need your yes first:
+  `executor: "host"`, `permissions.allow`, `sandbox.writePaths`, `env.allow` and
+  `web.allowLocalhost`. At startup the chat (and `-p` in a terminal) shows them and asks: yes for this
+  run, yes and remember (pinned in `~/.garuda/trust.json`; a change asks again), or no. Without a yes,
+  Garuda leaves those parts out and says so; the rest of the file (deny rules, limits, features)
+  applies. A scheduled job uses them only when they are pinned. Settings that `garuda init` writes
+  ask once at the next start too.
 
 ## Standalone binary
 

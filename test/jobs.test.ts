@@ -28,9 +28,11 @@ import {
   specPath,
 } from "../src/jobs/launchd.js";
 import { jobBase, worktreeDir } from "../src/jobs/worktree.js";
+import { TrustStore } from "../src/mcp/trust.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { JOB_DENIAL, PermissionEngine } from "../src/permissions/engine.js";
+import { settingsRisk, settingsRiskHash } from "../src/permissions/projectSettings.js";
 import { parseRule } from "../src/permissions/rules.js";
 import { parseSettings } from "../src/permissions/settings.js";
 import type { CallTarget } from "../src/permissions/types.js";
@@ -250,6 +252,33 @@ describe("scheduled jobs: create, run, report (0.7)", () => {
     expect((await createJob({ ...common, root: dir, executor: host })).text).toMatch(
       /needs the OS sandbox/,
     );
+  });
+
+  it("a job takes the project's allow rules only when the user approved them (review finding)", async () => {
+    const settings = { permissions: { allow: ["bash"] } };
+    const job = async (pin: boolean) => {
+      const { root, home } = await repo({ ".garuda/settings.json": JSON.stringify(settings) });
+      const created = await createJob({
+        root,
+        executor: new SandboxedHost(),
+        approver: new AutoApprover("once"),
+        plan: { request: "Fix the add bug", plan: PLAN, sessionId: "s1" },
+        modelId: "fake",
+        home,
+        signal: signal(),
+      });
+      if (!created.ok) throw new Error(created.text);
+      if (pin) {
+        const risk = settingsRisk(parseSettings(settings));
+        if (risk === undefined) throw new Error("no risk");
+        await (await TrustStore.open(home)).setSettingsHash(root, settingsRiskHash(risk));
+      }
+      const prepared = await prepareJob(root, created.job.id, undefined, quiet, host, {}, home);
+      if (typeof prepared === "number") throw new Error(`exit ${prepared}`);
+      return prepared.settings.allow.some((r) => r.tool === "bash" && r.pattern === undefined);
+    };
+    expect(await job(false)).toBe(false);
+    expect(await job(true)).toBe(true);
   });
 
   it("runs unattended in the worktree: approved edits land on the job branch, the rest is denied and reported", async () => {

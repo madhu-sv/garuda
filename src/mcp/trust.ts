@@ -12,7 +12,7 @@ import { z } from "zod";
  *   toolHashes  one hash per tool, to say which tools were added, removed or changed
  * User servers are recorded under the key "~" (tools only; they need no consent).
  * Project hooks and project slash commands (0.4), project skills (0.5) and the project's network
- * allowlist (0.13) keep the hash of what the user allowed.
+ * allowlist (0.13) and the project settings that loosen safety keep the hash of what the user allowed.
  */
 export const TRUST_FILE = join(".garuda", "trust.json");
 
@@ -37,6 +37,8 @@ const schema = z.object({
   network: z.record(z.string(), z.string()).default({}),
   /** Project root → language plugin name → hash of the approved plugin file (0.16). */
   languages: z.record(z.string(), z.record(z.string(), z.string())).default({}),
+  /** Project root → hash of the approved settings parts that loosen safety (review, 2026-10). */
+  settings: z.record(z.string(), z.string()).default({}),
 });
 type TrustData = z.infer<typeof schema>;
 export type TrustEntry = z.infer<typeof entry>;
@@ -53,6 +55,7 @@ export class TrustStore {
     agents: {},
     network: {},
     languages: {},
+    settings: {},
   };
 
   private constructor(private readonly file: string) {}
@@ -121,6 +124,15 @@ export class TrustStore {
 
   async setNetworkHash(root: string, hash: string): Promise<void> {
     this.data.network[root] = hash;
+    await this.save();
+  }
+
+  settingsHash(root: string): string | undefined {
+    return this.data.settings[root];
+  }
+
+  async setSettingsHash(root: string, hash: string): Promise<void> {
+    this.data.settings[root] = hash;
     await this.save();
   }
 

@@ -84,8 +84,9 @@ checks it again (schema, id, root, rules).
    `--at` waits until the next HH:MM in local time (Ctrl-C cancels; the job stays scheduled).
 2. The worktree: `git worktree add -b <branch> <worktree> <base>` (or the existing branch after an earlier
    run); symlinks for the links.
-3. Settings: the worktree's `.garuda/settings.json`, plus the job's rules in `allow`, `maxSteps`, and the
-   links' real paths as sandbox write paths (tool caches).
+3. Settings: the worktree's `.garuda/settings.json` (its parts that loosen safety only when the user
+   pinned them for the main checkout: `gateProjectSettings`, no question), plus the job's rules in
+   `allow`, `maxSteps`, and the links' real paths as sandbox write paths (tool caches).
 4. The CLI builds the runtime as for `-p`, with root = the worktree, the session store of the checkout (the
    session file stays out of the branch), the approver `AutoApprover("deny")` (consents for project MCP
    servers, hooks, skills, agents and Claude's search all get "no"), no undo snapshots (the branch is the

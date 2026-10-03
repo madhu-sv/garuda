@@ -14,7 +14,8 @@ imports the CLI.
 | `modelInfo`, `maxTokens` | Context window and price of the model (default: the Claude table), and the output limit. The CLI gets them from `resolveModel`. |
 | `approver`, `store` | Approval UI and session store. |
 | `resume` | `true` (latest) or a session id. |
-| `settings` | Default: read `.garuda/settings.json`. |
+| `settings` | Default: read `.garuda/settings.json`, gated by `projectSettings`. |
+| `projectSettings` | `{ home?, ask? }` (review 2026-10): the parts of the project's settings that loosen safety apply only when pinned in `home`/.garuda/trust.json or approved at startup (`ask`, the CLI with a terminal). Absent: they are left out with a notice. See [permissions.md](permissions.md). |
 | `onEvent`, `onNotice` | Agent events; warnings outside tool calls. |
 | `mcp` | `false`, or `{ home, env }` to override where MCP config and trust are read. |
 | `hooks` | `false`, or `{ home }`. |
@@ -32,7 +33,7 @@ imports the CLI.
 
 ### `Runtime.create`
 
-1. Load settings. `createExecutor(settings.executor)` → executor and an optional notice.
+1. Load settings (`gateProjectSettings`: the loosening parts only when approved). `createExecutor(settings.executor)` → executor and an optional notice.
 2. Load MCP configs and hooks configs (problems go to `onNotice`).
 3. Detect the language profiles. `buildSystemPrompt(root, GARUDA.md, memory.md, { codeIndex, sandboxed,
    mcp, web, hooks, languages, explore, todo, lsp })`.

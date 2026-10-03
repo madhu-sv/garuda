@@ -16,8 +16,10 @@ import {
 } from "../jobs/proof.js";
 import { jobReport } from "../jobs/text.js";
 import { cleanArgs, commitJob, jobChanges, prepareWorktree } from "../jobs/worktree.js";
+import { TrustStore } from "../mcp/trust.js";
 import type { DeadlineClient } from "../model/deadline.js";
 import { totalTokens } from "../model/pricing.js";
+import { gateProjectSettings } from "../permissions/projectSettings.js";
 import { parseRule } from "../permissions/rules.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import { createExecutor } from "../sandbox/index.js";
@@ -144,8 +146,10 @@ export async function prepareJob(
   renderer: Renderer,
   git: Executor = createExecutor("host").executor,
   launchd: LaunchdRun = {},
+  /** Where approvals of project settings are pinned (~). Absent: none, so loosening parts stay off. */
+  trustHome?: string,
 ): Promise<PreparedJob | number> {
-  const prepared = await prepare(mainRoot, id, at, renderer, git);
+  const prepared = await prepare(mainRoot, id, at, renderer, git, trustHome);
   // A start from the agent that does not run (done, running, broken): the agent goes anyway.
   if (typeof prepared === "number" && launchd.fromLaunchd === true) {
     const job = await loadJob(mainRoot, id).catch(() => undefined);
@@ -166,6 +170,7 @@ async function prepare(
   at: string | undefined,
   renderer: Renderer,
   git: Executor,
+  trustHome: string | undefined,
 ): Promise<PreparedJob | number> {
   let job: Job;
   try {
@@ -195,7 +200,16 @@ async function prepare(
     renderer.error(`The job's worktree failed: ${error.message}`);
     return 1;
   }
-  const project = await loadSettings(job.worktree);
+  // The project's settings that loosen safety apply only when the user approved them (pinned for
+  // the main checkout). A job has nobody to ask. Before, a job also took the project's allow rules
+  // unchecked, with nobody there to see a question (review finding).
+  const gate = await gateProjectSettings({
+    root: job.root,
+    settings: await loadSettings(job.worktree),
+    trust: trustHome === undefined ? undefined : await TrustStore.open(trustHome),
+  });
+  if (gate.notice !== undefined) renderer.info(gate.notice);
+  const project = gate.settings;
   const links = job.links.map((name) => join(job.root, name));
   // The network allowlist (0.13) is the one approved with the job, not the project's current one.
   const { network: _projectNetwork, ...projectRest } = project;

@@ -77,6 +77,7 @@ import {
   isHostBlockedByPolicy,
   type TeamPolicy,
 } from "../permissions/policy.js";
+import { gateProjectSettings } from "../permissions/projectSettings.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
@@ -260,6 +261,14 @@ export interface RuntimeOptions {
    * folder). Absent: the built-in experts only (tests, evals). Project plugins are not loaded.
    */
   languages?: { home?: string };
+  /**
+   * The project's own settings (review, 2026-10): the parts that loosen safety (executor host,
+   * allow rules, sandbox.writePaths, env.allow, web.allowLocalhost) apply only after the user's yes,
+   * which can be pinned in `home`/.garuda/trust.json. `ask`: put the question at startup (the CLI,
+   * with a terminal). Absent: nothing is pinned and nobody is asked, so those parts stay off (tests,
+   * -p from a pipe). Not used when `settings` is given (evals, jobs: they decide themselves).
+   */
+  projectSettings?: { home?: string; ask?: boolean };
 }
 
 /** The output of a `!command` that goes to the model with the next message is cut here (0.6). */
@@ -588,7 +597,7 @@ export class Runtime {
     // A new object: the loaded settings may be the shared DEFAULT_SETTINGS, or the caller's own
     // object. Changing either in place gave every later runtime in the process the policy's limits.
     const settings = withPolicyLimits(
-      options.settings ?? (await loadSettings(options.root)),
+      options.settings ?? (await gatedProjectSettings(options)),
       policy,
     );
     const auditLogger = new AuditLogger(options.audit?.dir ?? options.root, {
@@ -1997,4 +2006,21 @@ function lastAssistantText(messages: readonly Message[]): string {
 /** `{ test }` when there is a test command (exactOptionalPropertyTypes). */
 function testOption(test: string | undefined): { test?: string } {
   return test === undefined ? {} : { test };
+}
+
+/** The project's settings file, with the parts that loosen safety only when approved. */
+async function gatedProjectSettings(options: RuntimeOptions): Promise<Settings> {
+  const loaded = await loadSettings(options.root);
+  const home = options.projectSettings?.home;
+  const gate = await gateProjectSettings({
+    root: options.root,
+    settings: loaded,
+    trust: home === undefined ? undefined : await TrustStore.open(home),
+    ask:
+      options.projectSettings?.ask === true
+        ? (request) => options.approver.ask(request, new AbortController().signal)
+        : undefined,
+  });
+  if (gate.notice !== undefined) options.onNotice?.(gate.notice);
+  return gate.settings;
 }

@@ -153,6 +153,15 @@ A tool's `CallInfo` may carry a `title` (0.5): the engine passes it to the appro
 
 A missing file gives the defaults; a broken file is an error that names the file.
 
+Project settings consent (`projectSettings.ts`, review 2026-10): `settingsRisk` lists the parts that
+loosen safety (executor host, allow rules, `sandbox.writePaths`, `env.allow`, `web.allowLocalhost`);
+`gateProjectSettings` applies them when their hash is pinned in `trust.json` (`settings`, per root) or
+the user says yes at startup (`RuntimeOptions.projectSettings.ask`; "remember" pins), and otherwise
+returns `withoutRisk(settings)` and a notice. `Runtime.create` gates the loaded file (not
+`options.settings`: evals and jobs pass their own); without `projectSettings` nothing is pinned and
+nobody is asked. Allow rules match command parts as written (`commandParts(command, false)`); deny
+rules and the team policy still strip `sudo`, `env`, `exec`, `command` and `VAR=value`.
+
 `moe` and `daemons` (0.14–0.17) are off by default, like every feature with no measured gain.
 `subagents.enabled` does not turn MoE on.
 

@@ -51,7 +51,9 @@ export function ruleMatches(
   if (target.kind === "url") return hostMatches(rule.pattern, target.host);
 
   if (rule.exact) return normalize(target.command) === normalize(rule.pattern);
-  const parts = commandParts(target.command);
+  // An allow rule matches the command as written: `NODE_OPTIONS=… pnpm test` or `sudo pnpm test` is
+  // not `pnpm test` (review finding). A deny rule still looks through the prefixes, to catch more.
+  const parts = commandParts(target.command, mode === "deny");
   if (parts.length === 0) return false;
   const hit = (part: string) => commandMatches(rule.pattern ?? "", part);
   return mode === "allow" ? parts.every(hit) : parts.some(hit) || hit(target.command);
@@ -103,10 +105,11 @@ export function commandMatches(pattern: string, command: string): boolean {
 /**
  * Split a shell command into simple commands, outside quotes:
  * at ; & && | || newlines, $( ) and backticks. Leading `sudo`, `env` and
- * VAR=value words are removed, so `sudo rm -rf x` still matches `rm -rf*`.
+ * VAR=value words are removed, so `sudo rm -rf x` still matches `rm -rf*` (deny rules and the team
+ * policy; allow rules keep them, with `stripPrefixesToo` false).
  * This is a guard for rules, not a full shell parser. Approval remains the main control.
  */
-export function commandParts(command: string): string[] {
+export function commandParts(command: string, stripPrefixesToo = true): string[] {
   const parts: string[] = [];
   let current = "";
   let quote: "'" | '"' | undefined;
@@ -134,7 +137,9 @@ export function commandParts(command: string): string[] {
     } else current += c;
   }
   parts.push(current);
-  return parts.map(stripPrefixes).filter((part) => part !== "");
+  return parts
+    .map((part) => (stripPrefixesToo ? stripPrefixes(part) : normalize(part)))
+    .filter((part) => part !== "");
 }
 
 function stripPrefixes(part: string): string {
