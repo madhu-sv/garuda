@@ -1,0 +1,33 @@
+---
+// Starlight's Markdown frame, plus the Mermaid diagrams of the design docs. Mermaid loads only on a
+// page that has a diagram, and draws again when the reader switches between light and dark.
+import Default from "@astrojs/starlight/components/MarkdownContent.astro";
+---
+<Default><slot /></Default>
+
+<script>
+  const blocks = [...document.querySelectorAll<HTMLElement>("pre.mermaid")];
+  if (blocks.length > 0) {
+    for (const block of blocks) block.dataset.source = block.textContent ?? "";
+    const { default: mermaid } = await import("mermaid");
+    const draw = async () => {
+      const dark = document.documentElement.dataset.theme === "dark";
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: dark ? "dark" : "neutral",
+        securityLevel: "strict",
+        fontFamily: "Inter Variable, system-ui, sans-serif",
+      });
+      for (const block of blocks) {
+        block.removeAttribute("data-processed");
+        block.textContent = block.dataset.source ?? "";
+      }
+      await mermaid.run({ nodes: blocks });
+    };
+    await draw();
+    new MutationObserver(() => void draw()).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+  }
+</script>

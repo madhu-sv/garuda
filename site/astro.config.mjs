@@ -19,6 +19,7 @@ export default defineConfig({
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/madhu-sv/garuda" }],
       editLink: { baseUrl: "https://github.com/madhu-sv/garuda/edit/main/site/" },
       lastUpdated: false,
+      components: { MarkdownContent: "./src/components/MarkdownContent.astro" },
       customCss: [
         "@fontsource-variable/inter",
         "@fontsource-variable/newsreader",

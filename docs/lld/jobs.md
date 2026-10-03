@@ -12,21 +12,21 @@ the user's checkout never changes, and a report says what happened.
 sequenceDiagram
   participant U as User (chat)
   participant RT as Runtime
-  participant J as .garuda/jobs/<id>.json
-  participant R as garuda run <id>
-  participant W as worktree (garuda/job-<id>)
+  participant J as .garuda/jobs/#lt;id#gt;.json
+  participant R as garuda run #lt;id#gt;
+  participant W as worktree (garuda/job-#lt;id#gt;)
   U->>RT: plan-mode turn ends (done): lastPlan
   U->>RT: /schedule [HH:MM]
-  RT->>RT: base commit, ```permissions rules, links
+  RT->>RT: base commit, the rules of the permissions block, links
   RT->>U: one question (the rules, the base, the branch)
   RT->>J: job (status scheduled)
-  U->>R: garuda run <id> [--at 01:00]
+  U->>R: garuda run #lt;id#gt; [--at 01:00]
   R->>R: wait until HH:MM (optional)
-  R->>W: git worktree add -b garuda/job-<id> <base>; link node_modules …
+  R->>W: git worktree add -b garuda/job-#lt;id#gt; #lt;base#gt;, link node_modules …
   R->>R: Runtime in the worktree: job rules, unattended engine, approver "deny"
   R->>R: one turn (the job prompt)
-  R->>W: commit (no hooks; no links, no Garuda files)
-  R->>J: result, status; <id>.md report; notification
+  R->>W: commit (no hooks, no links, no Garuda files)
+  R->>J: result, status, #lt;id#gt;.md report, notification
 ```
 
 ## Files

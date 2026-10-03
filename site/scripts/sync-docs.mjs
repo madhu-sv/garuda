@@ -32,7 +32,7 @@ for (const [source, target] of pages) {
   const title = (at >= 0 ? lines[at].slice(2).trim() : posix.basename(target)).replaceAll("`", "");
   if (at >= 0) lines.splice(at, 1);
   // README.md starts with the CI badge; the site shows its own header.
-  const body = rewriteLinks(lines.join("\n"), source)
+  const body = mermaidBlocks(rewriteLinks(lines.join("\n"), source))
     .replace(/^\[!\[CI\]\([^)]*\)\]\([^)]*\)\n+/m, "")
     .trimStart();
   const front = [
@@ -50,6 +50,19 @@ for (const [source, target] of pages) {
   writeFileSync(file, `${front}${body}`);
 }
 console.log(`sync-docs: ${pages.size} pages`);
+
+/**
+ * A ```mermaid block becomes <pre class="mermaid"> (raw HTML), so the code highlighter leaves it
+ * alone and the browser draws it (src/components/MarkdownContent.astro). Without JavaScript the
+ * reader still sees the diagram's source.
+ */
+function mermaidBlocks(text) {
+  const html = (s) => s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return text.replace(
+    /^```mermaid\n([\s\S]*?)^```[ \t]*$/gm,
+    (_all, source) => `<pre class="mermaid">\n${html(source.trimEnd())}\n</pre>`,
+  );
+}
 
 /** Rewrite relative Markdown links `](path)` of one source file. */
 function rewriteLinks(text, source) {
