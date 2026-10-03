@@ -17,7 +17,7 @@ import {
 } from "./config.js";
 import { connectHttp } from "./http.js";
 import { type AuthStore, authKey } from "./oauth.js";
-import { cleanText } from "./sanitize.js";
+import { cleanLine, cleanText } from "./sanitize.js";
 import { perToolHashes, type ToolChanges, toGarudaTools, toolChanges, toolsHash } from "./tools.js";
 import { ProcessTransport } from "./transport.js";
 import { type TrustStore, USER_SCOPE } from "./trust.js";
@@ -311,7 +311,7 @@ export class McpManager {
           ? `This project wants to connect to MCP server "${name}" (from ${file}).`
           : `MCP server "${name}" in ${file} changed since you allowed it.`,
         "It is a remote server:",
-        `  URL: ${cleanText(def.url)}`,
+        `  URL: ${cleanLine(def.url)}`,
         "  Garuda connects from its own process (not the sandbox), only to public addresses.",
         "  ! The server gets the arguments of every call to its tools: that data leaves this machine.",
         "  ! It may ask you to sign in; then it acts with your account.",
@@ -328,19 +328,22 @@ export class McpManager {
     }
     const envNames = Object.entries(def.env).map(([k, v]) => {
       const refs = [...v.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)].map((m) => `$${m[1]}`);
-      return refs.length > 0 ? `${k} (from ${refs.join(", ")})` : `${k} (a fixed value)`;
+      const key = cleanLine(k);
+      return refs.length > 0 ? `${key} (from ${refs.join(", ")})` : `${key} (a fixed value)`;
     });
     const lines = [
       previous === undefined
         ? `This project wants to start MCP server "${name}" (from ${file}).`
         : `MCP server "${name}" in ${file} changed since you allowed it.`,
       "It runs this program:",
-      `  $ ${commandLine(def)}`,
+      `  $ ${cleanLine(commandLine(def))}`,
       isolation === "none"
         ? "  Sandbox: NONE. It runs as you, with full access to your files."
         : `  Sandbox: ${this.options.executor.name}. It can read your files (not ~/.ssh and other secrets) and write only in this project and temp folders.`,
       `  Network: ${def.network ? "YES" : "no"}`,
-      ...(def.writePaths.length > 0 ? [`  Extra write paths: ${def.writePaths.join(", ")}`] : []),
+      ...(def.writePaths.length > 0
+        ? [`  Extra write paths: ${def.writePaths.map(cleanLine).join(", ")}`]
+        : []),
       `  Environment: ${envNames.length > 0 ? envNames.join(", ") : "only the normal variables"}`,
       ...warnings({ ...config, def }, isolation === "none").map((w) => `  ! ${w}`),
       "Allow it only if you trust this project.",

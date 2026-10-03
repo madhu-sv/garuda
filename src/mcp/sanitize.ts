@@ -25,6 +25,15 @@ export function cleanText(text: string): string {
 }
 
 /** Keep the start and the end of a long text, with a note in the middle. */
+/**
+ * One line for a consent prompt (0.14, review): clean, then turn any newline or tab into a space,
+ * so a value from a project's mcp.json cannot add fake lines (a spoofed "Network: no") to the
+ * screen that is the only gate before a project server runs.
+ */
+export function cleanLine(text: string): string {
+  return cleanText(text).replace(/\s+/g, " ").trim();
+}
+
 export function capText(text: string, max: number): string {
   if (text.length <= max) return text;
   const head = Math.floor(max * 0.7);

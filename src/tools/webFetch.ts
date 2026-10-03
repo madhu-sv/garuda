@@ -125,7 +125,9 @@ export function pageText(page: Page, start: number, maxChars: number): string {
   const text = cleanText(page.text);
   const part = text.slice(start, start + maxChars);
   const end = start + part.length;
-  const attr = (v: string) => cleanText(v).replaceAll('"', "'").slice(0, 300);
+  // neutralizeTags too (review): a page <title> is entity-decoded, so it could hold literal
+  // </web_result> or <garuda_note> and fake the result boundary; webSearch already does this.
+  const attr = (v: string) => neutralizeTags(cleanText(v)).replaceAll('"', "'").slice(0, 300);
   const head = [
     `<web_result url="${attr(page.url)}" type="${attr(page.contentType)}"${page.title ? ` title="${attr(page.title)}"` : ""}>`,
     `[characters ${start}–${end} of ${text.length}]`,

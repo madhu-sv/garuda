@@ -63,7 +63,9 @@ sequenceDiagram
   `text/xml`, JSON, XML, XHTML, RSS, Atom (or none). Others: error.
 - HTML: remove comments and `script`, `style`, `noscript`, `template`, `iframe`, `svg`, `canvas`, `nav`,
   `footer`, `aside`, `form`, `button`, `select`, `object`, `embed`; then node-html-markdown (loaded with
-  `import()`). The title is taken from `<title>` with entities decoded.
+  `import()`). The title is taken from `<title>` with entities decoded; in the output header it is
+  cleaned and tag-neutralized (0.14, review), so a title holding `</web_result>` cannot fake the
+  boundary.
 
 ## Tool (`web_fetch`)
 
@@ -77,8 +79,9 @@ Input: `url`, `start` (character offset, default 0), `max_chars` (1 000–100 00
   `web_fetch(docs.python.org)`, `web_fetch(*.github.com)`.
 - A redirect to another host calls `permissions.check` for that host, with the preview "a redirect from …".
 - Cache: 10 minutes per URL, so paging with `start` does not fetch again.
-- Output: `<web_result url=… type=… title=…>`, `[characters a–b of n]`, the cleaned text part (tags
-  neutralized), `[More: call web_fetch again with start=b]` when more is left, `</web_result>`.
+- Output: `<web_result url=… type=… title=…>` (url, type and title cleaned and tag-neutralized),
+  `[characters a–b of n]`, the cleaned text part (tags neutralized), `[More: call web_fetch again with
+  start=b]` when more is left, `</web_result>`.
 
 ## Settings
 

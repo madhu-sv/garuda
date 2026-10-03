@@ -20,7 +20,7 @@ import {
   type StdioDef,
 } from "../src/mcp/config.js";
 import { McpManager, warnings } from "../src/mcp/manager.js";
-import { capText, cleanText } from "../src/mcp/sanitize.js";
+import { capText, cleanLine, cleanText } from "../src/mcp/sanitize.js";
 import { mcpToolName, resultText, toGarudaTools } from "../src/mcp/tools.js";
 import { TrustStore } from "../src/mcp/trust.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
@@ -175,6 +175,14 @@ describe("MCP text from servers is cleaned", () => {
     expect(capText("a".repeat(100), 20)).toMatch(
       /^a{14}\n\[… 80 characters cut by Garuda …\]\na{6}$/,
     );
+  });
+
+  it("cleanLine keeps a consent field on one line, so mcp.json cannot add fake lines (review)", () => {
+    expect(cleanLine("safe\n  Network: no\n  Environment: none")).toBe(
+      "safe Network: no Environment: none",
+    );
+    expect(cleanLine("\u001b[2K\r  $ innocent")).toBe("$ innocent");
+    expect(cleanLine("one\ttwo")).toBe("one two");
   });
 
   it("makes prefixed tools, drops $schema, and never marks them read-only", () => {

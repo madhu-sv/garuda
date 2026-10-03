@@ -16,7 +16,7 @@ import {
   GarudaOAuthProvider,
   waitForCallback,
 } from "./oauth.js";
-import { cleanText } from "./sanitize.js";
+import { cleanLine, cleanText } from "./sanitize.js";
 
 /**
  * Connect to a remote MCP server over Streamable HTTP (0.4). When the server answers 401, the SDK
@@ -143,7 +143,7 @@ function signInQuestion(
     tool: "mcp",
     target: { kind: "input", json: JSON.stringify({ server: config.name }) },
     preview: [
-      `MCP server "${config.name}" (${config.def.url}) asks you to sign in.`,
+      `MCP server "${config.name}" (${cleanLine(config.def.url)}) asks you to sign in.`,
       `Garuda opens your browser at ${authUrl.origin}. After the sign-in, the browser returns to`,
       `${redirect}. The tokens stay in ~/.garuda/mcp-auth.json (only you can read it).`,
     ].join("\n"),

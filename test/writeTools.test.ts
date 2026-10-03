@@ -132,6 +132,22 @@ describe("edit_file (F11)", () => {
     expect(many.content).toMatch(/occurs 3 times/);
   });
 
+  it("refuses a file that is not valid UTF-8, leaving the bytes unchanged (review)", async () => {
+    const { approver, call } = session();
+    const bytes = Buffer.from("caf\xe9 au lait\nhello\n", "latin1");
+    writeFileSync(join(repo.root, "latin1.txt"), bytes);
+    await call("read_file", { path: "latin1.txt" });
+    const r = await call("edit_file", {
+      path: "latin1.txt",
+      old_string: "hello",
+      new_string: "bye",
+    });
+    expect(r.isError).toBe(true);
+    expect(r.content).toMatch(/not valid UTF-8/);
+    expect(approver.requests).toEqual([]);
+    expect(readFileSync(join(repo.root, "latin1.txt")).equals(bytes)).toBe(true);
+  });
+
   it("keeps $ patterns in new_string literal", async () => {
     const { call } = session();
     writeFileSync(join(repo.root, "dollar.txt"), "price = X\n");

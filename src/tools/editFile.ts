@@ -106,7 +106,17 @@ async function plan(args: Input, { root, files }: ToolContext): Promise<PlannedE
     throw new Error(`${shown} changed after your last read. Read it again, then retry the edit.`);
   }
 
-  const before = buffer.toString("utf8");
+  // Refuse a file that is not valid UTF-8 (review): toString("utf8") turns each bad byte into
+  // U+FFFD, and writing the whole string back would corrupt a Latin-1 or binary file silently,
+  // because the diff shows only the already-decoded text.
+  let before: string;
+  try {
+    before = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    throw new Error(
+      `${shown} is not valid UTF-8 text. Edit it with a bash command, or convert it to UTF-8 first.`,
+    );
+  }
   const count = countOccurrences(before, args.old_string);
   if (count === 0) {
     throw new Error(`old_string was not found in ${shown}. Check spaces and indentation.`);

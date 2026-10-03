@@ -61,6 +61,9 @@ flowchart TD
   `def = sha256(command, args, sorted env, network, writePaths)` and, after connect, `tools` (whole list)
   and `toolHashes` (per tool: `descriptionHash:schemaHash`). Old entries get `toolHashes` added when the
   list is unchanged.
+- The consent fields that come from the project's mcp.json (the command, write paths, env names, the
+  URL) pass `cleanLine` (0.14, review): cleaned and collapsed to one line, so a newline or escape in a
+  value cannot add a fake line (a spoofed "Network: no") to the consent screen.
 - Warnings in the consent: no OS sandbox; `npx`/`uvx`/`dlx` (runs a downloaded package: pin a version);
   shell `-c`, curl, wget, pipes into a shell; sudo, `rm -rf`; network; env names with KEY, TOKEN, SECRET,
   PASS or CRED.
@@ -125,7 +128,9 @@ closes them, so a planned stop gives no notice; the servers show as `stopped`.
 | Result | text blocks; images/audio as a note; resource links as URIs; embedded text; structured content as JSON when there is no text. Cleaned, max 30 000 chars, wrapped in `<mcp_result server=… tool=…>`; `isError` from the server |
 
 `neutralizeTags` turns `<mcp_result`, `</mcp_result`, `<web_result`, `<garuda_note` in server text into
-harmless forms, so a server cannot close the wrapper or pose as Garuda.
+harmless forms, so a server cannot close the wrapper or pose as Garuda. `cleanLine` (0.14) is
+`cleanText` with every whitespace run collapsed to one space, for a consent field that must stay on
+one line.
 
 ## Calls and status
 
