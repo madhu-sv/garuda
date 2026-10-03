@@ -85,6 +85,10 @@ describe("read_file (F9)", () => {
     expect((await call("read_file", { path: "README.md", offset: 99 })).content).toMatch(
       /past the end/,
     );
+    // The same failed call again: still the error, not "unchanged since your last read" (0.14.1).
+    expect((await call("read_file", { path: "README.md", offset: 99 })).content).toMatch(
+      /past the end/,
+    );
   });
 
   it("refuses paths outside the root (F15)", async () => {

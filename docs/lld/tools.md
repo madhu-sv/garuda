@@ -54,9 +54,9 @@ treats it as read-only.
 
 | Tool | Read-only | Target | Behaviour and limits |
 | --- | --- | --- | --- |
-| `read_file` (F9) | yes | path | Numbered lines (`cat -n`), `offset` and `limit` (max 2000 lines), lines cut at 2000 chars, output ≤ 50 000 chars, files ≤ 10 MB, no binaries, no folders. Records the file for `edit_file`. Read deduplication: the same offset/limit on an unchanged file returns a short note instead of the lines. |
+| `read_file` (F9) | yes | path | Numbered lines (`cat -n`), `offset` and `limit` (max 2000 lines), lines cut at 2000 chars, output ≤ 50 000 chars, files ≤ 10 MB, no binaries, no folders. Records the file for `edit_file`. Read deduplication: the same offset/limit on an unchanged file returns a short note instead of the lines (checked after the offset, so a failed read does not count; 0.14.1). |
 | `glob` (F12) | yes | – | globby, respects `.gitignore`, skips `.git/`, does not follow symlinks, newest first, at most 200 paths. Absolute patterns and `..` are refused. Files that the team policy denies (`denyPaths`) are not listed (G04). |
-| `grep` (F13) | yes | – | JavaScript regex, written in TypeScript (no ripgrep binary). Modes `files`, `content`, `count`; `glob`, `ignoreCase`, `context` (0–5). Skips binary files, files > 1 MB and sensitive files. Default 100 results, max 500. Files that the team policy denies (`denyPaths`) are not searched (G04). |
+| `grep` (F13) | yes | – | JavaScript regex, written in TypeScript (no ripgrep binary). The match runs in a worker thread (`regexWorker.ts`, 0.14.1, review): a pattern that backtracks badly cannot block Garuda; Ctrl-C ends it, and one file may take at most 10 s. Modes `files`, `content`, `count`; `glob`, `ignoreCase`, `context` (0–5). Skips binary files, files > 1 MB and sensitive files. Default 100 results, max 500. Files that the team policy denies (`denyPaths`) are not searched (G04). |
 | `write_file` (F10) | no | path | Create only (fails if the file exists), folders created, atomic (temp file + hard link). Approval shows the diff. With LSP on, the result adds the errors of the new file (see [lsp.md](lsp.md)). |
 | `edit_file` (F11, UTF-8 only: a file that is not valid UTF-8 is refused, 0.14) | no | path | Replace one exact `old_string`. Fails on 0 or several matches, and when the file is unread or changed since the last read. The edit is planned before approval (real diff) and planned again after it. Atomic write that keeps the file mode and follows symlinks. With LSP on, the result adds the errors of the changed file. Partial approval (U0): `describe` sets `hunks: true` when the preview is complete; with `context.approvedHunks` it writes only those hunks (`applyHunks`), refuses when the change differs from the reviewed preview, and names the rejected hunks in the result. |
 | `bash` (F14) | no | command | Runs through the Executor; timeout default 120 s, max 600 s; stdout and stderr capped at 30 000 bytes each (middle cut). Strips a leading `cd <root> &&`. Hints: read-only commands (use file tools), pipes into head/tail, sandbox blocks. `outside_sandbox: true` runs with no isolation and always asks. `is_daemon: true` (0.14, only with `daemons.enabled`) starts a background daemon and returns at once with its `daemonId`. Without the setting the parameter is not in the schema, and a call with it fails. |
@@ -79,7 +79,8 @@ treats it as read-only.
 `readOnlyTools(codeIndex)` gives the tool set of a subagent.
 
 Helpers: `limits.ts` (`LIMITS`, `cutLine`, `joinWithinLimit`, `looksBinary`), `files.ts` (`listFiles`,
-`assertSafePattern`), `diff.ts` (unified diff for previews), `atomicWrite.ts`.
+`assertSafePattern`), `diff.ts` (unified diff for previews), `atomicWrite.ts` (the temp file gets the
+target's mode when it is created, so a private file's new content is never readable by others; 0.14.1).
 
 ## Paths
 

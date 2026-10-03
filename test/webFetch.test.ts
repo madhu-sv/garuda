@@ -9,7 +9,12 @@ import { parseSettings } from "../src/permissions/settings.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../src/permissions/types.js";
 import { FileTracker } from "../src/session/fileTracker.js";
 import { ToolRegistry } from "../src/tools/registry.js";
-import { createWebFetchTool, isUnusualUrl, pageText } from "../src/tools/webFetch.js";
+import {
+  CACHE_MAX_PAGES,
+  createWebFetchTool,
+  isUnusualUrl,
+  pageText,
+} from "../src/tools/webFetch.js";
 import { checkUrl, decodeEntities, fetchPage, htmlToMarkdown } from "../src/web/fetch.js";
 import { toolContext } from "./helpers.js";
 
@@ -191,6 +196,28 @@ describe("web_fetch rules and output", () => {
   it("marks long URLs and long tokens as unusual", () => {
     expect(isUnusualUrl(new URL("https://docs.python.org/3/library/os.html"))).toBe(false);
     expect(isUnusualUrl(new URL(`https://x.io/?d=${"A".repeat(80)}`))).toBe(true);
+    // The host name can carry data too (0.14.1, review): an allow rule for *.example.com does not
+    // cover a long label or a very long host.
+    expect(isUnusualUrl(new URL(`https://${"ab12".repeat(10)}.example.com/`))).toBe(true);
+    expect(isUnusualUrl(new URL(`https://${"a.".repeat(51)}example.com/`))).toBe(true);
+    expect(isUnusualUrl(new URL("https://my-app-feature.vercel.app/"))).toBe(false);
+  });
+
+  it("keeps at most CACHE_MAX_PAGES pages in the cache (0.14.1, review)", async () => {
+    hits = [];
+    const registry = new ToolRegistry([createWebFetchTool(local)]);
+    const context = toolContext("/tmp");
+    const fetchOnce = (i: number) =>
+      registry.execute(
+        { type: "tool_use", id: `c${i}`, name: "web_fetch", input: { url: `${base}/page?i=${i}` } },
+        context,
+      );
+    await fetchOnce(0);
+    await fetchOnce(0);
+    expect(hits.filter((h) => h === "/page?i=0")).toHaveLength(1); // the second came from the cache
+    for (let i = 1; i <= CACHE_MAX_PAGES; i++) await fetchOnce(i);
+    await fetchOnce(0); // the oldest page was dropped: fetched again
+    expect(hits.filter((h) => h === "/page?i=0")).toHaveLength(2);
   });
 
   it("gives pages in parts, and page text cannot close the wrapper", () => {

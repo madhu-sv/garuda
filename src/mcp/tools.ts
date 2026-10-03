@@ -103,7 +103,11 @@ export function toGarudaTools(
       problems.push(`tool "${label}" is left out: its name clashes with another tool`);
       continue;
     }
-    const schema = cleanJson(tool.inputSchema ?? { type: "object" }) as Record<string, unknown>;
+    // Schema text reaches the model too: no Garuda markers in it (0.14.1, review).
+    const schema = neutralizeJson(cleanJson(tool.inputSchema ?? { type: "object" })) as Record<
+      string,
+      unknown
+    >;
     delete schema.$schema;
     if (schema.type !== "object") {
       problems.push(`tool "${label}" is left out: its input schema is not an object`);
@@ -201,4 +205,16 @@ export function resultText(server: string, tool: string, result: CallToolResult)
   const body = neutralizeTags(capText(cleanText(parts.join("\n")), MAX_RESULT_CHARS));
   const label = cleanText(tool).replaceAll('"', "'");
   return `<mcp_result server="${server}" tool="${label}">\n${body}\n</mcp_result>`;
+}
+
+/** Every string of a JSON value with Garuda's markers neutralized (keys stay as they are). */
+function neutralizeJson(value: unknown): unknown {
+  if (typeof value === "string") return neutralizeTags(value);
+  if (Array.isArray(value)) return value.map(neutralizeJson);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, neutralizeJson(v)]),
+    );
+  }
+  return value;
 }

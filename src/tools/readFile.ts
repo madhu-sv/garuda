@@ -53,14 +53,15 @@ export const readFileTool: Tool<z.infer<typeof input>> = {
     if (looksBinary(buffer)) throw new Error(`${shown} is a binary file.`);
     // edit_file needs this record (F11). A partial read still counts: the edit checks the whole file.
     files.record(absolute, buffer);
-    if (files.noteRead(absolute, buffer, offset, limit)) {
-      return `[${shown}: these lines are unchanged since your last read_file with the same offset and limit. Use that output; it is still in the conversation.]`;
-    }
-
     const lines = splitLines(buffer.toString("utf8"));
     if (buffer.length === 0) return `${shown} is empty.`;
+    // Check the offset before the read counts: a failed read gave no output to point back to
+    // (0.14.1, review).
     if (offset > lines.length) {
       throw new Error(`${shown} has ${lines.length} lines. Offset ${offset} is past the end.`);
+    }
+    if (files.noteRead(absolute, buffer, offset, limit)) {
+      return `[${shown}: these lines are unchanged since your last read_file with the same offset and limit. Use that output; it is still in the conversation.]`;
     }
 
     const slice = lines.slice(offset - 1, offset - 1 + limit);

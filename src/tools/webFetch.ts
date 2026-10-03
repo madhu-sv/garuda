@@ -37,10 +37,23 @@ export interface WebFetchOptions {
   resolve?: FetchOptions["resolve"];
 }
 
-/** True for a URL that could carry data out: very long, or with a long opaque token. */
+/**
+ * True for a URL that could carry data out: very long, with a long opaque token in the path or
+ * query, or (0.14.1, review) in the host name: a host label of 32 characters or more, or a host
+ * name over 100 characters. An allow rule for `*.example.com` does not cover such a URL.
+ */
 export function isUnusualUrl(url: URL): boolean {
-  return url.toString().length > 300 || /[A-Za-z0-9+/_=-]{64,}/.test(url.pathname + url.search);
+  const host = url.hostname;
+  return (
+    url.toString().length > 300 ||
+    /[A-Za-z0-9+/_=-]{64,}/.test(url.pathname + url.search) ||
+    host.length > 100 ||
+    host.split(".").some((label) => label.length >= 32)
+  );
 }
+
+/** At most this many pages stay in the web_fetch cache (0.14.1, review: it never evicted). */
+export const CACHE_MAX_PAGES = 50;
 
 export function createWebFetchTool(options: WebFetchOptions = {}): Tool<Input, string> {
   const allowLocalhost = options.allowLocalhost ?? false;
@@ -113,7 +126,16 @@ export function createWebFetchTool(options: WebFetchOptions = {}): Tool<Input, s
           if (context.signal.aborted) throw error;
           throw new FetchError(`Could not fetch the page: ${(error as Error).message}`);
         }
-        cache.set(key, { page, at: Date.now() });
+        // Drop expired pages, then the oldest ones above the cap (a Map keeps insertion order).
+        const now = Date.now();
+        for (const [k, v] of cache) if (now - v.at >= CACHE_MS) cache.delete(k);
+        cache.delete(key);
+        while (cache.size >= CACHE_MAX_PAGES) {
+          const oldest = cache.keys().next().value;
+          if (oldest === undefined) break;
+          cache.delete(oldest);
+        }
+        cache.set(key, { page, at: now });
       }
       return pageText(page, start, max_chars);
     },

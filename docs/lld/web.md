@@ -72,13 +72,15 @@ sequenceDiagram
 Input: `url`, `start` (character offset, default 0), `max_chars` (1 000–100 000, default 30 000).
 
 - `describe()`: `checkUrl`, then target `{ kind: "url", url, host: hostname }`. An unusual URL (longer than
-  300 characters, or with a token of 64 or more characters in the path or query) sets `alwaysAsk`: the
+  300 characters, with a token of 64 or more characters in the path or query, or since 0.14.1 a host
+  label of 32 or more characters or a host name over 100 characters) sets `alwaysAsk`: the
   engine then ignores allow and session rules. Preview: `GET <url>`, the original URL if it changed, and
   a warning for unusual URLs.
 - Approval per host: "Yes, allow <host> for this session" adds a host-exact session rule. Rules:
   `web_fetch(docs.python.org)`, `web_fetch(*.github.com)`.
 - A redirect to another host calls `permissions.check` for that host, with the preview "a redirect from …".
-- Cache: 10 minutes per URL, so paging with `start` does not fetch again.
+- Cache: 10 minutes per URL, so paging with `start` does not fetch again. At most `CACHE_MAX_PAGES`
+  (50) pages: expired pages go first, then the oldest (0.14.1, review: the cache never evicted).
 - Output: `<web_result url=… type=… title=…>` (url, type and title cleaned and tag-neutralized),
   `[characters a–b of n]`, the cleaned text part (tags neutralized), `[More: call web_fetch again with
   start=b]` when more is left, `</web_result>`.

@@ -21,7 +21,10 @@ export async function writeFileAtomic(
     dirname(target),
     `.${basename(target)}.garuda-${randomBytes(4).toString("hex")}.tmp`,
   );
-  await writeFile(temp, content, { flag: "wx" });
+  // The temp file gets the target's permissions from the start, so a private file's new content is
+  // never readable by others before the rename (0.14.1, review: chmod came after the write).
+  const mode = createOnly ? undefined : (await stat(target)).mode & 0o7777;
+  await writeFile(temp, content, { flag: "wx", ...(mode === undefined ? {} : { mode }) });
   try {
     if (createOnly) {
       try {
@@ -35,7 +38,8 @@ export async function writeFileAtomic(
         return;
       }
     } else {
-      await chmod(temp, (await stat(target)).mode & 0o7777);
+      // The umask may have narrowed the mode at creation: set it exactly.
+      await chmod(temp, mode ?? 0o644);
       await rename(temp, target);
       return;
     }

@@ -87,10 +87,11 @@ export async function connectHttp(
 
     // Sign in: ask, listen for the callback, open the browser, exchange the code.
     const authUrl = provider.authorizationUrl;
-    if (
-      authUrl.protocol !== "https:" &&
-      !(authUrl.protocol === "http:" && isLoopbackHost(authUrl.hostname))
-    ) {
+    // http only on this machine, and only for the user's own servers (0.14.1, review): a project
+    // server could point the browser at a local service, with the browser's cookies for it.
+    const loopbackOk =
+      config.source === "user" && authUrl.protocol === "http:" && isLoopbackHost(authUrl.hostname);
+    if (authUrl.protocol !== "https:" && !loopbackOk) {
       await client.close().catch(() => {});
       throw new Error(
         `the sign-in page is not https (${authUrl.protocol}); Garuda does not open it`,

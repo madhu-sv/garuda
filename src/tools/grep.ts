@@ -2,8 +2,10 @@ import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { z } from "zod";
 import { displayPath, isInside, resolveInRoot } from "../permissions/pathGuard.js";
 import { isSensitive } from "../permissions/sensitive.js";
+import type { PermissionGate } from "../permissions/types.js";
 import { isDirectory, listFiles } from "./files.js";
 import { cutLine, joinWithinLimit, LIMITS, looksBinary, splitLines } from "./limits.js";
+import { RegexMatcher } from "./regexWorker.js";
 import type { Tool } from "./types.js";
 
 /**
@@ -80,66 +82,13 @@ export const grepTool: Tool<Input, GrepOutput> = {
       throw new Error(`Invalid regular expression: ${(error as Error).message}`);
     }
 
-    const target = await resolveInRoot(root, args.path ?? ".");
-    const files = (await isDirectory(target))
-      ? await listFiles(target, args.glob ?? "**/*", root)
-      : [target];
-    files.sort();
-
-    const out: string[] = [];
-    let results = 0;
-    let truncated = false;
-    let searched = 0;
-    let realRoot: string | undefined;
-
-    for (const file of files) {
-      signal.throwIfAborted();
-      if (results >= max) {
-        truncated = true;
-        break;
-      }
-      // Sensitive files are never searched (F20). read_file with an allow rule can still read them.
-      // Team policy denyPaths (G04): neither the content nor the name of such a file is shown.
-      const shownPath = displayPath(root, file);
-      if (isSensitive(shownPath) || permissions.deniedByPolicy(shownPath)) continue;
-      // A symbolic link: the file it reaches must pass the same checks, and stay in the root.
-      if ((await lstat(file).catch(() => undefined))?.isSymbolicLink() === true) {
-        realRoot ??= await realpath(root);
-        const real = await realpath(file).catch(() => undefined);
-        if (real === undefined || !isInside(realRoot, real)) continue;
-        const realShown = displayPath(realRoot, real);
-        if (isSensitive(realShown) || permissions.deniedByPolicy(realShown)) continue;
-      }
-      const info = await stat(file).catch(() => undefined);
-      if (info === undefined || !info.isFile() || info.size > LIMITS.grepFileBytes) continue;
-      const buffer = await readFile(file);
-      if (looksBinary(buffer)) continue;
-      searched++;
-
-      const lines = splitLines(buffer.toString("utf8"));
-      const hits: number[] = [];
-      lines.forEach((line, i) => {
-        if (regex.test(line)) hits.push(i);
-      });
-      if (hits.length === 0) continue;
-
-      const shown = shownPath;
-      if (mode === "files") {
-        out.push(shown);
-        results++;
-      } else if (mode === "count") {
-        out.push(`${shown}:${hits.length}`);
-        results++;
-      } else {
-        const room = max - results;
-        if (hits.length > room) truncated = true;
-        const used = hits.slice(0, room);
-        out.push(...contentLines(shown, lines, used, context));
-        results += used.length;
-      }
+    // The match runs in a worker, so a pattern that backtracks badly cannot block Garuda.
+    const matcher = new RegexMatcher(regex.source, regex.flags, signal);
+    try {
+      return await search(args, root, signal, permissions, matcher, mode, max, context);
+    } finally {
+      matcher.close();
     }
-
-    return { mode, lines: out, truncated, filesSearched: searched };
   },
 
   toText({ lines, truncated, filesSearched }) {
@@ -154,6 +103,75 @@ export const grepTool: Tool<Input, GrepOutput> = {
     return notes.length === 0 ? text : `${text}\n\n[${notes.join(" ")}]`;
   },
 };
+
+async function search(
+  args: Input,
+  root: string,
+  signal: AbortSignal,
+  permissions: PermissionGate,
+  matcher: RegexMatcher,
+  mode: GrepOutput["mode"],
+  max: number,
+  context: number,
+): Promise<GrepOutput> {
+  const target = await resolveInRoot(root, args.path ?? ".");
+  const files = (await isDirectory(target))
+    ? await listFiles(target, args.glob ?? "**/*", root)
+    : [target];
+  files.sort();
+
+  const out: string[] = [];
+  let results = 0;
+  let truncated = false;
+  let searched = 0;
+  let realRoot: string | undefined;
+
+  for (const file of files) {
+    signal.throwIfAborted();
+    if (results >= max) {
+      truncated = true;
+      break;
+    }
+    // Sensitive files are never searched (F20). read_file with an allow rule can still read them.
+    // Team policy denyPaths (G04): neither the content nor the name of such a file is shown.
+    const shownPath = displayPath(root, file);
+    if (isSensitive(shownPath) || permissions.deniedByPolicy(shownPath)) continue;
+    // A symbolic link: the file it reaches must pass the same checks, and stay in the root.
+    if ((await lstat(file).catch(() => undefined))?.isSymbolicLink() === true) {
+      realRoot ??= await realpath(root);
+      const real = await realpath(file).catch(() => undefined);
+      if (real === undefined || !isInside(realRoot, real)) continue;
+      const realShown = displayPath(realRoot, real);
+      if (isSensitive(realShown) || permissions.deniedByPolicy(realShown)) continue;
+    }
+    const info = await stat(file).catch(() => undefined);
+    if (info === undefined || !info.isFile() || info.size > LIMITS.grepFileBytes) continue;
+    const buffer = await readFile(file);
+    if (looksBinary(buffer)) continue;
+    searched++;
+
+    const lines = splitLines(buffer.toString("utf8"));
+    const hits = await matcher.match(lines, shownPath);
+    if (hits.length === 0) continue;
+
+    const shown = shownPath;
+    if (mode === "files") {
+      out.push(shown);
+      results++;
+    } else if (mode === "count") {
+      out.push(`${shown}:${hits.length}`);
+      results++;
+    } else {
+      const room = max - results;
+      if (hits.length > room) truncated = true;
+      const used = hits.slice(0, room);
+      out.push(...contentLines(shown, lines, used, context));
+      results += used.length;
+    }
+  }
+
+  return { mode, lines: out, truncated, filesSearched: searched };
+}
 
 /** path:line:text for matches, path-line-text for context, "--" between groups. */
 function contentLines(path: string, lines: string[], hits: number[], context: number): string[] {

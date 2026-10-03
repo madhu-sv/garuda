@@ -9,6 +9,7 @@ import {
   loadMcpConfig,
   type ServerConfig,
 } from "../src/mcp/config.js";
+import { connectHttp } from "../src/mcp/http.js";
 import { McpManager } from "../src/mcp/manager.js";
 import { AuthStore, authKey, waitForCallback } from "../src/mcp/oauth.js";
 import { TrustStore } from "../src/mcp/trust.js";
@@ -145,6 +146,32 @@ describe("remote MCP servers over Streamable HTTP (0.4)", () => {
     });
     await manager.close();
     await fixture.close();
+  });
+
+  it("a project server's sign-in page on http://127.0.0.1 is not opened (0.14.1, review)", async () => {
+    // Opening it would send the browser, with its cookies, to a service on this machine.
+    const fixture = await startHttpFixture({ oauth: true });
+    const approver = new Recorder(["once"]);
+    let opened = false;
+    await expect(
+      connectHttp(
+        remote("proj", fixture.url, "project"),
+        {
+          scope: "proj-root",
+          auth: await AuthStore.open(folder("home")),
+          approver,
+          executor: new HostExecutor(),
+          notify: () => {},
+          openBrowser: async () => {
+            opened = true;
+          },
+          connectTimeoutMs: 10_000,
+        },
+        signal(),
+      ),
+    ).rejects.toThrow(/sign-in page is not https/);
+    expect(approver.requests).toEqual([]);
+    expect(opened).toBe(false);
   });
 
   it("OAuth: asks, signs in through the browser with PKCE, keeps the tokens private, and reuses them", async () => {

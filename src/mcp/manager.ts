@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { resolve, sep } from "node:path";
 import { type CallToolResult, Client, type Tool as McpTool } from "@modelcontextprotocol/client";
 import { pinnedFetch } from "../net/pinnedFetch.js";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
@@ -86,7 +88,17 @@ export class McpManager {
     for (const config of configs) {
       if (signal.aborted) break;
       try {
-        tools.push(...(await this.startOne(config, signal)));
+        for (const tool of await this.startOne(config, signal)) {
+          // Two servers can map to the same tool name ("gh" + "create__pr" and "gh__create" +
+          // "pr"). The first one keeps it (0.14.1, review: the clash stopped every MCP start).
+          if (tools.some((t) => t.name === tool.name)) {
+            this.notify(
+              `MCP server "${config.name}": tool ${tool.name} is left out: another server has a tool with the same name.`,
+            );
+            continue;
+          }
+          tools.push(tool);
+        }
       } catch (error) {
         if (signal.aborted) throw error;
         const message = cleanText((error as Error).message).slice(0, 300);
@@ -345,7 +357,9 @@ export class McpManager {
         ? [`  Extra write paths: ${def.writePaths.map(cleanLine).join(", ")}`]
         : []),
       `  Environment: ${envNames.length > 0 ? envNames.join(", ") : "only the normal variables"}`,
-      ...warnings({ ...config, def }, isolation === "none").map((w) => `  ! ${w}`),
+      ...warnings({ ...config, def }, isolation === "none", this.options.root).map(
+        (w) => `  ! ${w}`,
+      ),
       "Allow it only if you trust this project.",
     ];
     return {
@@ -479,7 +493,11 @@ function changeSummary(changes: ToolChanges): string {
 }
 
 /** Patterns in a server command that deserve a warning in the consent prompt. */
-export function warnings(config: ServerConfig & { def: StdioDef }, noSandbox: boolean): string[] {
+export function warnings(
+  config: ServerConfig & { def: StdioDef },
+  noSandbox: boolean,
+  root?: string,
+): string[] {
   const { def } = config;
   const line = commandLine(def);
   const out: string[] = [];
@@ -495,9 +513,31 @@ export function warnings(config: ServerConfig & { def: StdioDef }, noSandbox: bo
   }
   if (/(^|\s)sudo(\s|$)|rm\s+-rf/.test(line)) out.push("It uses sudo or rm -rf.");
   if (def.network) out.push("It may send data over the network.");
-  const secret = Object.keys(def.env).filter((k) => /KEY|TOKEN|SECRET|PASS|CRED/i.test(k));
+  // The names of the variables, and the variables that their values take with ${NAME}
+  // (0.14.1, review: "CFG": "${ANTHROPIC_API_KEY}" gave no warning).
+  const referenced = Object.values(def.env).flatMap((value) =>
+    [...value.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)].map((m) => m[1] as string),
+  );
+  const secret = [...new Set([...Object.keys(def.env), ...referenced])].filter((k) =>
+    /KEY|TOKEN|SECRET|PASS|CRED/i.test(k),
+  );
   if (secret.length > 0) out.push(`It gets secrets: ${secret.join(", ")}.`);
+  // Write paths outside the project and the temp folders (0.14.1, review: "~" gave no warning).
+  if (root !== undefined) {
+    const outside = def.writePaths.filter((p) => writesOutside(p, root));
+    if (outside.length > 0) {
+      out.push(`It may write outside this project: ${outside.map(cleanLine).join(", ")}.`);
+    }
+  }
   return out;
+}
+
+/** True when a server's write path is outside the root and the temp folders. */
+function writesOutside(path: string, root: string): boolean {
+  if (path === "~" || path.startsWith("~/")) return true;
+  const absolute = resolve(root, path);
+  const inside = (folder: string) => absolute === folder || absolute.startsWith(`${folder}${sep}`);
+  return !inside(root) && !inside(tmpdir()) && !inside("/tmp") && !inside("/private/tmp");
 }
 
 async function listAllTools(client: Client): Promise<McpTool[]> {

@@ -165,6 +165,20 @@ describe("MCP config", () => {
     expect(w).toMatch(/network/);
     expect(w).toMatch(/secrets: API_TOKEN/);
   });
+
+  it("warns about a secret taken by ${NAME}, and about write paths outside the project (0.14.1)", () => {
+    const d = def({
+      env: { CFG: "${ANTHROPIC_API_KEY}" },
+      writePaths: ["~", "build", "/etc/x", "../other"],
+    });
+    const w = warnings(server("x", "project", d), false, "/work/repo").join("\n");
+    expect(w).toMatch(/secrets: CFG, ANTHROPIC_API_KEY|secrets: ANTHROPIC_API_KEY/);
+    expect(w).toMatch(/write outside this project: ~, \/etc\/x, \.\.\/other\./);
+    const inside = def({ writePaths: ["build", "/tmp/cache"] });
+    expect(warnings(server("x", "project", inside), false, "/work/repo").join("\n")).not.toMatch(
+      /outside/,
+    );
+  });
 });
 
 describe("MCP text from servers is cleaned", () => {
@@ -257,6 +271,23 @@ describe("MCP servers (stdio fixture)", () => {
     expect(big).toMatch(/^<mcp_result server="fix" tool="big">\nredx/);
     expect(big).toContain("characters cut by Garuda");
     expect(big.length).toBeLessThan(31_000);
+  });
+
+  it("two servers whose tool names clash: the first keeps the name, the start goes on (0.14.1)", async () => {
+    const { home, root } = dirs();
+    const { m, notes } = await manager(root, home, new ScriptedApprover([]));
+    const tools = await m.start(
+      [server("s", "user", def({ env: { MCP_FIXTURE_MODE: "clash" } })), server("s__x", "user")],
+      signal(),
+    );
+    const names = tools.map((t) => t.name);
+    expect(names.filter((n) => n === "mcp__s__x__echo")).toHaveLength(1);
+    expect(names).toContain("mcp__s__x__add");
+    expect(notes.join("\n")).toMatch(/tool mcp__s__x__echo is left out: another server/);
+    // The clashing tool's schema text has no Garuda markers (0.14.1, review).
+    const kept = tools.find((t) => t.name === "mcp__s__x__echo");
+    expect(JSON.stringify(kept?.jsonSchema)).not.toContain("</mcp_result>");
+    expect(JSON.stringify(kept?.jsonSchema)).not.toContain("<garuda_note>");
   });
 
   it("passes only declared env vars, filled from the environment", async () => {

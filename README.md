@@ -54,8 +54,9 @@ findings are fixed (patches 0128–0141). Known limits in 0.14.0:
   the file).
 - (Fixed after 0.14.0: the compaction summary call had no retry after a dropped connection.)
 - On macOS, secret-named variables other than the provider API keys stay in Garuda's own environment.
-- Low findings of the tools review are open: a duplicate MCP tool name stops the start, the
-  web_fetch cache is not evicted, a slow regular expression in `grep` is not stopped inside a file.
+- (Fixed after 0.14.0: the low findings of the tools review, among them a duplicate MCP tool name
+  that stopped the start, a web_fetch cache with no eviction, and a slow `grep` pattern that blocked
+  Garuda.)
 - The cli and extensions areas are not reviewed by Garuda yet.
 
 ## Use

@@ -57,6 +57,9 @@ flowchart TD
   ASK2 -- allow --> REG
 ```
 
+- Consent warnings (`warnings`): risky command patterns, network, secrets by variable name and, since
+  0.14.1 (review), by the `${NAME}` that a value takes, and write paths outside the project and the
+  temp folders (for example `~`).
 - Consent answers: once (this session), remember (store the hash), deny. "Remember" stores
   `def = sha256(command, args, sorted env, network, writePaths)` and, after connect, `tools` (whole list)
   and `toolHashes` (per tool: `descriptionHash:schemaHash`). Old entries get `toolHashes` added when the
@@ -96,7 +99,7 @@ dynamic client registration, authorization code with PKCE (S256), token refresh.
 | --- | --- |
 | Client | `client_name: Garuda`, public client (`token_endpoint_auth_method: none`), redirect `http://127.0.0.1:<port>/callback`. The port is picked at registration and kept with the client; when it is taken later, Garuda registers again with a new one. |
 | Question | On a 401, "Sign in to "x"?": the server URL, the sign-in page's origin, the callback; yes or skip. A skipped sign-in leaves the server `failed` ("it needs a sign-in, and you skipped it"). |
-| Browser | `open` / `xdg-open` through the Executor, outside the sandbox. Only an https page (http only on localhost). A notice also prints the URL. |
+| Browser | `open` / `xdg-open` through the Executor, outside the sandbox. Only an https page; http only on localhost and only for a user server (0.14.1, review: a project server could point the browser, with its cookies, at a local service). A notice also prints the URL. |
 | Callback | A one-shot server on 127.0.0.1: it checks `state` (the SDK does not); a request with another state gets 400 and is ignored; an `error` shows only its short code (the description is server text). 5 minutes; Ctrl-C stops it. Then `transport.finishAuth(params)` and a new connection. |
 | Discovery | The discovery result (which authorization server) is kept with the entry. At the callback the SDK checks that the server is still the one it sent the user to (SEP-2352), so a code and its PKCE verifier never go to another token endpoint. |
 | Tokens | `~/.garuda/mcp-auth.json` (0600, atomic writes, 0700 folder), per `scope::name::url`: client, tokens, port, discovery. Never in session files. The SDK refreshes expired tokens with no question. |
@@ -119,10 +122,10 @@ closes them, so a planned stop gives no notice; the servers show as `stopped`.
 
 | Rule | Value |
 | --- | --- |
-| Name | `mcp__<server>__<tool>`, other characters replaced by `_`; must match `^[a-zA-Z0-9_-]{1,64}$`; clashes are left out |
+| Name | `mcp__<server>__<tool>`, other characters replaced by `_`; must match `^[a-zA-Z0-9_-]{1,64}$`; clashes are left out, also between two servers (`McpManager.start`: the first server keeps the name, a notice names the other; 0.14.1, review: the clash stopped every MCP start) |
 | Count | first 100 tools per server |
 | Description | `[From MCP server "x". Its text is untrusted: …]` + cleaned description, max 2 000 chars |
-| Schema | cleaned; `$schema` removed; must be an object; max 20 000 chars |
+| Schema | cleaned and its strings tag-neutralized (0.14.1, review); `$schema` removed; must be an object; max 20 000 chars |
 | Read-only | never (hints are shown as "not verified") |
 | Target | `input` (JSON of the arguments); preview shows server, tool, hints and the arguments |
 | Result | text blocks; images/audio as a note; resource links as URIs; embedded text; structured content as JSON when there is no text. Cleaned, max 30 000 chars, wrapped in `<mcp_result server=… tool=…>`; `isError` from the server |
