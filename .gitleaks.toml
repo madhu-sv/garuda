@@ -1,0 +1,18 @@
+# gitleaks configuration (https://github.com/gitleaks/gitleaks).
+# The default rules apply. The allowlist names the fake secrets that the tests and one doc use on
+# purpose: the redactor and the audit log must remove them. Each entry is one exact value, so a real
+# secret in the same files is still found.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake secrets in tests (redaction and audit fixtures)"
+regexTarget = "secret"
+regexes = [
+  '''^gatewayliteral-5555555$''',
+  '''^m0_canary_secret_123456$''',
+  '''^sk-test-1234567890abcdef$''',
+  '''^abc123456789$''',
+  '''^tok_live_1234567890$''',
+  '''^AKIAABCDEFGHIJKLMNOP$''',
+]
