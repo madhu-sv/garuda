@@ -662,6 +662,7 @@ async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): 
 
   if (arg === "verify") {
     // Check each file's hash chain (merge gate): a changed, removed or inserted line shows here.
+    // Lines cut from the end of a file, or a removed file, do not (no anchor outside the file).
     const files = await runtime.audit.files();
     lines.push("", `Audit files: ${runtime.audit.dir}`);
     if (files.length === 0) lines.push("  none yet");
@@ -677,6 +678,7 @@ async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): 
       }
     }
     if (broken > 0) lines.push(`${broken} file(s) were changed after Garuda wrote them.`);
+    lines.push("This check cannot see lines cut from the end of a file, or a removed file.");
     renderer.info(lines.join("\n"));
     return;
   }

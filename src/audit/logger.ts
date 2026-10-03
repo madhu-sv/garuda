@@ -14,7 +14,8 @@ import { Redactor } from "../session/redact.js";
  *
  * Each line carries `seq`, `prev` (the hash of the line before; 64 zeros for the first) and `hash`
  * (sha256 of the line without `hash`). A changed, removed or inserted line breaks the chain, and
- * `verifyAuditFile` names the first broken line. This makes the log tamper-EVIDENT, not tamper-proof:
+ * `verifyAuditFile` names the first broken line. Not detected (0.14, review): lines cut from the end
+ * of a file, or a whole file removed; that needs an anchor outside the file. This makes the log tamper-EVIDENT, not tamper-proof:
  * someone who can write the file can also rewrite the whole chain.
  *
  * Targets and reasons go through the session redactor first, so tokens and keys never reach disk.
@@ -44,6 +45,8 @@ export type AuditDecision =
   | "deny_plan"
   | "deny_unattended"
   | "deny_user"
+  | "deny_hook"
+  | "hook"
   | "executed"
   | "error";
 
@@ -77,8 +80,13 @@ export interface AuditLoggerOptions {
    */
   mandatory?: boolean;
   onError?: (message: string) => void;
-  /** For the redactor. Default: this process's environment. */
+  /** For the redactor. Default: this process's environment and the provider keys moved out of it. */
   env?: NodeJS.ProcessEnv;
+}
+
+/** A write of the mandatory audit log failed (the team policy sets `audit.enabled: true`). */
+export class AuditWriteError extends Error {
+  override readonly name = "AuditWriteError";
 }
 
 /** sha256 over the line without its own hash. */
@@ -168,8 +176,10 @@ export class AuditLogger {
         mode: 0o600,
       });
     } catch (error) {
+      // The folder may have been removed: the next write creates it again (0.14, review).
+      this.dirCreated = false;
       const message = `The audit log could not be written (${this.filePath}): ${(error as Error).message}`;
-      if (this.mandatory) throw new Error(message);
+      if (this.mandatory) throw new AuditWriteError(message);
       if (!this.failed) {
         this.failed = true;
         this.onError?.(`${message}. Garuda goes on without it.`);
@@ -196,7 +206,7 @@ export class AuditLogger {
     tool: string;
     target?: CallTarget;
     readOnly?: boolean;
-    decision: { allowed: boolean; by?: string; reason?: string };
+    decision: { allowed: boolean; by?: string; reason?: string; kind?: "protected" | "plan" };
     userChoice?: "once" | "session" | "deny";
   }): Promise<void> {
     const { tool, target, decision, userChoice } = params;
@@ -228,10 +238,11 @@ export class AuditLogger {
         auditDecision = "deny_sensitive";
         risk = "critical";
       } else if (decision.by === "rule") {
-        if (decision.reason?.includes(".git")) {
+        // From the decision's kind, not its text: a deny rule on .github/** is a rule (0.14, review).
+        if (decision.kind === "protected") {
           auditDecision = "deny_protected";
           risk = "critical";
-        } else if (decision.reason?.includes("Plan mode")) {
+        } else if (decision.kind === "plan") {
           auditDecision = "deny_plan";
           risk = "medium";
         } else {
@@ -282,13 +293,47 @@ export class AuditLogger {
     });
   }
 
+  /** A call that a preToolUse hook blocked (0.14, review: it left no event). */
+  async logHookBlock(params: { tool: string; target?: CallTarget; reason: string }): Promise<void> {
+    const targetDesc = params.target ? describeTarget(params.target) : undefined;
+    await this.log({
+      tool: params.tool,
+      ...(targetDesc !== undefined ? { target: targetDesc } : {}),
+      decision: "deny_hook",
+      allowed: false,
+      reason: params.reason,
+      risk: "medium",
+    });
+  }
+
+  /** One hook command that ran (0.14, review: hooks run commands, and none was recorded). */
+  async logHookRun(params: {
+    event: string;
+    command: string;
+    durationMs: number;
+    exitCode: number | null;
+    network: boolean;
+  }): Promise<void> {
+    await this.log({
+      tool: `hook:${params.event}`,
+      target: params.command,
+      decision: "hook",
+      allowed: true,
+      ...(params.exitCode === 0 ? {} : { reason: `exit code ${params.exitCode ?? "none"}` }),
+      risk: params.network ? "high" : "medium",
+      durationMs: params.durationMs,
+      isError: params.exitCode !== 0,
+    });
+  }
+
   async readEvents(
     options: { limit?: number; tool?: string; risk?: AuditRisk; denialsOnly?: boolean } = {},
   ): Promise<AuditEvent[]> {
     let content = "";
     for (const file of await this.files()) {
       try {
-        content += await readFile(file, "utf8");
+        // A file cut in a crash may end with no newline: keep its last line apart (0.14, review).
+        content += `${await readFile(file, "utf8")}\n`;
       } catch {
         // A file removed while reading: skip it.
       }
@@ -307,6 +352,8 @@ export class AuditLogger {
       }
     }
     const limit = options.limit ?? 50;
+    // slice(-0) is the whole list: "/audit 0" printed every event (0.14, review).
+    if (limit <= 0) return [];
     return events.slice(-limit).reverse();
   }
 

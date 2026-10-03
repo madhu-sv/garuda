@@ -92,6 +92,7 @@ describe("plan mode: the permission engine (0.4)", () => {
         allowed: false,
         by: "rule",
         reason: PLAN_MODE_DENIAL,
+        kind: "plan",
       });
     }
     expect(approver.requests).toEqual([]);

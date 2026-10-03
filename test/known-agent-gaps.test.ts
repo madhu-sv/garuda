@@ -271,39 +271,36 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
     ).rejects.toThrow();
   });
 
-  knownGap(
-    "G07 child execution must persist an outcome in addition to its permission decision",
-    async () => {
-      const root = folder();
-      writeFileSync(join(root, "data.txt"), "fixture");
-      const audit = new AuditLogger(root);
-      const permissions = new PermissionEngine({
-        root,
-        approver: new AutoApprover("once"),
-        auditLogger: audit,
-      });
-      const model = new FakeModelClient([
-        reply([toolUse("read_file", { path: "data.txt" })]),
-        reply([text("done")]),
-      ]);
-      await runChild(
-        {
-          id: "audit",
-          system: "test",
-          prompt: "read",
-          tools: new ToolRegistry(defaultTools()),
-          model: { spec: modelId, contextWindow: 100_000, client: async () => model },
-          permissions,
-          limits: { maxSteps: 3, tokenBudget: 1000 },
-          maxTokens: 20,
-        },
-        toolContext(root, { permissions, audit }),
-      );
-      const events = await audit.readEvents();
-      expect(events.some((event) => event.decision === "allow_readonly")).toBe(true);
-      expect(events.some((event) => event.decision === "executed")).toBe(true);
-    },
-  );
+  it("G07 child execution must persist an outcome in addition to its permission decision", async () => {
+    const root = folder();
+    writeFileSync(join(root, "data.txt"), "fixture");
+    const audit = new AuditLogger(root);
+    const permissions = new PermissionEngine({
+      root,
+      approver: new AutoApprover("once"),
+      auditLogger: audit,
+    });
+    const model = new FakeModelClient([
+      reply([toolUse("read_file", { path: "data.txt" })]),
+      reply([text("done")]),
+    ]);
+    await runChild(
+      {
+        id: "audit",
+        system: "test",
+        prompt: "read",
+        tools: new ToolRegistry(defaultTools()),
+        model: { spec: modelId, contextWindow: 100_000, client: async () => model },
+        permissions,
+        limits: { maxSteps: 3, tokenBudget: 1000 },
+        maxTokens: 20,
+      },
+      toolContext(root, { permissions, audit }),
+    );
+    const events = await audit.readEvents();
+    expect(events.some((event) => event.decision === "allow_readonly")).toBe(true);
+    expect(events.some((event) => event.decision === "executed")).toBe(true);
+  });
 
   it("G08 a module-level Python reference must not be attributed to the preceding function", async () => {
     const root = folder();

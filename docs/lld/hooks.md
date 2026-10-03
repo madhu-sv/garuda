@@ -43,8 +43,13 @@ matching part is enough: `git status && git push` matches `bash(git push*)`).
 
 Execution:
 
+- The team policy first (0.14, review): `permissions.commandPolicyDenial(command, false)` applies
+  `requireSandbox` (with no OS sandbox every hook is refused) and `disallowedCommands`. A refused hook
+  does not run; it counts as a failed hook (a preToolUse hook then blocks the call) and the audit log
+  gets `deny_policy`.
 - `executor.run(command, policy, { signal, env })` with `policy = execPolicy(timeoutMs, { sandbox: true })`,
-  `network` from the hook, output capped at 8 000 bytes.
+  `network` from the hook, output capped at 8 000 bytes. Each run goes to the audit log (`hook` event:
+  command, duration, exit code; risk high with network).
 - Data: a 0600 temp file (`$GARUDA_HOOK_INPUT`) with `{ event, tool, input, target, result?, root }`,
   deleted afterwards; variables `$GARUDA_HOOK_EVENT`, `$GARUDA_TOOL`, `$GARUDA_FILE` (absolute, for path
   targets), `$GARUDA_COMMAND`, `$GARUDA_URL`.

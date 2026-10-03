@@ -34,7 +34,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
 log, hunk approval U0, daemons, MoE, project plugins), and features with no measured gain are off by
-default (MoE, daemons). G02, G04 and G06 are fixed too. The open gaps G07 (child outcome), G08 and G09 are listed in
+default (MoE, daemons). G02 to G08 are fixed too. The open gap G09 is listed in
 [docs/quality-baseline/issue-register.md](docs/quality-baseline/issue-register.md). The section
 headings below keep the branch labels (0.14–0.17).
 
@@ -472,16 +472,21 @@ A team policy sets limits that a project cannot loosen, and an audit log records
 - **Structured audit log** (`~/.garuda/audit/<project>-<hash>/`, one file per Garuda process): on in
   the chat, `-p` and jobs (a job writes under its main checkout's folder, so the log outlives the
   worktree); off in evals and tests; the team policy can turn it off (`audit.enabled: false`) or make it
-  mandatory (`audit.enabled: true`: a failed write then fails the call). Without a policy a failed write
+  mandatory (`audit.enabled: true`: a failed write then fails the call with an error result, and
+  says whether the call ran). Without a policy a failed write
   gives one notice. It is not in the project, so the agent's own tools cannot edit it. Targets and
   reasons pass the session redactor, so known secret formats (keys, tokens, `password=…`) are removed. Each line has `seq`,
-  `prev` and `hash` (sha256): `/audit verify` shows a changed, removed or inserted line. This makes the
-  log tamper-evident, not tamper-proof: a user who can write the file can rewrite the whole chain.
+  `prev` and `hash` (sha256): `/audit verify` shows a changed, removed or inserted line, but not lines
+  cut from the end of a file or a removed file. This makes the log tamper-evident, not tamper-proof:
+  a user who can write the file can rewrite the whole chain.
   Each line records:
   - Every authorization decision (`allow_readonly`, `allow_sandbox`, `deny_policy`, `deny_user`, etc.).
   - Security risk classification (`low`, `medium`, `high`, `critical`).
-  - Tool execution duration in milliseconds and error status.
-- **Chat command**: `/audit` displays active policy rules and recent audit events. Use `/audit stats` for totals, `/audit denials` for security blocks, `/audit verify` to check the hash chains, or `/audit <n>` for recent events. Not recorded yet: the tool outcomes inside a subagent run (only their permission decisions, G07).
+  - Tool execution duration in milliseconds and error status, also for the tool calls of a subagent
+    (0.14).
+  - Calls that a preToolUse hook blocked, and each hook command that ran (0.14). The team policy's
+    `requireSandbox` and `disallowedCommands` hold for hook commands too.
+- **Chat command**: `/audit` displays active policy rules and recent audit events. Use `/audit stats` for totals, `/audit denials` for security blocks, `/audit verify` to check the hash chains, or `/audit <n>` for recent events.
 
 ## Sessions, limits and context
 

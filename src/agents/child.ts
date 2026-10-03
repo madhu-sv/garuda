@@ -115,6 +115,8 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
     ...(run.hooks === undefined ? {} : { hooks: run.hooks }),
     ...(run.executor === undefined ? {} : { executor: run.executor }),
     ...(run.serverTools === undefined ? {} : { serverTools: run.serverTools }),
+    // The child's tool calls go to the parent's audit log (G07, 0.14 review).
+    ...(context.audit === undefined ? {} : { audit: context.audit }),
     maxSteps: limits.maxSteps,
     tokenBudget: limits.tokenBudget,
     maxTokens: run.maxTokens,

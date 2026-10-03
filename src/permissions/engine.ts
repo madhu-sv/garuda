@@ -227,7 +227,12 @@ export class PermissionEngine implements PermissionGate {
 
     if (target?.kind === "path" && !request.readOnly && isProtectedFromWrites(target.path)) {
       return {
-        decision: { allowed: false, by: "rule", reason: `${target.path} is inside .git/.` },
+        decision: {
+          allowed: false,
+          by: "rule",
+          reason: `${target.path} is inside .git/.`,
+          kind: "protected",
+        },
       };
     }
 
@@ -307,7 +312,12 @@ export class PermissionEngine implements PermissionGate {
     target: CallTarget | undefined,
     allowed: boolean,
   ): PermissionDecision {
-    const deny: PermissionDecision = { allowed: false, by: "rule", reason: PLAN_MODE_DENIAL };
+    const deny: PermissionDecision = {
+      allowed: false,
+      by: "rule",
+      reason: PLAN_MODE_DENIAL,
+      kind: "plan",
+    };
     if (target?.kind === "command") {
       if (target.outsideSandbox || this.isolation === "none") return deny;
       return { allowed: true, by: "sandbox" };
@@ -342,7 +352,12 @@ export class PermissionEngine implements PermissionGate {
       }
     }
     if (!readOnly && isProtectedFromWrites(target.path)) {
-      return { allowed: false, by: "rule", reason: `${target.path} is inside .git/.` };
+      return {
+        allowed: false,
+        by: "rule",
+        reason: `${target.path} is inside .git/.`,
+        kind: "protected",
+      };
     }
     const deny = this.settings.deny.find((r) => ruleMatches(r, tool, target, "deny"));
     if (deny !== undefined) {
@@ -352,6 +367,20 @@ export class PermissionEngine implements PermissionGate {
         reason: `A deny rule blocks this call: ${formatRule(deny)}.`,
       };
     }
+    return undefined;
+  }
+
+  commandPolicyDenial(command: string, outsideSandbox: boolean): string | undefined {
+    if (this.policy === undefined) return undefined;
+    const sandbox = isSandboxRequiredByPolicy(
+      this.policy,
+      outsideSandbox || this.isolation === "none",
+    );
+    if (sandbox.disallowed) {
+      return sandbox.reason ?? "Running commands outside the sandbox is disallowed by team policy.";
+    }
+    const command_ = isCommandDisallowedByPolicy(this.policy, command);
+    if (command_.disallowed) return command_.reason ?? "Command disallowed by team policy.";
     return undefined;
   }
 

@@ -43,11 +43,26 @@ function looksLikeCode(name: string, value: string, next: string | undefined): b
 
 const SECRET_ENV_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)/i;
 
+/** Secret variables that Garuda took out of process.env (provider keys, 0.14). */
+const movedSecrets = new Map<string, string>();
+
+/**
+ * A secret variable leaves process.env (keepProviderKey). A Redactor made later with the default
+ * environment still removes its value (0.14, review: the audit log's redactor was made after the
+ * provider keys left, so a key with no known pattern reached the log).
+ */
+export function keepSecretForRedaction(name: string, value: string): void {
+  movedSecrets.set(name, value);
+}
+
 export class Redactor {
   private readonly literals: string[];
 
-  /** `env`: variables whose names look secret have their values removed wherever they appear. */
-  constructor(env: NodeJS.ProcessEnv = process.env) {
+  /**
+   * `env`: variables whose names look secret have their values removed wherever they appear.
+   * Default: this process's environment and the secrets moved out of it.
+   */
+  constructor(env: NodeJS.ProcessEnv = { ...process.env, ...Object.fromEntries(movedSecrets) }) {
     this.literals = Object.entries(env)
       .filter(([name, value]) => SECRET_ENV_NAME.test(name) && (value?.length ?? 0) >= 8)
       .map(([, value]) => value as string)

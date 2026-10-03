@@ -6,17 +6,20 @@ import { Runtime } from "../src/app/runtime.js";
 import { AuditLogger, auditDirFor, verifyAuditFile } from "../src/audit/logger.js";
 import { runCommand } from "../src/cli/chat/commands.js";
 import type { Renderer } from "../src/cli/renderer.js";
+import { HookRunner } from "../src/hooks/runner.js";
 import type { AgentEvent } from "../src/loop/runAgent.js";
 import { FakeModelClient, reply, text } from "../src/model/fake.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
 import type { TeamPolicy } from "../src/permissions/policy.js";
+import { parseSettings } from "../src/permissions/settings.js";
 import { HostExecutor } from "../src/sandbox/host.js";
 import { FileTracker } from "../src/session/fileTracker.js";
+import { keepSecretForRedaction } from "../src/session/redact.js";
 import { FileSessionStore } from "../src/session/store.js";
 import { defaultTools } from "../src/tools/index.js";
 import { ToolRegistry } from "../src/tools/registry.js";
-import type { ToolContext } from "../src/tools/types.js";
+import type { ToolContext, ToolHooks } from "../src/tools/types.js";
 
 const base = mkdtempSync(join(tmpdir(), "garuda-audit-test-"));
 afterAll(() => rmSync(base, { recursive: true, force: true }));
@@ -389,5 +392,193 @@ describe("Audit log: hash chain, redaction, location, failures (merge gate)", ()
     });
     await runtime.runTurn("hi", signal);
     expect(await runtime.audit.files()).toEqual([]);
+  });
+});
+
+describe("Audit log: fixes from Garuda's audit review (0.14)", () => {
+  let k = 0;
+  const folder = () => {
+    const dir = join(base, `review-${k++}`);
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  };
+  const call = (name: string, input: unknown) => ({
+    type: "tool_use" as const,
+    id: `c${k}`,
+    name,
+    input,
+  });
+
+  it("removes an env secret that matches no pattern, also one moved out of the environment", async () => {
+    // The merge-gate test used values that the patterns remove anyway, so it could not see this.
+    const env = { MY_API_KEY: "plainliteral-987654321" };
+    const own = new AuditLogger(folder(), { env });
+    await own.logToolExecution({
+      tool: "bash",
+      target: { kind: "command", command: "x --key plainliteral-987654321" },
+      durationMs: 1,
+      isError: false,
+    });
+    expect(readFileSync(own.filePath, "utf8")).not.toContain("plainliteral-987654321");
+
+    // A provider key that Garuda took out of process.env before the logger was made.
+    keepSecretForRedaction("GATEWAY_KEY_FOR_TEST", "gatewayliteral-5555555");
+    const later = new AuditLogger(folder());
+    await later.logToolExecution({
+      tool: "bash",
+      target: { kind: "command", command: "curl -H 'x-key: gatewayliteral-5555555' h" },
+      durationMs: 1,
+      isError: false,
+    });
+    expect(readFileSync(later.filePath, "utf8")).not.toContain("gatewayliteral-5555555");
+  });
+
+  it("reads nothing for limit 0, and keeps a file's last line apart when it has no newline", async () => {
+    const dir = folder();
+    const logger = new AuditLogger(dir);
+    await logger.log({ tool: "a", decision: "executed", allowed: true, risk: "low" });
+    expect(await logger.readEvents({ limit: 0 })).toEqual([]);
+    // A crash cut the newline off the first file; a second file follows it.
+    const text = readFileSync(logger.filePath, "utf8").trimEnd();
+    writeFileSync(logger.filePath, text);
+    writeFileSync(join(dir, "zz-later.jsonl"), `${text.replace('"tool":"a"', '"tool":"b"')}\n`);
+    expect((await logger.readEvents()).map((e) => e.tool)).toEqual(["b", "a"]);
+  });
+
+  it("writes again after the folder was removed", async () => {
+    const dir = join(folder(), "audit");
+    const logger = new AuditLogger(dir);
+    await logger.log({ tool: "a", decision: "executed", allowed: true, risk: "low" });
+    rmSync(dir, { recursive: true, force: true });
+    await logger.log({ tool: "b", decision: "executed", allowed: true, risk: "low" });
+    await logger.log({ tool: "c", decision: "executed", allowed: true, risk: "low" });
+    expect((await logger.readEvents()).map((e) => e.tool)).toEqual(["c"]);
+  });
+
+  it("classifies a protected path by the decision, not by .git in a rule's text", async () => {
+    const root = folder();
+    const logger = new AuditLogger(folder());
+    const engine = new PermissionEngine({
+      root,
+      approver: new AutoApprover("once"),
+      auditLogger: logger,
+      settings: parseSettings({ permissions: { deny: ["edit_file(.github/**)"] } }),
+    });
+    const target = (path: string) => ({ target: { kind: "path" as const, path } });
+    await engine.check(
+      { tool: "edit_file", readOnly: false, info: target(".github/ci.yml") },
+      signal,
+    );
+    await engine.check({ tool: "edit_file", readOnly: false, info: target(".git/config") }, signal);
+    const events = (await logger.readEvents()).reverse();
+    expect(events.map((e) => [e.decision, e.risk])).toEqual([
+      ["deny_rule", "high"],
+      ["deny_protected", "critical"],
+    ]);
+  });
+
+  it("a mandatory log that cannot be written gives an error result; the call does not run", async () => {
+    const root = folder();
+    writeFileSync(join(root, "blocker"), "a file, not a folder");
+    const logger = new AuditLogger(join(root, "blocker", "audit"), {
+      policy: { audit: { enabled: true } },
+    });
+    const permissions = new PermissionEngine({
+      root,
+      approver: new AutoApprover("once"),
+      auditLogger: logger,
+    });
+    const registry = new ToolRegistry(defaultTools());
+    const outcome = await registry.execute(call("write_file", { path: "new.txt", content: "x" }), {
+      root,
+      signal,
+      permissions,
+      files: new FileTracker(),
+      audit: logger,
+    });
+    expect(outcome.isError).toBe(true);
+    expect(outcome.content).toMatch(/could not be written.*so the call did not run/s);
+    expect(() => readFileSync(join(root, "new.txt"))).toThrow();
+  });
+
+  it("records a call that a hook blocked, and one execution event when a later step fails", async () => {
+    const root = folder();
+    writeFileSync(join(root, "a.txt"), "hello\n");
+    const logger = new AuditLogger(folder());
+    const permissions = new PermissionEngine({
+      root,
+      approver: new AutoApprover("once"),
+      auditLogger: logger,
+    });
+    const registry = new ToolRegistry(defaultTools());
+    const context = (hooks: ToolHooks): ToolContext => ({
+      root,
+      signal,
+      permissions,
+      files: new FileTracker(),
+      audit: logger,
+      hooks,
+    });
+    const blocked = await registry.execute(
+      call("read_file", { path: "a.txt" }),
+      context({ before: async () => "not today", after: async (_c, o) => o }),
+    );
+    expect(blocked.content).toBe("Blocked by a hook: not today");
+    const failing = await registry.execute(
+      call("read_file", { path: "a.txt" }),
+      context({
+        before: async () => undefined,
+        after: async () => {
+          throw new Error("post hook broke");
+        },
+      }),
+    );
+    expect(failing.isError).toBe(true);
+    const events = (await logger.readEvents()).reverse();
+    expect(events.map((e) => e.decision)).toEqual(["deny_hook", "allow_readonly", "executed"]);
+    expect(events[0]).toMatchObject({ tool: "read_file", target: "a.txt", reason: "not today" });
+    expect(events[2]).toMatchObject({ target: "a.txt" });
+  });
+
+  it("records each hook command, and the team policy refuses a hook command", async () => {
+    const root = folder();
+    writeFileSync(join(root, "a.txt"), "hello\n");
+    const logger = new AuditLogger(folder());
+    const permissions = new PermissionEngine({
+      root,
+      approver: new AutoApprover("once"),
+      policy: { disallowedCommands: ["echo refused-by-policy*"] },
+      isolation: "none",
+    });
+    const hook = (command: string) => ({
+      event: "preToolUse" as const,
+      source: "project" as const,
+      def: { command, tools: [], timeoutMs: 10_000, network: false },
+      rules: [],
+    });
+    const marker = join(root, "ran.txt");
+    const ok = new HookRunner({
+      root,
+      hooks: [hook("true")],
+      executor: new HostExecutor(),
+      permissions,
+      audit: logger,
+    });
+    const hookCall = { tool: "read_file", input: { path: "a.txt" } };
+    expect(await ok.before(hookCall, signal)).toBeUndefined();
+    const refused = new HookRunner({
+      root,
+      hooks: [hook(`echo refused-by-policy > "${marker}"`)],
+      executor: new HostExecutor(),
+      permissions,
+      audit: logger,
+    });
+    expect(await refused.before(hookCall, signal)).toMatch(/blocked the call/);
+    expect(() => readFileSync(marker)).toThrow();
+    const events = (await logger.readEvents()).reverse();
+    expect(events.map((e) => [e.tool, e.decision])).toEqual([
+      ["hook:preToolUse", "hook"],
+      ["hook:preToolUse", "deny_policy"],
+    ]);
   });
 });

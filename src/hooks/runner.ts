@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import type { AuditLogger } from "../audit/logger.js";
 import { capText, cleanText, neutralizeTags } from "../mcp/sanitize.js";
 import { ruleMatches } from "../permissions/rules.js";
 import type { ApprovalRequest, PermissionGate } from "../permissions/types.js";
@@ -18,6 +19,8 @@ export interface HookRunnerOptions {
   executor: Executor;
   permissions: PermissionGate;
   notify?: (text: string) => void;
+  /** Each hook run goes to the audit log (0.14, review). */
+  audit?: AuditLogger;
 }
 
 /**
@@ -29,6 +32,8 @@ export interface HookRunnerOptions {
  *   Other failures only warn the user.
  * - Hooks run through the Executor, in the OS sandbox (no network unless the hook says so).
  *   They get the event data in a JSON file ($GARUDA_HOOK_INPUT) and in a few variables.
+ * - The team policy holds for hooks too (0.14, review): a command that requireSandbox or
+ *   disallowedCommands refuses does not run, and counts as a failed hook. Each run is audited.
  */
 export class HookRunner implements ToolHooks {
   constructor(private readonly options: HookRunnerOptions) {}
@@ -92,8 +97,21 @@ export class HookRunner implements ToolHooks {
     outcome: ToolOutcome | undefined,
     signal: AbortSignal,
   ) {
-    const { root, executor, permissions } = this.options;
+    const { root, executor, permissions, audit } = this.options;
     const target = call.info?.target;
+    const refused = permissions.commandPolicyDenial(hook.def.command, false);
+    if (refused !== undefined) {
+      this.options.notify?.(`The team policy refused a hook: ${hook.def.command}. ${refused}`);
+      await audit?.log({
+        tool: `hook:${hook.event}`,
+        target: hook.def.command,
+        decision: "deny_policy",
+        allowed: false,
+        reason: refused,
+        risk: "critical",
+      });
+      return { exitCode: null, signal: "refused by the team policy", timedOut: false, stderr: "" };
+    }
     const file = join(tmpdir(), `garuda-hook-${randomBytes(6).toString("hex")}.json`);
     const data = {
       event: hook.event,
@@ -124,7 +142,15 @@ export class HookRunner implements ToolHooks {
         network: hook.def.network,
         maxOutputBytes: OUTPUT_BYTES,
       };
+      const started = Date.now();
       const r = await executor.run(hook.def.command, policy, { signal, env });
+      await audit?.logHookRun({
+        event: hook.event,
+        command: hook.def.command,
+        durationMs: Date.now() - started,
+        exitCode: r.timedOut ? null : r.exitCode,
+        network: hook.def.network,
+      });
       return {
         exitCode: r.exitCode,
         signal: r.signal,

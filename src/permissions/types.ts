@@ -63,7 +63,13 @@ export type PermissionDecision =
       /** The user accepted only these hunks of the preview (0-based, in diff order). */
       hunks?: readonly number[];
     }
-  | { allowed: false; by: "rule" | "sensitive" | "user" | "unattended" | "policy"; reason: string };
+  | {
+      allowed: false;
+      by: "rule" | "sensitive" | "user" | "unattended" | "policy";
+      reason: string;
+      /** What kind of rule denied the call, for the audit log (0.14, review). */
+      kind?: "protected" | "plan";
+    };
 
 /** The permission check as the tools see it. The PermissionEngine implements it. */
 export interface PermissionGate {
@@ -76,6 +82,12 @@ export interface PermissionGate {
    * Required, so a wrapper (a subagent's gate) cannot drop the filter by mistake.
    */
   deniedByPolicy(path: string): boolean;
+  /**
+   * Why the team policy refuses this command (requireSandbox, disallowedCommands), or undefined.
+   * For commands that do not go through `check`: hooks (0.14, review). Required, like
+   * deniedByPolicy.
+   */
+  commandPolicyDenial(command: string, outsideSandbox: boolean): string | undefined;
   /** The network allowlist (0.13): hosts that the proxy blocked since the last call. */
   takeNetworkBlocks?(): { host: string; port: number; reason: string }[];
 }

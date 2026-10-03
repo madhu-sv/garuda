@@ -1666,6 +1666,7 @@ export class Runtime {
         hooks: active,
         executor: this.executor,
         permissions: this.permissions,
+        audit: this.auditLogger,
         ...(this.onNotice === undefined ? {} : { notify: this.onNotice }),
       });
     })();

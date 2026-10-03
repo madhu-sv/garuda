@@ -56,12 +56,28 @@ Order of checks — the first match decides:
 | 6 | An allow rule or a session rule matches, and the target is not an `alwaysAsk` URL | allow |
 | 7 | Otherwise | ask the user (F18) |
 
-Every permission check, and every tool run of the main agent, goes to the audit log by `AuditLogger`
+Every permission check, and every tool run of the main agent and (0.14, review) of its subagents, goes to the audit log by `AuditLogger`
 (0.17): `~/.garuda/audit/<project>-<hash>/<time>-<pid>-<random>.jsonl` (`auditDirFor`), one file per
 process, written in order (a queue), targets and reasons redacted, each line chained by `seq`, `prev`
 and `hash`; `verifyAuditFile` checks a file. The runtime writes it only when the caller passes
 `audit: { dir }` (the CLI does); a write failure is an error when the policy sets `audit.enabled:
 true`, else one notice. Inspect with `/audit`, `/audit verify`.
+
+Since 0.14 (Garuda's audit review):
+
+- A mandatory write failure is an `AuditWriteError`; `ToolRegistry.execute` turns it into an error
+  result that says whether the call ran (before, execute threw and the turn ended). The logger makes
+  the folder again after a failure, so a removed folder costs one event, not the rest of the session.
+- One execution event per call that ran, with its target and duration, also when `hooks.after` or
+  `report` fails later. A call that a preToolUse hook blocked gets `deny_hook`; each hook command gets
+  a `hook` event (tool `hook:<event>`), and a hook that the policy refuses gets `deny_policy`.
+- `deny_protected` and `deny_plan` come from the decision's `kind`, not from its text.
+- The default redactor also knows the provider keys that `keepProviderKey` moved out of
+  `process.env` (`keepSecretForRedaction`).
+- `readEvents({ limit: 0 })` is empty; files are joined with a newline, so a file cut in a crash does
+  not swallow the next file's first line.
+- Limit of the chain: lines cut from the end of a file, or a removed file, are not detected; that
+  needs an anchor outside the file. `/audit verify` says so.
 
 ### Plan mode (0.4)
 

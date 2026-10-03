@@ -1,8 +1,8 @@
 # Known agent gaps: issue register (M0)
 
 Original M0 status: all nine issue groups were open, with twelve intended strict failures.
-Current repair status: G01 to G06, G08 and two of the three G07 scenarios are resolved; the G07 child
-outcome and G09 remain open, with two intended strict failures (2026-10-03).
+Current repair status: G01 to G08 are resolved; G09 remains open, with one intended strict failure
+(2026-10-03).
 This is component evidence, not a complete adversarial
 security audit. Expectations are acceptance contracts proposed in the roadmap; their failure does
 not imply the earlier v0.17 requirements already promised every stronger guarantee.
@@ -127,8 +127,15 @@ reasons pass the session redactor. A write failure throws when the team policy s
 project to `~/.garuda/audit/<project>-<hash>/`, one file per process, and each line is chained
 (`seq`, `prev`, `hash`); `verifyAuditFile` and `/audit verify` detect a changed, removed or inserted
 line. Integrity claim: tamper-evident against edits of single lines, not tamper-proof (a writer can
-rebuild the chain; external anchoring is still open). The third scenario (child execution outcome)
-stays open.
+rebuild the chain; external anchoring is still open, so lines cut from the end of a file or a
+removed file are not detected).
+
+Patch 0141 (Garuda's audit review): the third scenario is resolved. `runChild` passes the parent's
+audit logger, so a child's tool calls get execution events; the G07 assertion is an ordinary test.
+Also: a mandatory-audit write failure gives an error result (no exception that ended the turn); a
+call blocked by a hook gets a `deny_hook` event; each hook run gets a `hook` event, and the team
+policy refuses hook commands as it refuses tool commands; provider keys moved out of the environment
+stay known to the redactor.
 
 ## G08 Code intelligence precision and coverage
 

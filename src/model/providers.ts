@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { isLoopbackHost } from "../net/address.js";
+import { keepSecretForRedaction } from "../session/redact.js";
 import { lookupModel, type ModelInfo, type Price } from "./pricing.js";
 import type { ModelClient } from "./types.js";
 
@@ -148,6 +149,7 @@ export function keepProviderKey(name: string): void {
   const value = process.env[name];
   if (value !== undefined && value !== "") {
     keptKeys.set(name, value);
+    keepSecretForRedaction(name, value);
     delete process.env[name];
   }
 }
