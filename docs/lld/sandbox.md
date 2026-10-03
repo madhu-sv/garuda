@@ -71,6 +71,8 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 (allow file-write* (subpath <writePath>)… /dev/null /dev/zero /dev/dtracehelper /dev/tty* /dev/fd/*)
 (deny file-write* (subpath <denyWritePath>)…)     ; after the allow: the last matching rule wins
 (deny file-read* (subpath <denyReadPath>)…)
+(deny lsopen)                                      ; 0.14: no apps through LaunchServices (`open`)
+(deny appleevent-send)                             ; 0.14: no Apple Events (`osascript`)
 (deny network-outbound (remote ip "*:*"))          ; when network is false
 (deny network-inbound (local ip "*:*"))
 (deny network-bind (local ip "*:*"))
@@ -87,11 +89,19 @@ Paths are Scheme strings with `\` and `"` escaped.
 --ro-bind <p> <p>            for each existing protected path
 --tmpfs <dir> --remount-ro <dir>   or   --ro-bind /dev/null <file>   for each denied read path
 --unshare-net                when network is false (only a loopback interface)
+--unshare-pid --proc /proc   always (0.14): its own process space and /proc
 --die-with-parent --chdir <root> -- <argv>
 ```
 
-No `--unshare-pid` and no `--new-session`: the command stays in Garuda's process group, so the group
-kill works and pids match the host. Limit: bubblewrap needs each mount point to exist, so a protected
+An app that LaunchServices or Apple Events starts is a child of launchd, not of the command, so it
+would run outside the sandbox: the two deny rules close that (0.14, review).
+
+`--unshare-pid` (0.14, review): the command sees only its own processes, not Garuda's or the user's
+(their command lines and environments in /proc). bwrap stays in Garuda's process group on the host and is
+pid 1 inside, so the group kill still stops every process in the sandbox. A pid that the command prints
+(`$!`) is a number from inside the sandbox; the contract tests find a background child by a unique
+`sleep` time with a host `pgrep` instead. No `--new-session`: the command stays in Garuda's process
+group, so a timeout or Ctrl-C reaches it. Limit: bubblewrap needs each mount point to exist, so a protected
 path that does not exist yet (for example `.git/hooks` with no `.git`) is not protected.
 
 ## Network allowlist (0.13)

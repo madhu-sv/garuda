@@ -5,7 +5,8 @@ export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 
 /**
  * The macOS sandbox: Seatbelt through sandbox-exec. The profile allows everything,
- * then denies writes outside `writePaths`, reads of `denyReadPaths` and IP networking.
+ * then denies writes outside `writePaths`, reads of `denyReadPaths`, IP networking, and
+ * starting apps through LaunchServices or Apple Events.
  * In Seatbelt profiles the last matching rule wins, so the order of the rules matters.
  */
 export class SeatbeltExecutor extends ProcessExecutor {
@@ -32,6 +33,9 @@ export function seatbeltProfile(policy: ExecPolicy): string {
   if (policy.denyReadPaths.length > 0) {
     lines.push(`(deny file-read* ${paths(policy.denyReadPaths)})`);
   }
+  // No apps through LaunchServices (`open`) or Apple Events (`osascript`) (0.14, review): an app
+  // started that way runs outside the sandbox, with the user's full rights.
+  lines.push("(deny lsopen)", "(deny appleevent-send)");
   if (!policy.network) {
     // No IP network, except localhost: test suites often start and call a local server.
     lines.push(

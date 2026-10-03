@@ -521,7 +521,10 @@ In the sandbox, a command:
   and for a Java or Python project `~/.m2/repository`, `~/.gradle/caches` and similar);
 - cannot write `.git/hooks`, `.git/config` or `.garuda/` in the root, because those run or apply later
   outside the sandbox;
-- has no network (localhost works on macOS), unless you open a network allowlist (0.13, below).
+- has no network (localhost works on macOS), unless you open a network allowlist (0.13, below);
+- cannot start apps on macOS (`open`, `osascript`), because an app started that way runs outside the
+  sandbox (0.14);
+- sees only its own processes on Linux, not Garuda's or yours (0.14).
 
 Commands in the sandbox run with no approval. Deny rules still apply. When the sandbox blocks a command
 (for example `pnpm install` needs the network), the model can ask to run it outside the sandbox.

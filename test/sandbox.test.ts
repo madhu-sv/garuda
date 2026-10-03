@@ -84,6 +84,14 @@ describe("Seatbelt profile", () => {
     expect(profile).toContain('(deny network-outbound (remote ip "*:*"))');
   });
 
+  it("does not let a command start apps outside the sandbox (0.14, review)", () => {
+    for (const network of [false, true]) {
+      const profile = seatbeltProfile(policy({ network }));
+      expect(profile).toContain("(deny lsopen)");
+      expect(profile).toContain("(deny appleevent-send)");
+    }
+  });
+
   it("keeps the network when the policy allows it, and quotes paths", () => {
     const profile = seatbeltProfile(policy({ network: true, writePaths: ['/a "b"\\c'] }));
     expect(profile).not.toContain("network-outbound");
@@ -108,6 +116,7 @@ describe("bubblewrap arguments", () => {
     expect(args).toContain("--tmpfs /home/u/.ssh --remount-ro /home/u/.ssh");
     expect(args).toContain("--ro-bind /dev/null /home/u/.netrc");
     expect(args).toContain("--unshare-net");
+    expect(args).toContain("--unshare-pid --proc /proc");
     expect(args.endsWith("--die-with-parent --chdir /repo -- bash -c make test")).toBe(true);
   });
 
@@ -115,6 +124,7 @@ describe("bubblewrap arguments", () => {
     const args = bwrapArgs("x", policy({ network: true }), () => undefined).join(" ");
     expect(args).not.toContain("--bind /repo");
     expect(args).not.toContain("--unshare-net");
+    expect(args).toContain("--unshare-pid --proc /proc");
   });
 });
 
@@ -245,6 +255,23 @@ describe.runIf(osExecutor !== undefined)("OS sandbox on this machine", () => {
     );
     expect(r.exitCode).toBe(1);
   });
+
+  it.runIf(executor.name === "bwrap")(
+    "shows the command only its own processes (0.14, review)",
+    async () => {
+      // Garuda's own process (this test runner) is not in the sandbox's /proc.
+      const r = await executor.run(
+        `grep -l [v]itest /proc/[0-9]*/cmdline 2>/dev/null | wc -l`,
+        sandboxed(),
+      );
+      expect(r.stdout.text.trim()).toBe("0");
+      const host = await executor.run(
+        `grep -l [v]itest /proc/[0-9]*/cmdline 2>/dev/null | wc -l`,
+        sandboxed({ sandbox: false }),
+      );
+      expect(Number(host.stdout.text.trim())).toBeGreaterThan(0);
+    },
+  );
 
   it("isolates nothing when the policy says sandbox: false", async () => {
     const r = await executor.run(`echo c > "${outside}/free.txt"`, sandboxed({ sandbox: false }));

@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import type { ExecPolicy, Executor } from "../src/sandbox/types.js";
+import { sleeping, uniqueSleep, waitUntil } from "./helpers.js";
 
 /**
  * The executor contract (N8). Every executor must pass this suite:
@@ -85,31 +86,23 @@ export function executorContract(name: string, make: () => Executor): void {
     });
 
     it("shutdown() kills every running command at once", async () => {
-      const pidFile = join(root, "shutdown.pid");
-      const run = executor.run(
-        `sleep 30 & echo $! > "${pidFile}"; wait`,
-        policy({ timeoutMs: 20_000 }),
-      );
-      await waitFor(() => readPid(pidFile) !== undefined);
-      const child = readPid(pidFile) ?? 0;
+      const marker = uniqueSleep();
+      const run = executor.run(`sleep ${marker} & wait`, policy({ timeoutMs: 20_000 }));
+      await waitUntil(() => sleeping(marker, root));
       executor.shutdown();
       const r = await run;
       expect(r.exitCode).not.toBe(0);
-      await waitFor(() => !isAlive(child));
+      await waitUntil(async () => !(await sleeping(marker, root)));
     });
 
     it("returns when a background child keeps the output open (0.14, review)", async () => {
-      const pidFile = join(root, "background.pid");
+      const marker = uniqueSleep();
       const started = Date.now();
       // No timeout reached: bash exits at once; the pipes stay open through the child.
-      const r = await executor.run(
-        `sleep 30 & echo $! > "${pidFile}"; echo started`,
-        policy({ timeoutMs: 20_000 }),
-      );
+      const r = await executor.run(`sleep ${marker} & echo started`, policy({ timeoutMs: 20_000 }));
       expect(Date.now() - started).toBeLessThan(8_000);
       expect(r.stdout.text).toContain("started");
-      const child = readPid(pidFile) ?? 0;
-      await waitFor(() => !isAlive(child));
+      await waitUntil(async () => !(await sleeping(marker, root)));
 
       // With a timeout shorter than the drain: it returns at the timeout.
       const quick = Date.now();
@@ -119,48 +112,17 @@ export function executorContract(name: string, make: () => Executor): void {
     });
 
     it("kills the whole process tree on abort", async () => {
-      const pidFile = join(root, "child.pid");
+      const marker = uniqueSleep();
       const controller = new AbortController();
-      const run = executor.run(
-        `sleep 30 & echo $! > "${pidFile}"; wait`,
-        policy({ timeoutMs: 20_000 }),
-        { signal: controller.signal },
-      );
-      await waitFor(() => readPid(pidFile) !== undefined);
-      const child = readPid(pidFile) ?? 0;
-      expect(isAlive(child)).toBe(true);
+      const run = executor.run(`sleep ${marker} & wait`, policy({ timeoutMs: 20_000 }), {
+        signal: controller.signal,
+      });
+      await waitUntil(() => sleeping(marker, root));
 
       controller.abort();
       const r = await run;
       expect(r.aborted).toBe(true);
-      await waitFor(() => !isAlive(child));
-      expect(isAlive(child)).toBe(false);
+      await waitUntil(async () => !(await sleeping(marker, root)));
     });
   });
-}
-
-function readPid(file: string): number | undefined {
-  try {
-    const pid = Number.parseInt(readFileSync(file, "utf8"), 10);
-    return Number.isNaN(pid) ? undefined : pid;
-  } catch {
-    return undefined;
-  }
-}
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function waitFor(check: () => boolean, timeoutMs = 5_000): Promise<void> {
-  const end = Date.now() + timeoutMs;
-  while (!check()) {
-    if (Date.now() > end) throw new Error("waitFor timed out");
-    await new Promise((r) => setTimeout(r, 20));
-  }
 }

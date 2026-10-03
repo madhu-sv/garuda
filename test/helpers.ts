@@ -2,6 +2,7 @@ import { Writable } from "node:stream";
 import { z } from "zod";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
+import { HostExecutor } from "../src/sandbox/host.js";
 import { FileTracker } from "../src/session/fileTracker.js";
 import type { Tool, ToolContext } from "../src/tools/types.js";
 
@@ -59,4 +60,39 @@ export function sink(): { stream: Writable; text: () => string } {
     },
   });
   return { stream, text: () => text };
+}
+
+/**
+ * A sleep time that names one test's background child. A pid from `$!` does not work: in a
+ * sandbox with its own process space it is a number from inside that space (0.14, review).
+ */
+export function uniqueSleep(): string {
+  return `30.${String(Math.floor(Math.random() * 1e6)).padStart(6, "0")}1`;
+}
+
+/** Whether the background child still runs, seen from the host with pgrep. */
+export async function sleeping(marker: string, root: string): Promise<boolean> {
+  const r = await new HostExecutor().run(
+    `pgrep -f '^sleep ${marker}$' >/dev/null && echo yes || echo no`,
+    {
+      root,
+      sandbox: false,
+      writePaths: [],
+      denyWritePaths: [],
+      denyReadPaths: [],
+      network: true,
+      envAllowlist: ["PATH"],
+      timeoutMs: 5_000,
+      maxOutputBytes: 1_000,
+    },
+  );
+  return r.stdout.text.trim() === "yes";
+}
+
+export async function waitUntil(check: () => Promise<boolean>, timeoutMs = 5_000): Promise<void> {
+  const end = Date.now() + timeoutMs;
+  while (!(await check())) {
+    if (Date.now() > end) throw new Error("waitUntil timed out");
+    await new Promise((r) => setTimeout(r, 50));
+  }
 }

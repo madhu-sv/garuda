@@ -26,7 +26,7 @@ import { parseSettings } from "../src/permissions/settings.js";
 import { Redactor } from "../src/session/redact.js";
 import { FileSessionStore } from "../src/session/store.js";
 import { writeFileAtomic } from "../src/tools/atomicWrite.js";
-import { sink } from "./helpers.js";
+import { sink, sleeping, uniqueSleep, waitUntil } from "./helpers.js";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "garuda-m5-")));
 afterAll(() => rmSync(base, { recursive: true, force: true }));
@@ -130,22 +130,23 @@ describe("M5 acceptance", () => {
 
   it("Ctrl-C (F4): the first one stops the turn and kills the running command; the chat goes on", async () => {
     const root = project("ctrlc");
-    const pidFile = join(root, "sleep.pid");
+    // A unique sleep time finds the child from the host: in the sandbox's own process space,
+    // `$!` is not a host pid (0.14, review).
+    const marker = uniqueSleep();
     const model = new FakeModelClient([
-      reply([toolUse("bash", { command: `sleep 30 & echo $! > ${pidFile}; wait` }, "b1")]),
+      reply([toolUse("bash", { command: `sleep ${marker} & wait` }, "b1")]),
     ]);
     const { runtime, renderer, err } = await runtimeFor(root, model);
 
     const turn = runTurnInTerminal(runtime, replApprover, renderer, "wait", noExit);
-    await waitFor(() => existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() !== "");
-    const pid = Number.parseInt(readFileSync(pidFile, "utf8"), 10);
+    await waitUntil(() => sleeping(marker, root));
     process.emit("SIGINT");
     const outcome = await turn;
 
     expect(outcome.kind).toBe("interrupted");
     expect(err.text()).toContain("Stopping…");
     expect(err.text()).toContain("Turn stopped.");
-    await waitFor(() => !alive(pid));
+    await waitUntil(async () => !(await sleeping(marker, root)));
     // The session records the stop, and the next turn repairs the open tool call.
     const id = runtime.session?.id ?? "";
     const records = readFileSync(join(root, ".garuda", "sessions", `${id}.jsonl`), "utf8");
@@ -221,15 +222,6 @@ describe("M5 acceptance", () => {
     expect(readdirSync(dir).filter((f) => f.includes(".garuda-"))).toEqual([]);
   });
 });
-
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 async function waitFor(check: () => boolean, timeoutMs = 5_000): Promise<void> {
   const end = Date.now() + timeoutMs;

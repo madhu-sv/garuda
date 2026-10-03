@@ -5,7 +5,8 @@ import type { ExecPolicy } from "./types.js";
 /**
  * The Linux sandbox: bubblewrap. The whole file system is mounted read-only,
  * then `writePaths` are mounted writable again. Denied read paths are covered with an
- * empty folder or /dev/null. --unshare-net leaves only a loopback interface.
+ * empty folder or /dev/null. --unshare-net leaves only a loopback interface, and --unshare-pid
+ * gives the command its own process space.
  */
 export class BwrapExecutor extends ProcessExecutor {
   readonly name = "bwrap";
@@ -52,9 +53,12 @@ export function bwrapArgv(
     else if (k === "file") args.push("--ro-bind", "/dev/null", path);
   }
   if (!policy.network) args.push("--unshare-net");
+  // Its own process space and /proc (0.14, review): the command sees only its own processes, not
+  // Garuda's or the user's. bwrap stays in Garuda's process group on the host, and it is pid 1
+  // inside, so stopping it ends every process in the sandbox, also one in its own session.
+  args.push("--unshare-pid", "--proc", "/proc");
   const run = policy.sandbox && !policy.network ? withBridge(argv, policy) : argv;
-  // No --new-session and no --unshare-pid: the command stays in Garuda's process group,
-  // so a timeout or Ctrl-C kills the whole tree, and pids stay the same as on the host.
+  // No --new-session: the command stays in Garuda's process group, so a timeout or Ctrl-C reaches it.
   args.push("--die-with-parent", "--chdir", policy.root, "--", ...run);
   return args;
 }
