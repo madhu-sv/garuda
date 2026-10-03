@@ -53,14 +53,27 @@ export class AnthropicClient implements ModelClient {
       } else if (
         event.type === "content_block_delta" &&
         event.delta.type === "thinking_delta" &&
-        event.delta.thinking !== ""
+        event.delta.thinking !== "" &&
+        request.thinking?.hide !== true
       ) {
         yield { type: "thinking_delta", text: event.delta.thinking };
       }
     }
     const final = await stream.finalMessage();
-    yield { type: "response", response: fromWireMessage(final) };
+    const response = fromWireMessage(final);
+    yield {
+      type: "response",
+      response: request.thinking?.hide === true ? withHiddenThinking(response) : response,
+    };
   }
+}
+
+/** Hidden thinking (0.14): the readable text goes; `wire` (with the summary) still goes back. */
+export function withHiddenThinking(response: ModelResponse): ModelResponse {
+  return {
+    ...response,
+    content: response.content.map((b) => (b.type === "thinking" ? { ...b, text: "" } : b)),
+  };
 }
 
 // Mapping functions. They are pure and exported for unit tests.

@@ -51,7 +51,12 @@ export function thinkingRequest(
   // On an optional model, a display without adaptive thinking would turn thinking on.
   const thinks = caps.mode === "always" || choice.enabled === true;
   if (caps.mode === "optional" && choice.enabled === true) request.adaptive = true;
-  if (thinks && choice.show !== undefined) request.display = choice.show ? "summarized" : "omitted";
+  // Always "summarized", so data keeps coming while the model thinks; "hide" (the default) only
+  // keeps the text off the screen. Thinking tokens cost the same either way.
+  if (thinks) {
+    request.display = "summarized";
+    if (choice.show !== true) request.hide = true;
+  }
   return Object.keys(request).length === 0 ? undefined : request;
 }
 
@@ -117,12 +122,8 @@ export function thinkingText(
   if (caps === undefined) return `${modelId} does not offer /thinking.`;
   const on = caps.mode === "always" ? "always on" : choice.enabled === true ? "on" : "off";
   const effort = choice.effort ?? "the model's default";
-  const shown =
-    choice.show === true
-      ? "shown (dimmed; Ctrl-O shows all)"
-      : choice.show === false
-        ? "hidden"
-        : "the model's default";
+  // The summaries always stream (0.14); "hidden" keeps them off the screen.
+  const shown = choice.show === true ? "shown (dimmed; Ctrl-O shows all)" : "hidden";
   return `Thinking for ${modelId}: ${on} · effort ${effort} · text ${shown}.`;
 }
 

@@ -25,7 +25,7 @@ interface Message { role: "user" | "assistant"; content: ContentBlock[] }
 interface ToolSpec { name: string; description: string; inputSchema: Record<string, unknown> }
 interface ServerToolSpec { type: "web_search"; maxUses; allowedDomains?; blockedDomains? }   // 0.6
 interface ModelRequest { system; messages: Message[]; tools: ToolSpec[]; serverTools?: ServerToolSpec[]; maxTokens; thinking?: ThinkingRequest }
-interface ThinkingRequest { adaptive?: boolean; display?: "summarized" | "omitted"; effort?: Effort }   // 0.9
+interface ThinkingRequest { adaptive?: boolean; display?: "summarized" | "omitted"; effort?: Effort; hide?: boolean }   // 0.9; hide 0.14
 interface ModelResponse { content: AssistantBlock[]; stopReason: StopReason; usage: Usage }
 type StopReason = "end_turn" | "tool_use" | "max_tokens" | "refusal" | "pause_turn" | "other";
 interface Usage { inputTokens; outputTokens; cacheReadTokens; cacheWriteTokens; webSearches? }
@@ -46,7 +46,12 @@ and 5.1 always think (the API refuses `thinking: disabled`), and by default they
 as an empty text with an encrypted `signature`. The API asks for every thinking block back, unchanged,
 within a tool-use turn; without them the model loses its earlier reasoning between steps. Garuda
 before 0.9 dropped them. Now `ThinkingBlock.wire` holds the `thinking` or `redacted_thinking` block and
-goes back byte for byte; `text` is the readable thinking (empty when omitted or redacted). They are left
+goes back byte for byte; `text` is the readable thinking (empty when omitted or redacted).
+Since 0.14 `thinkingRequest` always sends `display: "summarized"` when the model thinks, and `hide: true`
+unless the user chose show. `AnthropicClient.stream` then yields no `thinking_delta` and blanks `text`
+(`withHiddenThinking`); `wire` keeps the summary and goes back unchanged. Reason: with "omitted" no
+bytes came while the model thought, and Node's fetch closed the stream after 300 s
+(`UND_ERR_BODY_TIMEOUT`); a Fable review lost its final answer three times. They are left
 out (`thinking.ts`, `withoutThinking`) only where they cannot go back unchanged: after `/models` (a
 signature belongs to its model), on a resume with another model, when redaction changed one on
 disk, and on a resume after a message that redaction changed (the signature binds the content before

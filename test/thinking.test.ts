@@ -262,7 +262,8 @@ describe("/thinking (0.9)", () => {
     expect(ALWAYS?.mode).toBe("always");
     expect(OPTIONAL?.efforts).not.toContain("xhigh");
     expect(lookupModel("claude-haiku-4-5").thinking).toBeUndefined();
-    expect(thinkingRequest({}, ALWAYS)).toBeUndefined();
+    // Summaries always stream (no 5-minute silence); hidden unless the user says show (0.14).
+    expect(thinkingRequest({}, ALWAYS)).toEqual({ display: "summarized", hide: true });
     expect(thinkingRequest({ effort: "low", show: true }, ALWAYS)).toEqual({
       effort: "low",
       display: "summarized",
@@ -271,7 +272,8 @@ describe("/thinking (0.9)", () => {
     expect(thinkingRequest({ show: true }, OPTIONAL)).toBeUndefined();
     expect(thinkingRequest({ enabled: true, show: false }, OPTIONAL)).toEqual({
       adaptive: true,
-      display: "omitted",
+      display: "summarized",
+      hide: true,
     });
     expect(thinkingRequest({ effort: "high" }, undefined)).toBeUndefined();
 
@@ -371,11 +373,12 @@ describe("/thinking (0.9)", () => {
       runCommand(line, { runtime, renderer: chat, sessionPath: (id) => id });
     await run("/thinking");
     expect(chat.getState().items.at(-1)?.text).toBe(
-      "Thinking for claude-sonnet-5: always on · effort low · text the model's default.",
+      "Thinking for claude-sonnet-5: always on · effort low · text hidden.",
     );
     await run("/thinking show");
+    // Show and hide change only the screen (0.14): the request and the cache stay the same.
     expect(chat.getState().items.at(-1)?.text).toMatch(
-      /text shown .* the prompt cache starts again\.$/,
+      /text shown \(dimmed; Ctrl-O shows all\)\.$/,
     );
     await run("/thinking off");
     expect(chat.getState().items.at(-1)?.text).toMatch(/always thinks/);

@@ -109,6 +109,12 @@ export interface ThinkingRequest {
   adaptive?: boolean;
   display?: "summarized" | "omitted";
   effort?: Effort;
+  /**
+   * The summaries stream but Garuda does not show or keep their text (0.14). With "omitted" no data
+   * came while the model thought, and Node closed the stream after 5 minutes of silence
+   * (UND_ERR_BODY_TIMEOUT): a long Fable review lost its answer three times.
+   */
+  hide?: boolean;
 }
 
 export interface ModelRequest {

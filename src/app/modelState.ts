@@ -99,10 +99,15 @@ export class ModelState {
   setThinking(word: string, session?: Session): { ok: boolean; text: string } {
     const change = changeThinking(this.thinkingChoice, word, this.thinkingCaps, this.modelId);
     if (!change.ok) return change;
-    const before = JSON.stringify(this.thinkingParams ?? {});
+    // Only what goes to the API counts: show and hide change the screen, not the request (0.14).
+    const sent = () => {
+      const { hide: _hide, ...rest } = this.thinkingParams ?? {};
+      return JSON.stringify(rest);
+    };
+    const before = sent();
     this.thinkingChoice = change.choice;
     session?.journal?.write({ type: "thinking", choice: change.choice });
-    const changed = JSON.stringify(this.thinkingParams ?? {}) !== before;
+    const changed = sent() !== before;
     return {
       ok: true,
       text: changed
