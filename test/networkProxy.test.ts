@@ -83,6 +83,19 @@ describe("the allowlist (0.13)", () => {
       NODE_USE_ENV_PROXY: "1",
     });
     expect(env.MAVEN_OPTS).toContain("-Dhttps.proxyPort=4567");
+
+    // A host MAVEN_OPTS outside the allowlist stays out (0.14, review); an allowlisted one stays in.
+    const before = process.env.MAVEN_OPTS;
+    process.env.MAVEN_OPTS = "-Dhost.only=marker";
+    try {
+      expect(proxyEnv({ ...base, proxy }).MAVEN_OPTS).not.toContain("marker");
+      expect(proxyEnv({ ...base, proxy, envAllowlist: ["MAVEN_OPTS"] }).MAVEN_OPTS).toContain(
+        "-Dhost.only=marker",
+      );
+    } finally {
+      if (before === undefined) delete process.env.MAVEN_OPTS;
+      else process.env.MAVEN_OPTS = before;
+    }
   });
 
   it("runs the bridge in bubblewrap's network namespace only when there is a bridge", () => {

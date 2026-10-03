@@ -82,10 +82,10 @@ export class ToolRegistry implements ToolRunner {
       };
       const blocked = await context.hooks?.before(hookCall, context.signal);
       if (blocked !== undefined) return { content: `Blocked by a hook: ${blocked}`, isError: true };
+      // A read-only tool can mark one call as a change (CallInfo.mutates).
+      const readOnly = tool.readOnly && info?.mutates !== true;
       const decision = await context.permissions.check(
-        info === undefined
-          ? { tool: tool.name, readOnly: tool.readOnly }
-          : { tool: tool.name, readOnly: tool.readOnly, info },
+        info === undefined ? { tool: tool.name, readOnly } : { tool: tool.name, readOnly, info },
         context.signal,
       );
       if (!decision.allowed) {

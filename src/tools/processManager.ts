@@ -50,6 +50,18 @@ export const processManagerTool: Tool<Input, ProcessManagerOutput> = {
   inputSchema: input,
   readOnly: true,
 
+  // list, logs and status only read; kill stops a process, so it is checked like a write
+  // (0.14, review): it asks, follows rules, and plan mode refuses it.
+  async describe({ action, daemonId }) {
+    const target = { kind: "input" as const, json: JSON.stringify({ action, daemonId }) };
+    if (action !== "kill") return { target };
+    return {
+      target,
+      preview: `Stop background process ${daemonId ?? "(none given)"} (SIGTERM, then SIGKILL after 2 s).`,
+      mutates: true,
+    };
+  },
+
   async run({ action, daemonId, lines, stream }, { executor }) {
     if (executor?.daemons === undefined) {
       return {

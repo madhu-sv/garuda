@@ -13,6 +13,9 @@ import type {
 /** Time between SIGTERM and SIGKILL when the tree must stop. */
 const KILL_GRACE_MS = 2_000;
 
+/** After the command's own process exits, the longest wait for its output pipes to close. */
+export const EXIT_DRAIN_MS = 2_000;
+
 /** The program to start for one command. */
 export interface Launch {
   file: string;
@@ -103,10 +106,14 @@ export abstract class ProcessExecutor implements Executor {
       if (pid !== undefined) this.running.add(pid);
       let timedOut = false;
       let aborted = false;
+      let finished = false;
       let killTimer: NodeJS.Timeout | undefined;
+      let drainTimer: NodeJS.Timeout | undefined;
 
+      // The group is signalled even when bash itself has already exited: a background child
+      // started by the command may still be running in it.
       const killTree = () => {
-        if (child.pid === undefined || child.exitCode !== null) return;
+        if (child.pid === undefined || finished) return;
         signalGroup(child.pid, "SIGTERM");
         killTimer ??= setTimeout(() => {
           if (child.pid !== undefined) signalGroup(child.pid, "SIGKILL");
@@ -128,20 +135,25 @@ export abstract class ProcessExecutor implements Executor {
       child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
 
       child.on("error", (error) => {
+        if (finished) return;
+        finished = true;
         if (pid !== undefined) this.running.delete(pid);
         clearTimeout(timer);
+        if (drainTimer !== undefined) clearTimeout(drainTimer);
         options.signal?.removeEventListener("abort", onAbort);
         reject(error);
       });
 
-      // "close" fires after the streams end, so all output is in.
-      child.on("close", (code, signal) => {
+      const finish = (code: number | null, signal: NodeJS.Signals | null) => {
+        if (finished) return;
+        finished = true;
         if (pid !== undefined) this.running.delete(pid);
         clearTimeout(timer);
+        if (drainTimer !== undefined) clearTimeout(drainTimer);
+        if (killTimer !== undefined) clearTimeout(killTimer);
         options.signal?.removeEventListener("abort", onAbort);
         // Background children may still hold the group. Stop them too.
         if (child.pid !== undefined) signalGroup(child.pid, "SIGKILL");
-        if (killTimer !== undefined) clearTimeout(killTimer);
         resolve({
           exitCode: code,
           signal,
@@ -151,7 +163,23 @@ export abstract class ProcessExecutor implements Executor {
           aborted,
           durationMs: Date.now() - started,
         });
+      };
+
+      // When the command's own process exits, the output normally ends at once. A background
+      // child that inherited the pipes keeps them open, and "close" never came (0.14, review): the
+      // call hung past its timeout and Ctrl-C. So wait at most EXIT_DRAIN_MS for the pipes, then
+      // stop the group, close the pipes and return what was captured.
+      child.on("exit", (code, signal) => {
+        drainTimer = setTimeout(() => {
+          if (child.pid !== undefined) signalGroup(child.pid, "SIGKILL");
+          child.stdout.destroy();
+          child.stderr.destroy();
+          finish(code, signal);
+        }, EXIT_DRAIN_MS);
       });
+
+      // "close" fires after the streams end, so all output is in.
+      child.on("close", (code, signal) => finish(code, signal));
     });
   }
 }
@@ -180,12 +208,16 @@ export function allowedEnv(allowlist: readonly string[]): Record<string, string>
  * cargo, go, git, curl; Node's fetch with NODE_USE_ENV_PROXY; Maven and Gradle through their
  * Java options.
  */
-export function proxyEnv(policy: ExecPolicy): Record<string, string> {
+export function proxyEnv(
+  policy: ExecPolicy,
+  // The allowlisted environment (0.14, review): MAVEN_OPTS/GRADLE_OPTS were read from the full
+  // process.env, so a value outside the allowlist (a proxy password) reached the command.
+  base: Record<string, string> = allowedEnv(policy.envAllowlist),
+): Record<string, string> {
   if (!policy.sandbox || policy.network || policy.proxy === undefined) return {};
   const url = `http://127.0.0.1:${policy.proxy.port}`;
   const java = `-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=${policy.proxy.port} -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=${policy.proxy.port}`;
-  const add = (name: string) =>
-    `${process.env[name] === undefined ? "" : `${process.env[name]} `}${java}`;
+  const add = (name: string) => `${base[name] === undefined ? "" : `${base[name]} `}${java}`;
   return {
     HTTP_PROXY: url,
     HTTPS_PROXY: url,

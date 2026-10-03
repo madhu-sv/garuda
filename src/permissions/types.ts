@@ -43,6 +43,11 @@ export interface CallInfo {
    * The chat may then let the user accept some hunks; the tool gets them in `approvedHunks`.
    */
   hunks?: true;
+  /**
+   * This call changes something, although its tool is read-only (0.14, review: process_manager
+   * kill). The permission check then treats the call as a write: rules apply, plan mode refuses it.
+   */
+  mutates?: true;
 }
 
 export interface PermissionRequest {

@@ -41,6 +41,8 @@ interface DaemonEntry {
   readonly maxBufferLines: number;
   stdoutRemainder: string;
   stderrRemainder: string;
+  /** The user asked to stop it (kill or shutdown): its exit counts as "stopped", whatever the code. */
+  stopRequested: boolean;
 }
 
 export const DEFAULT_MAX_LOG_LINES = 2_000;
@@ -83,6 +85,7 @@ export class DaemonManager {
       maxBufferLines,
       stdoutRemainder: "",
       stderrRemainder: "",
+      stopRequested: false,
     };
 
     const appendChunk = (chunk: Buffer, stream: "stdout" | "stderr") => {
@@ -135,7 +138,7 @@ export class DaemonManager {
       entry.info.endTime = Date.now();
       entry.info.exitCode = code;
       entry.info.signal = signal;
-      if (signal !== null || code === 0) {
+      if (entry.stopRequested || signal !== null || code === 0) {
         entry.info.status = "stopped";
       } else {
         entry.info.status = "failed";
@@ -207,12 +210,13 @@ export class DaemonManager {
       };
     }
 
+    // The status changes when the process has really ended (0.14, review): before, it said
+    // "stopped" at once, while the process could still run, and later flipped to "failed".
+    entry.stopRequested = true;
     entry.process.stop();
-    entry.info.status = "stopped";
-    entry.info.endTime = Date.now();
     return {
       ok: true,
-      message: `Terminated daemon process ${id} (pid: ${entry.info.pid ?? "unknown"}).`,
+      message: `Asked daemon process ${id} (pid: ${entry.info.pid ?? "unknown"}) to stop: SIGTERM now, SIGKILL after 2 s if it is still running.`,
     };
   }
 
@@ -220,6 +224,7 @@ export class DaemonManager {
     for (const entry of this.daemons.values()) {
       if (entry.info.status === "running") {
         try {
+          entry.stopRequested = true;
           entry.process.stop();
           entry.info.status = "stopped";
           entry.info.endTime = Date.now();

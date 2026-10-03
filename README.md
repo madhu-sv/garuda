@@ -582,7 +582,8 @@ Turn it on with `"daemons": { "enabled": true }` in `.garuda/settings.json`.
 - With the setting on, `bash` takes `is_daemon: true`: the command starts through the same executor
   (the same sandbox and approval as any command) and the tool returns at once with a `daemonId`.
 - The `process_manager` tool has `list`, `status`, `logs` (`lines`, `stream`) and `kill` for daemons
-  that Garuda started in this session. It cannot touch other processes, so it runs without a question.
+  that Garuda started in this session. `list`, `status` and `logs` run without a question; `kill`
+  asks (or follows a rule) and is refused in plan mode.
 - Logs are kept in memory: the newest 2,000 lines per daemon, at most 4,000 characters per line, and
   `logs` returns at most 30,000 characters (the newest lines).
 - When the session closes, Garuda stops every running daemon (SIGTERM to the process group, then

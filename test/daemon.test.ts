@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import type { ToolUseBlock } from "../src/model/types.js";
+import { AutoApprover } from "../src/permissions/autoApprover.js";
+import { PermissionEngine } from "../src/permissions/engine.js";
 import { MAX_LOG_LINE_CHARS, MAX_LOGS_CHARS } from "../src/sandbox/daemon.js";
 import { HostExecutor } from "../src/sandbox/host.js";
 import type { ExecPolicy } from "../src/sandbox/types.js";
@@ -164,11 +166,12 @@ describe("bash tool and process_manager integration", () => {
     // 5. Terminate daemon via process_manager(action: "kill")
     const killResult = await call("process_manager", { action: "kill", daemonId });
     expect(killResult.isError).toBe(false);
-    expect(killResult.content).toContain(`Terminated daemon process ${daemonId}`);
+    expect(killResult.content).toContain(`Asked daemon process ${daemonId}`);
 
-    // Verify status updated
-    const statusAfterKill = await call("process_manager", { action: "status", daemonId });
-    expect(statusAfterKill.content).toContain("Status: stopped");
+    // The status changes when the process has ended (0.14, review), not at once.
+    const status = async () =>
+      (await call("process_manager", { action: "status", daemonId })).content;
+    await waitFor(async () => (await status()).includes("Status: stopped"));
 
     executor.shutdown();
   });
@@ -245,6 +248,11 @@ describe("bash tool and process_manager integration", () => {
     expect(stderrLogs.content).not.toContain("hello stdout");
 
     await call("process_manager", { action: "kill", daemonId });
+    await waitFor(async () =>
+      (await call("process_manager", { action: "status", daemonId })).content.includes(
+        "Status: stopped",
+      ),
+    );
 
     // Repeated kill on already stopped daemon
     const secondKill = await call("process_manager", { action: "kill", daemonId });
@@ -281,9 +289,12 @@ describe("bash tool and process_manager integration", () => {
 
     // Kill daemon 1 only
     await call("process_manager", { action: "kill", daemonId: id1 });
-    const s1After = await call("process_manager", { action: "status", daemonId: id1 });
+    await waitFor(async () =>
+      (await call("process_manager", { action: "status", daemonId: id1 })).content.includes(
+        "Status: stopped",
+      ),
+    );
     const s2After = await call("process_manager", { action: "status", daemonId: id2 });
-    expect(s1After.content).toContain("Status: stopped");
     expect(s2After.content).toContain("Status: running");
 
     executor.shutdown();
@@ -355,5 +366,42 @@ describe("daemons: bounded memory and shutdown (merge gate)", () => {
         toolContext(root, { executor: new HostExecutor() }),
       ),
     ).rejects.toThrow(/daemons\.enabled/);
+  });
+});
+
+describe("process_manager kill is checked like a write (0.14, review)", () => {
+  it("asks for kill, refuses it in plan mode, and never asks for list", async () => {
+    const executor = new HostExecutor();
+    const registry = new ToolRegistry([bashTool, processManagerTool]);
+    const asked: string[] = [];
+    let mode: "build" | "plan" = "build";
+    const permissions = new PermissionEngine({
+      root,
+      approver: new AutoApprover((r) => {
+        asked.push(r.preview);
+        return "once";
+      }),
+      mode: () => mode,
+    });
+    const ctx = { ...toolContext(root, { permissions }), executor };
+    let n = 0;
+    const call = (name: string, input: unknown) =>
+      registry.execute({ type: "tool_use", id: `pm_${++n}`, name, input } as ToolUseBlock, ctx);
+    const started = await call("bash", { command: "sleep 10", is_daemon: true });
+    const id = /background: (daemon_\d+)/.exec(started.content)?.[1] ?? "";
+    asked.length = 0;
+
+    expect((await call("process_manager", { action: "list" })).isError).toBe(false);
+    expect(asked).toEqual([]);
+
+    mode = "plan";
+    const refused = await call("process_manager", { action: "kill", daemonId: id });
+    expect(refused).toMatchObject({ isError: true, denied: true });
+
+    mode = "build";
+    const killed = await call("process_manager", { action: "kill", daemonId: id });
+    expect(killed.isError).toBe(false);
+    expect(asked).toEqual([expect.stringContaining(`Stop background process ${id}`)]);
+    executor.shutdown();
   });
 });

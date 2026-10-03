@@ -163,13 +163,18 @@ Only with `daemons.enabled: true` (off by default). Then `bash` accepts `is_daem
   `logs(id, {lines?, stream?})` (default 50 lines; at most `MAX_LOGS_CHARS`, 30,000 characters, newest
   lines first kept), `kill(id)` and `shutdown()`.
 - `kill` and `shutdown` call `RunningProcess.stop()`: SIGTERM to the process group, then SIGKILL
-  after the grace time.
+  after the grace time. `kill` marks the daemon `stopRequested`; its status becomes `stopped` when it
+  has really ended (0.14, review), whatever the exit code.
 - `Runtime.close()` calls `executor.daemons?.shutdown()`, so no daemon outlives the session.
 
 ## Tests
 
 `test/executorContract.ts` is one suite that every executor must pass: output, exit code, working folder,
-environment allowlist, output cap, timeout, `shutdown()`, and process-tree kill on abort.
+environment allowlist, output cap, timeout, `shutdown()`, process-tree kill on abort, and (0.14, review)
+a command that returns although a background child keeps its output open: after the command's own
+process exits, `run()` waits at most `EXIT_DRAIN_MS` (2 s) for the pipes, then kills the group, closes
+the pipes and returns; the timeout and Ctrl-C now signal the group even after bash has exited. Since
+0.14 `proxyEnv` builds `MAVEN_OPTS`/`GRADLE_OPTS` from the allowlisted environment only.
 `test/hostExecutor.test.ts` runs it for the host; `test/sandbox.test.ts` runs it for the machine's OS
 sandbox, plus real checks: writes outside the root fail, protected paths stay read-only, denied reads
 fail, no network, and `sandbox: false` isolates nothing. The Seatbelt tests run only on macOS.

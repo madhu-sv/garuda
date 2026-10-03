@@ -98,6 +98,26 @@ export function executorContract(name: string, make: () => Executor): void {
       await waitFor(() => !isAlive(child));
     });
 
+    it("returns when a background child keeps the output open (0.14, review)", async () => {
+      const pidFile = join(root, "background.pid");
+      const started = Date.now();
+      // No timeout reached: bash exits at once; the pipes stay open through the child.
+      const r = await executor.run(
+        `sleep 30 & echo $! > "${pidFile}"; echo started`,
+        policy({ timeoutMs: 20_000 }),
+      );
+      expect(Date.now() - started).toBeLessThan(8_000);
+      expect(r.stdout.text).toContain("started");
+      const child = readPid(pidFile) ?? 0;
+      await waitFor(() => !isAlive(child));
+
+      // With a timeout shorter than the drain: it returns at the timeout.
+      const quick = Date.now();
+      const t = await executor.run("sleep 30 & echo started", policy({ timeoutMs: 300 }));
+      expect(Date.now() - quick).toBeLessThan(5_000);
+      expect(t.stdout.text).toContain("started");
+    });
+
     it("kills the whole process tree on abort", async () => {
       const pidFile = join(root, "child.pid");
       const controller = new AbortController();
