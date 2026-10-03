@@ -82,6 +82,20 @@ describe("secret redaction (N6)", () => {
     expect(out).toContain("home /Users/me stays");
   });
 
+  it("keeps code and numbers that only look like secret assignments (live: tokenBudget in a review)", () => {
+    const code = [
+      "tokenBudget: 20000000",
+      '"tokenBudget": 1_000_000',
+      "tokenBudget: z.number().int().positive().optional()",
+      "apiKey: options.apiKey",
+    ];
+    for (const line of code) expect(redactor.text(line)).toBe(line);
+    // Still secrets: a literal value, and a number under a password name.
+    expect(redactor.text("token=m0_canary_secret_123456")).toBe("token=[REDACTED]");
+    expect(redactor.text("password=12345678")).toBe("password=[REDACTED]");
+    expect(redactor.text("secret = config.value1234567")).toBe("secret = [REDACTED]");
+  });
+
   it("session files never hold the secret, though the session in memory does", async () => {
     const root = join(base, "c");
     const store = new FileSessionStore(root, redactor);

@@ -147,6 +147,61 @@ describe("thinking blocks (0.9)", () => {
     expect(other.messages.flatMap((m) => m.content.map((b) => b.type))).not.toContain("thinking");
   });
 
+  it("after a message that redaction changed, no thinking block goes back (its signature binds the prefix)", async () => {
+    const root = dir();
+    const store = new FileSessionStore(root, new Redactor({}));
+    const journal = store.open("s2");
+    const start = {
+      root,
+      version: "t",
+      model: "claude-fable-5-1",
+      executor: "host",
+      isolation: "none",
+      limits: { maxSteps: 1, tokenBudget: 1, contextWindow: 1 },
+    };
+    journal.write({ type: "start", sessionId: "s2", ...start });
+    journal.write({ type: "user", message: { role: "user", content: [text("review")] } });
+    journal.write({
+      type: "assistant",
+      step: 1,
+      response: reply([thinking, toolUse("read_file", {}, "r1")]),
+    });
+    // The tool result holds a secret: on disk it is changed.
+    journal.write({
+      type: "tool_results",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            toolUseId: "r1",
+            content: "token=m0_canary_secret_123456",
+            isError: false,
+          },
+        ],
+      },
+      calls: [],
+    });
+    journal.write({
+      type: "assistant",
+      step: 2,
+      response: reply([thinking, toolUse("read_file", {}, "r2")]),
+    });
+    journal.write({
+      type: "tool_results",
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", toolUseId: "r2", content: "ok", isError: false }],
+      },
+      calls: [],
+    });
+    const resumed = await resumeSession({ store, root, sessionId: "s2", start });
+    const kinds = resumed.messages.map((m) => m.content.map((b) => b.type).join(","));
+    // Before the changed message: thinking kept. After it: left out.
+    expect(kinds[1]).toBe("thinking,tool_use");
+    expect(kinds[3]).toBe("tool_use");
+  });
+
   it("/models drops the thinking of the old model", async () => {
     const root = dir();
     const model = new FakeModelClient([reply([thinking, text("Hi.")])]);

@@ -129,7 +129,9 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
 
   const journal = options.store.open(id);
   const session = createSession(options.root, id, journal);
-  const messages = state.messages.map(repairServerBlocks).map(repairThinking);
+  const messages = dropThinkingAfterRedaction(
+    state.messages.map(repairServerBlocks).map(repairThinking),
+  );
   // Another model than the session's last one (0.9): thinking signatures do not carry over.
   session.messages =
     state.start !== undefined && state.start.model !== options.start.model
@@ -150,6 +152,18 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
  * (a secret in a query or a cited text), the API would refuse it: such a message keeps the titles
  * and URLs as plain text instead.
  */
+/**
+ * The API binds a thinking signature to all content before the block. When redaction changed a
+ * message on disk, every thinking block after it fails ("bound to a different conversation"; live,
+ * a Fable review that read source code with `tokenBudget: …` in it). So thinking blocks from the
+ * first changed message on are left out; the ones before it still go back unchanged.
+ */
+export function dropThinkingAfterRedaction(messages: readonly Message[]): Message[] {
+  const first = messages.findIndex((m) => JSON.stringify(m.content).includes(REDACTED));
+  if (first < 0) return [...messages];
+  return [...messages.slice(0, first), ...withoutThinking(messages.slice(first))];
+}
+
 /** A thinking block that redaction changed on disk cannot go back (0.9): it is left out. */
 function repairThinking(message: Message): Message {
   if (message.role !== "assistant") return message;

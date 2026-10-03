@@ -48,8 +48,9 @@ within a tool-use turn; without them the model loses its earlier reasoning betwe
 before 0.9 dropped them. Now `ThinkingBlock.wire` holds the `thinking` or `redacted_thinking` block and
 goes back byte for byte; `text` is the readable thinking (empty when omitted or redacted). They are left
 out (`thinking.ts`, `withoutThinking`) only where they cannot go back unchanged: after `/models` (a
-signature belongs to its model), on a resume with another model, and when redaction changed one on
-disk. The compaction summary, `/export` and the OpenAI-compatible adapter ignore them. The setting
+signature belongs to its model), on a resume with another model, when redaction changed one on
+disk, and on a resume after a message that redaction changed (the signature binds the content before
+it; see [session.md](session.md)). The compaction summary, `/export` and the OpenAI-compatible adapter ignore them. The setting
 `thinking.keepBlocks: false` (and `garuda eval --keep-thinking off`) drops them as before, for A/B runs.
 
 `/thinking` (0.9) sends `ModelRequest.thinking`. `ModelInfo.thinking` in `pricing.ts` says per model:

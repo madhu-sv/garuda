@@ -28,6 +28,19 @@ const ASSIGNMENT =
 /** Opaque provider values that must stay byte for byte: encrypted search results, thinking signatures. */
 const OPAQUE_KEYS = new Set(["encrypted_content", "encrypted_index", "signature"]);
 
+/**
+ * A value that is code or a number, not a secret: `tokenBudget: 20000000`,
+ * `tokenBudget: z.number().int()`, `apiKey: options.apiKey`. Redacting these changed source code in
+ * session files (and so broke resume, see resume.ts). A literal secret has no "(" and is not a
+ * plain number or a dotted name like `options.apiKey`.
+ */
+function looksLikeCode(name: string, value: string, next: string | undefined): boolean {
+  // A number is a limit (`tokenBudget`), unless the name says password or secret (a PIN).
+  if (/^[\d_.]+$/.test(value)) return !/pass|secret/i.test(name);
+  if (value.includes("(") || next === "(") return true;
+  return /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/.test(value) && !/\d{4,}/.test(value);
+}
+
 const SECRET_ENV_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)/i;
 
 export class Redactor {
@@ -45,7 +58,9 @@ export class Redactor {
     let out = input;
     for (const literal of this.literals) out = out.split(literal).join(REDACTED);
     for (const pattern of PATTERNS) out = out.replace(pattern, REDACTED);
-    return out.replace(ASSIGNMENT, (_all, name: string, sep: string) => `${name}${sep}${REDACTED}`);
+    return out.replace(ASSIGNMENT, (all, name: string, sep: string, value: string, at: number) =>
+      looksLikeCode(name, value, out[at + all.length]) ? all : `${name}${sep}${REDACTED}`,
+    );
   }
 
   /** A copy of `value` with every string redacted. */

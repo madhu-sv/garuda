@@ -79,12 +79,19 @@ The model may see a secret, but Garuda never writes it to disk. The `Redactor` r
    CREDENTIAL (8 characters or longer), wherever they appear.
 2. Known formats: private key blocks, Anthropic and OpenAI keys, AWS access key ids, GitHub tokens, Slack
    tokens, Google API keys, JWTs.
-3. Assignments such as `password = "…"`, `api_key: …`: the name stays, the value goes.
+3. Assignments such as `password = "…"`, `api_key: …`: the name stays, the value goes. Code and
+   numbers stay (`looksLikeCode`): `tokenBudget: 20000000`, `tokenBudget: z.number()…`,
+   `apiKey: options.apiKey`. A number under a password or secret name is still removed (a PIN).
+   Before this, reading Garuda's own source changed `tokenBudget` lines on disk, and a resume failed.
 
 The Redactor leaves `encrypted_content` and `encrypted_index` alone (0.6): they are ciphertext from Claude's
 web search and must go back unchanged. Since 0.9 it also leaves thinking `signature` values and the `data`
 of `redacted_thinking` blocks alone. The readable thinking text is redacted as usual; a block that
 changed that way is left out on resume (`repairThinking`), because its signature would no longer match.
+The API binds a signature to all content before the block too. So when redaction changed any message
+on disk (a tool result with a secret), every thinking block from that message on is left out on resume
+(`dropThinkingAfterRedaction`); the blocks before it go back unchanged. Live case: a resume answered
+400 "The block is bound to a different conversation".
 A resume with another model than the session's last one leaves all thinking out.
 
 ## Resume (`resume.ts`)
