@@ -101,6 +101,11 @@ export interface AgentDeps {
   keepThinking?: boolean;
   /** What each request asks of Claude's thinking (0.9, /thinking). */
   thinking?: ThinkingRequest;
+  /**
+   * Write the "end" record when the run stops (default true). A subagent run writes its own
+   * single end record after its wrap-up call (0.14.1, review: there were two).
+   */
+  endRecord?: boolean;
 }
 
 export interface AgentResult {
@@ -138,7 +143,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   let recoveries = 0;
 
   const finish = (stopReason: AgentStopReason): AgentResult => {
-    session.journal?.write({ type: "end", stopReason, steps });
+    if (deps.endRecord !== false) session.journal?.write({ type: "end", stopReason, steps });
     return {
       stopReason,
       steps,
@@ -158,7 +163,11 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       const result = await compactIfNeeded(
         session,
         deps.model,
-        { contextWindow: deps.contextWindow, costOf: cost },
+        {
+          contextWindow: deps.contextWindow,
+          costOf: cost,
+          ...(deps.retryDelaysMs === undefined ? {} : { retryDelaysMs: deps.retryDelaysMs }),
+        },
         signal,
       );
       if (result !== undefined) emit({ type: "compaction", result });

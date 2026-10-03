@@ -10,7 +10,7 @@ import {
 } from "../src/context/instructions.js";
 import { runAgent } from "../src/loop/runAgent.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
-import type { Message, Usage } from "../src/model/types.js";
+import type { Message, ModelClient, ModelEvent, Usage } from "../src/model/types.js";
 import { addUserMessage, createSession, type Session } from "../src/session/session.js";
 import { MemoryJournal } from "../src/session/store.js";
 import { ToolRegistry } from "../src/tools/registry.js";
@@ -165,6 +165,29 @@ describe("compaction (F23)", () => {
       expect(request.system).toBe("stable system");
       expect(request.tools).toEqual(main[0]?.tools);
     }
+  });
+});
+
+describe("compaction summary retry (0.14.1, review)", () => {
+  it("sends the summary again after a dropped connection, like a main call", async () => {
+    const session = longSession(8);
+    session.contextTokens = 95_000;
+    let calls = 0;
+    const model: ModelClient = {
+      async *stream(): AsyncIterable<ModelEvent> {
+        calls++;
+        if (calls === 1) throw new TypeError("terminated");
+        yield { type: "response", response: reply([text("The summary.")]) };
+      },
+    };
+    const result = await compactIfNeeded(
+      session,
+      model,
+      { contextWindow: 100_000, retryDelaysMs: [0] },
+      signal,
+    );
+    expect(calls).toBe(2);
+    expect(result?.stage).toBe("summary");
   });
 });
 

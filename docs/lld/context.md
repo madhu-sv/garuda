@@ -64,7 +64,7 @@ cut tool results longer than 1000 chars before the split to 200 chars + a note
 estimate = before - saved chars / 4
 if saved > 0 and estimate <= window * target: apply(trim)
 # Stage 2: summary
-summary = model(SUMMARY_SYSTEM, transcript(older messages))
+summary = model(SUMMARY_SYSTEM, transcript(older messages))   # retried like a main call (0.14.1)
 messages = [user: marker + first user request + summary, ...recent]
 estimate = before - (chars before - chars after) / 4   # 0.8: the system prompt and tools stay counted
 # thinking blocks (0.9) count by their wire size, and the summary request leaves them out

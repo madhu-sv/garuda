@@ -535,9 +535,13 @@ export class Runtime {
             client:
               sub === undefined
                 ? () => {
+                    // A failed start is not kept: the next call tries again (0.14.1, review).
                     startClient ??= Promise.resolve(
                       typeof startModel === "function" ? startModel() : startModel,
-                    );
+                    ).catch((error: unknown) => {
+                      startClient = undefined;
+                      throw error;
+                    });
                     return startClient;
                   }
                 : async () => {
@@ -580,9 +584,13 @@ export class Runtime {
             client:
               sub === undefined
                 ? () => {
+                    // A failed start is not kept: the next call tries again (0.14.1, review).
                     startClient ??= Promise.resolve(
                       typeof startModel === "function" ? startModel() : startModel,
-                    );
+                    ).catch((error: unknown) => {
+                      startClient = undefined;
+                      throw error;
+                    });
                     return startClient;
                   }
                 : async () => {
@@ -879,7 +887,11 @@ export class Runtime {
           spec: sub.spec,
           client: () => {
             assertModelAllowedByPolicy(this.policy, sub.spec);
-            client ??= sub.model();
+            // A failed start is not kept: the next call tries again (0.14.1, review).
+            client ??= sub.model().catch((error: unknown) => {
+              client = undefined;
+              throw error;
+            });
             return client as Promise<ModelClient>;
           },
           contextWindow: sub.info.contextWindow,
@@ -911,7 +923,11 @@ export class Runtime {
           spec: resolved.spec,
           client: () => {
             assertModelAllowedByPolicy(this.policy, resolved.spec);
-            client ??= resolved.model();
+            // A failed start is not kept: the next call tries again (0.14.1, review).
+            client ??= resolved.model().catch((error: unknown) => {
+              client = undefined;
+              throw error;
+            });
             return client as Promise<ModelClient>;
           },
           contextWindow: resolved.info.contextWindow,

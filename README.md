@@ -48,11 +48,11 @@ findings are fixed (patches 0128–0141). Known limits in 0.14.0:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Subagents: each child has its own step and token budget (capped by the team policy); it does not
-  take what the parent has left, and parallel `explore` calls each get one. A child that fails with
-  an error loses its usage from the session totals.
+  take what the parent has left, and parallel `explore` calls each get one. (Fixed after 0.14.0: a
+  child that failed with an error lost its usage from the session totals.)
 - Audit log: lines cut from the end of a file, or a removed file, are not detected (no anchor outside
   the file).
-- The compaction summary call has no retry after a dropped connection; send the message again.
+- (Fixed after 0.14.0: the compaction summary call had no retry after a dropped connection.)
 - On macOS, secret-named variables other than the provider API keys stay in Garuda's own environment.
 - Low findings of the tools review are open: a duplicate MCP tool name stops the start, the
   web_fetch cache is not evicted, a slow regular expression in `grep` is not stopped inside a file.

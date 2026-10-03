@@ -262,7 +262,9 @@ You are an expert application security auditor...
    - The team policy's `limits` cap both, for explore, custom agents and MoE (`withPolicyLimits`, 0.14,
      review). Limit: each child has its own budget; it does not take what the parent has left.
 3. **Wrap-Up Recovery**: When a child hits its step limit, its token limit or repeats a call, `runChild` adds a wrap-up prompt (`WRAP_UP`) and makes one more model call (tool calls in it are ignored), so the subagent can say what it found and what is still open. The call runs only when it fits in the budget that is left (G06): the tokens used so far, plus the context of the last response, plus the output limit, must not pass `tokenBudget`. With no room there is no call; the answer is the child's last text, or a note that says the budget ran out.
-4. **Usage Accounting**: Emits a `SubagentReport` attached to the tool's `ToolOutcome`. The primary orchestrator adds child token usage and cost to the parent session totals.
+4. **Usage Accounting**: Emits a `SubagentReport` attached to the tool's `ToolOutcome`. The primary orchestrator adds child token usage and cost to the parent session totals. The report's usage is the child session's whole usage: its responses, its compaction summaries and the wrap-up call (0.14.1, review). A run that fails after it used the model throws `SubagentFailure`, which carries the report; the registry adds it to the error outcome, so the tokens still count (on Ctrl-C they are not counted).
+5. **One end record**: `runAgent` runs with `endRecord: false`, and `runChild` writes the single `end` record of the child journal: the loop's stop reason, `wrap_up`, `no_wrap_up`, `error` or `interrupted`, with the final step count (0.14.1, review: there were two).
+6. **What the parent has**: a child's edits get the parent's diagnostics and formatters (`context.diagnostics`, `context.format`), and MoE specialists get Claude's web search when the runtime offers it (0.14.1, review). A model client that fails to start is not kept, so the next call tries again.
 
 ---
 

@@ -1,3 +1,4 @@
+import { callModelWithRetry, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
 import { hasServerBlocks, serverPairText, withoutServerBlocks } from "../model/serverTools.js";
 import type {
   ContentBlock,
@@ -26,6 +27,8 @@ export interface CompactionOptions {
   keepSteps?: number;
   /** Cost of the summary response, when the price is known. */
   costOf?: (response: ModelResponse) => number | undefined;
+  /** Waits before the retries of a broken summary stream (default: as the main loop). */
+  retryDelaysMs?: readonly number[];
 }
 
 export interface CompactionResult {
@@ -75,7 +78,17 @@ export async function compactIfNeeded(
   }
 
   // Stage 2: summary of everything before the split.
-  return summaryStage(session, model, trimmed, split, before, options.costOf, signal);
+  return summaryStage(
+    session,
+    model,
+    trimmed,
+    split,
+    before,
+    options.costOf,
+    signal,
+    undefined,
+    options.retryDelaysMs,
+  );
 }
 
 /**
@@ -114,10 +127,11 @@ async function summaryStage(
   costOf: CompactionOptions["costOf"],
   signal: AbortSignal,
   focus?: string,
+  delays: readonly number[] = MODEL_RETRY_DELAYS_MS,
 ): Promise<CompactionResult> {
   const older = trimmed.slice(0, split);
   const recent = trimmed.slice(split);
-  const summary = await summarise(model, older, signal, focus);
+  const summary = await summarise(model, older, signal, focus, delays);
   const summaryText = summary.content
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -226,7 +240,8 @@ async function summarise(
   model: ModelClient,
   messages: readonly Message[],
   signal: AbortSignal,
-  focus?: string,
+  focus: string | undefined,
+  delays: readonly number[],
 ): Promise<ModelResponse> {
   const ask =
     focus === undefined || focus.trim() === ""
@@ -248,12 +263,9 @@ async function summarise(
     tools: [],
     maxTokens: 4096,
   };
-  let response: ModelResponse | undefined;
-  for await (const event of model.stream(request, { signal })) {
-    if (event.type === "response") response = event.response;
-  }
-  if (response === undefined) throw new Error("The model gave no summary.");
-  return response;
+  // The summary request is the largest of the session, so a dropped connection is most likely
+  // here: retry it like a main call (0.14.1, review). Its text is not shown, so no events.
+  return callModelWithRetry(model, request, signal, () => {}, delays);
 }
 
 /** The older turns as plain text for the summary request. Long tool outputs are cut. */

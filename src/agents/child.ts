@@ -7,21 +7,24 @@ import {
 } from "../loop/runAgent.js";
 import { type Price, responseCost, totalTokens } from "../model/pricing.js";
 import { serverCallText } from "../model/serverTools.js";
-import {
-  addUsage,
-  type ModelClient,
-  type ModelResponse,
-  type ServerToolSpec,
-  type TextBlock,
-  type ToolUseBlock,
-  type Usage,
+import type {
+  ModelClient,
+  ModelResponse,
+  ServerToolSpec,
+  TextBlock,
+  ToolUseBlock,
 } from "../model/types.js";
 import type { PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
 import type { SubagentReport } from "../session/records.js";
 import { addAssistantResponse, addUserMessage, createSession } from "../session/session.js";
 import type { Journal } from "../session/store.js";
-import type { ToolContext, ToolHooks, ToolRunner } from "../tools/types.js";
+import {
+  SubagentFailure,
+  type ToolContext,
+  type ToolHooks,
+  type ToolRunner,
+} from "../tools/types.js";
 import { VERSION } from "../version.js";
 
 /**
@@ -106,68 +109,87 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
     calls.push(line);
     context.progress?.(`step ${calls.length} · ${line}`);
   };
-  const result = await runAgent(session, {
-    model,
-    tools: run.tools,
-    system: run.system,
-    permissions: run.permissions,
-    ...(run.knowledge === undefined ? {} : { knowledge: run.knowledge }),
-    ...(run.hooks === undefined ? {} : { hooks: run.hooks }),
-    ...(run.executor === undefined ? {} : { executor: run.executor }),
-    ...(run.serverTools === undefined ? {} : { serverTools: run.serverTools }),
-    // The child's tool calls go to the parent's audit log (G07, 0.14 review).
-    ...(context.audit === undefined ? {} : { audit: context.audit }),
-    maxSteps: limits.maxSteps,
-    tokenBudget: limits.tokenBudget,
-    maxTokens: run.maxTokens,
-    contextWindow: run.model.contextWindow,
-    ...(run.model.price === undefined ? {} : { price: run.model.price }),
-    signal: context.signal,
-    onEvent,
-  });
-
-  let usage: Usage = result.usage;
-  let steps = result.steps;
-  let answer = lastText(session.messages);
-  // G06: the wrap-up call is one more request, so it must fit in the budget that is left. It costs
-  // at least the context of the last response plus its output limit. No room: no call.
-  const reserve = session.contextTokens + run.maxTokens;
-  const wrapUpFits = totalTokens(result.usage) + reserve <= limits.tokenBudget;
-  if (stoppedEarly(result.stopReason) && !wrapUpFits) {
-    answer = answer || NO_ROOM;
-    journal?.write({ type: "end", stopReason: "no_wrap_up", steps });
-  } else if (stoppedEarly(result.stopReason)) {
-    // One more call with no tool use, so the run still gives an answer.
-    context.progress?.("writing the answer");
-    addUserMessage(session, WRAP_UP);
-    const response = await callOnce(model, run, session.messages, context.signal);
-    steps++;
-    usage = addUsage(usage, response.usage);
-    const price = run.model.price;
-    addAssistantResponse(
-      session,
-      response,
-      steps,
-      price === undefined ? undefined : responseCost(response, price),
-    );
-    answer = textOf(response.content) || answer;
-    journal?.write({ type: "end", stopReason: "wrap_up", steps });
-  }
-
-  // The session adds each response at its own price (the Batch API costs half).
-  const costUsd = run.model.price === undefined ? undefined : session.costUsd;
-  return {
-    answer: answer.trim(),
-    calls,
-    report: {
+  const { diagnostics, format } = context;
+  // Steps so far: one per assistant message (also when the run fails part way).
+  const stepsSoFar = () => session.messages.filter((m) => m.role === "assistant").length;
+  // The report counts the child session's whole usage: its responses, its compaction summaries and
+  // the wrap-up call (0.14.1, review: compaction was missing).
+  const report = (stopReason: string, steps: number): SubagentReport => {
+    const costUsd = run.model.price === undefined ? undefined : session.costUsd;
+    return {
       sessionId: run.id,
       model: run.model.spec,
       steps,
-      stopReason: result.stopReason,
-      usage,
+      stopReason,
+      usage: session.usage,
       ...(costUsd === undefined ? {} : { costUsd }),
-    },
+    };
   };
+  try {
+    const result = await runAgent(session, {
+      model,
+      tools: run.tools,
+      system: run.system,
+      permissions: run.permissions,
+      ...(run.knowledge === undefined ? {} : { knowledge: run.knowledge }),
+      ...(run.hooks === undefined ? {} : { hooks: run.hooks }),
+      ...(run.executor === undefined ? {} : { executor: run.executor }),
+      ...(run.serverTools === undefined ? {} : { serverTools: run.serverTools }),
+      // Edits of a child get the same diagnostics and formatters as the parent's (0.14.1, review).
+      ...(diagnostics === undefined ? {} : { diagnostics }),
+      ...(format === undefined ? {} : { format }),
+      // The child's tool calls go to the parent's audit log (G07, 0.14 review).
+      ...(context.audit === undefined ? {} : { audit: context.audit }),
+      maxSteps: limits.maxSteps,
+      tokenBudget: limits.tokenBudget,
+      maxTokens: run.maxTokens,
+      contextWindow: run.model.contextWindow,
+      ...(run.model.price === undefined ? {} : { price: run.model.price }),
+      signal: context.signal,
+      onEvent,
+      // One end record per child run: written below, after a possible wrap-up call.
+      endRecord: false,
+    });
+
+    let steps = result.steps;
+    let answer = lastText(session.messages);
+    let end: string = result.stopReason;
+    // G06: the wrap-up call is one more request, so it must fit in the budget that is left. It
+    // costs at least the context of the last response plus its output limit. No room: no call.
+    const reserve = session.contextTokens + run.maxTokens;
+    const wrapUpFits = totalTokens(session.usage) + reserve <= limits.tokenBudget;
+    if (stoppedEarly(result.stopReason) && !wrapUpFits) {
+      answer = answer || NO_ROOM;
+      end = "no_wrap_up";
+    } else if (stoppedEarly(result.stopReason)) {
+      // One more call with no tool use, so the run still gives an answer.
+      context.progress?.("writing the answer");
+      addUserMessage(session, WRAP_UP);
+      const response = await callOnce(model, run, session.messages, context.signal);
+      steps++;
+      const price = run.model.price;
+      addAssistantResponse(
+        session,
+        response,
+        steps,
+        price === undefined ? undefined : responseCost(response, price),
+      );
+      answer = textOf(response.content) || answer;
+      end = "wrap_up";
+    }
+    journal?.write({ type: "end", stopReason: end, steps });
+    return { answer: answer.trim(), calls, report: report(result.stopReason, steps) };
+  } catch (error) {
+    const steps = stepsSoFar();
+    const aborted = context.signal.aborted;
+    journal?.write({ type: "end", stopReason: aborted ? "interrupted" : "error", steps });
+    if (aborted) throw error;
+    // The usage so far still counts for the parent session (0.14.1, review: it was lost).
+    throw new SubagentFailure(
+      error instanceof Error ? error.message : String(error),
+      report("error", steps),
+    );
+  }
 }
 
 export function stoppedEarly(reason: AgentStopReason): boolean {

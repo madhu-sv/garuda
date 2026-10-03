@@ -2,7 +2,13 @@ import { z } from "zod";
 import { AuditWriteError } from "../audit/logger.js";
 import type { ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { CallInfo } from "../permissions/types.js";
-import type { AnyTool, ToolContext, ToolOutcome, ToolRunner } from "./types.js";
+import {
+  type AnyTool,
+  SubagentFailure,
+  type ToolContext,
+  type ToolOutcome,
+  type ToolRunner,
+} from "./types.js";
 
 export class ToolRegistry implements ToolRunner {
   private readonly tools = new Map<string, AnyTool>();
@@ -151,6 +157,8 @@ export class ToolRegistry implements ToolRunner {
         };
       }
       const message = error instanceof Error ? error.message : String(error);
+      // A failed subagent run still reports its usage (0.14.1, review).
+      const failed = error instanceof SubagentFailure ? { subagent: error.report } : {};
       try {
         if (startTime !== undefined) await logRun(true);
       } catch (auditError) {
@@ -158,9 +166,10 @@ export class ToolRegistry implements ToolRunner {
         return {
           content: `Error: ${call.name} failed: ${message}\n\nError: ${auditError.message}.`,
           isError: true,
+          ...failed,
         };
       }
-      return { content: `Error: ${call.name} failed: ${message}`, isError: true };
+      return { content: `Error: ${call.name} failed: ${message}`, isError: true, ...failed };
     }
   }
 }

@@ -172,3 +172,17 @@ export interface ToolOutcome {
 /** A tool with its generic types erased, as the registry stores it. */
 // biome-ignore lint/suspicious/noExplicitAny: variance escape hatch for a heterogeneous registry; not a public input type.
 export type AnyTool = Tool<any, any>;
+
+/**
+ * A subagent run that failed after it used the model (0.14.1, review). The registry still adds the
+ * report to the outcome, so the tokens and the cost of the failed run count for the session.
+ */
+export class SubagentFailure extends Error {
+  override readonly name = "SubagentFailure";
+  constructor(
+    message: string,
+    readonly report: SubagentReport,
+  ) {
+    super(message);
+  }
+}

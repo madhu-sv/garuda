@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -98,6 +98,51 @@ describe("MoE delegate_expert tool execution", () => {
     const rendered = tool.toText?.(result);
     expect(rendered).toContain("[Go Specialist Report]");
     expect(rendered).toContain("moe-expert go: 2 steps");
+  });
+});
+
+describe("MoE specialists get what the main agent has (0.14.1, review)", () => {
+  it("passes Claude's web search, and runs diagnostics after a specialist's edit", async () => {
+    const root = join(base, "proj-inherit");
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, "calc.go"), "package main\nconst rate = 1\n");
+    const childModel = new FakeModelClient(
+      [
+        reply([toolUse("read_file", { path: "calc.go" }, "r1")]),
+        reply([
+          toolUse(
+            "edit_file",
+            { path: "calc.go", old_string: "rate = 1", new_string: "rate = 10" },
+            "e1",
+          ),
+        ]),
+        reply([text("Rate fixed.")]),
+      ],
+      { serverTools: ["web_search"] },
+    );
+    const tool = createMoeDispatchTool({
+      mainTools: () => new ToolRegistry(defaultTools({ codeIndex: "lookup" })),
+      model: async () => ({
+        spec: "test-model",
+        client: async () => childModel,
+        contextWindow: 100_000,
+      }),
+      permissions: allowAll(root),
+      executor: new HostExecutor(),
+      serverTools: () => [{ type: "web_search", maxUses: 3 }],
+    });
+    const checked: string[] = [];
+    await tool.run(
+      { language: "go", task: "Fix the tax rate in calc.go", files: ["calc.go"] },
+      toolContext(root, {
+        diagnostics: async (_absolute, shown) => {
+          checked.push(shown);
+          return undefined;
+        },
+      }),
+    );
+    expect(childModel.requests[0]?.serverTools).toEqual([{ type: "web_search", maxUses: 3 }]);
+    expect(checked).toEqual(["calc.go"]);
   });
 });
 

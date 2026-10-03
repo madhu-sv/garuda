@@ -253,6 +253,7 @@ export function createMoeDispatchTool(
       const system = buildSpecialistSystem(spec, context.root, options.profiles);
       const hooks = options.hooks?.();
       const journal = options.journal?.(childId);
+      const serverTools = options.serverTools?.() ?? [];
 
       const promptParts = [input.task];
       if (input.files && input.files.length > 0) {
@@ -278,6 +279,8 @@ export function createMoeDispatchTool(
           ...(options.knowledge !== undefined ? { knowledge: options.knowledge } : {}),
           ...(hooks !== undefined ? { hooks } : {}),
           ...(journal !== undefined ? { journal } : {}),
+          // Claude's web search, as the runtime offers it (0.14.1, review: the option was unused).
+          ...(serverTools.length === 0 ? {} : { serverTools }),
         },
         context,
       );

@@ -68,6 +68,42 @@ const resultOf = (parent: FakeModelClient, step: number): ToolResultBlock | unde
     .at(-1)
     ?.content.find((b): b is ToolResultBlock => b.type === "tool_result");
 
+describe("explore: a model that fails to start (0.14.1, review)", () => {
+  it("tries again at the next call; a failed start is not kept", async () => {
+    const root = repo();
+    const model = new FakeModelClient([
+      reply([toolUse("explore", { question: QUESTION }, "x1")]),
+      reply([text("The explore call failed.")]),
+      reply([toolUse("explore", { question: QUESTION }, "x2")]),
+      reply([text("applyCoupon is in src/coupon.ts:1.")]),
+      reply([text("Found it.")]),
+    ]);
+    let starts = 0;
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake-main",
+      model: async () => {
+        starts++;
+        // The first start is the main loop's; the second, explore's first, fails once.
+        if (starts === 2) throw new Error("the provider was not reachable");
+        return model;
+      },
+      modelInfo: INFO,
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({ subagents: { enabled: true } }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    await runtime.runTurn("Where is applyCoupon?", new AbortController().signal);
+    expect(resultOf(model, 1)?.content).toMatch(/not reachable/);
+    await runtime.runTurn("Try again.", new AbortController().signal);
+    expect(resultOf(model, 4)?.content).toContain("applyCoupon is in src/coupon.ts:1.");
+    expect(starts).toBe(3);
+  });
+});
+
 describe("explore subagent (0.3)", () => {
   it("answers in its own context with read-only tools, and its usage counts for the session", async () => {
     const root = repo();
