@@ -34,6 +34,23 @@ export async function resolveInRoot(root: string, input: string): Promise<string
   return absolute;
 }
 
+/**
+ * The root-relative real path of a root-relative `path`, when a symbolic link makes it another path
+ * inside the root (review finding: `public.txt -> .env` passed the sensitive and policy checks,
+ * which saw only "public.txt"). Undefined when it is the same path, or not inside the root.
+ */
+export async function realRelative(root: string, path: string): Promise<string | undefined> {
+  try {
+    const realRoot = await realpath(root);
+    const real = await realpathOfNearestExisting(resolve(root, path));
+    if (!isInside(realRoot, real)) return undefined;
+    const shown = displayPath(realRoot, real);
+    return shown === path ? undefined : shown;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The real path of `path`, or of its nearest existing parent folder. */
 async function realpathOfNearestExisting(path: string): Promise<string> {
   let current = path;

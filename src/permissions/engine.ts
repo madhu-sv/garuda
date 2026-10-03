@@ -2,6 +2,7 @@ import { sep } from "node:path";
 import type { AuditLogger } from "../audit/logger.js";
 import type { ProfileAccess } from "../lang/profiles.js";
 import type { ExecPolicy, Isolation, NetworkProxyPolicy } from "../sandbox/types.js";
+import { realRelative } from "./pathGuard.js";
 import {
   isCommandDisallowedByPolicy,
   isHostBlockedByPolicy,
@@ -10,7 +11,7 @@ import {
   type TeamPolicy,
 } from "./policy.js";
 import { formatRule, type Rule, ruleMatches } from "./rules.js";
-import { sandboxPaths } from "./sandboxPaths.js";
+import { policyDeniedPaths, sandboxPaths } from "./sandboxPaths.js";
 import { isProtectedFromWrites, isSensitive } from "./sensitive.js";
 import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 import type {
@@ -129,6 +130,19 @@ export class PermissionEngine implements PermissionGate {
     const { tool, info } = request;
     const target = info?.target;
     const allowRule = this.settings.allow.find((r) => ruleMatches(r, tool, target, "allow"));
+
+    // A symbolic link: the file it reaches gets the same denials as when it is named directly.
+    if (target?.kind === "path") {
+      const real = await realRelative(this.root, target.path);
+      if (real !== undefined) {
+        const denial = this.pathDenial(tool, { kind: "path", path: real }, request.readOnly);
+        if (denial !== undefined) {
+          return {
+            decision: { ...denial, reason: `${target.path} leads to ${real}. ${denial.reason}` },
+          };
+        }
+      }
+    }
 
     if (this.policy !== undefined) {
       if (target?.kind === "command") {
@@ -303,6 +317,44 @@ export class PermissionEngine implements PermissionGate {
     return allowed && !mustAsk ? { allowed: true, by: "rule" } : deny;
   }
 
+  /** The denials that depend only on the path: team policy, sensitive files, .git, deny rules. */
+  private pathDenial(
+    tool: string,
+    target: { kind: "path"; path: string },
+    readOnly: boolean,
+  ): Extract<PermissionDecision, { allowed: false }> | undefined {
+    if (this.policy !== undefined) {
+      const violation = isPathDeniedByPolicy(this.policy, target.path);
+      if (violation.denied) {
+        return {
+          allowed: false,
+          by: "policy",
+          reason: violation.reason ?? "Denied by team policy.",
+        };
+      }
+    }
+    if (isSensitive(target.path)) {
+      const named = this.settings.allow.some(
+        (r) => r.pattern !== undefined && ruleMatches(r, tool, target, "allow"),
+      );
+      if (!named) {
+        return { allowed: false, by: "sensitive", reason: `${target.path} is a sensitive file.` };
+      }
+    }
+    if (!readOnly && isProtectedFromWrites(target.path)) {
+      return { allowed: false, by: "rule", reason: `${target.path} is inside .git/.` };
+    }
+    const deny = this.settings.deny.find((r) => ruleMatches(r, tool, target, "deny"));
+    if (deny !== undefined) {
+      return {
+        allowed: false,
+        by: "rule",
+        reason: `A deny rule blocks this call: ${formatRule(deny)}.`,
+      };
+    }
+    return undefined;
+  }
+
   deniedByPolicy(path: string): boolean {
     return this.policy !== undefined && isPathDeniedByPolicy(this.policy, path).denied;
   }
@@ -319,8 +371,10 @@ export class PermissionEngine implements PermissionGate {
     }: { sandbox?: boolean; readOnlyRoot?: boolean } = {},
   ): ExecPolicy {
     const paths = sandboxPaths(this.root, this.settings.sandbox);
+    // The team policy's denied paths: no read and no write for commands either (K6).
+    const denied = policyDeniedPaths(this.root, this.policy?.denyPaths ?? []);
     let writePaths = [...new Set([...paths.writePaths, ...this.access.writePaths])];
-    let denyWritePaths = paths.denyWritePaths;
+    let denyWritePaths = [...paths.denyWritePaths, ...denied];
     if (readOnlyRoot) {
       // The root is also a read-only hole, for a project inside a writable folder (a temp dir).
       const inRoot = (p: string) => p === this.root || p.startsWith(`${this.root}${sep}`);
@@ -331,6 +385,7 @@ export class PermissionEngine implements PermissionGate {
       root: this.root,
       sandbox,
       ...paths,
+      denyReadPaths: [...paths.denyReadPaths, ...denied],
       writePaths,
       denyWritePaths,
       network: !sandbox,

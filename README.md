@@ -456,8 +456,9 @@ A team policy sets limits that a project cannot loosen, and an audit log records
     denied, and on a machine with no OS sandbox every command is denied.
   - `denyPaths`: root-relative path patterns that the agent may not read or write (for example
     `["**/.env*", "secret/**"]`). File tools refuse them; `grep`, `glob` and the code index skip them
-    (no content, no name). Not covered: shell commands (`cat` in `bash`) and a symbolic link with
-    another name.
+    (no content, no name). Commands in the OS sandbox cannot read or write them either: the matching
+    files and folders are added to the sandbox profile when each command starts (not searched:
+    `node_modules`, `.git`; at most 1,000 paths). A symbolic link to a denied file is denied too.
   - `allowedModels`: Allowlist of LLM models permitted for use in the organization.
   - `network`: `blockedHosts` (`*.example.com` for subdomains) and `strictAllowlist`. A blocked host
     stays blocked for `web_fetch` and for sandboxed commands, also when the project's
@@ -894,7 +895,9 @@ Put rules in `.garuda/settings.json` in the project. Deny rules always win.
   A deny rule blocks the command when one part matches, also behind `sudo`, `env` or `VAR=value`.
   An allow rule must match every part as written: `bash(pnpm test*)` does not cover
   `NODE_OPTIONS=… pnpm test` or `sudo pnpm test`.
-- Sensitive files (`.env*`, keys, `.npmrc`, `.aws/`, …) are blocked, also for reads.
+- Sensitive files (`.env*`, keys, `.npmrc`, `.aws/`, …) are blocked, also for reads, also through a
+  symbolic link with another name. On macOS and Windows, path patterns ignore letter case
+  (`.ENV` is `.env` there).
   An allow rule that names the file, for example `read_file(.env.example)`, unblocks it.
 - Write tools never change files in `.git/`.
 - Commands see only these environment variables: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`,

@@ -1,6 +1,8 @@
 import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import { globbySync } from "globby";
+import { CASE_INSENSITIVE_FS, fullGlob } from "./rules.js";
 
 /**
  * Default paths for the OS sandbox (0.2). Commands may read everything except
@@ -92,4 +94,33 @@ function real(path: string): string {
 
 function unique(paths: string[]): string[] {
   return [...new Set(paths.filter((p) => isAbsolute(p)))];
+}
+
+/** Most paths that a team policy's `denyPaths` adds to one sandbox profile. */
+export const MAX_POLICY_DENIED_PATHS = 1_000;
+
+/**
+ * The files and folders in the root that the team policy's `denyPaths` names, as absolute paths
+ * for the OS sandbox (K6, review): file tools refused them, but `cat secret/x` in `bash` read them.
+ * The sandbox needs real paths, so the patterns are matched against the disk when a command
+ * starts: a file created later is covered from the next command on. node_modules and .git are
+ * not searched.
+ */
+export function policyDeniedPaths(
+  root: string,
+  patterns: readonly string[],
+  ignoreCase: boolean = CASE_INSENSITIVE_FS,
+): string[] {
+  if (patterns.length === 0) return [];
+  const found = globbySync(patterns.map(fullGlob), {
+    cwd: root,
+    absolute: true,
+    dot: true,
+    onlyFiles: false,
+    followSymbolicLinks: false,
+    gitignore: false,
+    caseSensitiveMatch: !ignoreCase,
+    ignore: ["**/node_modules/**", "**/.git/**"],
+  });
+  return found.slice(0, MAX_POLICY_DENIED_PATHS);
 }

@@ -32,8 +32,8 @@ export const SENSITIVE_PATTERNS: readonly string[] = [
 /** Paths that write tools may never change, even with approval: git internals. */
 export const PROTECTED_WRITE_PATTERNS: readonly string[] = [".git/**"];
 
-export function isSensitive(path: string): boolean {
-  return SENSITIVE_PATTERNS.some((pattern) => pathMatches(pattern, path));
+export function isSensitive(path: string, ignoreCase?: boolean): boolean {
+  return SENSITIVE_PATTERNS.some((pattern) => pathMatches(pattern, path, ignoreCase));
 }
 
 export function isProtectedFromWrites(path: string): boolean {

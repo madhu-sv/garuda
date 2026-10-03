@@ -128,7 +128,7 @@ export async function gateProjectSettings(options: GateOptions): Promise<GateRes
   return {
     settings: withoutRisk(options.settings),
     notice: [
-      "Project settings not applied (not approved): " + lines.join("; ") + ".",
+      `Project settings not applied (not approved): ${lines.join("; ")}.`,
       "Start the chat in a terminal and answer yes to use them.",
     ].join(" "),
   };

@@ -176,6 +176,10 @@ web_fetch.
 `resolveInRoot(root, input)` resolves a relative or absolute path and checks it twice: as written, and as
 a real path (the existing part through `realpath`, the rest added back). So a symbolic link cannot lead
 outside the root. It throws `PathOutsideRootError`. `displayPath` gives the root-relative form.
+`realRelative(root, path)` (0130) gives the root-relative real path when a link makes it another
+path in the root; the engine runs the path denials (`pathDenial`: team policy, sensitive files,
+`.git`, deny rules) on it too, and `grep` checks the target of each link it meets (and skips a link
+out of the root). Path patterns ignore letter case on macOS and Windows (`CASE_INSENSITIVE_FS`).
 
 ## Sensitive files (`sensitive.ts`)
 
@@ -193,6 +197,11 @@ grep never searches them; the code index never indexes them.
 | Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, `~/.garuda/mcp-auth.json`, `~/.claude.json`, `~/.claude/.credentials.json` (0.5: tokens of Garuda and Claude Code; the rest of `~/.garuda` and `~/.claude` stays readable, for skills), plus `sandbox.denyRead` |
 
 `~/` means the home folder; other relative paths start at the root.
+
+The team policy's `denyPaths` (0130, K6): `execPolicy` adds `policyDeniedPaths(root, denyPaths)` to
+both `denyReadPaths` and `denyWritePaths`. The patterns are matched against the disk when a command
+starts (globby, no .gitignore, not in `node_modules` or `.git`, at most 1,000 paths), because the
+OS sandboxes need real paths.
 
 ## Tests
 

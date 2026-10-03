@@ -1,6 +1,6 @@
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { z } from "zod";
-import { displayPath, resolveInRoot } from "../permissions/pathGuard.js";
+import { displayPath, isInside, resolveInRoot } from "../permissions/pathGuard.js";
 import { isSensitive } from "../permissions/sensitive.js";
 import { isDirectory, listFiles } from "./files.js";
 import { cutLine, joinWithinLimit, LIMITS, looksBinary, splitLines } from "./limits.js";
@@ -90,6 +90,7 @@ export const grepTool: Tool<Input, GrepOutput> = {
     let results = 0;
     let truncated = false;
     let searched = 0;
+    let realRoot: string | undefined;
 
     for (const file of files) {
       signal.throwIfAborted();
@@ -101,6 +102,14 @@ export const grepTool: Tool<Input, GrepOutput> = {
       // Team policy denyPaths (G04): neither the content nor the name of such a file is shown.
       const shownPath = displayPath(root, file);
       if (isSensitive(shownPath) || permissions.deniedByPolicy(shownPath)) continue;
+      // A symbolic link: the file it reaches must pass the same checks, and stay in the root.
+      if ((await lstat(file).catch(() => undefined))?.isSymbolicLink() === true) {
+        realRoot ??= await realpath(root);
+        const real = await realpath(file).catch(() => undefined);
+        if (real === undefined || !isInside(realRoot, real)) continue;
+        const realShown = displayPath(realRoot, real);
+        if (isSensitive(realShown) || permissions.deniedByPolicy(realShown)) continue;
+      }
       const info = await stat(file).catch(() => undefined);
       if (info === undefined || !info.isFile() || info.size > LIMITS.grepFileBytes) continue;
       const buffer = await readFile(file);

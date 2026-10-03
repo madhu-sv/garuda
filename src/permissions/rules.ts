@@ -72,13 +72,27 @@ export function hostMatches(pattern: string, host: string): boolean {
 
 // Paths.
 
+/**
+ * macOS and Windows file systems ignore case by default: `.ENV` opens `.env`. So path patterns
+ * ignore case there (review finding: `.ENV` was not a sensitive file).
+ */
+export const CASE_INSENSITIVE_FS = process.platform === "darwin" || process.platform === "win32";
+
 /** Glob match on a root-relative path. A pattern without "/" matches at any depth. */
-export function pathMatches(pattern: string, path: string): boolean {
-  const full = pattern.includes("/") ? pattern.replace(/^\.?\//, "") : `**/${pattern}`;
-  return globToRegExp(full).test(path);
+export function pathMatches(
+  pattern: string,
+  path: string,
+  ignoreCase: boolean = CASE_INSENSITIVE_FS,
+): boolean {
+  return globToRegExp(fullGlob(pattern), ignoreCase).test(path);
 }
 
-function globToRegExp(glob: string): RegExp {
+/** The pattern as a glob from the root: a pattern without "/" matches at any depth. */
+export function fullGlob(pattern: string): string {
+  return pattern.includes("/") ? pattern.replace(/^\.?\//, "") : `**/${pattern}`;
+}
+
+function globToRegExp(glob: string, ignoreCase: boolean): RegExp {
   let out = "";
   for (let i = 0; i < glob.length; i++) {
     const c = glob[i] ?? "";
@@ -92,7 +106,7 @@ function globToRegExp(glob: string): RegExp {
     else if (c === "?") out += "[^/]";
     else out += escapeRegExp(c);
   }
-  return new RegExp(`^${out}$`);
+  return new RegExp(`^${out}$`, ignoreCase ? "i" : "");
 }
 
 // Commands.

@@ -67,8 +67,11 @@ Resolved for the bulk tools: `PermissionGate.deniedByPolicy(path)` (required, so
 cannot drop it) tells `grep` (all modes) and `glob` to skip a denied file, and the runtime gives the
 code index the same filter, so `find_symbol`, `repo_map` and the other index tools do not see it.
 The G04 assertion is an ordinary test; `test/policyGaps.test.ts` checks grep, glob and the index with
-positive controls. Still open: shell commands (`cat` through `bash` reads the file; the OS sandbox
-does not get `denyPaths`), symbolic links with another name, and `@path` or `/where` typed by the user.
+positive controls. Later (patch 0130, from Garuda's own review): the OS sandbox gets the denied files
+and folders (`policyDeniedPaths`, read and write), a symbolic link is checked as the file it reaches,
+and path patterns ignore case on macOS and Windows (`test/pathHoles.test.ts`, with `cat` in bwrap).
+Still open: a file created by a command after the profile was built (covered from the next command),
+`@path` or `/where` typed by the user, and a check-then-open race on links.
 
 ## G05 Writable specialist scheduling
 
