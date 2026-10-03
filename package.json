@@ -2,6 +2,7 @@
   "name": "garuda",
   "version": "0.14.0",
   "description": "Garuda: a terminal coding agent.",
+  "license": "Apache-2.0",
   "type": "module",
   "private": true,
   "bin": {

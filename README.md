@@ -56,13 +56,16 @@ findings are fixed (patches 0128–0141). Known limits in 0.14.0:
 
 ## Use
 
-You need Node 22 or later and pnpm 10. Node 25 and later do not include corepack, so install pnpm with npm:
+You need Node 22 or later, pnpm 10 and git. Node 25 and later do not include corepack, so install pnpm with npm.
+Garuda is not on npm yet: clone it and build it.
 
 ```sh
 npm install -g pnpm@10
+git clone https://github.com/madhu-sv/garuda.git && cd garuda
 pnpm install
 pnpm check          # typecheck + lint + tests
 pnpm build
+pnpm link --global  # optional: puts `garuda` on your PATH (run `pnpm setup` once first)
 export ANTHROPIC_API_KEY=...
 export GARUDA_MODEL=<model-id>
 node dist/cli/index.js                                  # chat in the current folder
@@ -996,3 +999,8 @@ Notes:
 - Only `src/model/anthropic.ts` imports the Anthropic SDK (N1).
 - Only `src/sandbox/` may start processes (N8). Biome and a test enforce this.
 - Strict TypeScript. No `any` in public interfaces (N7).
+
+## License
+
+Garuda is licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE).
+To report a security problem, see [SECURITY.md](SECURITY.md).

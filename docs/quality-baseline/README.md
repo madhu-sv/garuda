@@ -67,7 +67,7 @@ scheduling overlap observable without risking application files.
 
 `test/knowledge.plugins.test.ts` now generates TS, Python, Java, Go and Rust source files in a temporary
 repository. It retains the five-language, symbol and affected-test assertions. It does not depend on
-`/Users/madhusudhan/dev/garuda-polyglot` and no longer silently returns when that unrelated repository
+a local `garuda-polyglot` checkout and no longer silently returns when that unrelated repository
 is absent. Parsing checks need no external compiler, LLM or installation.
 
 ## Milestone artefacts
