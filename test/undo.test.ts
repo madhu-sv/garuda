@@ -440,6 +440,7 @@ describe("the undo question (0.4)", () => {
         "  ~ a.ts",
         "  + b.ts",
         "  (+ comes back, - is removed, ~ changes)",
+        "Files that .gitignore covers (for example build output) are not in undo.",
         "The conversation was compacted, so it keeps the turn; the model gets a note.",
         "Changes that you made to these files after the turn go back too. /redo brings everything back.",
       ].join("\n"),

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { checkServerUrl } from "../mcp/config.js";
 import {
@@ -241,7 +241,7 @@ function geminiLike(
   }
   for (const [scope, dir] of paths.commands) {
     const base = scope === "user" ? home : root;
-    for (const file of listFiles(join(base, dir), ".toml")) {
+    for (const file of listFiles(join(base, dir), ".toml", scope === "user")) {
       const shown = `${scope === "user" ? "~/" : ""}${dir}/${file}`;
       const name = commandName(file, ".toml");
       const data = readTomlFile(join(base, dir, file), agent, out);
@@ -371,7 +371,7 @@ function mcpServers(
 
 function markdownCommands(agent: AgentName, scope: Scope, base: string, dir: string): ImportItem[] {
   const out: ImportItem[] = [];
-  for (const file of listFiles(join(base, dir), ".md")) {
+  for (const file of listFiles(join(base, dir), ".md", scope === "user")) {
     const shown = `${scope === "user" ? "~/" : ""}${dir}/${file}`;
     const name = commandName(file, ".md");
     if (name === undefined) {
@@ -406,7 +406,12 @@ function commandName(file: string, ext: string): string | undefined {
   return parts.every((p) => p !== undefined) ? parts.join(":") : undefined;
 }
 
-function listFiles(dir: string, ext: string | string[]): string[] {
+/**
+ * Files below `dir` with one of the extensions. `followLinks` false (a project's folders): a symbolic
+ * link is skipped (0.14.1, review: `.claude/commands/x.md -> ~/.ssh/id_rsa` was copied into the
+ * project). The user's own folders may hold links (dotfile managers use them).
+ */
+function listFiles(dir: string, ext: string | string[], followLinks = false): string[] {
   const exts = Array.isArray(ext) ? ext : [ext];
   const out: string[] = [];
   const walk = (current: string) => {
@@ -421,7 +426,7 @@ function listFiles(dir: string, ext: string | string[]): string[] {
       const full = join(current, name);
       let stat: ReturnType<typeof statSync>;
       try {
-        stat = statSync(full);
+        stat = followLinks ? statSync(full) : lstatSync(full);
       } catch {
         continue;
       }

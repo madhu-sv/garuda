@@ -178,7 +178,7 @@ the user says yes at startup (`RuntimeOptions.projectSettings.ask`; "remember" p
 returns `withoutRisk(settings)` and a notice. `Runtime.create` gates the loaded file (not
 `options.settings`: evals and jobs pass their own); without `projectSettings` nothing is pinned and
 nobody is asked. Allow rules match command parts as written (`commandParts(command, false)`); deny
-rules and the team policy still strip `sudo`, `env`, `exec`, `command` and `VAR=value`.
+rules and the team policy still strip `sudo`, `env`, `exec`, `command` and `VAR=value`. Since 0.14.1 (review) the project's own formatter commands are one of these parts (`formatterCommands`, left out of the hash when absent, so earlier answers stay valid).
 
 `moe` and `daemons` (0.14–0.17) are off by default, like every feature with no measured gain.
 `subagents.enabled` does not turn MoE on.

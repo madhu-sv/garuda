@@ -175,9 +175,10 @@ export function parseCommandLine(line: string): { name: string; args: string } |
 export function expandCommand(command: CustomCommand, args: string): string {
   const words = splitArgs(args);
   const hasPlaceholder = /\$ARGUMENTS|\$[1-9]/.test(command.body);
-  const text = command.body
-    .replaceAll("$ARGUMENTS", args)
-    .replace(/\$([1-9])/g, (_, n: string) => words[Number(n) - 1] ?? "");
+  // One pass (0.14.1, review): "$5" or "$&" in the arguments stays as typed.
+  const text = command.body.replace(/\$ARGUMENTS|\$([1-9])/g, (all, n?: string) =>
+    all === "$ARGUMENTS" ? args : (words[Number(n) - 1] ?? ""),
+  );
   return hasPlaceholder || args === "" ? text : `${text}\n\nArguments: ${args}`;
 }
 

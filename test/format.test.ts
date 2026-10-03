@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -224,6 +225,43 @@ describe.runIf(osReady)("formatters in the OS sandbox (0.10)", () => {
     });
     await quiet.runTurn("write", new AbortController().signal);
     expect(readFileSync(join(plain, "new.txt"), "utf8")).toBe("abc\n");
+  });
+});
+
+describe.runIf(osReady)("formatters and the team policy (0.14.1, review)", () => {
+  it("a formatter command that the policy refuses does not run, and says why", async () => {
+    const root = project({ "notes.txt": "one\n" });
+    const marker = join(root, "formatter-ran");
+    let seen = "";
+    const model = new FakeModelClient([
+      reply([toolUse("write_file", { path: "new.txt", content: "abc\n" }, "w1")], "tool_use"),
+      (request) => {
+        seen = JSON.stringify(request.messages.at(-1));
+        return reply([text("Done.")]);
+      },
+    ]);
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake",
+      model: async () => model,
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({
+        executor: "os",
+        formatters: {
+          enabled: true,
+          commands: { touchy: { extensions: ["txt"], command: ["touch", marker, "$FILE"] } },
+        },
+      }),
+      policy: { disallowedCommands: ["touch *"] },
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    await runtime.runTurn("write", new AbortController().signal);
+    expect(existsSync(marker)).toBe(false);
+    expect(seen).toMatch(/touchy/);
+    expect(seen).toMatch(/polic/i);
   });
 });
 

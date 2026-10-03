@@ -40,6 +40,9 @@ other agents. Garuda does both.
 A missing file gives nothing. A file that does not parse gives one `skipped` item, and the rest is still read.
 At most 200 files per command folder.
 
+A symbolic link in a project's command folders is skipped (0.14.1, review: a link to `~/.ssh/id_rsa`
+was copied into `.garuda/commands`). The user's own folders may hold links.
+
 ## Conversions
 
 | From | To | Rule |

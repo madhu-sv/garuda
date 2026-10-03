@@ -34,6 +34,10 @@ Save a prompt that you use often as a Markdown file and run it with `/name`. Add
 The result becomes the user's prompt. A command is only text: every tool call that it leads to passes the
 permission engine and the sandbox, as for a typed prompt.
 
+Arguments are inserted in one pass over the text (0.14.1, review): `$5` or `$&` inside the arguments
+stays as typed (before, `replaceAll` read `$&` as a replacement pattern and a second pass replaced
+`$5` in the inserted text).
+
 ## Name clashes
 
 1. A built-in name (`/help`, `/new`, `/exit`, since 0.6 `/sessions`, `/models`, `/export`, `/diff`, since 0.7 `/schedule`, `/jobs`, since 0.8 `/compact`, since 0.9 `/details`, `/thinking`, and since 0.15 `/defs`, `/callers`, `/impact` …)

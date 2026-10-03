@@ -36,6 +36,9 @@ export function undoQuestion(
     }
     lines.push("  (+ comes back, - is removed, ~ changes)");
   }
+  // Undo covers the files that git sees; a turn may also have changed ignored ones (0.14.1, review:
+  // "No file changes" read as if nothing had changed).
+  lines.push("Files that .gitignore covers (for example build output) are not in undo.");
   if (kind === "undo") {
     lines.push(
       conversation

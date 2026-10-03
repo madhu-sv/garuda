@@ -36,6 +36,11 @@ first. `"$FILE"` in the command is the file's absolute path; `formatCommand` quo
   to read the file again), so the model's next `old_string` matches. A failed or slow formatter adds a
   note ("ruff could not format it: exit code 2: …"); it never fails the edit.
 
+Since 0.14.1 (review): a project's own formatter commands (`formatters.commands` with a `command`)
+are a part of the settings that loosen safety, so they need the user's yes (`settingsRisk`); before each
+run the team policy checks the command (`commandPolicyDenial`), and the run gets no network proxy, as
+hooks do.
+
 ## Measuring (`garuda eval --format on|off`)
 
 Result (2026-09-29, hard suite, claude-sonnet-5, 3 runs per task): on 18/18, 141 steps, $0.6834, 84% of

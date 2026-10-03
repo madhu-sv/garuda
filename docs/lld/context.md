@@ -42,6 +42,11 @@ Parts, in order:
 5. `# Project memory (.garuda/memory.md)`: facts from `remember`, cut at 8 000 characters, with a warning
    that they can be out of date.
 
+Instruction files and `.garuda/memory.md` are read only when their real path stays in the root
+(`readInRoot`, 0.14.1, review): a link inside the root (`CLAUDE.md -> AGENTS.md`) works, a link out of
+it (`CLAUDE.md -> ~/.aws/credentials`) is skipped, so a cloned repo cannot put a secret into the system
+prompt.
+
 ## Compaction (`compact.ts`, F23)
 
 `compactIfNeeded(session, model, options, signal)` runs at the start of each step.

@@ -29,6 +29,10 @@ hooks?" and shows every event, tool list, network flag and command in full, and 
 exists. Answers: once, remember (store the hash), deny (ignore the project's hooks). A changed file asks
 again ("changed since you allowed them").
 
+The consent and `/hooks` show each command and tool pattern as one clean line (`cleanLine`, 0.14.1,
+review): an escape code, a carriage return or a newline in a project's hook cannot hide its real start
+or add a fake line.
+
 ## Runner (`runner.ts`)
 
 `HookRunner` implements `ToolHooks`; the registry calls it around each tool call.

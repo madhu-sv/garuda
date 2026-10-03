@@ -162,7 +162,10 @@ export function parseSkill(
   // Claude Code takes the first line of the body when there is no description.
   const first = body.split("\n").find((l) => l.trim() !== "" && !l.startsWith("#"));
   const description = [meta.description ?? first ?? "", meta.when_to_use ?? ""]
+    // A project skill's description reaches the model before any consent: no Garuda markers in it
+    // (0.14.1, review), as in its body.
     .map((s) => cleanText(s).replace(/\s+/g, " ").trim())
+    .map((s) => (place.source === "project" ? neutralizeTags(s) : s))
     .filter((s) => s !== "")
     .join(" ")
     .slice(0, DESCRIPTION_MAX_CHARS);
@@ -174,7 +177,12 @@ export function parseSkill(
     dir: place.dir,
     shown: place.shown,
     description,
-    ...(hint === undefined ? {} : { argumentHint: cleanText(hint) }),
+    ...(hint === undefined
+      ? {}
+      : {
+          argumentHint:
+            place.source === "project" ? neutralizeTags(cleanText(hint)) : cleanText(hint),
+        }),
     modelInvocable: !isTrue(meta["disable-model-invocation"]),
     userInvocable: !isFalse(meta["user-invocable"]),
     body,
@@ -197,13 +205,18 @@ export function expandSkill(skill: Skill, args: string, folder: string): string 
     (m) => m[1] ?? m[2] ?? m[3] ?? "",
   );
   const hasPlaceholder = /\$ARGUMENTS|\$\d/.test(skill.body);
-  const text = skill.body
-    .replace(/\$\{(?:CLAUDE|GARUDA)_SKILL_DIR\}/g, () => folder)
-    .replace(/\$ARGUMENTS\[(\d+)\]/g, (_, n: string) => words[Number(n)] ?? "")
-    .replaceAll("$ARGUMENTS", args)
-    .replace(/(?<!\\)\$(\d)/g, (_, n: string) => words[Number(n)] ?? "")
-    // "\$1.00" in prose stays "$1.00".
-    .replace(/\\\$(\d)/g, "$$$1");
+  // One pass over the body (0.14.1, review): text that an argument inserts is never read again, so
+  // "$5" or "$&" in the arguments stays as typed. "\$1.00" in prose stays "$1.00".
+  const text = skill.body.replace(
+    /\$\{(?:CLAUDE|GARUDA)_SKILL_DIR\}|\$ARGUMENTS\[(\d+)\]|\$ARGUMENTS|\\\$(\d)|\$(\d)/g,
+    (all, index?: string, escaped?: string, n?: string) => {
+      if (all.startsWith("${")) return folder;
+      if (index !== undefined) return words[Number(index)] ?? "";
+      if (all === "$ARGUMENTS") return args;
+      if (escaped !== undefined) return `$${escaped}`;
+      return words[Number(n)] ?? "";
+    },
+  );
   return hasPlaceholder || args === "" ? text : `${text}\n\nARGUMENTS: ${args}`;
 }
 

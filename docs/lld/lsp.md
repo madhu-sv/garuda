@@ -97,7 +97,7 @@ npm install --prefix ~/.garuda/lsp/<language> --ignore-scripts --no-audit --no-f
 
 For Java, the install downloads the pinned milestone from
 `https://download.eclipse.org/jdtls/milestones/1.61.0/`: the file name comes from `latest.txt` (or the
-folder listing), a `.sha256` file must match when the server has one, and the archive is unpacked into
+folder listing), its `.sha256` file must exist and match (0.14.1, review: a missing file let the install go on unchecked; the checksum comes from the same server, so a pinned hash is still open), and the archive is unpacked into
 `~/.garuda/lsp/java/jdtls`. It needs `curl` and `tar`. `brew install jdtls` works too (PATH).
 
 - The versions are pinned; a new Garuda version moves them.

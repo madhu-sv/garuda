@@ -2051,11 +2051,13 @@ export class Runtime {
       this.formatters ??= detectFormatters(this.root, process.env.PATH, config.commands);
       const formatter = formatterFor(this.formatters, absolute);
       if (formatter === undefined) return undefined;
-      const result = await this.executor.run(
-        formatCommand(formatter, absolute),
-        this.permissions.execPolicy(FORMAT_TIMEOUT_MS),
-        { signal },
-      );
+      const command = formatCommand(formatter, absolute);
+      // The team policy holds for formatters, as for hooks; and like hooks they get no network
+      // proxy (0.14.1, review).
+      const refused = this.permissions.commandPolicyDenial(command, false);
+      if (refused !== undefined) return { name: formatter.name, problem: refused };
+      const { proxy: _proxy, ...policy } = this.permissions.execPolicy(FORMAT_TIMEOUT_MS);
+      const result = await this.executor.run(command, policy, { signal });
       if (result.timedOut) return { name: formatter.name, problem: "it took too long" };
       if (result.exitCode !== 0) {
         const first = (result.stderr.text || result.stdout.text).trim().split("\n")[0] ?? "";

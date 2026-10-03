@@ -3,7 +3,7 @@ import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { AuditLogger } from "../audit/logger.js";
-import { capText, cleanText, neutralizeTags } from "../mcp/sanitize.js";
+import { capText, cleanLine, cleanText, neutralizeTags } from "../mcp/sanitize.js";
 import { ruleMatches } from "../permissions/rules.js";
 import type { ApprovalRequest, PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
@@ -53,7 +53,7 @@ export class HookRunner implements ToolHooks {
         ? `it timed out after ${hook.def.timeoutMs} ms`
         : `exit code ${r.exitCode ?? r.signal}`;
       this.options.notify?.(
-        `A preToolUse hook failed (${why}), so Garuda blocked ${call.tool}: ${hook.def.command}`,
+        `A preToolUse hook failed (${why}), so Garuda blocked ${call.tool}: ${cleanLine(hook.def.command)}`,
       );
       return `a preToolUse hook failed (${why}), so Garuda blocked the call${stderr === "" ? "" : `: ${stderr}`}`;
     }
@@ -68,7 +68,7 @@ export class HookRunner implements ToolHooks {
         content += `\n<hook_feedback>\n${clean(r.stderr)}\n</hook_feedback>`;
       } else if (r.exitCode !== 0 || r.timedOut) {
         const why = r.timedOut ? "timed out" : `exit code ${r.exitCode ?? r.signal}`;
-        this.options.notify?.(`A postToolUse hook failed (${why}): ${hook.def.command}`);
+        this.options.notify?.(`A postToolUse hook failed (${why}): ${cleanLine(hook.def.command)}`);
       }
     }
     return { ...outcome, content };
@@ -77,7 +77,7 @@ export class HookRunner implements ToolHooks {
   describe(): string[] {
     return this.options.hooks.map(
       (h) =>
-        `${h.event} [${h.source}] ${h.def.tools.length === 0 ? "all tools" : h.def.tools.join(", ")}: ${h.def.command}`,
+        `${h.event} [${h.source}] ${h.def.tools.length === 0 ? "all tools" : h.def.tools.map(cleanLine).join(", ")}: ${cleanLine(h.def.command)}`,
     );
   }
 
@@ -101,7 +101,9 @@ export class HookRunner implements ToolHooks {
     const target = call.info?.target;
     const refused = permissions.commandPolicyDenial(hook.def.command, false);
     if (refused !== undefined) {
-      this.options.notify?.(`The team policy refused a hook: ${hook.def.command}. ${refused}`);
+      this.options.notify?.(
+        `The team policy refused a hook: ${cleanLine(hook.def.command)}. ${refused}`,
+      );
       await audit?.log({
         tool: `hook:${hook.event}`,
         target: hook.def.command,
@@ -180,9 +182,11 @@ export function hooksConsent(
       ? `The hooks in ${file} changed since you allowed them.`
       : `This project has hooks in ${file}.`,
     "Hooks run these commands around the agent's tool calls:",
+    // One clean line each (0.14.1, review): a project's command could hide its real start behind
+    // an escape code or a carriage return, as the MCP consent already prevents with cleanLine.
     ...hooks.flatMap((h) => [
-      `  ${h.event} for ${h.def.tools.length === 0 ? "every tool" : h.def.tools.join(", ")}${h.def.network ? " (network: YES)" : ""}:`,
-      `    $ ${h.def.command}`,
+      `  ${h.event} for ${h.def.tools.length === 0 ? "every tool" : h.def.tools.map(cleanLine).join(", ")}${h.def.network ? " (network: YES)" : ""}:`,
+      `    $ ${cleanLine(h.def.command)}`,
     ]),
     isolation === "none"
       ? "  ! There is no OS sandbox on this machine: they run as you, with full access."

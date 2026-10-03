@@ -68,6 +68,9 @@ Conversation rules (`src/session/undo.ts`):
 - At most 50 undo points per session.
 - The records are in the session file, so `/undo` works after `garuda --resume`; replay applies them too.
 
+The question says that files which `.gitignore` covers (build output) are not in undo (0.14.1, review):
+"No file changes" read as if the turn had changed nothing.
+
 ## `/diff` (0.6)
 
 `Runtime.diff(scope, path)` compares a base snapshot with a new one taken now (so the user's own changes

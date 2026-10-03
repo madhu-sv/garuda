@@ -239,7 +239,9 @@ export function jdtlsLaunch(
 /**
  * The managed install: download the pinned milestone from download.eclipse.org and unpack it into
  * <dir>/jdtls. The file name has a build time stamp, so it comes from latest.txt (or the folder
- * listing). A .sha256 file, when the server has one, must match.
+ * listing). Its .sha256 file must exist and match (0.14.1, review: a missing checksum let the
+ * install go on unchecked). Limit: the checksum comes from the same server, so it guards against a
+ * broken download, not against a changed server; a pinned hash per build would.
  */
 export function jdtlsInstallCommand(dir: string, quote: (s: string) => string): string {
   const d = quote(dir);
@@ -249,7 +251,9 @@ export function jdtlsInstallCommand(dir: string, quote: (s: string) => string): 
     `f=$(curl -fsSL "$B/latest.txt" 2>/dev/null || curl -fsSL "$B/" | grep -o 'jdt-language-server-[0-9.]*-[0-9]*\\.tar\\.gz' | head -1)`,
     `test -n "$f" || { echo "No jdtls ${JDTLS_VERSION} file at $B" >&2; exit 1; }`,
     `curl -fsSL -o jdtls.tar.gz "$B/$f"`,
-    `if want=$(curl -fsSL "$B/$f.sha256" 2>/dev/null); then got=$( (sha256sum jdtls.tar.gz 2>/dev/null || shasum -a 256 jdtls.tar.gz) | cut -d' ' -f1); test "$(echo "$want" | cut -d' ' -f1)" = "$got" || { echo "Checksum mismatch for $f" >&2; exit 1; }; fi`,
+    `want=$(curl -fsSL "$B/$f.sha256") || { echo "No checksum file for $f, so Garuda does not install it" >&2; rm -f jdtls.tar.gz; exit 1; }`,
+    `got=$( (sha256sum jdtls.tar.gz 2>/dev/null || shasum -a 256 jdtls.tar.gz) | cut -d' ' -f1)`,
+    `test -n "$got" && test "$(echo "$want" | cut -d' ' -f1)" = "$got" || { echo "Checksum mismatch for $f" >&2; rm -f jdtls.tar.gz; exit 1; }`,
     "rm -rf jdtls && mkdir jdtls && tar -xzf jdtls.tar.gz -C jdtls && rm jdtls.tar.gz",
   ].join(" && ");
 }

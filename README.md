@@ -57,7 +57,12 @@ findings are fixed (patches 0128–0141). Known limits in 0.14.0:
 - (Fixed after 0.14.0: the low findings of the tools review, among them a duplicate MCP tool name
   that stopped the start, a web_fetch cache with no eviction, and a slow `grep` pattern that blocked
   Garuda.)
-- The extensions area is not reviewed by Garuda yet. (After 0.14.0: the cli area was reviewed, and its nine findings are fixed.)
+- Build tool caches that the sandbox may write (`~/.gradle/wrapper`, `jdks`, `native`, `caches`,
+  `~/.m2/wrapper`) hold programs that a build runs later outside the sandbox. They stay writable, because
+  `./gradlew` needs them in the sandbox; a sandboxed command could change them.
+- The jdtls download is checked against the `.sha256` file of the same server, not a pinned hash.
+- (After 0.14.0: the cli and extensions areas were reviewed, and their findings are fixed, except the
+  two items above.)
 
 ## Use
 

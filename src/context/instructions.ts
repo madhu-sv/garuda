@@ -1,6 +1,32 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { type CodeIndexMode, DEFAULT_CODE_INDEX_MODE } from "../knowledge/mode.js";
+import { isInside } from "../permissions/pathGuard.js";
+
+/**
+ * Read a file of the root, but only when its real path stays in the root (0.14.1, review): a
+ * cloned repo's `CLAUDE.md -> ~/.aws/credentials` put the secret into the system prompt. A link
+ * inside the root (CLAUDE.md -> AGENTS.md) still works. Undefined: no file, or it leads out.
+ */
+async function readInRoot(root: string, name: string): Promise<string | undefined> {
+  const file = join(root, name);
+  let real: string;
+  try {
+    real = await realpath(file);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return undefined;
+    throw error;
+  }
+  if (!isInside(await realpath(root), real)) return undefined;
+  try {
+    return await readFile(real, "utf8");
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "EISDIR") return undefined;
+    throw error;
+  }
+}
 
 export const INSTRUCTIONS_FILE = "GARUDA.md";
 /**
@@ -22,12 +48,13 @@ export const MEMORY_MAX_CHARS = 8_000;
 
 /** Read the project memory. Undefined when there is no file or it is empty. */
 export async function loadMemory(root: string): Promise<string | undefined> {
-  let text: string;
+  let text: string | undefined;
   try {
-    text = await readFile(join(root, MEMORY_FILE), "utf8");
+    text = await readInRoot(root, MEMORY_FILE);
   } catch {
     return undefined;
   }
+  if (text === undefined) return undefined;
   text = text.trim();
   if (text === "") return undefined;
   return text.length <= MEMORY_MAX_CHARS ? text : text.slice(0, MEMORY_MAX_CHARS);
@@ -42,14 +69,9 @@ export async function loadMemory(root: string): Promise<string | undefined> {
 export async function loadInstructions(root: string): Promise<InstructionFile[]> {
   const found: InstructionFile[] = [];
   for (const name of INSTRUCTION_FILES) {
-    let text: string;
-    try {
-      text = (await readFile(join(root, name), "utf8")).trim();
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT" || code === "EISDIR") continue;
-      throw error;
-    }
+    const raw = await readInRoot(root, name);
+    if (raw === undefined) continue;
+    const text = raw.trim();
     if (text === "" || found.some((f) => f.text === text)) continue;
     found.push({ name, text });
   }

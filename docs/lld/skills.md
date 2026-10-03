@@ -52,6 +52,9 @@ words), `${CLAUDE_SKILL_DIR}` or `${GARUDA_SKILL_DIR}` (the folder). `\$1` stays
 
 `!`command`` lines are not run: the text goes to the model as it is.
 
+A project skill's description and argument hint are tag-neutralized like its body (0.14.1, review):
+they reach the model in the skill tool's description before any consent.
+
 ## The skill tool
 
 The tool exists only when at least one skill may be loaded by the model. Its description has a short rule
