@@ -13,6 +13,8 @@ import {
   toWireMessages,
 } from "../src/model/openaiCompatible.js";
 import {
+  hasProviderKey,
+  keepProviderKey,
   loadModelsConfig,
   OPEN_MODEL_DEFAULT_WINDOW,
   resolveModel,
@@ -32,6 +34,29 @@ const request = (
   messages,
   tools: [{ name: "read_file", description: "Read.", inputSchema: { type: "object" } }],
   maxTokens: 1000,
+});
+
+describe("provider keys are kept out of the environment (0.14, review)", () => {
+  it("keepProviderKey removes the value from process.env, and create still gets it", async () => {
+    const name = `GARUDA_TEST_KEY_${Math.random().toString(36).slice(2)}`;
+    process.env[name] = "sk-ant-secret-value";
+    try {
+      expect(hasProviderKey(name)).toBe(true);
+      keepProviderKey(name);
+      // Gone from the environment that a sandboxed command could read via /proc.
+      expect(process.env[name]).toBeUndefined();
+      // Still known to Garuda.
+      expect(hasProviderKey(name)).toBe(true);
+      const model = resolveModel("claude-sonnet-5", {
+        models: { "claude-sonnet-5": {} },
+        providers: { anthropic: { type: "anthropic", apiKeyEnv: name } },
+      });
+      const client = (await model.create({})) as unknown as { client?: { apiKey?: string } };
+      expect(client.client?.apiKey ?? "").toBe("sk-ant-secret-value");
+    } finally {
+      delete process.env[name];
+    }
+  });
 });
 
 describe("model specs and providers", () => {

@@ -1,8 +1,10 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, readFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { z } from "zod";
 import { MEMORY_FILE, MEMORY_MAX_CHARS } from "../context/instructions.js";
+import { resolveInRoot } from "../permissions/pathGuard.js";
 import { Redactor } from "../session/redact.js";
+import { writeFileAtomic } from "./atomicWrite.js";
 import type { Tool } from "./types.js";
 
 const input = z.object({
@@ -45,7 +47,10 @@ export const rememberTool: Tool<z.infer<typeof input>> = {
   },
 
   async run({ fact }, { root }) {
-    const path = join(root, MEMORY_FILE);
+    // Resolve inside the root (review): .garuda or memory.md could be a symbolic link to a file
+    // outside the project (~/.bashrc, ~/.ssh), and the plain join + write followed it. A link that
+    // leaves the root throws here.
+    const path = await resolveInRoot(root, MEMORY_FILE);
     const current = await readFile(path, "utf8").catch(() => "");
     const line = `- ${clean(fact)}`;
     const known = current.split("\n").map((l) => l.trim().toLowerCase());
@@ -58,7 +63,7 @@ export const rememberTool: Tool<z.infer<typeof input>> = {
       );
     }
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, next);
+    await writeFileAtomic(path, next, { createOnly: current === "" });
     return `Saved to ${MEMORY_FILE}. It loads in the next session.`;
   },
 };

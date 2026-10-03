@@ -8,7 +8,13 @@ import { auditDirFor } from "../audit/logger.js";
 import { BUILTIN_COMMANDS } from "../commands/builtins.js";
 import { replaySession } from "../loop/replay.js";
 import { DEFAULT_MAX_TOKENS } from "../loop/runAgent.js";
-import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
+import {
+  hasProviderKey,
+  keepProviderKey,
+  loadModelsConfig,
+  type ResolvedModel,
+  resolveModel,
+} from "../model/providers.js";
 import { AutoApprover } from "../permissions/autoApprover.js";
 import { JOB_DENIAL } from "../permissions/engine.js";
 import type { CallTarget } from "../permissions/types.js";
@@ -265,8 +271,17 @@ async function start(options: Options, program: Command): Promise<number> {
     }
   }
 
-  // Web search (0.5): only the user's ~/.garuda/search.json and environment configure it.
+  // Web search (0.5): only the user's ~/.garuda/search.json and environment configure it. It reads
+  // its keys now, before the model keys are taken out of the environment below.
   const searchConfig = await loadSearchConfig();
+
+  // Take the model-provider keys out of Garuda's own environment (0.14, review): a command in the
+  // OS sandbox could otherwise read them from /proc/<pid>/environ of the Garuda process. create()
+  // reads them from the kept store instead. Done after the models and search config are loaded.
+  const hasApiKey = hasProviderKey("ANTHROPIC_API_KEY");
+  for (const name of [resolved.def.apiKeyEnv, sub?.def.apiKeyEnv, "ANTHROPIC_API_KEY"]) {
+    if (name !== undefined) keepProviderKey(name);
+  }
 
   // Team policy: the managed file and ~/.garuda/policy.json, never the project (merge gate). The
   // chat, -p, `garuda run` (a job) and the night shift (a `garuda run` per job) all start here.
@@ -431,10 +446,7 @@ async function start(options: Options, program: Command): Promise<number> {
               ],
               skills: runtime.skills.map((k) => k.name),
               agents: runtime.agents.map((a) => a.name),
-              apiKeySource:
-                !modelId.includes("/") && process.env.ANTHROPIC_API_KEY !== undefined
-                  ? "ANTHROPIC_API_KEY"
-                  : "none",
+              apiKeySource: !modelId.includes("/") && hasApiKey ? "ANTHROPIC_API_KEY" : "none",
             }),
           });
     if (output !== undefined) events = output;

@@ -111,6 +111,29 @@ describe("project memory", () => {
     expect(await loadMemory(join(root, "missing"))).toBeUndefined();
   });
 
+  it("refuses to write through a symbolic link that leaves the root (review)", async () => {
+    const { symlinkSync, existsSync } = await import("node:fs");
+    // .garuda/memory.md -> a file outside the project.
+    const dir = join(root, "linked");
+    mkdirSync(join(dir, ".garuda"), { recursive: true });
+    const outside = join(root, "outside-rc");
+    writeFileSync(outside, "# existing\n");
+    symlinkSync(outside, join(dir, MEMORY_FILE));
+    const r = await call(toolContext(dir), "remember", { fact: "Tests run with: node --test" });
+    expect(r.isError).toBe(true);
+    expect(readFileSync(outside, "utf8")).toBe("# existing\n");
+
+    // .garuda itself a link to a directory outside the project.
+    const dir2 = join(root, "linked2");
+    mkdirSync(dir2, { recursive: true });
+    const outDir = join(root, "outside-dir");
+    mkdirSync(outDir, { recursive: true });
+    symlinkSync(outDir, join(dir2, ".garuda"));
+    const r2 = await call(toolContext(dir2), "remember", { fact: "Layout: code in src/" });
+    expect(r2.isError).toBe(true);
+    expect(existsSync(join(outDir, "memory.md"))).toBe(false);
+  });
+
   it("refuses to grow past the size limit", async () => {
     const dir = join(root, "full");
     mkdirSync(join(dir, ".garuda"), { recursive: true });

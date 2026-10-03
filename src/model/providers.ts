@@ -134,6 +134,34 @@ export async function loadModelsConfig(
   }
 }
 
+/**
+ * Provider API keys that Garuda has taken out of its own process environment (0.14, review): a
+ * command in the OS sandbox could read /proc/<pid>/environ of the Garuda process and get the key
+ * from it, past the command's own environment allowlist. `keepProviderKey` moves the value here, so
+ * it is no longer in `process.env`; `create` reads it from here. The sandbox strips secret-named
+ * variables from a command anyway, so nothing a command should see is lost.
+ */
+const keptKeys = new Map<string, string>();
+
+/** Take a key variable out of process.env and keep it for `create`. Safe to call more than once. */
+export function keepProviderKey(name: string): void {
+  const value = process.env[name];
+  if (value !== undefined && value !== "") {
+    keptKeys.set(name, value);
+    delete process.env[name];
+  }
+}
+
+/** True when this key variable is set, in process.env or already kept (for the init line). */
+export function hasProviderKey(name: string): boolean {
+  return keptKeys.has(name) || (process.env[name] ?? "") !== "";
+}
+
+function providerKey(env: NodeJS.ProcessEnv, name: string | undefined): string | undefined {
+  if (name === undefined) return undefined;
+  return keptKeys.get(name) ?? env[name];
+}
+
 export function resolveModel(
   spec: string,
   config: ModelsConfig = { providers: {}, models: {} },
@@ -188,20 +216,25 @@ export function resolveModel(
             env: NodeJS.ProcessEnv = process.env,
             options: Pick<import("./anthropic.js").AnthropicBatchClientOptions, "onWait"> = {},
           ) {
-            const apiKey = def.apiKeyEnv === undefined ? undefined : env[def.apiKeyEnv];
+            // The Anthropic key defaults to ANTHROPIC_API_KEY (the SDK's own variable); passing it
+            // explicitly lets the CLI take it out of process.env (0.14, review).
+            const apiKey = providerKey(env, def.apiKeyEnv ?? "ANTHROPIC_API_KEY");
             const { AnthropicBatchClient } = await import("./anthropic.js");
             return new AnthropicBatchClient({ model, ...(apiKey ? { apiKey } : {}), ...options });
           },
         }
       : {}),
     async create(env = process.env) {
-      const apiKey = def.apiKeyEnv === undefined ? undefined : env[def.apiKeyEnv];
+      const apiKey = providerKey(env, def.apiKeyEnv);
       if (def.apiKeyEnv !== undefined && (apiKey === undefined || apiKey === "")) {
         throw new Error(`Set ${def.apiKeyEnv} to use the ${provider} provider.`);
       }
       if (def.type === "anthropic") {
+        // Default to ANTHROPIC_API_KEY so the key is passed explicitly and can be taken out of
+        // process.env (0.14, review). With no key at all, the SDK still tries its other methods.
+        const key = providerKey(env, def.apiKeyEnv ?? "ANTHROPIC_API_KEY");
         const { AnthropicClient } = await import("./anthropic.js");
-        return new AnthropicClient({ model, ...(apiKey === undefined ? {} : { apiKey }) });
+        return new AnthropicClient({ model, ...(key ? { apiKey: key } : {}) });
       }
       const { OpenAICompatibleClient } = await import("./openaiCompatible.js");
       return new OpenAICompatibleClient({
