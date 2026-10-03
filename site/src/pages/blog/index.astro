@@ -1,0 +1,28 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const posts = (await getCollection("blog")).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+const day = (d: Date) =>
+  d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+---
+<BaseLayout title="Blog — Garuda" description="Notes on building Garuda, a safety-first terminal coding agent." current="blog">
+  <div class="article" style="max-width:820px">
+    <p class="kicker">Blog</p>
+    <h1>Notes from building Garuda</h1>
+    <ul class="post-list">
+      {posts.map((post) => (
+        <li>
+          <a href={`${base}blog/${post.id}/`}>
+            <span class="meta">{day(post.data.date)} · {post.data.author}</span>
+            <h2>{post.data.title}</h2>
+            <p>{post.data.description}</p>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</BaseLayout>

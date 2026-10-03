@@ -1,0 +1,59 @@
+# The website (site/): build it for each change to the site, the docs or the README, and deploy it
+# to GitHub Pages from main. Pull requests only build. Actions are pinned to full commit hashes.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "docs/**", "README.md", ".github/workflows/pages.yml"]
+  pull_request:
+    paths: ["site/**", "docs/**", "README.md", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          package_json_file: site/package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Build the site
+        working-directory: site
+        run: |
+          pnpm install --frozen-lockfile --ignore-workspace
+          pnpm build
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

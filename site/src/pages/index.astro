@@ -1,0 +1,214 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const repo = "https://github.com/madhu-sv/garuda";
+
+// Small stroke icons (24×24) for the safety cards.
+const icons = {
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  hand: '<path d="M7 11V6a2 2 0 1 1 4 0v5"/><path d="M11 10V4a2 2 0 1 1 4 0v6"/><path d="M15 10V6a2 2 0 1 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-5.6-2.8L3 15a2 2 0 0 1 3-2.6l1 1.1"/>',
+  globe:
+    '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  shield:
+    '<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/>',
+  chain:
+    '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  pin: '<path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
+};
+const svg = (d: string) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+
+const pillars = [
+  {
+    icon: icons.box,
+    title: "An OS sandbox for every command",
+    text: "Seatbelt on macOS, bubblewrap on Linux. Commands write only in the project, temp folders and package caches. Home secrets stay unreadable, and there is no network by default.",
+  },
+  {
+    icon: icons.hand,
+    title: "It asks before it changes things",
+    text: "An edit shows its diff and a command shows its text. You allow it once, for the session, or not at all, and you can accept single hunks. Plan mode only reads.",
+  },
+  {
+    icon: icons.globe,
+    title: "A network allowlist",
+    text: "When you open the network, commands reach only the hosts you list, through Garuda's own proxy. Any other host asks first. IP addresses and private addresses are refused.",
+  },
+  {
+    icon: icons.shield,
+    title: "A team policy that projects cannot loosen",
+    text: "A managed file and ~/.garuda set denied commands and paths, a required sandbox, allowed models and step and token limits. They also hold for subagents and hooks.",
+  },
+  {
+    icon: icons.chain,
+    title: "A hash-chained audit log",
+    text: "Every permission decision, tool run and hook goes to a log outside the project. Secrets are redacted. /audit verify finds a changed, removed or inserted line.",
+  },
+  {
+    icon: icons.pin,
+    title: "Consent for project content",
+    text: "Hooks, MCP servers, slash commands, skills, agents and settings that loosen safety ask once. The answer is pinned to a hash, so a change asks again.",
+  },
+];
+
+const features = [
+  [
+    "Chat or headless",
+    "An Ink chat with @files, !commands, /diff and sessions. Or -p with JSON output in Claude Code's headless format.",
+  ],
+  [
+    "Any model",
+    "Claude, or open models through Ollama, LM Studio, llama.cpp, vLLM, OpenRouter or any OpenAI-compatible server.",
+  ],
+  [
+    "Plan mode and undo",
+    "Plan first, then build. /undo and /redo restore the files and the conversation of a turn.",
+  ],
+  [
+    "Extensions",
+    "MCP servers (stdio and remote, with OAuth), skills, custom agents, slash commands and hooks.",
+  ],
+  [
+    "Code intelligence",
+    "A local index for TypeScript, Python, Java, Go and Rust: symbols, references, callers and impact.",
+  ],
+  [
+    "Overnight jobs",
+    "Plan now, build later on a job branch with an approval list. Proof of work: tests before and after, and a review.",
+  ],
+  ["Evals", "Built-in task suites, and a benchmark made from your own repository's history."],
+  ["Diagnostics", "Language-server errors after each edit, and formatters, both opt-in."],
+];
+---
+<BaseLayout
+  title="Garuda — a terminal coding agent that asks first"
+  description="Garuda is an open-source terminal coding agent. Commands run in an OS sandbox, changes ask first, and every decision goes to an audit log."
+>
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <a class="eyebrow" href={`${base}blog/garuda-reviews-garuda/`}>
+          <b>v0.14.0</b> Garuda reviewed its own code before this release →
+        </a>
+        <h1 class="display">A coding agent that works <em>inside the lines</em>.</h1>
+        <p class="lede">
+          Garuda reads, edits and runs your code from the terminal, with the model you choose. Every
+          command runs in an OS sandbox, every change asks first, and every decision goes to an
+          audit log.
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href={`${base}docs/install/`}>Get started</a>
+          <a class="btn" href={repo}>View on GitHub</a>
+        </div>
+        <div class="install">
+          <span aria-hidden="true">$</span>
+          <code>git clone https://github.com/madhu-sv/garuda.git</code>
+        </div>
+      </div>
+      <figure style="margin:0">
+        <div class="term" role="img" aria-label="A Garuda session: it reads a file, runs the tests in the sandbox, asks before an edit, and runs the tests again.">
+          <div class="term-bar"><i></i><i></i><i></i><span>~/shop — garuda</span></div>
+          <pre><span class="t-dim">›</span> Fix the failing cart test
+<span class="t-acc">●</span> read_file src/cart.ts
+  <span class="t-dim">⎿ 48 line(s)</span>
+<span class="t-acc">●</span> bash pnpm test cart <span class="t-dim">[sandbox]</span>
+  <span class="t-dim">⎿ exit 1 · 1 failed</span>
+<span class="t-acc">●</span> edit_file src/cart.ts
+  <span class="t-box">╭ Allow this edit?</span>
+  <span class="t-box">│</span> <span class="t-del">-  return total - discount;</span>
+  <span class="t-box">│</span> <span class="t-ok">+  return Math.max(0, total - discount);</span>
+  <span class="t-box">╰</span> <span class="t-dim">once · session · deny</span>
+<span class="t-acc">●</span> bash pnpm test cart <span class="t-dim">[sandbox]</span>
+  <span class="t-dim">⎿ exit 0 · 12 passed</span>
+A discount larger than the total made it negative.
+It is now clamped at zero, and all 12 tests pass.
+<span class="t-dim">[done · 4 steps · 18.2k tokens · $0.04]</span></pre>
+        </div>
+        <figcaption class="term-cap">A session, simplified.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="safety">
+    <div class="wrap">
+      <p class="kicker">Safety first</p>
+      <h2 class="title" id="safety">The model proposes. Your rules decide.</h2>
+      <p class="sub">
+        A coding agent runs commands and edits files for a model. Garuda puts each of those actions
+        through checks that the model cannot turn off.
+      </p>
+      <div class="grid">
+        {pillars.map((p) => (
+          <article class="card">
+            <div class="icon" set:html={svg(p.icon)} />
+            <h3>{p.title}</h3>
+            <p>{p.text}</p>
+          </article>
+        ))}
+      </div>
+      <p style="margin-top:28px">
+        <a class="link-arrow" href={`${base}docs/security/`}>Read the security model →</a>
+      </p>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="features">
+    <div class="wrap">
+      <p class="kicker">Everyday work</p>
+      <h2 class="title" id="features">A full agent, not only a guard rail.</h2>
+      <p class="sub">The safety model costs you nothing in the daily flow. Commands in the sandbox run without a question.</p>
+      <div class="features">
+        {features.map(([name, text]) => (
+          <div class="feature"><b>{name}</b><span>{text}</span></div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="review">
+    <div class="wrap review">
+      <div>
+        <p class="kicker">Reviewed by itself</p>
+        <h2 class="title" id="review">Before 0.14.0, Garuda read its own code.</h2>
+        <p class="sub" style="margin-bottom:24px">
+          Garuda reviewed seven areas of its code in plan mode, read only. Each finding was checked by
+          hand, and each fix came with a test that fails without it. One finding was high: after Ctrl-C
+          at an approval question, every later message of the chat failed.
+        </p>
+        <a class="link-arrow" href={`${base}blog/garuda-reviews-garuda/`}>How the review went →</a>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="n">7</div><div class="l">areas reviewed, one run each</div></div>
+        <div class="stat"><div class="n">≈ $30</div><div class="l">of model time for all runs</div></div>
+        <div class="stat"><div class="n">1</div><div class="l">high-severity bug, found and fixed</div></div>
+        <div class="stat"><div class="n">800+</div><div class="l">tests, with no internet and no API key</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="start">
+    <div class="wrap start">
+      <div>
+        <p class="kicker">Get started</p>
+        <h2 class="title" id="start">Up and running in a minute.</h2>
+        <p class="sub" style="margin-bottom:24px">
+          You need Node 22 or later, pnpm 10 and git. Garuda runs on macOS and Linux, and is
+          open source under the Apache-2.0 license.
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href={`${base}docs/quick-start/`}>Quick start</a>
+          <a class="btn" href={`${base}docs/guide/`}>User guide</a>
+        </div>
+      </div>
+      <pre class="code"><span class="t-dim"># build it</span>
+git clone https://github.com/madhu-sv/garuda.git ~/garuda
+cd ~/garuda && pnpm install && pnpm build
+
+<span class="t-dim"># use it in your project</span>
+export ANTHROPIC_API_KEY=...
+export GARUDA_MODEL=claude-sonnet-5
+cd ~/my-project && node ~/garuda/dist/cli/index.js</pre>
+    </div>
+  </section>
+</BaseLayout>

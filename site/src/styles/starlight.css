@@ -1,0 +1,21 @@
+/* Starlight theme: the same type and accent as the landing page. */
+:root {
+  --sl-font: "Inter Variable", system-ui, sans-serif;
+  --sl-font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  --sl-color-accent-low: #3b2408;
+  --sl-color-accent: #d97706;
+  --sl-color-accent-high: #fcd9a8;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #fde7c8;
+  --sl-color-accent: #b45309;
+  --sl-color-accent-high: #6b3205;
+}
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+h1#_top {
+  font-family: "Newsreader Variable", Georgia, serif;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+}

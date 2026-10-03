@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/madhu-sv/garuda/actions/workflows/ci.yml/badge.svg)](https://github.com/madhu-sv/garuda/actions/workflows/ci.yml)
 
+Website and docs: https://madhu-sv.github.io/garuda/
+
 Garuda is a terminal coding agent. This is version 0.14.0: the 0.14–0.17 branches after the merge gate
 and Garuda's own review (see the notes under the status table).
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
@@ -1008,6 +1010,11 @@ Every pull request runs `.github/workflows/ci.yml`: `pnpm check` and a build on 
 bubblewrap, so the sandbox tests run) and macOS (Seatbelt), and a gitleaks scan of the history. The
 jobs have read-only access and get no secrets. Changes to `main` need a pull request and a review by
 the code owner (`.github/CODEOWNERS`).
+
+The website lives in `site/` (Astro and Starlight). Its docs pages are generated from `docs/` and this
+README at build time (`site/scripts/sync-docs.mjs`), so edit those files, not the generated pages.
+`.github/workflows/pages.yml` builds the site for each pull request that changes it, and deploys it
+to GitHub Pages from `main`. To work on it: `cd site && pnpm install --ignore-workspace && pnpm dev`.
 
 ## License
 

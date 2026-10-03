@@ -1,0 +1,74 @@
+---
+// The frame of the landing page and the blog: head, header and footer. The docs use Starlight.
+import "@fontsource-variable/inter";
+import "@fontsource-variable/newsreader";
+import "@fontsource-variable/jetbrains-mono";
+import "../styles/site.css";
+import Mark from "../components/Mark.astro";
+
+interface Props {
+  title: string;
+  description: string;
+  current?: "home" | "blog";
+}
+const { title, description, current = "home" } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const repo = "https://github.com/madhu-sv/garuda";
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0f13" media="(prefers-color-scheme: dark)" />
+    <script is:inline>
+      // Use the theme that the reader picked in the docs (Starlight keeps it in localStorage).
+      try {
+        const theme = localStorage.getItem("starlight-theme");
+        if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href={base} aria-label="Garuda home"><Mark />Garuda</a>
+        <nav class="nav" aria-label="Main">
+          <a href={`${base}docs/`}>Docs</a>
+          <a href={`${base}docs/guide/`} class="hide-sm">Guide</a>
+          <a href={`${base}blog/`} aria-current={current === "blog" ? "page" : undefined}>Blog</a>
+          <a class="gh" href={repo}>
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            <span class="hide-sm">GitHub</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Garuda · Apache-2.0 · © 2026 Madhusudhan Vasanth Kumar</span>
+        <nav aria-label="Footer">
+          <a href={`${base}docs/`}>Docs</a>
+          <a href={`${base}blog/`}>Blog</a>
+          <a href={`${repo}/blob/main/SECURITY.md`}>Security</a>
+          <a href={`${repo}/releases`}>Releases</a>
+          <a href={repo}>GitHub</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>

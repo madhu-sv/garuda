@@ -1,6 +1,8 @@
 # Garuda documentation
 
 Garuda is a terminal coding agent in TypeScript on Node. This folder describes how it is built.
+The website shows these documents at https://madhu-sv.github.io/garuda/docs/design/ (generated from
+this folder at each deploy).
 
 | Document | What it answers |
 | --- | --- |
