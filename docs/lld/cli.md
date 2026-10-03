@@ -141,7 +141,7 @@ flowchart LR
   ui -->|actions| store[store.ts: ChatStore]
   store -->|useSyncExternalStore| ui
   ctrl[controller.ts: runChat] -->|nextInput| store
-  ctrl --> cmds[commands.ts: /help /usage /session /where /defs /refs /callers /impact /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /compact /details /thinking /diff /schedule /jobs /exit; /name: skill or command]
+  ctrl --> cmds[commands.ts: /help /usage /session /where /defs /refs /callers /impact /map /mcp /hooks /lsp /commands /plan /build /undo /redo /init /agents /new /sessions /models /export /compact /details /thinking /search /diff /schedule /jobs /exit; /name: skill or command]
   ctrl -->|runTurnInTerminal| rt[Runtime]
   rt -->|events, approvals, notices| store
 ```
@@ -224,6 +224,9 @@ interface ChatState {
 - **Details (0.9):** `Renderer.details` (the Ink store and `PlainRenderer`; default true). `/details [on|off]`
   flips or sets it. Off: a `tool_result` or `server_tool` event adds only the call line, unless the call
   failed; todo lines stay. Items already drawn do not change (`<Static>`). Ctrl-O keeps the last output.
+- **Search (0.14):** `/search` prints `runtime.searchStatus()`; `/search claude|provider|off` calls
+  `runtime.setSearch(use, false)` (this session); `/search default <use>` saves it in
+  `~/.garuda/search.json`. Tab completes the words.
 - **Thinking (0.9):** `/thinking` prints `runtime.thinkingStatus()`; `/thinking <word>` calls
   `runtime.setThinking(word)` (`changeThinking` in `model/thinking.ts`: on, off, show, hide, default, an
   effort; refused when the model cannot do it). The runtime writes a `thinking` record, and a new or

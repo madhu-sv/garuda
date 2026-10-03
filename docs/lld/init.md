@@ -105,6 +105,10 @@ lists the files, `new` or `append`.
 
 In plan mode, `/init` adds a line: the init turn can only read; `/build` lets it write AGENTS.md.
 
+Web search (0.14): when `~/.garuda/search.json` has a `claude` section and no `use`, init asks once
+which web search to use (Claude's search, the other provider when there is one, or none) and saves the
+answer as `use` (`saveSearchUse`). It is a user setting, for every project.
+
 `initTip(root)` for the chat start banner: another agent's files and no `.garuda` → "Found files of …";
 no AGENTS.md, CLAUDE.md or GARUDA.md → a hint to type `/init`; else nothing.
 

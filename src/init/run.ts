@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ApprovalRequest, Approver } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
+import { loadSearchConfig, providerLabel, type SearchUse, saveSearchUse } from "../web/search.js";
 import { type FolderKind, folderKind } from "./detect.js";
 import { applyPlan, buildPlan, previewText } from "./plan.js";
 import { loadToml, readAllSources } from "./sources.js";
@@ -21,6 +22,8 @@ export interface InitContext {
   approver: Approver;
   executor: Executor;
   signal: AbortSignal;
+  /** Where ~/.garuda/search.json is (0.14). Absent: no web search question. */
+  searchHome?: string;
 }
 
 export interface InitResult {
@@ -29,6 +32,8 @@ export interface InitResult {
   report: string[];
   /** The prompt for the init turn. */
   prompt: string;
+  /** The web search choice that was saved, if init asked it (0.14). */
+  searchUse?: SearchUse;
 }
 
 export async function runInit(context: InitContext): Promise<InitResult> {
@@ -111,6 +116,12 @@ export async function runInit(context: InitContext): Promise<InitResult> {
     }
   }
 
+  const search =
+    context.searchHome === undefined
+      ? undefined
+      : await searchStep(context.searchHome, approver, executor, signal);
+  if (search !== undefined) report.push(search.text);
+
   return {
     kind,
     report,
@@ -118,7 +129,48 @@ export async function runInit(context: InitContext): Promise<InitResult> {
       kind,
       plan.instructions.map((i) => i.path),
     ),
+    ...(search === undefined ? {} : { searchUse: search.use }),
   };
+}
+
+/**
+ * The web search choice (0.14): once, when Claude's search is set up in ~/.garuda/search.json and
+ * no `use` is saved yet. The answer goes into search.json, so no session asks again; `/search`
+ * changes it later.
+ */
+async function searchStep(
+  home: string,
+  approver: Approver,
+  executor: Executor,
+  signal: AbortSignal,
+): Promise<{ use: SearchUse; text: string } | undefined> {
+  const loaded = await loadSearchConfig(home);
+  if (loaded.claude === undefined || loaded.use !== undefined) return undefined;
+  const provider = loaded.config === undefined ? undefined : providerLabel(loaded.config);
+  const choice = await approver.ask(
+    {
+      tool: "init",
+      target: { kind: "input", json: "{}" },
+      preview: [
+        "Claude can search the web itself, on Anthropic's servers, when a task needs it",
+        `($10 per 1,000 searches).${provider === undefined ? "" : ` Your other provider: ${provider}; it asks before each search.`}`,
+        'Garuda saves your choice in ~/.garuda/search.json ("use"), for every project. Change it later with /search.',
+      ].join("\n"),
+      isolation: executor.isolation,
+      title: "Web search",
+      question: "Which web search?",
+      choices: provider === undefined ? ["once", "deny"] : ["once", "session", "deny"],
+      labels: {
+        once: "Claude's search, when a task needs it",
+        session: "My other provider only",
+        deny: "No web search",
+      },
+    },
+    signal,
+  );
+  const use: SearchUse = choice === "once" ? "claude" : choice === "session" ? "provider" : "off";
+  const file = await saveSearchUse(home, use);
+  return { use, text: `Web search: ${use} (saved in ${file}).` };
 }
 
 /** The prompt of the init turn. */

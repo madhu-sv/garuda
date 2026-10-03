@@ -501,6 +501,41 @@ describe("init: the command (0.5)", () => {
     expect(result.report).toEqual([]);
   });
 
+  it("asks which web search once, when Claude's search is set up and nothing is saved (0.14)", async () => {
+    const files = {
+      ".git/HEAD": "ref: refs/heads/main\n",
+      ".garuda/settings.json": "{}\n",
+      ".gitignore": `${GITIGNORE_LINES.join("\n")}\n`,
+    };
+    const { root, home } = setup(files, {
+      ".garuda/search.json": json({ claude: {}, maxResults: 3 }),
+    });
+    const approver = new AutoApprover("deny");
+    const init = () =>
+      runInit({
+        root,
+        home,
+        approver,
+        executor: new HostExecutor(),
+        signal: signal(),
+        searchHome: home,
+      });
+    const result = await init();
+    expect(approver.requests.map((r) => r.title)).toEqual(["Web search"]);
+    expect(result.report[0]).toMatch(/^Web search: off \(saved in /);
+    expect(result.searchUse).toBe("off");
+    const saved = JSON.parse(readFileSync(join(home, ".garuda", "search.json"), "utf8"));
+    expect(saved).toEqual({ claude: {}, maxResults: 3, use: "off" });
+    // Saved: the next init does not ask.
+    expect((await init()).searchUse).toBeUndefined();
+    expect(approver.requests).toHaveLength(1);
+    // Without a search home (tests, evals) init never asks.
+    const other = setup(files, { ".garuda/search.json": json({ claude: {} }) });
+    const quiet = new AutoApprover("deny");
+    await runInit({ ...other, approver: quiet, executor: new HostExecutor(), signal: signal() });
+    expect(quiet.requests).toEqual([]);
+  });
+
   async function runtimeFor(root: string, home: string, model: FakeModelClient, answer = "once") {
     const approver = new AutoApprover((r: ApprovalRequest) =>
       r.tool === "init" ? (answer as "once") : "once",

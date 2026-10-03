@@ -15,6 +15,11 @@ export class ToolRegistry implements ToolRunner {
     this.tools.set(tool.name, tool);
   }
 
+  /** Remove a tool (0.14: `/search off` takes web_search away for the session). */
+  unregister(name: string): void {
+    this.tools.delete(name);
+  }
+
   get(name: string): AnyTool | undefined {
     return this.tools.get(name);
   }

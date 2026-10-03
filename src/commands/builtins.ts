@@ -34,6 +34,7 @@ export const BUILTIN_COMMANDS: readonly string[] = [
   "editor",
   "details",
   "thinking",
+  "search",
   "undo",
   "redo",
   "exit",

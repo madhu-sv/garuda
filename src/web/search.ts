@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import { isLoopbackHost } from "../net/address.js";
 
@@ -21,6 +21,12 @@ import { isLoopbackHost } from "../net/address.js";
  *
  *   { "claude": { "maxUses": 5 } }                            Claude's search; Tavily from the env
  *   { "provider": "brave", "claude": { "blockedDomains": ["example.com"] } }
+ *
+ * `use` (0.14) is the user's choice, so Garuda does not ask: "claude" (Claude's search, the provider
+ * as the fallback for other models), "provider" (only the provider) or "off" (no web search).
+ * Without it the chat asks once and saves the answer here; `garuda init` and `/search` set it too.
+ *
+ *   { "use": "claude", "claude": {}, "provider": "tavily" }
  */
 
 export const SEARCH_FILE = join(".garuda", "search.json");
@@ -30,6 +36,10 @@ export const DEFAULT_RESULTS = 5;
 export const MAX_RESULTS = 10;
 
 export type SearchProvider = "brave" | "tavily" | "searxng";
+
+/** Which web search the user chose (0.14): saved in search.json as `use`. */
+export const SEARCH_USES = ["claude", "provider", "off"] as const;
+export type SearchUse = (typeof SEARCH_USES)[number];
 
 /** Searches per model request for Claude's search, by default. */
 export const DEFAULT_CLAUDE_MAX_USES = 5;
@@ -53,6 +63,8 @@ const claudeSchema = z
   });
 
 const fileSchema = z.strictObject({
+  /** The user's choice (0.14); absent: the chat asks once and saves the answer. */
+  use: z.enum(SEARCH_USES).optional(),
   provider: z.enum(["brave", "tavily", "searxng"]).optional(),
   /** Claude's own web search (0.6). */
   claude: claudeSchema.optional(),
@@ -108,7 +120,12 @@ export function providerLabel(config: SearchConfig): string {
 export async function loadSearchConfig(
   home: string = homedir(),
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ config?: SearchConfig; claude?: ClaudeSearchConfig; problem?: string }> {
+): Promise<{
+  config?: SearchConfig;
+  claude?: ClaudeSearchConfig;
+  use?: SearchUse;
+  problem?: string;
+}> {
   const file = join(home, SEARCH_FILE);
   let text: string | undefined;
   try {
@@ -128,6 +145,7 @@ export async function loadSearchConfig(
     return { problem: `${file}: invalid JSON: ${(error as Error).message}` };
   }
   const max = parsed.maxResults ?? DEFAULT_RESULTS;
+  const use: { use?: SearchUse } = parsed.use === undefined ? {} : { use: parsed.use };
   const claude: { claude?: ClaudeSearchConfig } =
     parsed.claude === undefined
       ? {}
@@ -143,14 +161,34 @@ export async function loadSearchConfig(
           },
         };
   if (parsed.provider === undefined) {
-    if (parsed.claude === undefined) {
+    if (parsed.claude === undefined && parsed.use === undefined) {
       return { problem: `${file}: name a "provider", or add a "claude" section.` };
     }
     // The fallback comes from a key in the environment, if there is one.
-    return { ...fromEnv(env, max), ...claude };
+    return { ...fromEnv(env, max), ...claude, ...use };
   }
   const client = clientConfig(file, { ...parsed, provider: parsed.provider }, env, max);
-  return "problem" in client ? { ...client, ...claude } : { config: client.config, ...claude };
+  return "problem" in client
+    ? { ...client, ...claude, ...use }
+    : { config: client.config, ...claude, ...use };
+}
+
+/**
+ * Save the user's search choice as `use` in ~/.garuda/search.json (0.14). The other keys stay as
+ * they are; a missing file is created. Only the user's own commands call this (the first-time
+ * question, `garuda init`, `/search default`).
+ */
+export async function saveSearchUse(home: string, use: SearchUse): Promise<string> {
+  const file = join(home, SEARCH_FILE);
+  let data: Record<string, unknown> = {};
+  try {
+    data = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, `${JSON.stringify({ ...data, use }, null, 2)}\n`, { mode: 0o600 });
+  return file;
 }
 
 function fromEnv(env: NodeJS.ProcessEnv, max: number): { config?: SearchConfig } {

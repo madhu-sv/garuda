@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -28,7 +28,7 @@ import { createSession } from "../src/session/session.js";
 import { FileSessionStore, MemoryJournal } from "../src/session/store.js";
 import { ToolRegistry } from "../src/tools/registry.js";
 import { createWebSearchTool } from "../src/tools/webSearch.js";
-import { loadSearchConfig, type SearchConfig } from "../src/web/search.js";
+import { loadSearchConfig, type SearchConfig, saveSearchUse } from "../src/web/search.js";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "garuda-claudesearch-")));
 afterAll(() => rmSync(base, { recursive: true, force: true }));
@@ -439,6 +439,22 @@ describe("Claude's web search: the config (0.6)", () => {
   });
 });
 
+describe("the saved search choice in search.json (0.14)", () => {
+  it("loads use, also alone; saving keeps the other keys and never overwrites a broken file", async () => {
+    const home = join(base, `use${n++}`);
+    write(home, { ".garuda/search.json": JSON.stringify({ use: "off" }) });
+    expect(await loadSearchConfig(home, {})).toEqual({ use: "off" });
+    write(home, { ".garuda/search.json": JSON.stringify({ provider: "tavily", claude: {} }) });
+    await saveSearchUse(home, "claude");
+    const loaded = await loadSearchConfig(home, { TAVILY_API_KEY: "k" });
+    expect(loaded.use).toBe("claude");
+    expect(loaded.config?.provider).toBe("tavily");
+    write(home, { ".garuda/search.json": "{ broken" });
+    await expect(saveSearchUse(home, "off")).rejects.toThrow();
+    expect(readFileSync(join(home, ".garuda", "search.json"), "utf8")).toBe("{ broken");
+  });
+});
+
 describe("Claude's web search: the runtime (0.6)", () => {
   class Recorder implements Approver {
     readonly requests: ApprovalRequest[] = [];
@@ -448,6 +464,16 @@ describe("Claude's web search: the runtime (0.6)", () => {
       return this.answers.shift() ?? "deny";
     }
   }
+
+  const SEARCH = {
+    claude: { maxUses: 4 },
+    config: {
+      provider: "tavily" as const,
+      endpoint: new URL("https://api.tavily.com/search"),
+      apiKey: "k",
+      maxResults: 5,
+    },
+  };
 
   async function runtimeFor(
     model: FakeModelClient,
@@ -468,15 +494,7 @@ describe("Claude's web search: the runtime (0.6)", () => {
       mcp: false,
       hooks: false,
       profiles: [],
-      search: {
-        claude: { maxUses: 4 },
-        config: {
-          provider: "tavily",
-          endpoint: new URL("https://api.tavily.com/search"),
-          apiKey: "k",
-          maxResults: 5,
-        },
-      },
+      search: SEARCH,
       ...extra,
     });
   }
@@ -499,16 +517,63 @@ describe("Claude's web search: the runtime (0.6)", () => {
     expect(approver.requests).toHaveLength(1);
     expect(approver.requests[0]).toMatchObject({
       title: "Claude's web search",
-      question: "Allow Claude's web search in this session?",
+      question: "Allow Claude's web search?",
       choices: ["session", "deny"],
     });
     expect(approver.requests[0]?.preview).toContain("up to 4 searches per request");
-    expect(approver.requests[0]?.preview).toContain("uses your other provider");
+    expect(approver.requests[0]?.preview).toContain("does not mean this task will search");
+    expect(approver.requests[0]?.labels?.deny).toContain("other search provider");
     // A new session asks again; "no" falls back to the client web_search.
     runtime.newSession();
     await runtime.runTurn("three", signal());
     expect(approver.requests).toHaveLength(2);
     expect(seen).toEqual([["web_search:4"], ["web_search:4"], undefined]);
+  });
+
+  it("a saved choice (use) asks nothing; the first answer is saved; /search switches and saves (0.14)", async () => {
+    const tools = (request: Parameters<FakeModelClient["stream"]>[0]) =>
+      `${request.serverTools?.length ?? 0}/${request.tools.some((t) => t.name === "web_search")}`;
+    const seen: string[] = [];
+    const answer = (request: Parameters<FakeModelClient["stream"]>[0]) => {
+      seen.push(tools(request));
+      return reply([text("ok")]);
+    };
+    const run = async (use: "claude" | "provider" | "off") => {
+      seen.length = 0;
+      const approver = new Recorder([]);
+      const model = new FakeModelClient([answer], { serverTools: ["web_search"] });
+      const withUse = await runtimeFor(model, approver, { search: { ...SEARCH, use } });
+      await withUse.runTurn("one", signal());
+      return { asked: approver.requests.length, seen: seen[0] };
+    };
+    expect(await run("claude")).toEqual({ asked: 0, seen: "1/false" });
+    expect(await run("provider")).toEqual({ asked: 0, seen: "0/true" });
+    expect(await run("off")).toEqual({ asked: 0, seen: "0/false" });
+
+    // No saved choice, a home folder: the answer goes into search.json.
+    const home = join(base, `sh${n++}`);
+    write(home, {
+      ".garuda/search.json": JSON.stringify({ claude: { maxUses: 4 }, maxResults: 3 }),
+    });
+    const approver = new Recorder(["deny"]);
+    const model = new FakeModelClient([answer, answer, answer], { serverTools: ["web_search"] });
+    const runtime = await runtimeFor(model, approver, { search: { ...SEARCH, home } });
+    await runtime.runTurn("one", signal());
+    const saved = await loadSearchConfig(home, {});
+    expect(saved.use).toBe("provider");
+    expect(saved.claude?.maxUses).toBe(4);
+    runtime.newSession();
+    await runtime.runTurn("two", signal());
+    expect(approver.requests).toHaveLength(1);
+
+    // /search: this session, then saved.
+    expect((await runtime.setSearch("off", false)).text).toMatch(/off for this session/);
+    seen.length = 0;
+    await runtime.runTurn("three", signal());
+    expect(seen[0]).toBe("0/false");
+    expect(runtime.searchStatus()).toMatch(/Web search now: off.*\n.*Saved choice: provider/s);
+    expect((await runtime.setSearch("claude", true)).text).toMatch(/Saved in/);
+    expect((await loadSearchConfig(home, {})).use).toBe("claude");
   });
 
   it("never asks for a model that cannot run it", async () => {

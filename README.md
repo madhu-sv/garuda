@@ -759,13 +759,19 @@ on with a `claude` section in `~/.garuda/search.json`:
 { "provider": "tavily", "claude": { "blockedDomains": ["example.com"] } }
 ```
 
-- The search runs inside the model's reply, so Garuda cannot ask before each query. It asks once per
-  session instead, before the first turn: "Allow Claude's web search in this session?".
+- The search runs inside the model's reply, so Garuda cannot ask before each query. Choose once which
+  web search you want, with `"use"` in `~/.garuda/search.json`: `"claude"` (Claude's search; your other
+  backend stays the fallback for other models), `"provider"` (only your other backend) or `"off"`.
+  `garuda init` asks it when Claude's search is set up and nothing is saved; without a saved choice,
+  the chat asks once before the first task and saves the answer. No session asks again.
+- `/search` shows what is in use. `/search claude|provider|off` switches for this session;
+  `/search default claude|provider|off` changes the saved choice.
 - It costs $10 per 1,000 searches, on top of the tokens. The usage line and `/usage` include it.
 - `maxUses` (1–20, default 5) caps the searches per model request. `allowedDomains` or `blockedDomains`
   (not both) limit the sites.
 - Your other backend (`provider`, or a key in the environment) is the fallback: for a model that is not a
-  Claude model (for example after `/models`), or when you say No. Without one, No means no web search.
+  Claude model (for example after `/models`), or with `"use": "provider"`. Without one, `provider` is
+  not offered.
 - Custom agents whose tools allow `WebSearch` (or `web_search`) get it too, in the same session.
 - The chat shows each search: `● web_search (Claude) <query>` and the number of results; Ctrl-O lists
   the pages.

@@ -144,11 +144,22 @@ for Claude models.
 - **Config.** A `claude` section in `~/.garuda/search.json` (user only): `maxUses` (1–20, default 5),
   `allowedDomains` or `blockedDomains` (bare domains, optional path, not both). `provider` becomes
   optional: without it, the fallback comes from `BRAVE_API_KEY`/`TAVILY_API_KEY`. A broken fallback gives
-  a warning and keeps Claude's search. `loadSearchConfig` returns `{ config?, claude?, problem? }`.
-- **Consent.** Garuda cannot ask per query. `Runtime.claudeSearchTools()` asks once per session, before the
-  first turn whose model can run it: "Allow Claude's web search in this session?" (choices: Yes, for this
-  session / No, not in this session; the preview shows the limit, the price and what No means). The answer
-  holds until `/new` or `/sessions <n>`. Models that cannot run it (`ModelClient.serverTools`) never ask.
+  a warning and keeps Claude's search. `loadSearchConfig` returns `{ config?, claude?, use?, problem? }`.
+- **Choice (0.14).** `use` in search.json (`SEARCH_USES`: claude, provider, off) is the user's consent, so
+  nothing asks: `claude` turns Claude's search on for every session, `provider` keeps only the client
+  tool, `off` registers no `web_search`. `saveSearchUse(home, use)` writes it and keeps the other keys
+  (a broken file is not overwritten). `RuntimeOptions.search.use` and `.home` come from the CLI; evals
+  and tests pass neither.
+- **Consent without a saved choice.** Garuda cannot ask per query. `Runtime.claudeSearchTools()` asks
+  once, before the first turn whose model can run it: "Allow Claude's web search?" The preview says the
+  question comes before any task and does not mean the task will search, and gives the limit and the
+  price; the choices are "Yes, Claude may search when needed" and "No, use my other search provider" (or
+  "No, no web search"). With a home folder the answer is saved as `use` (yes → claude, no → provider or
+  off), so it is not asked again; without one it holds until `/new` or `/sessions <n>`. Models that cannot
+  run it (`ModelClient.serverTools`) never ask.
+- **/search (0.14).** `Runtime.searchStatus()` (now, saved, available) and `Runtime.setSearch(use, save)`:
+  this session only, or also saved. `off` unregisters the client `web_search`; `claude` and `provider`
+  register it again when a provider is set up.
 - **Request.** `ModelRequest.serverTools: [{ type: "web_search", maxUses, allowedDomains?, blockedDomains? }]`.
   The Anthropic adapter sends `web_search_20250305` after the client tools (the cache mark moves to it).
   Dynamic filtering (20260209+, with code execution) waits for an A/B eval. A server tool replaces the client

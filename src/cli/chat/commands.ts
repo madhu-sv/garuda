@@ -58,6 +58,7 @@ export const HELP = [
   "  /editor    write the next prompt in $VISUAL or $EDITOR (also Ctrl-G)",
   "  /details   show or hide the result line under each tool call; /details on|off",
   "  /thinking  Claude's thinking: /thinking low|medium|high|xhigh|max|default, show|hide, on|off",
+  "  /search    web search: /search shows it; /search claude|provider|off (this session); /search default <one> (saved)",
   "  /new       start a new session (the old one stays on disk)",
   "  /exit      leave (or press Ctrl-D, or Ctrl-C twice)",
 ].join("\n");
@@ -102,6 +103,19 @@ export async function runCommand(
       if (result.ok) renderer.info(result.text);
       else renderer.warn(result.text);
     }
+  } else if (command === "/search") {
+    const words = text.slice(command.length).trim().split(/\s+/).filter(Boolean);
+    const save = words[0] === "default";
+    const use = save ? words[1] : words[0];
+    if (use === undefined && !save) renderer.info(runtime.searchStatus());
+    else if (use === "claude" || use === "provider" || use === "off") {
+      const result = await runtime.setSearch(use, save);
+      if (result.ok) renderer.info(result.text);
+      else renderer.warn(result.text);
+    } else
+      renderer.warn(
+        "Use: /search, /search claude|provider|off, /search default claude|provider|off.",
+      );
   } else if (command === "/details") {
     detailsCommand(renderer, text.slice(command.length).trim());
   } else if (command === "/usage") renderer.info(usageSummary(runtime));

@@ -96,7 +96,13 @@ import type { FormatSource } from "../tools/types.js";
 import { createWebSearchTool } from "../tools/webSearch.js";
 import { type FileStat, SnapshotStore, storeDir } from "../undo/snapshots.js";
 import { VERSION } from "../version.js";
-import type { ClaudeSearchConfig, SearchConfig } from "../web/search.js";
+import {
+  type ClaudeSearchConfig,
+  providerLabel,
+  type SearchConfig,
+  type SearchUse,
+  saveSearchUse,
+} from "../web/search.js";
 import { attachMentions } from "./mentions.js";
 import { ModelState, modelFacts } from "./modelState.js";
 import { networkConsent, networkHash, networkNote, nodeBinary } from "./network.js";
@@ -199,7 +205,15 @@ export interface RuntimeOptions {
    * Web search (0.5): the backend from ~/.garuda/search.json or the environment (the CLI loads it).
    * Absent: no web_search tool. `web.enabled: false` in the settings also turns it off.
    */
-  search?: { config?: SearchConfig; claude?: ClaudeSearchConfig; fetch?: typeof fetch };
+  search?: {
+    config?: SearchConfig;
+    claude?: ClaudeSearchConfig;
+    fetch?: typeof fetch;
+    /** The user's saved choice (0.14, `use` in search.json). Absent: ask once, then save. */
+    use?: SearchUse;
+    /** Where search.json is, to save the answer (the CLI). Absent: the answer is not saved. */
+    home?: string;
+  };
   agents?: {
     home?: string;
     resolveModel?: (spec: string) => {
@@ -347,6 +361,9 @@ export class Runtime {
   private readonly claudeSearchConfig: ClaudeSearchConfig | undefined;
   /** The user's answer for this session: asked before the first turn that could search. */
   private claudeSearch: "unasked" | "on" | "off" = "unasked";
+  /** The saved search choice (0.14); `/search default` changes it. */
+  private searchUse: SearchUse | undefined;
+  private readonly searchOptions: RuntimeOptions["search"];
   /** The last finished plan (0.7, /schedule). */
   private plan: PlanForJob | undefined;
   /** The first snapshot tree of each session, for /diff (0.6). */
@@ -398,6 +415,9 @@ export class Runtime {
     this.networkOptions = options.network ?? {};
     this.root = options.root;
     this.claudeSearchConfig = settings.web?.enabled === false ? undefined : options.search?.claude;
+    this.searchOptions = options.search;
+    this.searchUse = options.search?.use;
+    this.claudeSearch = this.searchStart();
     this.store = options.store;
     this.onEvent = options.onEvent;
     this.system = system;
@@ -693,7 +713,11 @@ export class Runtime {
       for (const problem of loaded.problems) options.onNotice?.(problem);
     }
     const searchConfig = options.search?.config;
-    if (searchConfig !== undefined && settings.web?.enabled !== false) {
+    if (
+      searchConfig !== undefined &&
+      settings.web?.enabled !== false &&
+      options.search?.use !== "off"
+    ) {
       runtime.tools.register(
         createWebSearchTool({
           config: searchConfig,
@@ -964,7 +988,7 @@ export class Runtime {
   /** Start a new session at the next turn. The old one stays on disk. */
   newSession(): void {
     this.current = undefined;
-    this.claudeSearch = "unasked";
+    this.claudeSearch = this.searchStart();
   }
 
   /**
@@ -979,34 +1003,133 @@ export class Runtime {
     if (client.serverTools?.includes("web_search") !== true) return [];
     if (this.claudeSearch === "unasked") {
       const fallback = this.tools.get("web_search") !== undefined;
+      const saved = this.searchOptions?.home !== undefined;
       const choice = await this.approver.ask(
         {
           tool: "web_search",
           target: { kind: "input", json: "" },
           preview: [
-            `The model can search the web with Claude's own search tool, on Anthropic's servers: up to ${config.maxUses} searches per request, $10 per 1,000 searches.`,
-            "Garuda cannot ask before each query: the model sends them inside its reply.",
+            "This question comes once, before your first task, whatever the task is.",
+            "It does not mean this task will search the web.",
+            "",
+            `Claude can search the web itself, on Anthropic's servers, when a task needs it: up to ${config.maxUses} searches per request, $10 per 1,000 searches. Garuda cannot ask before each search, so it asks now.`,
             ...(config.allowedDomains === undefined
               ? []
               : [`Only these domains: ${config.allowedDomains.join(", ")}.`]),
             ...(config.blockedDomains === undefined
               ? []
               : [`Never these domains: ${config.blockedDomains.join(", ")}.`]),
-            fallback
-              ? "If you say no, web_search uses your other provider and asks for each query."
-              : "If you say no, there is no web search in this session.",
+            ...(saved
+              ? [
+                  "",
+                  'Your answer is saved in ~/.garuda/search.json ("use"). Change it with /search.',
+                ]
+              : []),
           ].join("\n"),
           isolation: this.executor.isolation,
           title: "Claude's web search",
-          question: "Allow Claude's web search in this session?",
+          question: "Allow Claude's web search?",
           choices: ["session", "deny"],
-          labels: { session: "Yes, for this session", deny: "No, not in this session" },
+          labels: {
+            session: "Yes, Claude may search when needed",
+            deny: fallback
+              ? "No, use my other search provider (it asks before each search)"
+              : "No, no web search",
+          },
         },
         signal,
       );
       this.claudeSearch = choice === "deny" ? "off" : "on";
+      const use: SearchUse = choice === "deny" ? (fallback ? "provider" : "off") : "claude";
+      if (use === "off") this.tools.unregister("web_search");
+      if (saved) await this.saveSearchDefault(use);
     }
     return this.claudeSearch === "on" ? [this.claudeSearchSpec(config)] : [];
+  }
+
+  /** The banner and /session word for web search, after the saved choice and /search. */
+  private searchLabel(): string | undefined {
+    const fallback = this.tools.get("web_search") !== undefined;
+    if (this.claudeSearchConfig !== undefined && this.claudeSearch !== "off") {
+      return fallback ? "web_search: Claude + fallback" : "web_search: Claude";
+    }
+    return fallback ? "web_search" : undefined;
+  }
+
+  /** Claude's search at the start of a session, from the saved choice. */
+  private searchStart(): "unasked" | "on" | "off" {
+    if (this.searchUse === undefined) return "unasked";
+    return this.searchUse === "claude" ? "on" : "off";
+  }
+
+  private async saveSearchDefault(use: SearchUse): Promise<string | undefined> {
+    const home = this.searchOptions?.home;
+    if (home === undefined) return undefined;
+    this.searchUse = use;
+    try {
+      return await saveSearchUse(home, use);
+    } catch (error) {
+      this.onNotice?.(`Could not save the search choice: ${(error as Error).message}`);
+      return undefined;
+    }
+  }
+
+  /** /search (0.14): what is in use, and what can be chosen. */
+  searchStatus(): string {
+    const claude = this.claudeSearchConfig !== undefined;
+    const provider = this.searchOptions?.config;
+    const now =
+      this.claudeSearch === "on"
+        ? "Claude's search"
+        : this.tools.get("web_search") !== undefined
+          ? `your provider (${provider === undefined ? "?" : providerLabel(provider)})`
+          : this.claudeSearch === "unasked" && claude
+            ? "not chosen yet (asked before the first task)"
+            : "off";
+    return [
+      `Web search now: ${now}.`,
+      `Saved choice: ${this.searchUse ?? "none"} (~/.garuda/search.json, "use").`,
+      `Available: ${[
+        ...(claude ? ["claude"] : []),
+        ...(provider === undefined ? [] : [`provider (${providerLabel(provider)})`]),
+        "off",
+      ].join(", ")}.`,
+      "Switch for this session: /search claude|provider|off. Save it: /search default claude|provider|off.",
+    ].join("\n");
+  }
+
+  /** /search <use> (0.14): switch for this session; with `save`, also the saved choice. */
+  async setSearch(use: SearchUse, save: boolean): Promise<{ ok: boolean; text: string }> {
+    const provider = this.searchOptions?.config;
+    if (use === "claude" && this.claudeSearchConfig === undefined) {
+      return {
+        ok: false,
+        text: 'Claude\'s search is not set up: add "claude": {} to ~/.garuda/search.json (and web.enabled must not be false).',
+      };
+    }
+    if (use === "provider" && provider === undefined) {
+      return {
+        ok: false,
+        text: "No search provider is set up: name one in ~/.garuda/search.json, or set BRAVE_API_KEY or TAVILY_API_KEY.",
+      };
+    }
+    this.claudeSearch = use === "claude" ? "on" : "off";
+    if (use === "off") this.tools.unregister("web_search");
+    else if (provider !== undefined && this.tools.get("web_search") === undefined) {
+      this.tools.register(
+        createWebSearchTool({
+          config: provider,
+          ...(this.searchOptions?.fetch === undefined ? {} : { fetch: this.searchOptions.fetch }),
+        }),
+      );
+    }
+    const file = save ? await this.saveSearchDefault(use) : undefined;
+    const label =
+      use === "claude" ? "Claude's search" : use === "provider" ? "your provider" : "off";
+    return {
+      ok: true,
+      text: `Web search: ${label} for this session.${file === undefined ? (save ? " (Not saved: no home folder.)" : "") : ` Saved in ${file}.`}`,
+    };
   }
 
   private claudeSearchSpec(config: ClaudeSearchConfig): ServerToolSpec {
@@ -1046,7 +1169,7 @@ export class Runtime {
     this.adoptThinking(this.current);
     // Notes and approvals for the old session do not carry over; the process-wide ones do.
     this.pendingNotes.length = 0;
-    this.claudeSearch = "unasked";
+    this.claudeSearch = this.searchStart();
     const s = this.current;
     return {
       ok: true,
@@ -1389,13 +1512,8 @@ export class Runtime {
     const hooks = this.hookConfig.user.length + this.hookConfig.project.length;
     if (hooks > 0) out.push(`${hooks} hook${hooks === 1 ? "" : "s"}`);
     if (this.tools.get("web_fetch") !== undefined) out.push("web_fetch");
-    if (this.claudeSearchConfig !== undefined) {
-      out.push(
-        this.tools.get("web_search") === undefined
-          ? "web_search: Claude"
-          : "web_search: Claude + fallback",
-      );
-    } else if (this.tools.get("web_search") !== undefined) out.push("web_search");
+    const search = this.searchLabel();
+    if (search !== undefined) out.push(search);
     if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
     if (this.selectedMode === "plan") out.push("plan mode");
     if (this.lspEnabled) out.push("LSP");
@@ -1457,13 +1575,8 @@ export class Runtime {
     const hooks = this.hookConfig.user.length + this.hookConfig.project.length;
     if (hooks > 0) out.push(`${hooks} hook${hooks === 1 ? "" : "s"}`);
     if (this.tools.get("web_fetch") !== undefined) out.push("web_fetch");
-    if (this.claudeSearchConfig !== undefined) {
-      out.push(
-        this.tools.get("web_search") === undefined
-          ? "web_search: Claude"
-          : "web_search: Claude + fallback",
-      );
-    } else if (this.tools.get("web_search") !== undefined) out.push("web_search");
+    const search = this.searchLabel();
+    if (search !== undefined) out.push(search);
     if (this.codeIndex !== "off") out.push(`code index: ${this.codeIndex}`);
     if (this.lspEnabled) out.push("LSP");
     if (this.selectedMode === "plan") out.push("plan mode");
@@ -1537,7 +1650,13 @@ export class Runtime {
       approver: this.approver,
       executor: this.executor,
       signal,
+      ...(this.searchOptions?.home === undefined ? {} : { searchHome: this.searchOptions.home }),
     });
+    // The search choice applies at once, also to this session (it is saved already).
+    if (result.searchUse !== undefined) {
+      this.searchUse = result.searchUse;
+      await this.setSearch(result.searchUse, false);
+    }
     const report = [...result.report];
     if (this.selectedMode === "plan") {
       report.push(

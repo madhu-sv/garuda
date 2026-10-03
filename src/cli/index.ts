@@ -334,6 +334,9 @@ async function start(options: Options, program: Command): Promise<number> {
           search: {
             ...(searchConfig.config === undefined ? {} : { config: searchConfig.config }),
             ...(searchConfig.claude === undefined ? {} : { claude: searchConfig.claude }),
+            // The saved choice (0.14); the first-time answer is saved in ~/.garuda/search.json.
+            ...(searchConfig.use === undefined ? {} : { use: searchConfig.use }),
+            home: homedir(),
           },
         }),
     // Custom agents from ~/.garuda/agents, ~/.claude/agents and the project (0.5). A model id in a

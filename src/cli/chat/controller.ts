@@ -199,6 +199,11 @@ export class CommandArgs {
         return first === undefined ? words("on", "off") : [];
       case "thinking":
         return first === undefined ? words(...THINKING_WORDS) : [];
+      case "search":
+        if (first === undefined) return words("claude", "provider", "off", "default");
+        return first === "default" && second === undefined
+          ? words("claude", "provider", "off")
+          : [];
       case "lsp":
         if (first === undefined) return words("install");
         return first === "install" && second === undefined ? words(...LSP_LANGUAGES) : [];
