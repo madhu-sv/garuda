@@ -305,20 +305,17 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
     },
   );
 
-  knownGap(
-    "G08 a module-level Python reference must not be attributed to the preceding function",
-    async () => {
-      const root = folder();
-      writeFileSync(
-        join(root, "calls.py"),
-        "def target():\n    pass\n\ndef helper():\n    target()\n\ntarget()\n",
-      );
-      const result = await new KnowledgeIndex(root, { home: folder() }).findCallers("target");
-      expect(result.callers.find((caller) => caller.callLine === 7)?.callerName).toBe("<module>");
-    },
-  );
+  it("G08 a module-level Python reference must not be attributed to the preceding function", async () => {
+    const root = folder();
+    writeFileSync(
+      join(root, "calls.py"),
+      "def target():\n    pass\n\ndef helper():\n    target()\n\ntarget()\n",
+    );
+    const result = await new KnowledgeIndex(root, { home: folder() }).findCallers("target");
+    expect(result.callers.find((caller) => caller.callLine === 7)?.callerName).toBe("<module>");
+  });
 
-  knownGap("G08 an unresolved impact target must not be labelled low risk", async () => {
+  it("G08 an unresolved impact target must not be labelled low risk", async () => {
     const root = folder();
     writeFileSync(join(root, "a.py"), "def known():\n    pass\n");
     const result = await new KnowledgeIndex(root, { home: folder() }).impactAnalysis(

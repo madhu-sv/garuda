@@ -158,7 +158,9 @@ export function parsePython(relPath: string, content: string): ParsedPythonFile 
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    // Check multi-line string toggle
+    // Multi-line strings (0.14, review): a line that opens one and does not close it, also in the
+    // middle (`QUERY = """`), starts it. Before, only a line starting with the quotes did, so
+    // `X = """` … `"""` turned the closing line into an opening one and hid the rest of the file.
     if (inMultiLineString) {
       const closeDelim = inMultiLineString.repeat(3);
       if (line.includes(closeDelim)) {
@@ -166,14 +168,11 @@ export function parsePython(relPath: string, content: string): ParsedPythonFile 
       }
       continue;
     }
-
-    if (trimmed.startsWith('"""') && !trimmed.slice(3).includes('"""')) {
-      inMultiLineString = '"';
-      continue;
-    }
-    if (trimmed.startsWith("'''") && !trimmed.slice(3).includes("'''")) {
-      inMultiLineString = "'";
-      continue;
+    const opened = openTripleQuote(line);
+    if (opened !== null) {
+      inMultiLineString = opened;
+      // A definition before the string on the same line (`X = """…`) is still read below.
+      if (trimmed.startsWith('"""') || trimmed.startsWith("'''")) continue;
     }
 
     // Ignore comment lines
@@ -310,4 +309,20 @@ export function parsePython(relPath: string, content: string): ParsedPythonFile 
     symbols,
     lines,
   };
+}
+
+/** The quote of a triple-quoted string that this line opens and does not close, or null. */
+function openTripleQuote(line: string): "'" | '"' | null {
+  let open: "'" | '"' | null = null;
+  for (let i = 0; i < line.length; i++) {
+    if (open === null && line[i] === "#") break;
+    for (const q of ['"', "'"] as const) {
+      if (line.startsWith(q.repeat(3), i) && (open === null || open === q)) {
+        open = open === null ? q : null;
+        i += 2;
+        break;
+      }
+    }
+  }
+  return open;
 }

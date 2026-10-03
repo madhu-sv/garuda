@@ -1,9 +1,8 @@
 # Known agent gaps: issue register (M0)
 
 Original M0 status: all nine issue groups were open, with twelve intended strict failures.
-Current repair status: G01 to G06 and two of the three G07 scenarios are resolved; the G07 child
-outcome, G08 and G09 remain open, with four intended strict failures (after the merge gate,
-2026-10-02).
+Current repair status: G01 to G06, G08 and two of the three G07 scenarios are resolved; the G07 child
+outcome and G09 remain open, with two intended strict failures (2026-10-03).
 This is component evidence, not a complete adversarial
 security audit. Expectations are acceptance contracts proposed in the roadmap; their failure does
 not imply the earlier v0.17 requirements already promised every stronger guarantee.
@@ -136,6 +135,14 @@ confident low-risk verdict for an unresolved target. The latter also resolves as
 in this fixture, illustrating uncertainty in target classification. Follow-up: a labelled
 five-language corpus with declaration boundaries, aliasing, shadowing, precision, recall and
 truncation/freshness checks. No full semantic call-graph claim is made by M0.
+
+Resolved (patch 0133, with the findings of Garuda's own review): the caller of a call is found by
+scope (`src/knowledge/scope.ts`: Python indentation, brace depth for the C-like languages), so
+top-level code is `<module>`; a target that is neither a file nor a symbol has risk `unknown`. Both G08
+assertions are ordinary tests; `test/knowledgeReview.test.ts` adds TS references, import matching for
+dependents, Python strings, Go groups and generics, Java phantom symbols, ast_query filtering, a
+read-only cache and the plugin factory. Not covered yet: the five-language corpus above; the regex
+parsers remain heuristics.
 
 ## G09 Plugin dependency trust
 

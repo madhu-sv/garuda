@@ -144,7 +144,12 @@ class TypeScriptExpert implements LanguageExpert {
     if (sf === undefined) return { definition, references: [], candidates };
     // The position of the name inside the declaration line.
     const lineStart = sf.getPositionOfLineAndCharacter(definition.line - 1, 0);
-    const at = sf.text.indexOf(name, lineStart);
+    // The name as a whole word (0.14, review): indexOf found "port" inside "export", and the
+    // reference search on a keyword gave 0 references for a used name.
+    const lineEnd = sf.text.indexOf("\n", lineStart);
+    const lineText = sf.text.slice(lineStart, lineEnd < 0 ? undefined : lineEnd);
+    const word = new RegExp(`(?<![\\w$])${name.replace(/[$]/g, "\\$")}(?![\\w$])`).exec(lineText);
+    const at = word === null ? -1 : lineStart + word.index;
     const groups = at < 0 ? undefined : this.service.findReferences(file, at);
 
     const references: ReferenceHit[] = [];

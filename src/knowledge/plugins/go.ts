@@ -136,6 +136,7 @@ export function parseGo(relPath: string, content: string): ParsedGoFile {
 
   let inMultiLineImport = false;
 
+  let group: "var" | "const" | "type" | undefined;
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i] ?? "";
     const commentIdx = rawLine.indexOf("//");
@@ -157,6 +158,38 @@ export function parseGo(relPath: string, content: string): ParsedGoFile {
 
     if (trimmed === "import (") {
       inMultiLineImport = true;
+      continue;
+    }
+
+    // Grouped declarations (0.14, review): `var (`, `const (`, `type (` … `)`. Each entry is a
+    // symbol; before, none was found (`ErrNotFound`, iota enums).
+    if (group !== undefined) {
+      if (trimmed === ")") {
+        group = undefined;
+        continue;
+      }
+      const entry = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\b/);
+      if (entry?.[1] && /^[a-zA-Z_]/.test(trimmed) && depthOf(rawLine) === 1) {
+        const name = entry[1];
+        const kind =
+          group === "type"
+            ? /\bstruct\b/.test(trimmed)
+              ? "struct"
+              : /\binterface\b/.test(trimmed)
+                ? "interface"
+                : "type"
+            : group === "const"
+              ? "constant"
+              : "variable";
+        const exported = isGoExported(name);
+        symbols.push({ name, kind, path: relPath, line: i + 1, exported });
+        if (exported) exports.push({ name, kind, line: i + 1 });
+      }
+      continue;
+    }
+    const groupStart = trimmed.match(/^(var|const|type)\s*\($/);
+    if (groupStart?.[1]) {
+      group = groupStart[1] as "var" | "const" | "type";
       continue;
     }
 
@@ -183,7 +216,7 @@ export function parseGo(relPath: string, content: string): ParsedGoFile {
     // 3. Types: struct, interface, alias
     // e.g. type OrderService struct { or type Handler interface { or type ID string
     const typeMatch = trimmed.match(
-      /^type\s+([a-zA-Z0-9_]+)\s+(struct|interface|[a-zA-Z0-9_.*[\]]+)/,
+      /^type\s+([a-zA-Z0-9_]+)(?:\[[^\]]*\])?\s+(struct|interface|[a-zA-Z0-9_.*[\]]+)/,
     );
     if (typeMatch?.[1] && typeMatch[2]) {
       const name = typeMatch[1];
@@ -230,7 +263,8 @@ export function parseGo(relPath: string, content: string): ParsedGoFile {
     }
 
     // 5. Standard Functions: func CreateOrder(...)
-    const funcMatch = trimmed.match(/^func\s+([a-zA-Z0-9_]+)\s*(?:<[^>]+>)?\s*\(/);
+    // Generic functions: func Map[T any](…) (0.14).
+    const funcMatch = trimmed.match(/^func\s+([a-zA-Z0-9_]+)\s*(?:\[[^\]]*\])?\s*\(/);
     if (funcMatch?.[1]) {
       const name = funcMatch[1];
       const exported = isGoExported(name);
@@ -280,4 +314,10 @@ export function parseGo(relPath: string, content: string): ParsedGoFile {
 
 export function createGoExpert(root: string): LanguageExpert {
   return new GoExpert(root);
+}
+
+/** Leading tabs or 4-space steps: 1 for an entry directly in a `var (` group. */
+function depthOf(line: string): number {
+  const lead = line.match(/^[\t ]*/)?.[0] ?? "";
+  return lead.includes("\t") ? lead.split("\t").length - 1 : Math.round(lead.length / 4);
 }

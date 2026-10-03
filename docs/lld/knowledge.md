@@ -50,7 +50,7 @@ interface ImpactResult {
   dependentFiles: string[];
   callers: CallerHit[];
   affectedTests: string[];
-  riskLevel: "low" | "medium" | "high";
+  riskLevel: "low" | "medium" | "high" | "unknown";
   summary: string;
 }
 interface AstQueryOptions { kind?; exported?; container?; namePattern?; pathPrefix?; limit? }
@@ -64,9 +64,20 @@ interface FileNode { path; exports: ExportEntry[]; imports: string[] }
 - `languageStatuses()`: reports all registered language plugins, their source, active/standby state, and file count.
 - `findSymbols(query, exact, limit = 50)`: asks every expert and merges.
 - `findReferences(name, inFile?, limit = 200)`: the first expert that finds the definition answers.
-- `findCallers(name, inFile?, limit = 50)`: traces invocation sites and resolves enclosing caller scope (class, method, function).
-- `impactAnalysis(target)`: computes blast radius, direct dependents, caller sites, risk classification (low/medium/high), and automatically discovers affected test suites (`*.test.ts`, `test_*.py`, `*Test.java`, `*_test.go`, `*_test.rs`).
-- `astQuery(options)`: structural query across indexed ASTs filtering by symbol kind, visibility, container, and wildcard patterns.
+- `findCallers(name, inFile?, limit = 50)`: the call sites and the definition that holds each one
+  (`scope.ts`, 0.14): by indentation in Python, and only inside a body (brace depth > 0) in the C-like
+  languages; top-level code is `<module>`.
+- `impactAnalysis(target)`: direct dependents (a file whose import names the target: relative imports
+  resolved, module names matched on the end of the path, Go packages by folder; `importNames`), caller
+  sites, a risk (low/medium/high, or `unknown` when the target is neither a file nor a symbol), and the
+  affected tests (`*.test.ts`, `test_*.py`, `*Test.java`, `*_test.go`, `*_test.rs`).
+- `astQuery(options)`: filters every symbol by kind, visibility, container and wildcard pattern, then
+  applies the limit.
+- `repoMap` skips a file that vanished since the listing and writes its cache on a best-effort basis.
+  The experts load once, also for parallel calls. A user plugin's factory runs once, with the root.
+- Parser fixes (0.14): TS references find the name as a whole word on its line; Python multi-line
+  strings that open mid-line (`X = """`); Go `var (`/`const (`/`type (` groups and generics; Java type
+  declarations anchored at the line start, and `else`/`return`/`yield` lines are not methods.
 - `repoMap(dir)`: file nodes; unchanged files (same content hash) come from the cache in
   `.garuda/index/code-graph.json` (versioned). The cache is rewritten after each map.
 - Experts load lazily on first use, so the index costs nothing at startup.

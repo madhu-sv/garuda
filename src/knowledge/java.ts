@@ -187,7 +187,8 @@ export function parseJava(relPath: string, content: string): ParsedJavaFile {
     // 2. Class, Interface, Record, Enum Declarations
     // e.g. [public] [final] class MyClass [extends ...] [implements ...] {
     const typeMatch = trimmed.match(
-      /(?:public|protected|private|static|final|abstract|\s)*\b(class|interface|record|enum)\s+([a-zA-Z0-9_]+)/,
+      // Anchored (0.14, review): `log.warn("class Foo")` or a comment made a phantom container.
+      /^(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|protected|private|static|final|abstract|sealed|non-sealed|strictfp)\s+)*(class|interface|record|enum)\s+([a-zA-Z0-9_]+)/,
     );
     if (typeMatch?.[1] && typeMatch[2]) {
       const kind = typeMatch[1];
@@ -243,11 +244,18 @@ export function parseJava(relPath: string, content: string): ParsedJavaFile {
           "this",
           "import",
           "package",
+          "else",
+          "yield",
+          "case",
+          "default",
         ]);
+        // `else doThing(x);`, `else return compute(x);`: statements, not declarations (0.14).
+        const firstWord = returnTypeOrName.split(/[\s<]/)[0] ?? "";
 
         if (
           !controlKeywords.has(methodName) &&
           !controlKeywords.has(returnTypeOrName) &&
+          !controlKeywords.has(firstWord) &&
           !returnTypeOrName.includes("new ") &&
           !methodName.includes(".")
         ) {

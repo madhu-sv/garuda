@@ -7,7 +7,7 @@ import { createJavaExpert } from "./java.js";
 import { createGoExpert } from "./plugins/go.js";
 import { createRustExpert } from "./plugins/rust.js";
 import { createPythonExpert } from "./python.js";
-import type { ExpertFactory, LanguageExpert, LanguagePlugin } from "./types.js";
+import type { LanguageExpert, LanguagePlugin } from "./types.js";
 import { createTypeScriptExpert } from "./typescript.js";
 
 export const BUILTIN_PLUGINS: readonly LanguagePlugin[] = [
@@ -80,7 +80,7 @@ export async function discoverPlugins({
     const id = basename(filename, extname(filename));
 
     try {
-      const plugin = await loadPluginModule(fullPath, id, "user");
+      const plugin = await loadPluginModule(fullPath, id, "user", root);
       if (plugin) {
         plugins.push(plugin);
       }
@@ -118,7 +118,7 @@ export async function discoverPlugins({
         continue;
       }
 
-      const plugin = await loadPluginModule(fullPath, id, "project");
+      const plugin = await loadPluginModule(fullPath, id, "project", root);
       if (plugin) {
         plugins.push(plugin);
       }
@@ -147,20 +147,22 @@ async function loadPluginModule(
   filePath: string,
   id: string,
   source: "user" | "project",
+  root: string,
 ): Promise<LanguagePlugin | undefined> {
   const url = pathToFileURL(filePath).href;
   const mod = await import(url);
   const exported = mod.default ?? mod;
 
   if (typeof exported === "function") {
-    // Factory function: (root) => LanguageExpert
-    const sample = await exported(".");
+    // Factory function: (root) => LanguageExpert. Called once, with the project root (0.14,
+    // review: it ran first with "." — the process folder — and then again with the root).
+    const sample = await exported(root);
     return {
       id: sample.id ?? id,
       extensions: sample.extensions ?? [],
       source,
       path: filePath,
-      factory: exported as ExpertFactory,
+      factory: (forRoot: string) => (forRoot === root ? sample : exported(forRoot)),
     };
   }
 

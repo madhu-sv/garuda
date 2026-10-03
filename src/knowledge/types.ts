@@ -47,7 +47,8 @@ export interface ImpactResult {
   dependentFiles: string[];
   callers: CallerHit[];
   affectedTests: string[];
-  riskLevel: "low" | "medium" | "high";
+  /** "unknown" (0.14): the target was not found, so the tool cannot say it is safe. */
+  riskLevel: "low" | "medium" | "high" | "unknown";
   summary: string;
 }
 

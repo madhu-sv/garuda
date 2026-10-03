@@ -5,14 +5,10 @@
   "semantics": "Expected failures are reproduced gaps, not safety passes. Promote to ordinary tests when fixed.",
   "scenarios": [
     "G07 child execution must persist an outcome in addition to its permission decision",
-    "G08 a module-level Python reference must not be attributed to the preceding function",
-    "G08 an unresolved impact target must not be labelled low risk",
     "G09 entry-file approval must not trust a changed imported dependency"
   ],
   "failurePatterns": {
     "G07 child execution must persist an outcome in addition to its permission decision": "expected false to be true",
-    "G08 a module-level Python reference must not be attributed to the preceding function": "expected 'helper' to be '<module>'",
-    "G08 an unresolved impact target must not be labelled low risk": "not to be 'low'",
     "G09 entry-file approval must not trust a changed imported dependency": "expected true to be false"
   },
   "resolvedScenarios": [
@@ -23,6 +19,8 @@
     "G05 writable specialist children must not execute mutations concurrently",
     "G02 proxy allowlist must not override a team blocked host",
     "G04 grep must not expose a policy-denied ordinary source file",
-    "G06 child budget exhaustion must not start an unreserved wrap-up request"
+    "G06 child budget exhaustion must not start an unreserved wrap-up request",
+    "G08 a module-level Python reference must not be attributed to the preceding function",
+    "G08 an unresolved impact target must not be labelled low risk"
   ]
 }

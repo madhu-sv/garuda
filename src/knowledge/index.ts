@@ -9,6 +9,7 @@ import { createGoExpert } from "./plugins/go.js";
 import { createRustExpert } from "./plugins/rust.js";
 import { BUILTIN_PLUGINS, discoverPlugins } from "./plugins.js";
 import { createPythonExpert } from "./python.js";
+import { braceDepthAt, importNames, pythonEnclosingLine } from "./scope.js";
 import type {
   AstQueryOptions,
   CallerHit,
@@ -80,6 +81,9 @@ export class KnowledgeIndex {
   private home?: string;
   private hidden: (path: string) => boolean = () => false;
   private pluginExperts: Array<{ plugin: LanguagePlugin; expert: LanguageExpert }> | undefined;
+  private pluginLoading:
+    | Promise<Array<{ plugin: LanguagePlugin; expert: LanguageExpert }>>
+    | undefined;
   private discoveryWarnings: string[] = [];
 
   constructor(
@@ -177,10 +181,10 @@ export class KnowledgeIndex {
           s.kind === "class",
       );
 
+      const content = await readFile(join(this.root, filePath), "utf8").catch(() => "");
+      const lines = content.split("\n");
       for (const site of sites) {
-        const enclosing = callableSymbols
-          .filter((s) => s.line <= site.line)
-          .sort((a, b) => b.line - a.line)[0];
+        const enclosing = enclosingSymbol(filePath, content, lines, site.line, callableSymbols);
 
         const callerName = enclosing
           ? enclosing.container
@@ -237,7 +241,9 @@ export class KnowledgeIndex {
       }
     }
 
-    if (!resolvedPath && targetKind === "symbol") {
+    // Neither a file nor a symbol (before, only the symbol case was caught; a missing name fell
+    // through as a "file" with no dependents and came out "low").
+    if (!resolvedPath) {
       return {
         target,
         targetKind: "symbol",
@@ -245,8 +251,9 @@ export class KnowledgeIndex {
         dependentFiles: [],
         callers: [],
         affectedTests: [],
-        riskLevel: "low",
-        summary: `Target "${target}" was not found in the indexed codebase.`,
+        // Not "low" (G08): nothing is known, so nothing is safe to change.
+        riskLevel: "unknown",
+        summary: `Target "${target}" was not found in the indexed codebase: the risk is unknown.`,
       };
     }
 
@@ -279,17 +286,10 @@ export class KnowledgeIndex {
       const targetFilePath = resolvedPath;
       // Find files importing this file directly
       const nodes = await this.repoMap();
-      const baseNameWithoutExt = targetFilePath
-        .slice(targetFilePath.lastIndexOf("/") + 1)
-        .replace(/\.[^/.]+$/, "");
-
       for (const node of nodes) {
         if (node.path === targetFilePath) continue;
-        const importsTarget = node.imports.some(
-          (imp) =>
-            imp.includes(targetFilePath) ||
-            imp.includes(baseNameWithoutExt) ||
-            imp.endsWith(`/${baseNameWithoutExt}`),
+        const importsTarget = node.imports.some((imp) =>
+          importNames(node.path, imp, targetFilePath),
         );
         if (importsTarget) {
           dependentFilesSet.add(node.path);
@@ -397,7 +397,9 @@ export class KnowledgeIndex {
 
       if (targetFiles.length === 0) continue;
 
-      const expertSymbols = expert.findSymbols(targetFiles, "", false, limit * 4);
+      // All symbols, then the filters, then the limit (before, the limit came first and a match
+      // after the first limit*4 symbols was lost).
+      const expertSymbols = expert.findSymbols(targetFiles, "", false, Number.MAX_SAFE_INTEGER);
 
       for (const sym of expertSymbols) {
         if (options.kind !== undefined && sym.kind.toLowerCase() !== options.kind.toLowerCase()) {
@@ -431,7 +433,9 @@ export class KnowledgeIndex {
     const prefix = dir.replace(/^\.?\/?/, "").replace(/\/?$/, dir === "" || dir === "." ? "" : "/");
     for (const { expert, files } of await this.byExpert()) {
       for (const path of files) {
-        const content = await readFile(join(this.root, path), "utf8");
+        // A file deleted or renamed since the listing is left out, not an error.
+        const content = await readFile(join(this.root, path), "utf8").catch(() => undefined);
+        if (content === undefined) continue;
         const hash = createHash("sha256").update(content).digest("hex");
         const cached = cache.files[path];
         const node = cached?.hash === hash ? cached.node : expert.summarise(path, content);
@@ -446,6 +450,12 @@ export class KnowledgeIndex {
   private async ensurePlugins(): Promise<
     Array<{ plugin: LanguagePlugin; expert: LanguageExpert }>
   > {
+    // One load, also for parallel read-only tool calls (before, each built its own experts).
+    this.pluginLoading ??= this.loadPlugins();
+    return this.pluginLoading;
+  }
+
+  private async loadPlugins(): Promise<Array<{ plugin: LanguagePlugin; expert: LanguageExpert }>> {
     if (this.pluginExperts) return this.pluginExperts;
 
     let plugins: LanguagePlugin[];
@@ -527,10 +537,15 @@ export class KnowledgeIndex {
     return { version: GRAPH_VERSION, files: {} };
   }
 
+  /** Best effort (0.14, review): a read-only checkout gives the map without a cache, not an error. */
   private async saveCache(cache: GraphCache): Promise<void> {
     const path = join(this.root, GRAPH_FILE);
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, JSON.stringify(cache));
+    try {
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, JSON.stringify(cache));
+    } catch {
+      // The next call builds the map again.
+    }
   }
 }
 
@@ -557,4 +572,23 @@ function matchPattern(name: string, pattern: string): boolean {
     return regex.test(name);
   }
   return name.toLowerCase().includes(pattern.toLowerCase());
+}
+
+/**
+ * The definition that holds a call (G08): in Python by indentation, in brace languages only when the
+ * call is inside a body (top-level code is "<module>"), then the nearest callable above it.
+ */
+function enclosingSymbol(
+  path: string,
+  content: string,
+  lines: readonly string[],
+  line: number,
+  callables: readonly SymbolHit[],
+): SymbolHit | undefined {
+  if (path.endsWith(".py")) {
+    const at = pythonEnclosingLine(lines, line);
+    return at === undefined ? undefined : callables.find((s) => s.line === at);
+  }
+  if (content !== "" && braceDepthAt(content, line) === 0) return undefined;
+  return callables.filter((s) => s.line <= line).sort((a, b) => b.line - a.line)[0];
 }
