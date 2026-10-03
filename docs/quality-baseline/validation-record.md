@@ -105,5 +105,5 @@ audit log (G07 resolved, hooks recorded and under the policy).
 Run on Linux (Node v22.22.2), `pnpm check`: 77 test files, 804 tests: 797 passed, 1 expected failure
 (G09) and 6 skipped (macOS-only Seatbelt tests and the opt-in Java test). Live on macOS (Seatbelt,
 2026-10-03): `open -a Calculator` and `osascript` Apple events are refused in the sandbox (error -54,
--600); ordinary commands (`git status`, `node -e`) run as before. The known
+-600) and work in a normal terminal (the control run); ordinary commands (`git status`, `node -e`) run as before. The known
 limits of 0.14.0 are listed in the README under the status table.
