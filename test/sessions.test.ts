@@ -8,9 +8,11 @@ import { Redactor } from "../src/session/redact.js";
 import { rebuildState, resumeSession } from "../src/session/resume.js";
 import {
   addAssistantResponse,
+  addSnapshot,
   addUserMessage,
   closeOpenToolCalls,
   createSession,
+  undoTurn,
 } from "../src/session/session.js";
 import { FileSessionStore, newSessionId, parseRecords } from "../src/session/store.js";
 
@@ -149,12 +151,37 @@ describe("resume (F25)", () => {
     expect(closeOpenToolCalls(session)).toBe(0);
   });
 
+  it("forgets read_file deduplication when outputs leave the conversation (0.14, review)", () => {
+    // Else read_file answers "it is still in the conversation" for an output that is gone.
+    const session = createSession("/r", "s");
+    const read = () => session.files.noteRead("/r/a.ts", "x", 0, 2000);
+    expect(read()).toBe(false);
+    expect(read()).toBe(true);
+    addUserMessage(session, "go");
+    addAssistantResponse(session, reply([toolUse("read_file", { path: "a.ts" }, "r1")]), 1, 0);
+    closeOpenToolCalls(session);
+    expect(read()).toBe(false);
+
+    addSnapshot(session, "tree", "next", 0);
+    addUserMessage(session, "next");
+    expect(read()).toBe(true);
+    expect(undoTurn(session, "after")).toBeDefined();
+    expect(read()).toBe(false);
+  });
+
   it("refuses a session from another project, and says when there is none", async () => {
     const root = join(base, "e");
     const store = new FileSessionStore(root, new Redactor({}));
     await expect(resumeSession({ store, root, start: start(root) })).rejects.toThrow(/no session/);
     store.open("x").write({ type: "start", sessionId: "x", ...start("/elsewhere") });
     await expect(resumeSession({ store, root, start: start(root) })).rejects.toThrow(/belongs to/);
+  });
+
+  it("refuses a session id that is a path (0.14, review)", async () => {
+    const store = new FileSessionStore(join(base, "g"));
+    expect(() => store.path("../../outside")).toThrow(/not a session id/);
+    await expect(store.read("../x")).rejects.toThrow(/not a session id/);
+    expect(store.path(newSessionId())).toMatch(/\.jsonl$/);
   });
 
   it("keeps a missing file error clear", async () => {

@@ -231,6 +231,53 @@ describe("thinking blocks (0.9)", () => {
     expect(switched.ok).toBe(true);
     expect(JSON.stringify(runtime.session?.messages)).not.toContain(SIGNATURE);
     expect(runtime.session?.messages.at(-1)?.content).toEqual([text("Hi.")]);
+
+    // A resume with the new model sends what the live session sent (0.14, review): the model record
+    // in the file now strips the old model's thinking too.
+    const store = new FileSessionStore(root);
+    const resumed = await resumeSession({
+      store,
+      root,
+      sessionId: runtime.session?.id ?? "",
+      start: {
+        root,
+        version: "t",
+        model: "claude-opus-5-5",
+        executor: "host",
+        isolation: "none",
+        limits: { maxSteps: 1, tokenBudget: 1, contextWindow: 1 },
+      },
+    });
+    expect(JSON.stringify(resumed.messages)).not.toContain(SIGNATURE);
+  });
+
+  it("a thinking-only answer whose thinking was redacted on disk is left out on resume (0.14, review)", async () => {
+    const root = dir();
+    const store = new FileSessionStore(root, new Redactor({}));
+    const journal = store.open("s3");
+    const start = {
+      root,
+      version: "t",
+      model: "claude-sonnet-5",
+      executor: "host",
+      isolation: "none",
+      limits: { maxSteps: 1, tokenBudget: 1, contextWindow: 1 },
+    };
+    journal.write({ type: "start", sessionId: "s3", ...start });
+    journal.write({ type: "user", message: { role: "user", content: [text("go")] } });
+    const leaky: ThinkingBlock = {
+      type: "thinking",
+      text: "sk-ant-abcdefghijklmnopqrstuvwxyz",
+      wire: {
+        type: "thinking",
+        thinking: "sk-ant-abcdefghijklmnopqrstuvwxyz",
+        signature: SIGNATURE,
+      },
+    };
+    journal.write({ type: "assistant", step: 1, response: reply([leaky]) });
+    const resumed = await resumeSession({ store, root, sessionId: "s3", start });
+    expect(resumed.messages.every((m) => m.content.length > 0)).toBe(true);
+    expect(resumed.messages).toHaveLength(1);
   });
 
   it("the summary, other providers and withoutThinking leave thinking out", () => {

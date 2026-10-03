@@ -71,7 +71,7 @@ Other methods: `newSession()`, `recordStop(reason)`, `mcpStatus()`, `hookLines()
 clients and language servers), `mode` and `setMode()` (0.4), `commands` and `resolveCommand()` (0.4),
 `lspEnabled`, `lspStatus()` and `installLsp()` (0.4), `runUserCommand(command, signal)` (0.6: a `!command` from the chat runs through `tools.execute` as a
 `bash` call, so the permission engine, hooks and executor apply; the output, cut at 10 000 characters and
-with Garuda's markers neutralized, goes into `pendingNotes` for the next message), `agents` and `allowAgent()` (0.5: custom agents; see [agents.md](agents.md)), `skills` and `allowSkill()` (0.5: the consent for a
+with Garuda's markers neutralized, goes into `pendingNotes` for the next message; `newSession()` clears them, 0.14), `agents` and `allowAgent()` (0.5: custom agents; see [agents.md](agents.md)), `skills` and `allowSkill()` (0.5: the consent for a
 project skill; `resolveCommand` checks skills before custom commands; see [skills.md](skills.md)), `init(signal)` (0.5: loads `init/run.js` with `import()`, runs the migration and git steps with the runtime's approver and executor, and returns the report and the init prompt; see [init.md](init.md)).
 
 Sessions and models in the chat (0.6):

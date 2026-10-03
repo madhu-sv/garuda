@@ -154,6 +154,46 @@ describe("M5 acceptance", () => {
     expect(process.listenerCount("SIGINT")).toBe(0);
   });
 
+  it("after Ctrl-C at an approval, the next message closes the open call first (0.14, review)", async () => {
+    // Ctrl-C while Garuda asks: the call throws, so the turn ends with a tool_use and no result.
+    // runAgent closed open calls only when the last message was the assistant's, and the new user
+    // text came first: the API refused every later request of the chat.
+    const root = project("ctrlc-ask");
+    const model = new FakeModelClient([
+      reply([toolUse("write_file", { path: "new.txt", content: "x" }, "w1")]),
+      reply([text("Next.")]),
+    ]);
+    let asked = false;
+    const runtime = await Runtime.create({
+      root,
+      modelId: "claude-sonnet-5",
+      model: async () => model,
+      approver: {
+        ask: (_request, signal) =>
+          new Promise((_resolve, reject) => {
+            asked = true;
+            signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+          }),
+      },
+      store: new FileSessionStore(root, new Redactor({})),
+      settings: parseSettings({}),
+    });
+    const controller = new AbortController();
+    const turn = runtime.runTurn("write it", controller.signal);
+    await waitUntil(async () => asked);
+    controller.abort();
+    await expect(turn).rejects.toBeDefined();
+    runtime.recordStop("interrupted");
+
+    await runtime.runTurn("next", new AbortController().signal);
+    const messages = model.requests.at(-1)?.messages ?? [];
+    const at = messages.findIndex((m) => m.content.some((b) => b.type === "tool_use"));
+    expect(at).toBeGreaterThan(-1);
+    expect(messages[at + 1]?.content[0]).toMatchObject({ type: "tool_result", toolUseId: "w1" });
+    expect(messages.at(-1)?.content[0]).toMatchObject({ type: "text", text: "next" });
+    await runtime.close();
+  });
+
   it("a second Ctrl-C during a turn exits at once", async () => {
     const root = project("ctrlc2");
     const pidFile = join(root, "sleep.pid");

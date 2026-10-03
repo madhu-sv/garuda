@@ -49,6 +49,8 @@ export class FileSessionStore implements SessionStore {
   }
 
   path(sessionId: string): string {
+    // `--resume ../x` must not read or append outside .garuda/sessions (0.14, review).
+    if (!SESSION_ID.test(sessionId)) throw new Error(`"${sessionId}" is not a session id.`);
     return join(this.dir, `${sessionId}.jsonl`);
   }
 
@@ -113,6 +115,9 @@ export class FileSessionStore implements SessionStore {
 }
 
 /** An id as a file name: tool call ids come from the model provider, so keep only safe characters. */
+/** The characters of a session id (newSessionId gives digits, "-" and hex). */
+const SESSION_ID = /^[A-Za-z0-9_-]{1,80}$/;
+
 function safeId(id: string): string {
   return id.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) || "_";
 }

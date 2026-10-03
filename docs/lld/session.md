@@ -24,7 +24,7 @@ Every change goes through these functions, so the journal always matches memory:
 | `addUserMessage(session, text, notes, attachments)` | user message: the prompt, then one `<garuda_note>` text block per note, then one plain text block per attachment (`@path`, 0.6) | `user` |
 | `addAssistantResponse(session, response, step, cost)` | assistant content, usage, cost, context size | `assistant` |
 | `addToolResults(session, results, meta)` | one user message with the tool results | `tool_results` |
-| `closeOpenToolCalls(session)` | an error result for each `tool_use` with no result (after Ctrl-C or a crash) | `tool_results` |
+| `closeOpenToolCalls(session)` | an error result for each `tool_use` with no result (after Ctrl-C or a crash); also forgets the read deduplication. `Runtime.runTurn` calls it before the new user message (0.14, review): Ctrl-C at an approval left an open call, and the API refused every later request of the chat | `tool_results` |
 
 ## Records (`records.ts`)
 
@@ -32,7 +32,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 
 | Type | Fields |
 | --- | --- |
-| `start`, `resume`, `model` | sessionId, root, version, model, executor, isolation, limits (maxSteps, tokenBudget, contextWindow). `model` (0.6): `/models` switched the model; resume and replay treat it like `resume`. |
+| `start`, `resume`, `model` | sessionId, root, version, model, executor, isolation, limits (maxSteps, tokenBudget, contextWindow). `model` (0.6): `/models` switched the model; resume and replay treat it like `resume`. A `model` record, or a start or resume record with another model, drops the thinking blocks before it, as `/models` does live (0.14, review). |
 | `user` | message |
 | `assistant` | step, response, costUsd? |
 | `tool_results` | message, `calls` (per call: toolUseId, name, durationMs, executor and isolation for commands, `subagent` report for explore calls), `synthetic` for closed open calls |
@@ -49,7 +49,8 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 
 ```ts
 interface SessionStore {
-  open(sessionId): Journal;          // Journal.write(record)
+  open(sessionId): Journal;          // Journal.write(record); an id with other characters than
+                                     // letters, digits, "-" and "_" is refused (0.14: --resume ../x)
   openChild(sessionId, childId): Journal;   // a subagent run, kept with its parent (0.3)
   read(sessionId): Promise<SessionRecord[]>;
   latest(): Promise<string | undefined>;
@@ -110,7 +111,7 @@ before it edits it.
 | `record(path, content)` | `read_file` and `write_file` note the content the agent knows. |
 | `status(path, content)` | `edit_file`: `unread`, `changed` or `current`. Only `current` may be edited (F11). |
 | `noteRead(path, content, offset, limit)` | Read deduplication: true when the same range of the same content was read before. |
-| `forgetReads()` | Compaction clears the dedup memory, because the earlier output may be gone. |
+| `forgetReads()` | Compaction, `/undo`, `/redo` and `closeOpenToolCalls` clear the dedup memory, because the earlier output may be gone (the last three since 0.14, review). |
 
 ## Tests
 

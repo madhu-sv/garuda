@@ -50,6 +50,14 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
       case "start":
       case "resume":
       case "model":
+        // /models strips thinking live (its signature belongs to the old model); do the same here,
+        // so a resumed session sends what the live one sent (0.14, review).
+        if (
+          record.type === "model" ||
+          (state.start !== undefined && record.model !== state.start.model)
+        ) {
+          state.messages = withoutThinking(state.messages);
+        }
         state.start = record;
         break;
       case "user":
@@ -130,7 +138,11 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
   const journal = options.store.open(id);
   const session = createSession(options.root, id, journal);
   const messages = dropThinkingAfterRedaction(
-    state.messages.map(repairServerBlocks).map(repairThinking),
+    state.messages
+      .map(repairServerBlocks)
+      .map(repairThinking)
+      // A thinking-only answer whose thinking was redacted is empty now; the API refuses that.
+      .filter((m) => m.content.length > 0),
   );
   // Another model than the session's last one (0.9): thinking signatures do not carry over.
   session.messages =

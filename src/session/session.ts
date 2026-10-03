@@ -109,14 +109,21 @@ export function addSnapshot(
 /** /undo (0.4): take the last turn out of the conversation. The caller restores the files. */
 export function undoTurn(session: Session, after: string): UndoPoint | undefined {
   const point = popPoint(session.undo, session.messages, after);
-  if (point !== undefined) session.journal?.write({ type: "undo", after });
+  if (point !== undefined) {
+    session.journal?.write({ type: "undo", after });
+    // The undone turn's read_file outputs left the conversation (0.14, review).
+    session.files.forgetReads();
+  }
   return point;
 }
 
 /** /redo (0.4): bring the last undone turn back. The caller restores the files. */
 export function redoTurn(session: Session): RedoEntry | undefined {
   const entry = redoPoint(session.undo, session.messages);
-  if (entry !== undefined) session.journal?.write({ type: "redo" });
+  if (entry !== undefined) {
+    session.journal?.write({ type: "redo" });
+    session.files.forgetReads();
+  }
   return entry;
 }
 
@@ -178,6 +185,8 @@ export function closeOpenToolCalls(session: Session): number {
   if (last?.role !== "assistant") return 0;
   const open = last.content.filter((b) => b.type === "tool_use");
   if (open.length === 0) return 0;
+  // A read in a stopped batch may be recorded with no result in the conversation (0.14, review).
+  session.files.forgetReads();
   addToolResults(
     session,
     open.map((call) => ({

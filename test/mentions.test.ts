@@ -169,6 +169,21 @@ describe("!command (0.6)", () => {
     expect(model.remaining).toBe(0);
   });
 
+  it("/new does not carry the old session's command notes (0.14, review)", async () => {
+    const root = project();
+    const model = new FakeModelClient([
+      (request) => {
+        expect(JSON.stringify(request.messages)).not.toContain("The user ran a command");
+        return reply([text("Fresh.")]);
+      },
+    ]);
+    const runtime = await runtimeFor(root, model);
+    await runtime.runUserCommand("cat README.md", signal());
+    runtime.newSession();
+    await runtime.runTurn("hello", signal());
+    expect(model.remaining).toBe(0);
+  });
+
   it("deny rules hold for the user's command too", async () => {
     const root = project();
     const runtime = await runtimeFor(root, new FakeModelClient([]), {

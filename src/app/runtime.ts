@@ -86,7 +86,12 @@ import { FileTracker } from "../session/fileTracker.js";
 import type { SessionSummary } from "../session/list.js";
 import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
-import { addUserMessage, createSession, type Session } from "../session/session.js";
+import {
+  addUserMessage,
+  closeOpenToolCalls,
+  createSession,
+  type Session,
+} from "../session/session.js";
 import { newSessionId, type SessionStore } from "../session/store.js";
 import { loadSkills, type Skill, skillConsent } from "../skills/load.js";
 import { createSkillTool, skillText } from "../skills/tool.js";
@@ -988,6 +993,8 @@ export class Runtime {
   /** Start a new session at the next turn. The old one stays on disk. */
   newSession(): void {
     this.current = undefined;
+    // Notes of the old session (a !command output, a stop note) do not go to the new one (0.14, review).
+    this.pendingNotes.length = 0;
     this.claudeSearch = this.searchStart();
   }
 
@@ -1266,6 +1273,10 @@ export class Runtime {
       ...mentions.skipped.map((s) => `Not attached: ${s}.`),
     ];
     if (lines.length > 0) this.onEvent?.({ type: "notice", text: lines.join("\n") });
+    // A turn stopped during a tool call (Ctrl-C) leaves a tool_use with no result. runAgent closes
+    // open calls only when the last message is the assistant's, so close them before the new user
+    // message (0.14, review): else the API refused every later request of the chat.
+    closeOpenToolCalls(session);
     addUserMessage(
       session,
       prompt,

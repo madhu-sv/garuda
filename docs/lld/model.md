@@ -57,7 +57,7 @@ their own fetch (`clientOptions`, `streamFetch`: undici's fetch with an `Agent` 
 is `STREAM_IDLE_MS`, 20 minutes). The SDK's own 10-minute timeout until the response starts stays. They are left
 out (`thinking.ts`, `withoutThinking`) only where they cannot go back unchanged: after `/models` (a
 signature belongs to its model), on a resume with another model, when redaction changed one on
-disk, and on a resume after a message that redaction changed (the signature binds the content before
+disk (a thinking-only answer is then left out: empty content is refused), and on a resume after a message that redaction changed (the signature binds the content before
 it; see [session.md](session.md)). The compaction summary, `/export` and the OpenAI-compatible adapter ignore them. The setting
 `thinking.keepBlocks: false` (and `garuda eval --keep-thinking off`) drops them as before, for A/B runs.
 
