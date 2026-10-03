@@ -1,5 +1,7 @@
 # Garuda
 
+[![CI](https://github.com/madhu-sv/garuda/actions/workflows/ci.yml/badge.svg)](https://github.com/madhu-sv/garuda/actions/workflows/ci.yml)
+
 Garuda is a terminal coding agent. This is version 0.14.0: the 0.14–0.17 branches after the merge gate
 and Garuda's own review (see the notes under the status table).
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
@@ -999,6 +1001,13 @@ Notes:
 - Only `src/model/anthropic.ts` imports the Anthropic SDK (N1).
 - Only `src/sandbox/` may start processes (N8). Biome and a test enforce this.
 - Strict TypeScript. No `any` in public interfaces (N7).
+
+## Contributions and CI
+
+Every pull request runs `.github/workflows/ci.yml`: `pnpm check` and a build on Linux (with
+bubblewrap, so the sandbox tests run) and macOS (Seatbelt), and a gitleaks scan of the history. The
+jobs have read-only access and get no secrets. Changes to `main` need a pull request and a review by
+the code owner (`.github/CODEOWNERS`).
 
 ## License
 
