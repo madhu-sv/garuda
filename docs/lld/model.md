@@ -51,7 +51,10 @@ Since 0.14 `thinkingRequest` always sends `display: "summarized"` when the model
 unless the user chose show. `AnthropicClient.stream` then yields no `thinking_delta` and blanks `text`
 (`withHiddenThinking`); `wire` keeps the summary and goes back unchanged. Reason: with "omitted" no
 bytes came while the model thought, and Node's fetch closed the stream after 300 s
-(`UND_ERR_BODY_TIMEOUT`); a Fable review lost its final answer three times. They are left
+(`UND_ERR_BODY_TIMEOUT`); a Fable review lost its final answer three times.
+The summaries alone were not enough (a later review still timed out), so the Anthropic clients use
+their own fetch (`clientOptions`, `streamFetch`: undici's fetch with an `Agent` whose `bodyTimeout`
+is `STREAM_IDLE_MS`, 20 minutes). The SDK's own 10-minute timeout until the response starts stays. They are left
 out (`thinking.ts`, `withoutThinking`) only where they cannot go back unchanged: after `/models` (a
 signature belongs to its model), on a resume with another model, when redaction changed one on
 disk, and on a resume after a message that redaction changed (the signature binds the content before

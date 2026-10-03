@@ -29,7 +29,7 @@ flowchart LR
 | N1 | Provider-neutral model access | The loop sees only the `ModelClient` interface. `anthropic.ts` (the only module with the Anthropic SDK) and `openaiCompatible.ts` (plain fetch) are the adapters. |
 | N2 | Prompt caching | The system prompt and the tool list stay the same bytes for a whole session. Cache breakpoints on the system prompt, the last tool and the last message. |
 | N3 | Start in less than 1 s | Heavy modules load with `import()` on first use: the SDK, inquirer, Ink and React, TypeScript 6, the MCP SDK, the HTML converter. `--version` takes about 240 ms. |
-| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0; 778 at 0.14.0-dev: 770 pass, 2 open-gap expected failures, 6 skipped on Linux). |
+| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0; 779 at 0.14.0-dev: 771 pass, 2 open-gap expected failures, 6 skipped on Linux). |
 | N5 | Measured quality | `garuda eval` runs fixed tasks in scratch folders and reports pass rate, steps, tokens and cost. |
 | N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). |
 | N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. The user's own editor (Ctrl-G, 0.6) runs on the real terminal through `src/sandbox/terminal.ts`, never through a tool. |
@@ -135,7 +135,8 @@ The rules keep the core independent of the interface, and keep risky code in one
 `test/architecture.test.ts` enforce them.
 
 1. The loop, the app, the agents, the evals, the context and the session never import the CLI.
-2. Only `src/model/anthropic.ts` imports `@anthropic-ai/*` (N1).
+2. Only `src/model/anthropic.ts` imports `@anthropic-ai/*` (N1). It also imports `undici` (0.14), for a
+   fetch that lets a stream stay quiet for up to 20 minutes while the model thinks.
 3. Only `src/sandbox/` imports `child_process` (N8). Biome also blocks it.
 4. Only `src/mcp/` imports `@modelcontextprotocol/*`, and never its stdio transport: MCP servers start
    through the Executor.

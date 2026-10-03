@@ -1,6 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { AnthropicClient } from "../src/model/anthropic.js";
+import {
+  AnthropicClient,
+  clientOptions,
+  STREAM_IDLE_MS,
+  streamFetch,
+} from "../src/model/anthropic.js";
 import type { ModelEvent } from "../src/model/types.js";
 
 /** A server-sent-events body in the Messages streaming format. */
@@ -159,4 +164,27 @@ describe("AnthropicClient.stream: thinking summaries (0.14)", () => {
     const { events } = await run(false);
     expect(events.filter((e) => e.type === "thinking_delta").map((e) => e.type)).toHaveLength(2);
   });
+});
+
+describe("a quiet stream is not cut off (0.14)", () => {
+  it("streamFetch waits through a pause that is longer than a short idle limit would allow", async () => {
+    const { createServer } = await import("node:http");
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.write("a");
+      setTimeout(() => res.end("b"), 2_500);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    const url = `http://127.0.0.1:${port}/`;
+    try {
+      // The idle limit decides: 10 s survives the 2.5 s pause, 1 s does not (undici timers are coarse).
+      expect(await (await streamFetch(10_000)(url)).text()).toBe("ab");
+      await expect((await streamFetch(1_000)(url)).text()).rejects.toThrow();
+      expect(STREAM_IDLE_MS).toBeGreaterThan(300_000);
+      expect(clientOptions("k").fetch).toBeTypeOf("function");
+    } finally {
+      server.close();
+    }
+  }, 15_000);
 });

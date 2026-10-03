@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { Agent, fetch as undiciFetch } from "undici";
 import type {
   AssistantBlock,
   ContentBlock,
@@ -37,9 +38,7 @@ export class AnthropicClient implements ModelClient {
 
   constructor(options: AnthropicClientOptions) {
     this.model = options.model;
-    this.client =
-      options.client ??
-      new Anthropic(options.apiKey === undefined ? {} : { apiKey: options.apiKey });
+    this.client = options.client ?? new Anthropic(clientOptions(options.apiKey));
   }
 
   async *stream(request: ModelRequest, options?: StreamOptions): AsyncIterable<ModelEvent> {
@@ -74,6 +73,36 @@ export function withHiddenThinking(response: ModelResponse): ModelResponse {
     ...response,
     content: response.content.map((b) => (b.type === "thinking" ? { ...b, text: "" } : b)),
   };
+}
+
+/**
+ * Longest wait for the next bytes of a response (0.14). Node's fetch closes a stream after 300 s
+ * with no data (UND_ERR_BODY_TIMEOUT). A model that thinks for a long time before a long answer
+ * sends nothing for longer than that, also with thinking summaries on: Fable reviews lost their
+ * answers this way. The SDK's own timeout (10 minutes until the response starts) still applies.
+ */
+export const STREAM_IDLE_MS = 20 * 60_000;
+
+const dispatchers = new Map<number, Agent>();
+
+/** A fetch whose streams may be quiet for up to `idleMs` (one shared connection pool per value). */
+export function streamFetch(idleMs: number = STREAM_IDLE_MS): typeof globalThis.fetch {
+  let agent = dispatchers.get(idleMs);
+  if (agent === undefined) {
+    agent = new Agent({ bodyTimeout: idleMs });
+    dispatchers.set(idleMs, agent);
+  }
+  const dispatcher = agent;
+  return ((input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) =>
+    undiciFetch(input, { ...init, dispatcher })) as unknown as typeof globalThis.fetch;
+}
+
+/** The SDK options: Garuda's fetch, with a longer wait for the next bytes of a stream. */
+export function clientOptions(apiKey: string | undefined): {
+  apiKey?: string;
+  fetch: typeof globalThis.fetch;
+} {
+  return { ...(apiKey === undefined ? {} : { apiKey }), fetch: streamFetch() };
 }
 
 // Mapping functions. They are pure and exported for unit tests.
@@ -308,9 +337,7 @@ export class AnthropicBatchClient implements ModelClient {
     this.pollMs = options.pollMs ?? BATCH_POLL_MS;
     this.onWait = options.onWait;
     this.noticeMs = options.noticeMs ?? 60_000;
-    this.client =
-      options.client ??
-      new Anthropic(options.apiKey === undefined ? {} : { apiKey: options.apiKey });
+    this.client = options.client ?? new Anthropic(clientOptions(options.apiKey));
   }
 
   async *stream(request: ModelRequest, options?: StreamOptions): AsyncIterable<ModelEvent> {

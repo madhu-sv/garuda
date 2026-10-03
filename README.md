@@ -143,7 +143,8 @@ Set the context window, price and output limit per model, and add providers, in 
   Opus 4.6 to 4.8 and Sonnet 4.6 think only after `/thinking on`. `/thinking low|medium|high|xhigh|max`
   sets the effort (less or more thinking; `default` goes back). Garuda always asks for short summaries
   of the thinking, so data keeps coming while the model thinks (with no data for 5 minutes, the
-  connection closed and a long answer was lost). By default they are hidden. `/thinking show` shows
+  connection closed and a long answer was lost; Garuda now also waits up to 20 minutes for the next
+  data). By default they are hidden. `/thinking show` shows
   them: the chat shows their first lines dimmed, and Ctrl-O shows all of it until the next tool output
   replaces it; `hide` goes back. The session records the choice; `"thinking": { "effort": "low",
   "show": true }` in settings sets the start value. A change of effort or on/off starts the prompt cache
