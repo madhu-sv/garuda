@@ -26,26 +26,46 @@ command is `garuda`. Homebrew installs the same npm package through the tap
    npm adds a provenance statement that links the package to the workflow run.
 4. Update the Homebrew formula (below).
 
-## The first publish (once, by hand)
+## The first publish (done for 0.14.1)
 
-npm can configure a trusted publisher only for a package that exists. So the first version is
-published from your computer:
+npm can configure a trusted publisher only for a package that exists. So the package name was taken
+with a placeholder, published by hand, and every real version comes from the release workflow with
+provenance. For a new package, do the same:
 
-```sh
-npm login                      # opens the browser; use the account that owns garuda-agent
-npm whoami
-npm org ls garuda-agent        # you are listed as owner
-git switch main && git pull && pnpm install && pnpm check
-npm publish --access public    # prepack builds; npm asks for your 2FA code
-```
+1. Log in and check the organization:
 
-Then, on npmjs.com, open the package, **Settings**, **Trusted publishing**, choose GitHub Actions,
-and enter: organization or user `madhu-sv`, repository `garuda`, workflow file `release.yml`,
-environment `npm`. After that, set **Publishing access** to "Require two-factor authentication and
-disallow tokens". Later versions come only from the release workflow.
+   ```sh
+   npm login                      # opens the browser; use the account that owns garuda-agent
+   npm whoami
+   npm org ls garuda-agent        # you are listed as owner
+   ```
 
-Then push the tag of that version. The release workflow sees that the version is already on npm
-and skips the publish step.
+2. Publish a placeholder from an empty folder (only a `package.json`):
+
+   ```sh
+   mkdir /tmp/garuda-placeholder && cd /tmp/garuda-placeholder
+   printf '{\n  "name": "@garuda-agent/garuda",\n  "version": "0.0.1",\n  "description": "Placeholder. Install 0.14.1 or later.",\n  "license": "Apache-2.0"\n}\n' > package.json
+   npm publish --access public    # npm asks for your 2FA code
+   ```
+
+3. On npmjs.com, open the package, **Settings**, **Trusted Publisher**, choose GitHub Actions, and
+   enter: organization or user `madhu-sv`, repository `garuda`, workflow filename `release.yml`
+   (the name only), environment `npm`. Under **Allowed actions**, allow direct publish: a new
+   trusted publisher may only stage a version, and the workflow then fails with
+   `403 OIDC permission denied for this action`.
+4. Set **Publishing access** to "Require two-factor authentication and disallow tokens".
+5. On GitHub, **Settings**, **Environments**, make the environment `npm`: a deployment rule for tags
+   `v*`, and optionally yourself as a required reviewer (each release then waits for your approval).
+6. Push the version tag. The workflow publishes it. If it fails, fix the setting and use **Re-run
+   failed jobs**; the tag stays.
+7. Deprecate the placeholder:
+
+   ```sh
+   npm deprecate @garuda-agent/garuda@0.0.1 "Placeholder. Use 0.14.1 or later."
+   ```
+
+The workflow skips a version that is already on npm, so a version published by hand is not an
+error.
 
 ## Homebrew
 

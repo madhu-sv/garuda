@@ -55,8 +55,8 @@ jobs:
             || { echo "npm 11.5.1 or later is necessary for trusted publishing." >&2; exit 1; }
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      # The first version is published by hand (docs/release.md), so a version that is already on
-      # npm is skipped, not an error.
+      # A version that is already on npm (for example one published by hand) is skipped, not an
+      # error. See docs/release.md.
       - name: Publish
         run: |
           name=$(node -p 'require("./package.json").name')
