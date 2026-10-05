@@ -4,8 +4,8 @@
 
 Website and docs: https://madhu-sv.github.io/garuda/
 
-Garuda is a terminal coding agent. This is version 0.14.0: the 0.14–0.17 branches after the merge gate
-and Garuda's own review (see the notes under the status table).
+Garuda is a terminal coding agent. This is version 0.14.1: the 0.14–0.17 branches after the merge gate
+and Garuda's own review (see the notes under the status table). Release notes: [CHANGELOG.md](CHANGELOG.md).
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -42,27 +42,21 @@ default (MoE, daemons). G02 to G08 are fixed too. The open gap G09 is listed in
 [docs/quality-baseline/issue-register.md](docs/quality-baseline/issue-register.md). The section
 headings below keep the branch labels (0.14–0.17).
 
-Before the release, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
-permissions, tools, sandbox, audit, loop, agents), in plan mode. The high and the policy and audit
-findings are fixed (patches 0128–0141). Known limits in 0.14.0:
+Before 0.14.0, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
+permissions, tools, sandbox, audit, loop, agents), in plan mode. 0.14.1 adds the cli and extensions
+areas and fixes the open findings of all nine areas (see [CHANGELOG.md](CHANGELOG.md)). Known limits
+in 0.14.1:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Subagents: each child has its own step and token budget (capped by the team policy); it does not
-  take what the parent has left, and parallel `explore` calls each get one. (Fixed after 0.14.0: a
-  child that failed with an error lost its usage from the session totals.)
+  take what the parent has left, and parallel `explore` calls each get one.
 - Audit log: lines cut from the end of a file, or a removed file, are not detected (no anchor outside
   the file).
-- (Fixed after 0.14.0: the compaction summary call had no retry after a dropped connection.)
 - On macOS, secret-named variables other than the provider API keys stay in Garuda's own environment.
-- (Fixed after 0.14.0: the low findings of the tools review, among them a duplicate MCP tool name
-  that stopped the start, a web_fetch cache with no eviction, and a slow `grep` pattern that blocked
-  Garuda.)
 - Build tool caches that the sandbox may write (`~/.gradle/wrapper`, `jdks`, `native`, `caches`,
   `~/.m2/wrapper`) hold programs that a build runs later outside the sandbox. They stay writable, because
   `./gradlew` needs them in the sandbox; a sandboxed command could change them.
 - The jdtls download is checked against the `.sha256` file of the same server, not a pinned hash.
-- (After 0.14.0: the cli and extensions areas were reviewed, and their findings are fixed, except the
-  two items above.)
 
 ## Use
 

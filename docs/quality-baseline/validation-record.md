@@ -107,3 +107,17 @@ Run on Linux (Node v22.22.2), `pnpm check`: 77 test files, 804 tests: 797 passed
 2026-10-03): `open -a Calculator` and `osascript` Apple events are refused in the sandbox (error -54,
 -600) and work in a normal terminal (the control run); ordinary commands (`git status`, `node -e`) run as before. The known
 limits of 0.14.0 are listed in the README under the status table.
+
+## Release 0.14.1
+
+Garuda's review of the cli and extensions areas (Fable 5.1, plan mode), and fixes for the open
+findings of all nine areas (patches 0149–0152). Patch 0153 adds the npm package and the Homebrew
+formula. Before the release, the parallel eval test failed now and then on macOS and Linux: one
+task's check ended with SIGKILL and no output. The cause was one sandbox executor for all runtimes
+of the process; a task that ended called `shutdown()` and killed the commands of the others. Each
+runtime now gets its own executor; the new test fails without the fix, and the parallel eval test
+passed 25 runs in a row with it (it failed at runs 3 and 6 without it).
+
+Run on Linux (Node v22.22.2), `pnpm check`: 81 test files, 837 tests: 830 passed, 1 expected
+failure (G09) and 6 skipped. The known limits of 0.14.1 are listed in the README under the status
+table.
