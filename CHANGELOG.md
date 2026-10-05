@@ -10,7 +10,8 @@ of the other areas are closed. Each fix has a test that fails without it.
 
 - npm: `npm install -g @garuda-agent/garuda`. Published from the release workflow with npm trusted
   publishing, with provenance.
-- Homebrew: `brew install madhu-sv/garuda/garuda`.
+- Homebrew: `brew tap madhu-sv/garuda`, `brew trust --formula madhu-sv/garuda/garuda`, then
+  `brew install garuda`.
 
 ### Security
 
