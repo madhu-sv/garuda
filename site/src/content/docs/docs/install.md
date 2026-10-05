@@ -9,12 +9,16 @@ and npm.
 ## Homebrew
 
 ```sh
-brew install madhu-sv/garuda/garuda
+brew tap madhu-sv/garuda
+brew trust --formula madhu-sv/garuda/garuda
+brew install garuda
 garuda --version
 ```
 
 The formula is in the tap [madhu-sv/homebrew-garuda](https://github.com/madhu-sv/homebrew-garuda).
-Homebrew installs Node if you do not have it.
+Homebrew loads a formula from a third-party tap only after you trust it. `brew trust --formula`
+trusts only the Garuda formula, not other formulae that the tap could add later. Homebrew installs
+Node if you do not have it.
 
 ## npm
 

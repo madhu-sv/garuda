@@ -63,8 +63,16 @@ in 0.14.1:
 Install (0.14.1 and later) with Homebrew or npm. You need Node 22 or later; Homebrew installs it.
 
 ```sh
-brew install madhu-sv/garuda/garuda     # Homebrew (macOS and Linux)
-npm install -g @garuda-agent/garuda     # or npm
+npm install -g @garuda-agent/garuda
+```
+
+Or with Homebrew (macOS and Linux). Homebrew loads a formula from a third-party tap only after you
+trust it, so trust the Garuda formula first:
+
+```sh
+brew tap madhu-sv/garuda
+brew trust --formula madhu-sv/garuda/garuda
+brew install garuda
 ```
 
 Or build from source. You need Node 22 or later, pnpm 10 and git. Node 25 and later do not include

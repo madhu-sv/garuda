@@ -82,8 +82,19 @@ Put the version in `url` and the hash in `sha256`, commit to the tap, then check
 
 ```sh
 brew update && brew reinstall madhu-sv/garuda/garuda && brew test madhu-sv/garuda/garuda
-brew audit --strict madhu-sv/garuda/garuda
+brew audit --strict --online madhu-sv/garuda/garuda
 ```
 
-Users install with `brew install madhu-sv/garuda/garuda`. homebrew-core needs a more widely used
-project, so the tap is the way for now.
+The first time, `brew trust --formula madhu-sv/garuda/garuda` is necessary before the install:
+Homebrew loads a formula from a third-party tap only after you trust it. `brew test` turns on
+Homebrew's developer mode; `brew developer off` turns it off.
+
+Users install with:
+
+```sh
+brew tap madhu-sv/garuda
+brew trust --formula madhu-sv/garuda/garuda
+brew install garuda
+```
+
+homebrew-core needs a more widely used project, so the tap is the way for now.
