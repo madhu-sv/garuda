@@ -217,6 +217,20 @@ describe.runIf(osExecutor !== undefined)("OS sandbox on this machine", () => {
     ...over,
   });
 
+  it("each runtime gets its own executor: one shutdown does not kill another's command (0.14.1)", async () => {
+    // Eval tasks run in parallel, each with its own Runtime. A task that ends calls shutdown();
+    // with one shared executor, that killed the other tasks' checks (SIGKILL, no output).
+    const mine = createExecutor("os").executor;
+    const other = createExecutor("os").executor;
+    expect(mine).not.toBe(other);
+    const run = mine.run("sleep 0.5 && echo done", sandboxed());
+    await new Promise((r) => setTimeout(r, 150));
+    other.shutdown();
+    const r = await run;
+    expect(r).toMatchObject({ exitCode: 0, signal: null });
+    expect(r.stdout.text).toContain("done");
+  });
+
   it("writes in the root, but not outside it", async () => {
     const r = await executor.run(`echo a > in.txt && echo b > "${outside}/out.txt"`, sandboxed());
     expect(readFileSync(join(root, "in.txt"), "utf8")).toBe("a\n");

@@ -148,7 +148,12 @@ the host. The Linux bridge is tested in the cloud (bubblewrap, curl through the 
 | `os` | The OS sandbox, or an error. |
 | `host` | `HostExecutor`. |
 
-`findOsSandbox()` (cached per process):
+`findOsSandbox()` caches the probe result per process, but each call returns a new executor
+(0.14.1). An executor's `shutdown()` kills its running commands and daemons, so each `Runtime` must
+own its executor: before 0.14.1 all runtimes shared one, and an eval task that ended killed the
+commands and checks of the other tasks of `--parallel` (SIGKILL, no output).
+
+The probes:
 - On macOS, `/usr/bin/sandbox-exec` must exist, and a probe
   (`sandbox-exec -p '(version 1)(allow default)' -- true`) must succeed (0.14). It fails, for example,
   in a nested sandbox; then `auto` uses `HostExecutor` with a notice that gives the first line of the

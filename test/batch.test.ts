@@ -192,7 +192,8 @@ describe("eval: tasks at the same time (0.7)", () => {
       { modelId: "fake", model: solve, parallel: 3 },
     );
     expect(results.map((r) => r.id)).toEqual(["fix-add", "fix-add-2", "fix-add-3"]);
-    expect(results.every((r) => r.passed)).toBe(true);
+    // On a failure, show each failed task's reason (the check output), not only "false".
+    expect(results.filter((r) => !r.passed).map((r) => `${r.id}: ${r.reason}`)).toEqual([]);
     expect(most).toBe(3);
     expect(results[0]?.cacheReadTokens).toBe(0);
   });

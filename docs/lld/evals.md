@@ -158,7 +158,8 @@ change (default on, as in the product; `report.json` records `keepThinking`).
 `--format on|off` (0.10, JS suites): both arms get a `biome.json` and the project formatted with Garuda's
 own Biome first; `on` also formats after each edit (see [format.md](format.md)).
 
-`--parallel n` (0.7) runs n tasks at the same time (a small pool; the results keep the task order).
+`--parallel n` (0.7) runs n tasks at the same time (a small pool; the results keep the task order). Each task has its own
+Runtime and its own executor, so a task that ends does not stop the commands of another (0.14.1).
 `--batch on` (0.7, Anthropic models only) makes each task's model client the `AnthropicBatchClient`: every
 model call is a batch of one at half price (each response carries `priceFactor: 0.5`), and the step waits
 until the batch ends. It

@@ -40,15 +40,22 @@ export function createExecutor(
 
 export type OsSandbox = { executor: Executor } | { problem: string; fix: string };
 
-let cached: OsSandbox | undefined;
+/** What the probe found: how to make an executor, or why there is none. */
+type Detected = { make: () => Executor } | { problem: string; fix: string };
 
-/** Find the sandbox for this platform. The result is cached for the process. */
+let cached: Detected | undefined;
+
+/**
+ * Find the sandbox for this platform. The probe result is cached for the process, but each call
+ * gets a new executor (0.14.1): an executor's shutdown() kills its running commands, so one
+ * Runtime (for example one of several eval tasks) must not stop the commands of another.
+ */
 export function findOsSandbox(): OsSandbox {
   cached ??= detect(process.platform);
-  return cached;
+  return "make" in cached ? { executor: cached.make() } : cached;
 }
 
-function detect(platform: NodeJS.Platform): OsSandbox {
+function detect(platform: NodeJS.Platform): Detected {
   const fix = 'Set "executor": "host" in .garuda/settings.json to hide this notice.';
   if (platform === "darwin") {
     if (!existsSync(SANDBOX_EXEC)) {
@@ -59,7 +66,7 @@ function detect(platform: NodeJS.Platform): OsSandbox {
       encoding: "utf8",
       timeout: 5_000,
     });
-    if (probe.status === 0) return { executor: new SeatbeltExecutor() };
+    if (probe.status === 0) return { make: () => new SeatbeltExecutor() };
     const why = (probe.stderr || probe.error?.message || "unknown error").trim().split("\n")[0];
     return { problem: `sandbox-exec cannot start a sandbox here (${why}).`, fix };
   }
@@ -77,7 +84,7 @@ function detect(platform: NodeJS.Platform): OsSandbox {
       ["--ro-bind", "/", "/", "--dev", "/dev", "--unshare-net", "--die-with-parent", "--", "true"],
       { encoding: "utf8", timeout: 5_000 },
     );
-    if (probe.status === 0) return { executor: new BwrapExecutor(bwrap) };
+    if (probe.status === 0) return { make: () => new BwrapExecutor(bwrap) };
     const why = (probe.stderr || probe.error?.message || "unknown error").trim().split("\n")[0];
     return { problem: `bubblewrap cannot start a sandbox here (${why}).`, fix };
   }
