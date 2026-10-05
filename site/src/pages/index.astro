@@ -201,9 +201,13 @@ It is now clamped at zero, and all 12 tests pass.
           <a class="btn" href={`${base}docs/guide/`}>User guide</a>
         </div>
       </div>
-      <pre class="code"><span class="t-dim"># install it</span>
+      <pre class="code"><span class="t-dim"># install it with npm</span>
 npm install -g @garuda-agent/garuda
-<span class="t-dim"># or Homebrew: brew tap madhu-sv/garuda, brew trust, brew install</span>
+
+<span class="t-dim"># or with Homebrew</span>
+brew tap madhu-sv/garuda
+brew trust --formula madhu-sv/garuda/garuda
+brew install garuda
 
 <span class="t-dim"># use it in your project</span>
 export ANTHROPIC_API_KEY=...
