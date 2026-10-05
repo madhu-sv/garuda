@@ -66,8 +66,15 @@ findings are fixed (patches 0128–0141). Known limits in 0.14.0:
 
 ## Use
 
-You need Node 22 or later, pnpm 10 and git. Node 25 and later do not include corepack, so install pnpm with npm.
-Garuda is not on npm yet: clone it and build it.
+Install (0.14.1 and later) with Homebrew or npm. You need Node 22 or later; Homebrew installs it.
+
+```sh
+brew install madhu-sv/garuda/garuda     # Homebrew (macOS and Linux)
+npm install -g @garuda-agent/garuda     # or npm
+```
+
+Or build from source. You need Node 22 or later, pnpm 10 and git. Node 25 and later do not include
+corepack, so install pnpm with npm.
 
 ```sh
 npm install -g pnpm@10
@@ -76,12 +83,19 @@ pnpm install
 pnpm check          # typecheck + lint + tests
 pnpm build
 pnpm link --global  # optional: puts `garuda` on your PATH (run `pnpm setup` once first)
+```
+
+Then:
+
+```sh
 export ANTHROPIC_API_KEY=...
 export GARUDA_MODEL=<model-id>
-node dist/cli/index.js                                  # chat in the current folder
-node dist/cli/index.js -p "Explain what this repo does" # run one task and exit
-echo "Explain this repo" | node dist/cli/index.js       # the same, from stdin
+garuda                                  # chat in the current folder
+garuda -p "Explain what this repo does" # run one task and exit
+echo "Explain this repo" | garuda       # the same, from stdin
 ```
+
+From a source build without `pnpm link`, use `node dist/cli/index.js` in place of `garuda`.
 
 Tools: read_file, glob and grep run with no question.
 write_file, edit_file and bash show a diff or the command first. You pick: allow once, allow for this session, or deny.
@@ -1021,6 +1035,10 @@ The website lives in `site/` (Astro and Starlight). Its docs pages are generated
 README at build time (`site/scripts/sync-docs.mjs`), so edit those files, not the generated pages.
 `.github/workflows/pages.yml` builds the site for each pull request that changes it, and deploys it
 to GitHub Pages from `main`. To work on it: `cd site && pnpm install --ignore-workspace && pnpm dev`.
+
+A tag `v<version>` runs `.github/workflows/release.yml`, which publishes the npm package with npm
+trusted publishing (no token in the repository). The steps, the first publish and the Homebrew tap
+are in [docs/release.md](docs/release.md).
 
 ## License
 

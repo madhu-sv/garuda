@@ -9,6 +9,7 @@ this folder at each deploy).
 | [Architecture](architecture.md) | What the parts are, how they depend on each other, where the trust boundaries are, and why. |
 | [High-level design](hld.md) | How a task flows through the system: start, turns, tool calls, approvals, sandbox, sessions, extensions. |
 | Low-level design | One document per component: its types, algorithms, limits and tests. |
+| [Release](release.md) | How a version goes to npm (trusted publishing) and to the Homebrew tap. |
 
 Low-level design documents:
 

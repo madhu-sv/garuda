@@ -1,15 +1,40 @@
 {
-  "name": "garuda",
+  "name": "@garuda-agent/garuda",
   "version": "0.14.0",
-  "description": "Garuda: a terminal coding agent.",
+  "description": "Garuda: a terminal coding agent with an OS sandbox, approvals and an audit log.",
   "license": "Apache-2.0",
+  "author": "Madhusudhan Vasanth Kumar",
+  "homepage": "https://madhu-sv.github.io/garuda/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/madhu-sv/garuda.git"
+  },
+  "bugs": "https://github.com/madhu-sv/garuda/issues",
+  "keywords": [
+    "coding-agent",
+    "cli",
+    "terminal",
+    "sandbox",
+    "anthropic",
+    "claude",
+    "mcp"
+  ],
   "type": "module",
-  "private": true,
   "bin": {
     "garuda": "dist/cli/index.js"
   },
+  "files": [
+    "dist/**/*.js",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "SECURITY.md"
+  ],
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsup",
@@ -21,7 +46,8 @@
     "package": "tsup && node scripts/package.mjs",
     "startup": "node scripts/startup.mjs",
     "eval": "node dist/cli/index.js eval",
-    "baseline:capture": "node scripts/capture-quality-baseline.mjs"
+    "baseline:capture": "node scripts/capture-quality-baseline.mjs",
+    "prepack": "pnpm build"
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {

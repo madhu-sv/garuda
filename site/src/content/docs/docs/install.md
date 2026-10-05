@@ -1,25 +1,38 @@
 ---
 title: Install
-description: Build Garuda from source on macOS or Linux.
+description: Install Garuda with Homebrew or npm, or build it from source, on macOS or Linux.
 ---
 
-Garuda is not on npm yet. Clone it and build it.
+Garuda runs on macOS and Linux with Node 22 or later. Versions 0.14.1 and later are on Homebrew
+and npm.
 
-## Requirements
+## Homebrew
 
-- macOS or Linux.
-- Node 22 or later, pnpm 10 and git.
-- For the OS sandbox on Linux: bubblewrap (`bwrap`). On macOS the sandbox is built in.
+```sh
+brew install madhu-sv/garuda/garuda
+garuda --version
+```
 
-Node 25 and later do not include corepack, so install pnpm with npm:
+The formula is in the tap [madhu-sv/homebrew-garuda](https://github.com/madhu-sv/homebrew-garuda).
+Homebrew installs Node if you do not have it.
+
+## npm
+
+```sh
+npm install -g @garuda-agent/garuda
+garuda --version
+```
+
+The package is published from the repository's release workflow with npm trusted publishing, so
+`npm audit signatures` can check its provenance.
+
+## Build from source
+
+You need Node 22 or later, pnpm 10 and git. Node 25 and later do not include corepack, so install
+pnpm with npm:
 
 ```sh
 npm install -g pnpm@10
-```
-
-## Build
-
-```sh
 git clone https://github.com/madhu-sv/garuda.git ~/garuda
 cd ~/garuda
 pnpm install
@@ -27,7 +40,7 @@ pnpm check   # optional: typecheck, lint and tests
 pnpm build
 ```
 
-## Put `garuda` on your PATH (optional)
+To put `garuda` on your PATH:
 
 ```sh
 pnpm setup          # once: makes a folder for global commands

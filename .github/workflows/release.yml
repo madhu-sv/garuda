@@ -1,0 +1,69 @@
+# Release: a pushed tag `v<version>` publishes @garuda-agent/garuda to npm.
+# npm trusted publishing: npm checks this workflow's OIDC token, so the repository holds no npm
+# token, and npm adds a provenance statement to the package. Actions are pinned to a full commit
+# hash (the tag is in the comment). See docs/release.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  npm:
+    name: publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The trusted publisher on npmjs.com names this environment. Add protection rules to it (for
+    # example a required reviewer) in the repository settings if you want a second yes.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # the OIDC token for npm trusted publishing
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Install bubblewrap
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0 (version from packageManager)
+      # Node 24: its npm (11.5.1 or later) supports trusted publishing.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: The tag matches the version
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "The tag ${GITHUB_REF_NAME} does not match package.json version ${version}." >&2
+            exit 1
+          fi
+      - name: npm supports trusted publishing
+        run: |
+          npm --version
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)" \
+            || { echo "npm 11.5.1 or later is necessary for trusted publishing." >&2; exit 1; }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      # The first version is published by hand (docs/release.md), so a version that is already on
+      # npm is skipped, not an error.
+      - name: Publish
+        run: |
+          name=$(node -p 'require("./package.json").name')
+          version=$(node -p 'require("./package.json").version')
+          if [ -n "$(npm view "${name}@${version}" version 2>/dev/null)" ]; then
+            echo "${name}@${version} is already on npm; nothing to publish."
+            exit 0
+          fi
+          # `npm publish` runs the prepack script (pnpm build) and uses the OIDC token.
+          npm publish --access public

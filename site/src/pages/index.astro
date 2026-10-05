@@ -103,7 +103,7 @@ const features = [
         </div>
         <div class="install">
           <span aria-hidden="true">$</span>
-          <code>git clone https://github.com/madhu-sv/garuda.git</code>
+          <code>brew install madhu-sv/garuda/garuda</code>
         </div>
       </div>
       <figure style="margin:0">
@@ -193,22 +193,22 @@ It is now clamped at zero, and all 12 tests pass.
         <p class="kicker">Get started</p>
         <h2 class="title" id="start">Up and running in a minute.</h2>
         <p class="sub" style="margin-bottom:24px">
-          You need Node 22 or later, pnpm 10 and git. Garuda runs on macOS and Linux, and is
-          open source under the Apache-2.0 license.
+          Install it with Homebrew or npm (Node 22 or later). Garuda runs on macOS and Linux, and
+          is open source under the Apache-2.0 license.
         </p>
         <div class="cta">
           <a class="btn btn-primary" href={`${base}docs/quick-start/`}>Quick start</a>
           <a class="btn" href={`${base}docs/guide/`}>User guide</a>
         </div>
       </div>
-      <pre class="code"><span class="t-dim"># build it</span>
-git clone https://github.com/madhu-sv/garuda.git ~/garuda
-cd ~/garuda && pnpm install && pnpm build
+      <pre class="code"><span class="t-dim"># install it</span>
+brew install madhu-sv/garuda/garuda
+<span class="t-dim"># or: npm install -g @garuda-agent/garuda</span>
 
 <span class="t-dim"># use it in your project</span>
 export ANTHROPIC_API_KEY=...
 export GARUDA_MODEL=claude-sonnet-5
-cd ~/my-project && node ~/garuda/dist/cli/index.js</pre>
+cd ~/my-project && garuda</pre>
     </div>
   </section>
 </BaseLayout>

@@ -19,7 +19,7 @@ See [Models](/garuda/docs/guide/#models) for other providers.
 
 ```sh
 cd ~/my-project
-garuda          # or: node ~/garuda/dist/cli/index.js
+garuda          # from a source build: node ~/garuda/dist/cli/index.js
 ```
 
 Ask for a task, for example "Fix the failing test in src/cart.ts". Garuda reads files with no
