@@ -122,7 +122,7 @@ Run on Linux (Node v22.22.2), `pnpm check`: 81 test files, 837 tests: 830 passed
 failure (G09) and 6 skipped. The known limits of 0.14.1 are listed in the README under the status
 table.
 
-## Editors over ACP (0.15, not released)
+## Editors over ACP and release 0.15.0
 
 Patches 0159–0163 on the `acp` branch: the design, the call id in approval questions, `garuda acp`
 and its docs. `pnpm check` on Linux (Node v22.22.2): 83 test files, 859 tests: 852 passed, 1
@@ -139,3 +139,7 @@ about the project, an edit after "Allow once", a command outside the sandbox tha
 during `sleep 60`, and Plan mode all behaved as designed. The same five steps in Zed 1.22, checked
 in Zed's ACP log, behaved as designed too; the one finding (a stopped command showed as done) is
 fixed in 0164. Details in [acp.md](../lld/acp.md#tests).
+
+Release 0.15.0 (patches 0159–0166): `pnpm check` on Linux (Node v22.22.2): 83 test files, 862
+tests: 855 passed, 1 expected failure (G09) and 6 skipped. After 0164 and 0165 (a stop names what
+it ended; running calls settle), the stop in the live test showed `Garuda: $ sleep 60 cancelled.`

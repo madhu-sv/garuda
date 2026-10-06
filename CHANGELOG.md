@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.15.0 (not released)
+## 0.15.0 (2026-10-06)
+
+Garuda in your editor. Version 0.15.0 is not the old "0.15" branch label of the status table (code
+intelligence), which shipped in 0.14.0.
 
 ### Editors
 

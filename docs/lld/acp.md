@@ -1,6 +1,6 @@
-# Editors over ACP (`src/acp/`, 0.15)
+# Editors over ACP (`src/acp/`, 0.15.0)
 
-Status: built on the `acp` branch (patches 0161–0163) and tested live in VS Code; not released yet.
+Status: released in 0.15.0 (patches 0159–0166), tested live in VS Code and Zed.
 The user guide is the website's Editors page (`site/src/content/docs/docs/editors.md`). The plan and
 the scope of the first iteration are at the end.
 
@@ -398,4 +398,4 @@ Never (by design): commands through the editor's terminal, writes through the ed
 | 2 (0161) | Core: `callId` from the registry through `PermissionRequest` to `ApprovalRequest`. No change of behaviour. | A test that the approver gets the id of each parallel call. Done. |
 | 3 (0162) | `src/acp/` and `garuda acp`: server, approver, updates, prompt, tool calls; `CallInfo.change`; the SDK dependency. | The tests above. Done. |
 | 4 (0163) | Docs: the Editors page of the site (user guide), README, the validation record. | Live test in VS Code (ACP Client) on macOS: chat, an edit, a denied command, cancel, plan mode. Done: all passed. |
-| 5 | Release 0.15.0. | `pnpm check`, CI, the release workflow. |
+| 5 (0164–0166) | A stop names what it ended; running calls settle; release 0.15.0. | `pnpm check`, CI, the release workflow. |

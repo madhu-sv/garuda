@@ -4,8 +4,9 @@
 
 Website and docs: https://madhu-sv.github.io/garuda/
 
-Garuda is a terminal coding agent. This is version 0.14.1: the 0.14–0.17 branches after the merge gate
-and Garuda's own review (see the notes under the status table). Release notes: [CHANGELOG.md](CHANGELOG.md).
+Garuda is a terminal coding agent. This is version 0.15.0: Garuda in your editor over the Agent Client
+Protocol (`garuda acp`), on top of 0.14.1 (the 0.14–0.17 branches after the merge gate and Garuda's own
+review; see the notes under the status table). Release notes: [CHANGELOG.md](CHANGELOG.md).
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -34,7 +35,10 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.15: multi-language AST code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done (0.14.0) |
 | 0.16: language plugins (Go and Rust built in, user plugins in ~/.garuda/languages, /languages; project plugins not loaded) | Done (0.14.0) |
 | 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | Done (0.14.0) |
-| 0.15: editors over the Agent Client Protocol (`garuda acp`: VS Code with an extension, Zed, JetBrains, Neovim, Emacs) | Built, not released (branch `acp`) |
+| Editors over the Agent Client Protocol (`garuda acp`: VS Code with an extension, Zed, JetBrains, Neovim, Emacs) | Done (0.15.0) |
+
+The rows labelled 0.14–0.17 are branch labels, not versions: the "0.15" branch (code intelligence)
+shipped in 0.14.0. The editors row is version 0.15.0.
 
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
@@ -46,7 +50,7 @@ headings below keep the branch labels (0.14–0.17).
 Before 0.14.0, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
 permissions, tools, sandbox, audit, loop, agents), in plan mode. 0.14.1 adds the cli and extensions
 areas and fixes the open findings of all nine areas (see [CHANGELOG.md](CHANGELOG.md)). Known limits
-in 0.14.1:
+in 0.15.0:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Subagents: each child has its own step and token budget (capped by the team policy); it does not
@@ -58,6 +62,9 @@ in 0.14.1:
   `~/.m2/wrapper`) hold programs that a build runs later outside the sandbox. They stay writable, because
   `./gradlew` needs them in the sandbox; a sandboxed command could change them.
 - The jdtls download is checked against the `.sha256` file of the same server, not a pinned hash.
+- Editors (`garuda acp`): Garuda's session history is not in the editor (no `session/load`), the
+  editor's MCP servers are not started, Garuda reads saved files (not unsaved buffers), the terminal's
+  own commands (`/undo`, `/diff` …) are not available, and an edit is approved as a whole (no hunks).
 
 ## Use
 

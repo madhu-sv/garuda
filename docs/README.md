@@ -40,4 +40,4 @@ Low-level design documents:
 | Editors over ACP (0.15) | `src/acp/`, `src/cli/acpCommand.ts` | [acp.md](lld/acp.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
-The code, the tests and the commits use the same IDs. The documents describe version 0.14.1 (the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas).
+The code, the tests and the commits use the same IDs. The documents describe version 0.15.0 (editors over ACP, on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas).
