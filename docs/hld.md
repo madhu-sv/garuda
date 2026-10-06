@@ -16,7 +16,7 @@ Version 0.15.0 (editors over ACP, on top of 0.14.1: the 0.14–0.17 branches aft
 | `garuda run <job> [--at HH:MM] [-m model]` | Run a scheduled job (0.7): its plan, unattended, in its own worktree and branch. | The run's lines, then the job report (also in `.garuda/jobs/<id>.md`). |
 | `garuda night [--at HH:MM] [--parallel n]` | Run the project's night queue (0.11), up to 3 jobs at a time. | One line per job; the digest (also in `.garuda/jobs/night-<date>.md`). |
 | `garuda acp` (0.15) | Garuda as an agent for an editor over the Agent Client Protocol (VS Code with an extension, Zed, JetBrains, Neovim, Emacs). The editor starts it. | JSON-RPC on stdout for the editor; logs and notices on stderr. |
-| `garuda setup` (0.16, planned) | Choose a provider and model, enter the key once; `--show`, `--forget`. The editor runs it as ACP Terminal Auth. See [setup.md](lld/setup.md). | Questions on a terminal; a masked summary. Exit code 0 when done. |
+| `garuda setup` (0.16) | Choose a provider and model, enter the key once; `--show`, `--forget`. The editor runs it as ACP Terminal Auth (planned). See [setup.md](lld/setup.md). | Questions on a terminal; a masked summary. Exit code 0 when done. |
 | `garuda eval -s java` / `--prepare java` | Check the toolchain, then run the Java (or Python) suite; `--prepare` fills `~/.m2` once. | A hint when a toolchain is missing; otherwise the same report. |
 | `garuda eval --from-git` / `-s repo` (0.12) | Turn recent commits (code + tests, tests fail at the parent and pass at the commit) into tasks in `.garuda/evals/repo-suite.json`; run them in git worktrees at the parent. | The kept count and skip reasons; then the same report. |
 

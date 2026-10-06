@@ -1,9 +1,10 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import { isLoopbackHost } from "../net/address.js";
 import { keepSecretForRedaction } from "../session/redact.js";
+import { writeFileAtomic } from "../tools/atomicWrite.js";
 import { readCredentials } from "./credentials.js";
 import { lookupModel, type ModelInfo, type Price } from "./pricing.js";
 import type { ModelClient } from "./types.js";
@@ -24,7 +25,7 @@ export const MODELS_FILE = join(".garuda", "models.json");
 
 /** No --model, no GARUDA_MODEL and no default model in ~/.garuda/models.json. */
 export const NO_MODEL =
-  'Set a model with --model <id>, the GARUDA_MODEL variable, or "default" in ~/.garuda/models.json.';
+  "Set a model with --model <id> or the GARUDA_MODEL variable, or run `garuda setup`.";
 
 const priceSchema = z.strictObject({
   input: z.number().min(0),
@@ -153,6 +154,30 @@ export async function loadModelsConfig(
       problem: `${file}: invalid JSON: ${(error as Error).message}`,
     };
   }
+}
+
+/**
+ * Set the default model in ~/.garuda/models.json (0.16, `garuda setup`). The rest of the file stays
+ * as it is (its JSON is written again with two-space indents). A file that is not a JSON object is
+ * an error, never replaced.
+ */
+export async function setDefaultModel(spec: string, home: string = homedir()): Promise<void> {
+  const file = join(home, MODELS_FILE);
+  let data: Record<string, unknown> = {};
+  let exists = true;
+  try {
+    const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error(`${file} is not a JSON object.`);
+    }
+    data = parsed as Record<string, unknown>;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    exists = false;
+  }
+  data.default = spec;
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+  await writeFileAtomic(file, `${JSON.stringify(data, null, 2)}\n`, { createOnly: !exists });
 }
 
 /**
@@ -289,7 +314,9 @@ export function resolveModel(
     async create(env = process.env) {
       const apiKey = providerKey(env, def.apiKeyEnv);
       if (def.apiKeyEnv !== undefined && (apiKey === undefined || apiKey === "")) {
-        throw new Error(`Set ${def.apiKeyEnv} to use the ${provider} provider.`);
+        throw new Error(
+          `Set ${def.apiKeyEnv} to use the ${provider} provider, or run \`garuda setup\`.`,
+        );
       }
       if (def.type === "anthropic") {
         // Default to ANTHROPIC_API_KEY so the key is passed explicitly and can be taken out of

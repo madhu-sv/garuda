@@ -1,7 +1,8 @@
+import { randomBytes } from "node:crypto";
 import { constants } from "node:fs";
-import { open } from "node:fs/promises";
+import { chmod, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 
 /**
@@ -77,4 +78,39 @@ export async function readCredentials(home: string = homedir()): Promise<StoredK
   } finally {
     await handle.close();
   }
+}
+
+/**
+ * Write the stored keys (only `garuda setup` calls this). The file is replaced in one step: a
+ * private temporary file (0600 from the start) in the same folder, then a rename. A rename replaces
+ * a link itself, never its target. An empty set removes the file. A new ~/.garuda is 0700.
+ */
+export async function writeCredentials(
+  keys: Record<string, string>,
+  home: string = homedir(),
+): Promise<void> {
+  const file = credentialsPath(home);
+  if (Object.keys(keys).length === 0) {
+    await rm(file, { force: true });
+    return;
+  }
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+  const temp = join(dirname(file), `.credentials.garuda-${randomBytes(4).toString("hex")}.tmp`);
+  await writeFile(temp, `${JSON.stringify(keys, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  try {
+    await chmod(temp, 0o600);
+    await rename(temp, file);
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
+}
+
+/** A key for the screen: the start and the last four characters, never the whole key. */
+export function maskKey(key: string): string {
+  // A short key shows less: at most a quarter of it, so the rest stays long enough to guess at.
+  if (key.length < 16) return "…";
+  if (key.length < 32) return `…${key.slice(-4)}`;
+  const start = key.match(/^[A-Za-z]+-(?:[A-Za-z]+-)?/)?.[0] ?? key.slice(0, 3);
+  return `${start.slice(0, 8)}…${key.slice(-4)}`;
 }

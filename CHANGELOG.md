@@ -7,12 +7,17 @@ Setup for editors and the ACP Registry (design: [docs/lld/setup.md](docs/lld/set
 - Stored provider keys: Garuda reads `~/.garuda/credentials` (JSON, key name → key) when no
   environment variable sets the key. It reads the file only when it is a regular file (not a link),
   owned by you, with mode 0600; else it ignores the file with a warning. The key never enters
-  Garuda's environment, and the redactor knows it. `garuda setup` will write this file.
+  Garuda's environment, and the redactor knows it. `garuda setup` writes this file.
 - Commands in the OS sandbox cannot read `~/.garuda/credentials` (macOS and Linux).
 - `"default"` in `~/.garuda/models.json`: the model when neither `--model` nor `GARUDA_MODEL` names
   one.
 - The redactor removes every provider key that Garuda keeps, also one whose variable name does not
   look secret (a custom provider's `apiKeyEnv`).
+- `garuda setup`: choose a provider and a model, enter the key once (hidden input), check it with
+  one free request to the provider, then store the model as the default and the key in
+  `~/.garuda/credentials`. `--show` shows where each key comes from (masked); `--forget [NAME]`
+  removes stored keys. With no terminal, it stops with a message.
+- The messages for a missing model or key name `garuda setup`.
 - `-p --output-format stream-json`: `apiKeySource` in `system/init` is `credentials` for a stored
   Claude key.
 

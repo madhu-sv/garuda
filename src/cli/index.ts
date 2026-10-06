@@ -200,6 +200,18 @@ async function main(): Promise<void> {
     });
 
   program
+    .command("setup")
+    .description(
+      "choose a provider and model and store its key (~/.garuda/credentials, only you can read it); editors run it to sign in",
+    )
+    .option("--show", "show the model and where each key comes from (keys masked)")
+    .option("--forget [key-name]", "remove a stored key, or all of them")
+    .action(async (options: { show?: boolean; forget?: string | boolean }) => {
+      const { setupCommand, terminalIO } = await import("./setupCommand.js");
+      process.exitCode = await setupCommand(options, { io: await terminalIO() });
+    });
+
+  program
     .command("acp")
     .description(
       "run as an agent for an editor over the Agent Client Protocol (VS Code with an extension, Zed, JetBrains, Neovim, Emacs); the editor starts it",

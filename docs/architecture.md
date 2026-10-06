@@ -217,6 +217,7 @@ flowchart LR
 | Garuda → disk | Secrets in session logs. | Redactor on every journal line; files 0600. |
 | Model text → tool call | A small model's text (or file text it repeats) is read as a tool call. | Default: only when the whole reply is calls to tools of this request. A user can allow calls on their own lines for one model (`"textToolCalls": "lines"` in `~/.garuda/models.json`; never from project settings). A call in the middle of a sentence never runs. The call then passes the same input check, hooks and permissions. |
 | Project config → model provider | A cloned repo sends the code and an API key to its own server. | Providers only in `~/.garuda/models.json`; keys only from environment variables or (0.16) `~/.garuda/credentials`, which only `garuda setup` writes; plain http only to this machine unless allowed. |
+| `garuda setup` → network (0.16) | The key check sends the key to a server that is not the provider. | One request (`GET …/models`) to the provider's own base URL from `~/.garuda/models.json` (or the Anthropic SDK's base URL), no redirects, a 10 s limit; the key is never printed (masked summary). |
 | Sandboxed command → stored key (0.16) | A command (or injected instructions) reads `~/.garuda/credentials`; a project plants a link or a looser file there. | The file is in `DENY_READ_IN_HOME` (Seatbelt, bubblewrap); the key never enters `process.env`; only a regular file, owned by the user, mode 0600, no link; the redactor knows the key. See [setup.md](lld/setup.md). |
 
 ## 6. Data stores
@@ -241,8 +242,8 @@ All state is in files. There is no server and no database.
 | `~/.garuda/mcp.json`, `hooks.json` | User | Trusted MCP servers and hooks. |
 | `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers, hooks, slash commands, skills and agents, the network list and the project settings that loosen safety; tool-list hashes. 0600. |
 | `~/.garuda/search.json` | User | The web search backend (Brave, Tavily, SearXNG); keys come from environment variables. A `claude` section turns on Claude's search (0.6). |
-| `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. 0.16: an optional `"default"` model (`garuda setup` writes it, planned). |
-| `~/.garuda/credentials` (0.16) | Garuda (`garuda setup`, planned) | Provider keys by key name (JSON). 0600 in `~/.garuda` (0700). An environment variable wins. Commands in the sandbox cannot read it. |
+| `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. 0.16: an optional `"default"` model (`garuda setup` writes it). |
+| `~/.garuda/credentials` (0.16) | Garuda (`garuda setup`) | Provider keys by key name (JSON). 0600 in `~/.garuda` (0700). An environment variable wins. Commands in the sandbox cannot read it. |
 | `~/.garuda/mcp-auth.json` | Garuda | OAuth clients and tokens of remote MCP servers. 0600. |
 | `~/.garuda/snapshots/<hash of root>/` | Garuda | Undo snapshots: a git folder per project (0700). |
 | `~/.garuda/lsp.json`, `~/.garuda/lsp/<language>/` | User, Garuda | `autoInstall`; the managed language servers (npm, pinned versions). |

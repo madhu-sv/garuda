@@ -98,14 +98,20 @@ pnpm link --global  # optional: puts `garuda` on your PATH (run `pnpm setup` onc
 Then:
 
 ```sh
-export ANTHROPIC_API_KEY=...
-export GARUDA_MODEL=<model-id>
+garuda setup                            # once: pick a provider and model, enter the key
 garuda                                  # chat in the current folder
 garuda -p "Explain what this repo does" # run one task and exit
 echo "Explain this repo" | garuda       # the same, from stdin
 ```
 
 From a source build without `pnpm link`, use `node dist/cli/index.js` in place of `garuda`.
+
+`garuda setup` (0.16) asks for the provider, the model and the key (hidden input), checks the key
+with one free request to the provider, and stores the model as `"default"` in
+`~/.garuda/models.json` and the key in `~/.garuda/credentials` (mode 0600; commands in the sandbox
+cannot read it). `garuda setup --show` shows the model and where each key comes from (masked);
+`garuda setup --forget [NAME]` removes stored keys. Environment variables still work and win:
+`ANTHROPIC_API_KEY`, `GARUDA_MODEL`. Do not sync or back up `~/.garuda/credentials` to other places.
 
 Tools: read_file, glob and grep run with no question.
 write_file, edit_file and bash show a diff or the command first. You pick: allow once, allow for this session, or deny.

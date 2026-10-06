@@ -1,7 +1,7 @@
 # Setup and stored keys (`garuda setup`, 0.16, planned)
 
 Status: in progress. Built: patch 2 (reading the credentials file, the sandbox rule, the default
-model). Planned: the rest. The plan is at the end.
+model) and patch 3 (`garuda setup`). Planned: the rest. The plan is at the end.
 
 ## Purpose
 
@@ -95,7 +95,28 @@ Other forms:
 - With no terminal (stdin not a TTY), `garuda setup` stops with a message: it never reads a key from
   a pipe by mistake. A script sets the environment variable instead.
 
-Exit code 0 means done (Terminal Auth needs this: "a zero exit status signals success").
+Exit code 0 means done (Terminal Auth needs this: "a zero exit status signals success"). A stop
+after a failed check, or no terminal, gives 1; Ctrl-C gives 130. Nothing is written before the last
+step.
+
+Built as `src/cli/setupCommand.ts` (patch 3):
+
+- Before any question, setup reads `~/.garuda/credentials`. When Garuda would ignore the file (a
+  link, another owner, loose bits, invalid JSON), setup stops and says so: it never writes over such
+  a file.
+- The key file is written as a temporary file with mode 0600 from the start, then renamed into place
+  (a rename replaces a link itself, never its target). Other stored keys stay. A new `~/.garuda` is
+  0700; an existing one keeps its mode (the key file itself is 0600).
+- `models.json` keeps its content; setup writes it again as JSON with two-space indents, with
+  `"default"` set. A file that is not a JSON object stops setup.
+- The check for Claude goes to `ANTHROPIC_BASE_URL` when it is set (the SDK's base URL, where the
+  model calls go too), else `https://api.anthropic.com`. No redirects; 10 s at most.
+- Keys and model names must be visible ASCII with no spaces. A local server's model list keeps only
+  such names (at most 50).
+- `maskKey`: at most the start (for example `sk-ant-`) and the last four characters; a key shorter
+  than 32 characters shows only its last four, and one shorter than 16 shows nothing.
+- `--show` needs no terminal; `--forget` asks, so it needs one. Removing the last key removes the
+  file.
 
 ## ACP: Terminal Auth
 
@@ -152,7 +173,7 @@ All with a temporary home, never the user's:
 | --- | --- |
 | 1 | This design; the architecture (data stores, N6 exception, trust boundary, decision) and the HLD (`garuda setup`). |
 | 2 (built) | The credentials file: reading, checks, the in-process store, `DENY_READ_IN_HOME`, the default model in `models.json`. Tests, including the sandbox on macOS and Linux. |
-| 3 | `garuda setup` (`--show`, `--forget`). Tests. |
+| 3 (built) | `garuda setup` (`--show`, `--forget`). Tests. |
 | 4 | ACP: Terminal Auth, "auth required", setup read per session, the Windows message. Tests. |
 | 5 | Docs (user guide, Editors page, README) and a live test in Zed: an agent entry with no `env`, the setup from the editor, then a chat. |
 | 6 | Release 0.16.0. |
