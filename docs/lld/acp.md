@@ -210,7 +210,14 @@ The user sees what the stop ended (0.15, from the live test in Zed). A tool call
 stop is `failed`, also when its command returned a result (killed by SIGTERM): before, a stopped
 `sleep 60` showed as `completed`. Before the response, one line per such call says so
 (`Garuda: $ sleep 60 cancelled.`, `Garuda: Write a.txt cancelled.`); with no call running (the
-model was writing), the line is `Garuda: the turn was cancelled.`
+model was writing), the line is `Garuda: the turn was cancelled.` A tool call appears only when it
+starts, after the model has written it, so a stop during the model's answer ends the turn before
+any call.
+
+A stopped command can report its result after the turn ended. So after a stop, Garuda waits up to
+3 s (`SETTLE_MS`, more than the 2 s kill grace) for the running calls; a call with no result by then
+ends `failed` with "Cancelled." and is named in the line, so no call stays "running" in the editor.
+A result that comes later is dropped.
 
 ## Modes
 

@@ -10,7 +10,8 @@
 - Approval questions name their tool call (`callId`), and file writes carry the whole change, so an
   editor shows each question next to the right call, with its own diff view.
 - A stop in the editor names what it ended: each stopped tool call shows as failed, with a line
-  such as "Garuda: $ sleep 60 cancelled." (or "the turn was cancelled." when no call ran).
+  such as "Garuda: $ sleep 60 cancelled." (or "the turn was cancelled." when no call ran). A call
+  that has not reported within 3 s of the stop ends as failed, so none stays "running".
 - Docs: the website's Editors page (VS Code with ACP Client, Zed, other ACP editors). Tested live
   in VS Code and Zed on macOS.
 

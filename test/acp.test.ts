@@ -12,6 +12,7 @@ import {
 } from "@agentclientprotocol/sdk";
 import { afterAll, describe, expect, it } from "vitest";
 import { acpServer } from "../src/acp/server.js";
+import { EventMapper, KnownCalls, SessionChannel } from "../src/acp/updates.js";
 import { Runtime } from "../src/app/runtime.js";
 import { protocolOutput } from "../src/cli/acpCommand.js";
 import { HIDDEN_WARNING } from "../src/cli/approver.js";
@@ -583,5 +584,60 @@ describe("the stdout guard of garuda acp (0.15)", () => {
     await writer.write(new TextEncoder().encode('{"jsonrpc":"2.0"}\n'));
     expect(out).toEqual(['{"jsonrpc":"2.0"}\n']);
     expect(err).toEqual(["a notice\n", "with encoding\n"]);
+  });
+});
+
+describe("after a stop, running tool calls settle (0.15)", () => {
+  const setup = () => {
+    const sent: SessionNotification[] = [];
+    const channel = new SessionChannel("s1");
+    channel.open({
+      notify: async (_method, params) => {
+        sent.push(params);
+      },
+      request: async () => ({ outcome: { outcome: "cancelled" } }),
+    });
+    const events = new EventMapper(channel, new KnownCalls(), "/root");
+    const call = {
+      type: "tool_use" as const,
+      id: "b1",
+      name: "bash",
+      input: { command: "sleep 60" },
+    };
+    events.event({ type: "tool_call", call });
+    channel.cancel();
+    return { sent, channel, events, call };
+  };
+  const last = (sent: SessionNotification[]) => sent.at(-1)?.update;
+
+  it("a call with no result by the deadline ends failed and counts as cancelled", async () => {
+    const { sent, channel, events } = setup();
+    await events.settle(20);
+    await channel.flush();
+    expect(last(sent)).toMatchObject({
+      sessionUpdate: "tool_call_update",
+      toolCallId: "b1",
+      status: "failed",
+    });
+    expect(channel.takeCancelled()).toEqual(["$ sleep 60"]);
+  });
+
+  it("a result that comes during the wait ends it at once; a late result after it is dropped", async () => {
+    const { sent, channel, events, call } = setup();
+    const started = Date.now();
+    const settled = events.settle(5_000);
+    events.event({
+      type: "tool_result",
+      call,
+      outcome: { content: "The command was stopped by the user.", isError: false },
+    });
+    await settled;
+    expect(Date.now() - started).toBeLessThan(1_000);
+    events.event({ type: "tool_result", call, outcome: { content: "again", isError: false } });
+    await channel.flush();
+    const updates = sent.filter((n) => n.update.sessionUpdate === "tool_call_update");
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.update).toMatchObject({ status: "failed" });
+    expect(channel.takeCancelled()).toEqual(["$ sleep 60"]);
   });
 });

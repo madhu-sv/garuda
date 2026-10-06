@@ -39,6 +39,7 @@ interface AcpSession {
   root: string;
   runtime: Runtime;
   channel: SessionChannel;
+  events: EventMapper;
   running?: AbortController | undefined;
 }
 
@@ -133,7 +134,7 @@ export function acpServer(options: AcpServerOptions): AcpServer {
       if (runtime.executorNotice !== undefined) channel.notice(runtime.executorNotice);
       const skipped = editorServers(c.params.mcpServers);
       if (skipped !== undefined) channel.notice(skipped);
-      sessions.set(id, { id, root, runtime, channel });
+      sessions.set(id, { id, root, runtime, channel, events });
       // The commands for the editor's "/" menu, after the response (an update needs the session).
       setImmediate(() => {
         void connection
@@ -216,7 +217,7 @@ export function acpServer(options: AcpServerOptions): AcpServer {
 
 /** One prompt: a command first, then the turn. */
 async function turn(session: AcpSession, text: string, signal: AbortSignal): Promise<StopReason> {
-  const { runtime, channel } = session;
+  const { runtime, channel, events } = session;
   let prompt = text;
   const command = /^\/([A-Za-z0-9][\w:.-]*)(?:\s|$)/.exec(text.trim());
   if (command !== null) {
@@ -242,6 +243,8 @@ async function turn(session: AcpSession, text: string, signal: AbortSignal): Pro
   } catch (error) {
     if (signal.aborted) {
       runtime.recordStop("interrupted");
+      // A stopped command may report its result after the turn ended: wait for it (briefly).
+      await events.settle();
       // Tell the user what the stop ended: "$ sleep 60 cancelled." per call.
       const calls = channel.takeCancelled();
       channel.notice(

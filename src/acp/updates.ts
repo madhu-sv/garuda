@@ -119,8 +119,15 @@ export class KnownCalls {
   }
 }
 
+/** After a stop, the longest wait for running tool calls to report (more than the kill grace). */
+export const SETTLE_MS = 3_000;
+
 /** Turns the runtime's events into `session/update` notifications (see docs/lld/acp.md). */
 export class EventMapper {
+  /** Tool calls that started and have no result yet. */
+  private readonly open = new Set<string>();
+  private changed: () => void = () => {};
+
   constructor(
     private readonly channel: SessionChannel,
     private readonly calls: KnownCalls,
@@ -139,6 +146,7 @@ export class EventMapper {
       case "tool_call": {
         const view = viewOf(event.call.name, event.call.input, this.root);
         this.calls.add(event.call.id, view.title);
+        this.open.add(event.call.id);
         send({
           sessionUpdate: "tool_call",
           toolCallId: event.call.id,
@@ -161,6 +169,8 @@ export class EventMapper {
       case "tool_result": {
         // A call that ends after the editor's stop was cancelled, also when its command returned a
         // result (killed by SIGTERM): it shows as failed, and the turn ends with a line for it.
+        if (!this.open.delete(event.call.id)) break;
+        this.changed();
         const stopped = this.channel.cancelled;
         if (stopped) {
           this.channel.noteCancelled(this.calls.title(event.call.id) ?? event.call.name);
@@ -210,6 +220,35 @@ export class EventMapper {
       case "step_end":
         break;
     }
+  }
+
+  /**
+   * After a stop: wait (at most `ms`) until every running tool call reported its result. A call
+   * that has not reported by then ends here as failed and counts as cancelled, so no call stays
+   * "running" in the editor.
+   */
+  async settle(ms = SETTLE_MS): Promise<void> {
+    if (this.open.size > 0) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, ms);
+        this.changed = () => {
+          if (this.open.size > 0) return;
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+      this.changed = () => {};
+    }
+    for (const id of this.open) {
+      this.channel.noteCancelled(this.calls.title(id) ?? id);
+      this.channel.update({
+        sessionUpdate: "tool_call_update",
+        toolCallId: id,
+        status: "failed",
+        content: [textContent("Cancelled.")],
+      });
+    }
+    this.open.clear();
   }
 }
 
