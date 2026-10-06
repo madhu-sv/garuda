@@ -38,6 +38,7 @@ Low-level design documents:
 | Scheduled jobs (0.7), proof of work and the night shift (0.11) | `src/jobs/`, `src/cli/jobCommand.ts`, `src/cli/nightCommand.ts` | [jobs.md](lld/jobs.md) |
 | Formatters (0.10) | `src/format/`, `afterWrite` in `src/tools/types.ts` | [format.md](lld/format.md) |
 | Editors over ACP (0.15) | `src/acp/`, `src/cli/acpCommand.ts` | [acp.md](lld/acp.md) |
+| Setup and stored keys (0.16, planned) | planned: `src/cli/setupCommand.ts`, `src/model/` | [setup.md](lld/setup.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
 The code, the tests and the commits use the same IDs. The documents describe version 0.15.0 (editors over ACP, on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas).
