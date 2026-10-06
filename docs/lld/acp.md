@@ -1,7 +1,8 @@
 # Editors over ACP (`src/acp/`, 0.15)
 
-Status: built on the `acp` branch (patches 0161, 0162), not released yet. The live test in an editor
-and the user guide are next. The plan and the scope of the first iteration are at the end.
+Status: built on the `acp` branch (patches 0161–0163) and tested live in VS Code; not released yet.
+The user guide is the website's Editors page (`site/src/content/docs/docs/editors.md`). The plan and
+the scope of the first iteration are at the end.
 
 ## Purpose
 
@@ -292,6 +293,13 @@ A process test is not in the suite (the suite runs before the build). It was run
 dist/cli/index.js acp`, driven over stdio, wrote only JSON-RPC lines on stdout and exited with 0
 when stdin closed.
 
+Live test (2026-10-06, macOS, VS Code with ACP Client, Garuda from the `acp` branch, Claude Sonnet
+5): a question about the project (streamed text, a sandboxed `$ ls` call with no question); an edit
+of README.md after "Allow once"; `curl` failed in the sandbox (no network), the question to run it
+outside the sandbox was denied and the call ended failed; stop during `sleep 60` ended the turn at
+once and the next prompt worked; in Plan mode a request for an edit gave a plan, no question and no
+change.
+
 ## Editor setup (for the user guide)
 
 VS Code has no ACP client of its own. The extension "ACP Client" (`formulahendry.acp-client`) adds
@@ -367,5 +375,5 @@ Never (by design): commands through the editor's terminal, writes through the ed
 | 1 (0159, 0160) | This design document; ACP in the architecture and the HLD. | Review. Done. |
 | 2 (0161) | Core: `callId` from the registry through `PermissionRequest` to `ApprovalRequest`. No change of behaviour. | A test that the approver gets the id of each parallel call. Done. |
 | 3 (0162) | `src/acp/` and `garuda acp`: server, approver, updates, prompt, tool calls; `CallInfo.change`; the SDK dependency. | The tests above. Done. |
-| 4 | Docs: user guide (editor setup), site, CHANGELOG. | Live test in VS Code (ACP Client) on macOS: chat, an edit with the diff view, a denied command, cancel, plan mode. |
+| 4 (0163) | Docs: the Editors page of the site (user guide), README, the validation record. | Live test in VS Code (ACP Client) on macOS: chat, an edit, a denied command, cancel, plan mode. Done: all passed. |
 | 5 | Release 0.15.0. | `pnpm check`, CI, the release workflow. |

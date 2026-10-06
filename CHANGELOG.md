@@ -9,6 +9,8 @@
   the same permission engine, OS sandbox, team policy, hooks and audit log as the terminal.
 - Approval questions name their tool call (`callId`), and file writes carry the whole change, so an
   editor shows each question next to the right call, with its own diff view.
+- Docs: the website's Editors page (VS Code with ACP Client, Zed, other ACP editors). Tested live
+  in VS Code on macOS.
 
 ## 0.14.1 (2026-10)
 

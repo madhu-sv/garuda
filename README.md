@@ -251,13 +251,15 @@ Model text goes to stdout; tool activity and notes go to stderr. So `garuda -p "
 starts it, shows the conversation, the tool calls and the questions, and Garuda does the work with
 the same permission engine, OS sandbox, team policy, hooks and audit log as in the terminal.
 
-VS Code, with the extension "ACP Client" (`formulahendry.acp-client`), in `settings.json`:
+VS Code, with the extension "ACP Client" (`formulahendry.acp-client`), in the user settings
+(Cmd+Shift+P, **Preferences: Open User Settings (JSON)**). Use the full path from `which garuda`:
+VS Code started from the Dock does not get your shell's `PATH`.
 
 ```json
 {
   "acp.agents": {
     "Garuda": {
-      "command": "garuda",
+      "command": "/opt/homebrew/bin/garuda",
       "args": ["acp"],
       "env": { "GARUDA_MODEL": "claude-sonnet-5", "ANTHROPIC_API_KEY": "..." }
     }
@@ -266,9 +268,14 @@ VS Code, with the extension "ACP Client" (`formulahendry.acp-client`), in `setti
 ```
 
 Zed: the same command, argument and environment under `agent_servers` (with `"type": "custom"`).
+The website's [Editors](https://madhu-sv.github.io/garuda/docs/editors/) page has the steps, a way
+to keep the API key out of `settings.json`, and what the editor shows.
 
 - Each edit asks in the editor, with the editor's diff view; "Allow for this session" lasts for this
   session only. Keep an extension's auto-approve off: it answers Garuda's questions for you.
+- The editor's stop button ends the turn: a running command stops, and a waiting question is a deny.
+  A command that exits with an error shows as done (the model reads the error); a refused call shows
+  as failed.
 - Build and plan modes are in the editor's mode menu; custom commands and skills are in its `/` menu.
   Built-in chat commands (`/undo`, `/diff` ...) are only in the terminal in this version.
 - Garuda reads and writes files and runs commands itself; it does not use the editor's file or

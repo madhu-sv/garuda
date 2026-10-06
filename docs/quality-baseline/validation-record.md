@@ -121,3 +121,20 @@ passed 25 runs in a row with it (it failed at runs 3 and 6 without it).
 Run on Linux (Node v22.22.2), `pnpm check`: 81 test files, 837 tests: 830 passed, 1 expected
 failure (G09) and 6 skipped. The known limits of 0.14.1 are listed in the README under the status
 table.
+
+## Editors over ACP (0.15, not released)
+
+Patches 0159–0163 on the `acp` branch: the design, the call id in approval questions, `garuda acp`
+and its docs. `pnpm check` on Linux (Node v22.22.2): 83 test files, 859 tests: 852 passed, 1
+expected failure (G09) and 6 skipped. Each rule of the adapter has a test that fails without it
+(negative controls run by hand: call id, visible characters, the diff, the stdout guard, cancel
+during a question and during a command, one prompt at a time, plan mode, deny on a cancelled
+answer).
+
+Process test (Linux): `node dist/cli/index.js acp`, driven over stdio, wrote only JSON-RPC lines on
+stdout and exited with 0 when stdin closed.
+
+Live test (2026-10-06, macOS, VS Code with the ACP Client extension, Claude Sonnet 5): a question
+about the project, an edit after "Allow once", a command outside the sandbox that was denied, stop
+during `sleep 60`, and Plan mode all behaved as designed. Details in
+[acp.md](../lld/acp.md#tests).
