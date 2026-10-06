@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.15.0 (editors over ACP, on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas). This document shows how the parts work together. The component documents in
+Version 0.16.0 (`garuda setup` and the editor sign-in; editors over ACP since 0.15.0; on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas). This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
@@ -16,7 +16,7 @@ Version 0.15.0 (editors over ACP, on top of 0.14.1: the 0.14–0.17 branches aft
 | `garuda run <job> [--at HH:MM] [-m model]` | Run a scheduled job (0.7): its plan, unattended, in its own worktree and branch. | The run's lines, then the job report (also in `.garuda/jobs/<id>.md`). |
 | `garuda night [--at HH:MM] [--parallel n]` | Run the project's night queue (0.11), up to 3 jobs at a time. | One line per job; the digest (also in `.garuda/jobs/night-<date>.md`). |
 | `garuda acp` (0.15) | Garuda as an agent for an editor over the Agent Client Protocol (VS Code with an extension, Zed, JetBrains, Neovim, Emacs). The editor starts it. | JSON-RPC on stdout for the editor; logs and notices on stderr. |
-| `garuda setup` (0.16, planned) | Choose a provider and model, enter the key once; `--show`, `--forget`. The editor runs it as ACP Terminal Auth. See [setup.md](lld/setup.md). | Questions on a terminal; a masked summary. Exit code 0 when done. |
+| `garuda setup` (0.16) | Choose a provider and model, enter the key once; `--show`, `--forget`. The editor runs it as ACP Terminal Auth (`garuda acp setup`). See [setup.md](lld/setup.md). | Questions on a terminal; a masked summary. Exit code 0 when done. |
 | `garuda eval -s java` / `--prepare java` | Check the toolchain, then run the Java (or Python) suite; `--prepare` fills `~/.m2` once. | A hint when a toolchain is missing; otherwise the same report. |
 | `garuda eval --from-git` / `-s repo` (0.12) | Turn recent commits (code + tests, tests fail at the parent and pass at the commit) into tasks in `.garuda/evals/repo-suite.json`; run them in git worktrees at the parent. | The kept count and skip reasons; then the same report. |
 
@@ -28,7 +28,10 @@ sequenceDiagram
   participant RT as Runtime.create
   participant FS as Files
   CLI->>FS: ~/.garuda/models.json
+  CLI->>CLI: chooseModel: --model, GARUDA_MODEL, else "default" (0.16)
   CLI->>CLI: resolveModel(spec): provider, model, window, price
+  CLI->>FS: ~/.garuda/credentials (0.16)
+  CLI->>CLI: keepProviderKeys: keys leave process.env, stored keys fill the rest
   CLI->>RT: root, model spec and info, approver, store, event target
   RT->>FS: .garuda/settings.json
   RT->>RT: createExecutor(auto|os|host)
@@ -430,8 +433,10 @@ sequenceDiagram
   participant A as garuda acp
   participant RT as Runtime
   E->>A: initialize (protocol 1)
-  A-->>E: capabilities: no image, embedded context, no editor MCP
+  A-->>E: capabilities: no image, embedded context, no editor MCP, Terminal Auth (0.16)
   E->>A: session/new (cwd)
+  A->>A: prepare: model, keys, policy (each session, 0.16)
+  A-->>E: no model or key: auth required, then the editor runs garuda acp setup
   A->>RT: Runtime.create(root = cwd, AcpApprover)
   A-->>E: sessionId, modes build and plan
   E->>A: session/prompt (text, file links)

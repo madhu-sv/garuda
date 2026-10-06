@@ -275,7 +275,7 @@ The CLI startup banner provides dedicated, aligned rows for active capabilities:
 
 ```text
 ╭────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ ✦ Garuda 0.15.0 · a terminal coding agent                                                          │
+│ ✦ Garuda 0.16.0 · a terminal coding agent                                                          │
 │                                                                                                    │
 │   model      claude-sonnet-5                                                                       │
 │   sandbox    seatbelt · no network                                                                 │

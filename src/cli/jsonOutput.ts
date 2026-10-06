@@ -33,7 +33,8 @@ export interface RunInfo {
   skills?: string[];
   /** Custom agent names (0.5). */
   agents?: string[];
-  apiKeySource: "ANTHROPIC_API_KEY" | "none";
+  /** "credentials": the key is from ~/.garuda/credentials (0.16). */
+  apiKeySource: "ANTHROPIC_API_KEY" | "credentials" | "none";
 }
 
 /** The rest of the `result` line, known when the turn ends. */

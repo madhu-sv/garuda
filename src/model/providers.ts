@@ -1,9 +1,11 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import { isLoopbackHost } from "../net/address.js";
 import { keepSecretForRedaction } from "../session/redact.js";
+import { writeFileAtomic } from "../tools/atomicWrite.js";
+import { readCredentials } from "./credentials.js";
 import { lookupModel, type ModelInfo, type Price } from "./pricing.js";
 import type { ModelClient } from "./types.js";
 
@@ -15,10 +17,15 @@ import type { ModelClient } from "./types.js";
  *
  * Providers come from built-in presets and from ~/.garuda/models.json. Only the user's own file
  * can define a provider: a project's settings could otherwise send the code and an API key to a
- * server of the repository's choice. API keys come from environment variables, never from files.
+ * server of the repository's choice. API keys come from environment variables or (0.16) from
+ * ~/.garuda/credentials, which only `garuda setup` writes; never from a project file.
  */
 
 export const MODELS_FILE = join(".garuda", "models.json");
+
+/** No --model, no GARUDA_MODEL and no default model in ~/.garuda/models.json. */
+export const NO_MODEL =
+  "Set a model with --model <id> or the GARUDA_MODEL variable, or run `garuda setup`.";
 
 const priceSchema = z.strictObject({
   input: z.number().min(0),
@@ -57,6 +64,8 @@ const fileSchema = z.strictObject({
   providers: z.record(z.string().regex(/^[a-z][a-z0-9-]{0,31}$/), providerSchema).default({}),
   /** Keyed by the full spec, for example "ollama/qwen3-coder:30b". */
   models: z.record(z.string(), modelSchema).default({}),
+  /** The model when neither --model nor GARUDA_MODEL names one (0.16; `garuda setup` writes it). */
+  default: z.string().min(1).optional(),
 });
 
 export type ProviderDef = z.infer<typeof providerSchema>;
@@ -103,6 +112,18 @@ export interface ResolvedModel {
   ): Promise<ModelClient>;
 }
 
+/**
+ * The model spec to use: the first one given (--model, a job's model, GARUDA_MODEL, in that
+ * order), else the default model in ~/.garuda/models.json (0.16). An empty string counts as unset.
+ */
+export function chooseModel(
+  config: Pick<ModelsConfig, "default">,
+  ...given: ReadonlyArray<string | undefined>
+): string | undefined {
+  for (const spec of given) if (spec !== undefined && spec !== "") return spec;
+  return config.default;
+}
+
 export async function loadModelsConfig(
   home: string = homedir(),
 ): Promise<{ config: ModelsConfig; problem?: string }> {
@@ -136,22 +157,61 @@ export async function loadModelsConfig(
 }
 
 /**
+ * Set the default model in ~/.garuda/models.json (0.16, `garuda setup`). The rest of the file stays
+ * as it is (its JSON is written again with two-space indents). A file that is not a JSON object is
+ * an error, never replaced.
+ */
+export async function setDefaultModel(spec: string, home: string = homedir()): Promise<void> {
+  const file = join(home, MODELS_FILE);
+  let data: Record<string, unknown> = {};
+  let exists = true;
+  try {
+    const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error(`${file} is not a JSON object.`);
+    }
+    data = parsed as Record<string, unknown>;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    exists = false;
+  }
+  data.default = spec;
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+  await writeFileAtomic(file, `${JSON.stringify(data, null, 2)}\n`, { createOnly: !exists });
+}
+
+/**
  * Provider API keys that Garuda has taken out of its own process environment (0.14, review): a
  * command in the OS sandbox could read /proc/<pid>/environ of the Garuda process and get the key
  * from it, past the command's own environment allowlist. `keepProviderKey` moves the value here, so
  * it is no longer in `process.env`; `create` reads it from here. The sandbox strips secret-named
  * variables from a command anyway, so nothing a command should see is lost.
  */
-const keptKeys = new Map<string, string>();
+const keptKeys = new Map<string, { value: string; from: KeySource }>();
+
+/** Where a provider key came from: an environment variable, or ~/.garuda/credentials (0.16). */
+export type KeySource = "environment" | "file";
 
 /** Take a key variable out of process.env and keep it for `create`. Safe to call more than once. */
 export function keepProviderKey(name: string): void {
   const value = process.env[name];
   if (value !== undefined && value !== "") {
-    keptKeys.set(name, value);
+    keptKeys.set(name, { value, from: "environment" });
     keepSecretForRedaction(name, value);
     delete process.env[name];
   }
+}
+
+/**
+ * A key from ~/.garuda/credentials (0.16). An environment variable wins: the key is used only when
+ * no variable of that name is set or kept. A later read of the file replaces an older stored key.
+ */
+export function keepStoredKey(name: string, value: string): boolean {
+  if ((process.env[name] ?? "") !== "") return false;
+  if (keptKeys.get(name)?.from === "environment") return false;
+  keptKeys.set(name, { value, from: "file" });
+  keepSecretForRedaction(name, value);
+  return true;
 }
 
 /** True when this key variable is set, in process.env or already kept (for the init line). */
@@ -159,9 +219,37 @@ export function hasProviderKey(name: string): boolean {
   return keptKeys.has(name) || (process.env[name] ?? "") !== "";
 }
 
+/** Where the key of this name comes from, or undefined when there is none. */
+export function providerKeySource(name: string): KeySource | undefined {
+  if ((process.env[name] ?? "") !== "") return "environment";
+  return keptKeys.get(name)?.from;
+}
+
+/**
+ * At startup: the keys of these names leave process.env (0.14, review), and stored keys from
+ * ~/.garuda/credentials fill every name that no variable sets (0.16). The redactor knows every
+ * stored key, also one that a variable overrides. Returns a warning when the file was ignored.
+ */
+export async function keepProviderKeys(
+  names: ReadonlyArray<string | undefined>,
+  home?: string,
+): Promise<string | undefined> {
+  const wanted = names.filter((name): name is string => name !== undefined);
+  for (const name of wanted) keepProviderKey(name);
+  const stored = await readCredentials(home);
+  // A new read replaces the stored keys of an older one (`garuda acp` reads at each session): a key
+  // that `garuda setup --forget` removed is gone from the next session.
+  for (const [name, kept] of keptKeys) if (kept.from === "file") keptKeys.delete(name);
+  for (const [name, value] of Object.entries(stored.keys)) {
+    // All stored keys, so `/model` can switch to another stored provider. The redactor knows each.
+    if (!keepStoredKey(name, value)) keepSecretForRedaction(name, value);
+  }
+  return stored.warning;
+}
+
 function providerKey(env: NodeJS.ProcessEnv, name: string | undefined): string | undefined {
   if (name === undefined) return undefined;
-  return keptKeys.get(name) ?? env[name];
+  return keptKeys.get(name)?.value ?? env[name];
 }
 
 export function resolveModel(
@@ -229,7 +317,9 @@ export function resolveModel(
     async create(env = process.env) {
       const apiKey = providerKey(env, def.apiKeyEnv);
       if (def.apiKeyEnv !== undefined && (apiKey === undefined || apiKey === "")) {
-        throw new Error(`Set ${def.apiKeyEnv} to use the ${provider} provider.`);
+        throw new Error(
+          `Set ${def.apiKeyEnv} to use the ${provider} provider, or run \`garuda setup\`.`,
+        );
       }
       if (def.type === "anthropic") {
         // Default to ANTHROPIC_API_KEY so the key is passed explicitly and can be taken out of

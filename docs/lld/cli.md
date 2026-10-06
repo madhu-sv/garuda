@@ -9,14 +9,15 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 
 | File | Role |
 | --- | --- |
-| `index.ts` | Entry point (commander). Modes: chat, `-p`, stdin task, `--resume`, `--replay`, `eval`, `acp` (0.15, loaded with `import()`), `init` (the chat with `/init` as the first line, `firstInput`). With no first line, the banner gets `initTip` (see [init.md](init.md)). |
+| `index.ts` | Entry point (commander). Modes: chat, `-p`, stdin task, `--resume`, `--replay`, `eval`, `acp` (0.15, loaded with `import()`), `setup` (0.16, loaded with `import()`), `init` (the chat with `/init` as the first line, `firstInput`). With no first line, the banner gets `initTip` (see [init.md](init.md)). |
 | `turn.ts` | `runTurnInTerminal`: one turn with Ctrl-C handling, usage line and stop message; an optional `TurnWatcher` (0.6) is told when it starts and ends. |
 | `notify.ts` | Notifications (0.6): `pickChannel`, `notificationBytes`, `Notifier`. See below. |
 | `focus.ts` | Terminal focus (0.6): `reportsFocus`, `FocusTracker`, `focusEvent`, the mode 1004 codes. See below. |
 | `repl.ts` | Plain chat (readline). Used for pipes, `GARUDA_PLAIN=1`, and the single binary. |
 | `renderer.ts` | `Renderer` interface and `PlainRenderer`: model text to stdout, activity to stderr. |
 | `approver.ts` | `TerminalApprover` (inquirer select), `SwitchApprover` (with `onAsk`, 0.6), shared `header`, `colorPreview` and `colorDiff`; `visible`, `hasHidden`, and (0.15) the plain `headerText` and `HIDDEN_WARNING`, which ACP uses too. |
-| `acpCommand.ts` | `garuda acp [-m model]` (0.15): the model, providers, team policy and search as for the chat; `protocolOutput` (stdout only for protocol messages, all else to stderr); one runtime per editor session through `src/acp/`. See [acp.md](acp.md). |
+| `setupCommand.ts` | `garuda setup [--show] [--forget [name]]` (0.16, loaded with `import()`): provider, model, hidden key, a free key check (`checkKey`), then the default model and the stored key. The questions go through `SetupIO` (inquirer in a terminal, scripted answers in tests). No terminal: a message, exit 1; Ctrl-C: exit 130. See [setup.md](setup.md). |
+| `acpCommand.ts` | `garuda acp [-m model] [setup]` (0.15): the model, providers, team policy and search as for the chat, read again for each session (0.16, `prepare`; a missing model or key is ACP "auth required"); `garuda acp setup` runs `garuda setup` (Terminal Auth, 0.16); `protocolOutput` (stdout only for protocol messages, all else to stderr); one runtime per editor session through `src/acp/`. See [acp.md](acp.md). |
 | `report.ts` | Usage line and stop messages. |
 | `jobCommand.ts` | `garuda run <job> [--at HH:MM]` (0.7; the hidden `--from-launchd` marks a start from the agent): `prepareJob`, `testsBefore` (0.11) and `finishJob`; `start()` builds the runtime in the worktree. See [jobs.md](jobs.md). |
 | `nightCommand.ts` | `garuda night [--at HH:MM] [--parallel n]` (0.11): wait, run the queue, write the digest, notify. See [jobs.md](jobs.md). |
@@ -52,7 +53,7 @@ for `claude -p --output-format …` read Garuda too.
 
 | Line | When | Main fields |
 | --- | --- | --- |
-| `system/init` | before the first other line | `cwd`, `tools`, `mcp_servers` (`name`, `status`), `model`, `permissionMode` (`default` or `plan`), `slash_commands`, `apiKeySource`, `garuda_version` |
+| `system/init` | before the first other line | `cwd`, `tools`, `mcp_servers` (`name`, `status`), `model`, `permissionMode` (`default` or `plan`), `slash_commands`, `apiKeySource` (`ANTHROPIC_API_KEY`, `credentials` (0.16) or `none`), `garuda_version` |
 | `assistant` | each model response (`step_end`) | `message`: an Anthropic Messages API message with all blocks (`text`, `tool_use`), `stop_reason`, `usage` |
 | `user` | each tool result | `message.content`: one `tool_result` block (`tool_use_id`, `content`, `is_error`) |
 | `system/api_retry` | a broken stream is sent again | `attempt`, `max_retries`, `retry_delay_ms`, `message` |

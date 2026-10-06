@@ -122,7 +122,9 @@ describe("model specs and providers", () => {
     expect(local.notes).toEqual([]);
     const box = resolveModel("box/big", config);
     expect(box.info.price?.output).toBe(2);
-    await expect(box.create({})).rejects.toThrow("Set BOX_KEY to use the box provider.");
+    await expect(box.create({})).rejects.toThrow(
+      "Set BOX_KEY to use the box provider, or run `garuda setup`.",
+    );
 
     writeFileSync(
       join(home, ".garuda", "models.json"),

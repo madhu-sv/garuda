@@ -89,7 +89,7 @@ const features = [
     <div class="wrap">
       <div>
         <a class="eyebrow" href={`${base}docs/editors/`}>
-          <b>v0.15.0</b> Garuda in your editor: VS Code, Zed and more →
+          <b>v0.16.0</b> Set up once, sign in from your editor →
         </a>
         <h1 class="display">A coding agent that works <em>inside the lines</em>.</h1>
         <p class="lede">
@@ -209,9 +209,10 @@ brew tap madhu-sv/garuda
 brew trust --formula madhu-sv/garuda/garuda
 brew install garuda
 
+<span class="t-dim"># once: choose a model and enter its key</span>
+garuda setup
+
 <span class="t-dim"># use it in your project</span>
-export ANTHROPIC_API_KEY=...
-export GARUDA_MODEL=claude-sonnet-5
 cd ~/my-project && garuda</pre>
     </div>
   </section>

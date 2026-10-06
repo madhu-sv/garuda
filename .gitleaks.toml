@@ -15,4 +15,7 @@ regexes = [
   '''^abc123456789$''',
   '''^tok_live_1234567890$''',
   '''^AKIAABCDEFGHIJKLMNOP$''',
+  # garuda setup tests (0.16): a stored key and an environment key, both fake.
+  '''^other-key-12345678$''',
+  '''^sk-or-v1-0123456789abcdef0123456789abcdef$''',
 ]

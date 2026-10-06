@@ -161,7 +161,15 @@ Security rules:
 - Only the user's own `~/.garuda/models.json` can define a provider. A project's settings cannot set a
   base URL: a cloned repository could otherwise send the code and an API key to its own server. (Project
   settings may still set `model.price` and `model.contextWindow`, which are harmless.)
-- API keys come only from environment variables (`apiKeyEnv`), never from files.
+- API keys come from environment variables (`apiKeyEnv`) or (0.16) from `~/.garuda/credentials`,
+  which only `garuda setup` writes; never from a project file. A variable wins over a stored key.
+  `keepProviderKeys(names)` runs at startup (chat, `-p`, jobs, eval, `garuda acp`): the named
+  variables leave `process.env` (0.14), then the stored keys fill every name that no variable sets.
+  Both kinds live only in Garuda's own memory, and the redactor knows them. The file is read only
+  when it is a regular file (opened with `O_NOFOLLOW`), owned by the user, with no group or other
+  bits; otherwise Garuda ignores it and warns, without its text. See [setup.md](setup.md).
+- The model: `--model`, then a job's model, then `GARUDA_MODEL`, then (0.16) `"default"` in
+  `~/.garuda/models.json` (`chooseModel`).
 - A base URL must be http(s) and hold no user name or password. Plain http is allowed only to this
   machine, unless the provider sets `"allowInsecureHttp": true` (for a trusted network).
 - A missing key fails with "Set <VAR> to use the <provider> provider."

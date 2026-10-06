@@ -83,7 +83,8 @@ Since 0.14 (Garuda's audit review):
   a `hook` event (tool `hook:<event>`), and a hook that the policy refuses gets `deny_policy`.
 - `deny_protected` and `deny_plan` come from the decision's `kind`, not from its text.
 - The default redactor also knows the provider keys that `keepProviderKey` moved out of
-  `process.env` (`keepSecretForRedaction`).
+  `process.env` and (0.16) the keys stored in `~/.garuda/credentials` (`keepSecretForRedaction`),
+  whatever their names.
 - `readEvents({ limit: 0 })` is empty; files are joined with a newline, so a file cut in a crash does
   not swallow the next file's first line.
 - Limit of the chain: lines cut from the end of a file, or a removed file, are not detected; that
@@ -222,7 +223,7 @@ grep never searches them; the code index never indexes them.
 | --- | --- |
 | Writable | the root, `os.tmpdir()` and `/tmp` (real paths), `~/.cache`, `~/.npm`, `~/.local/share/pnpm`, `~/Library/Caches`, `~/Library/pnpm`, plus `sandbox.writePaths`, plus the caches of the detected language profiles (for example `~/.m2/repository`) |
 | Read-only inside the root | `.git/hooks`, `.git/config`, `.garuda` (they run or apply later, outside the sandbox) |
-| Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, `~/.garuda/mcp-auth.json`, `~/.claude.json`, `~/.claude/.credentials.json` (0.5: tokens of Garuda and Claude Code; the rest of `~/.garuda` and `~/.claude` stays readable, for skills), plus `sandbox.denyRead` |
+| Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, `~/.garuda/mcp-auth.json`, `~/.garuda/credentials` (0.16), `~/.claude.json`, `~/.claude/.credentials.json` (0.5: tokens of Garuda and Claude Code; the rest of `~/.garuda` and `~/.claude` stays readable, for skills), plus `sandbox.denyRead` |
 
 `~/` means the home folder; other relative paths start at the root.
 

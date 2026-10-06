@@ -9,9 +9,11 @@ import { BUILTIN_COMMANDS } from "../commands/builtins.js";
 import { replaySession } from "../loop/replay.js";
 import { DEFAULT_MAX_TOKENS } from "../loop/runAgent.js";
 import {
-  hasProviderKey,
-  keepProviderKey,
+  chooseModel,
+  keepProviderKeys,
   loadModelsConfig,
+  NO_MODEL,
+  providerKeySource,
   type ResolvedModel,
   resolveModel,
 } from "../model/providers.js";
@@ -198,14 +200,30 @@ async function main(): Promise<void> {
     });
 
   program
+    .command("setup")
+    .description(
+      "choose a provider and model and store its key (~/.garuda/credentials, only you can read it); editors run it to sign in",
+    )
+    .option("--show", "show the model and where each key comes from (keys masked)")
+    .option("--forget [key-name]", "remove a stored key, or all of them")
+    .action(async (options: { show?: boolean; forget?: string | boolean }) => {
+      const { setupCommand, terminalIO } = await import("./setupCommand.js");
+      process.exitCode = await setupCommand(options, { io: await terminalIO() });
+    });
+
+  program
     .command("acp")
     .description(
       "run as an agent for an editor over the Agent Client Protocol (VS Code with an extension, Zed, JetBrains, Neovim, Emacs); the editor starts it",
     )
+    .argument("[action]", "setup: run garuda setup (the editor's sign-in, ACP Terminal Auth)")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
-    .action(async (options: { model?: string }) => {
+    .action(async (action: string | undefined, options: { model?: string }) => {
       const { acpCommand } = await import("./acpCommand.js");
-      process.exitCode = await acpCommand(options);
+      process.exitCode = await acpCommand({
+        ...options,
+        ...(action === undefined ? {} : { action }),
+      });
     });
 
   const lsp = program
@@ -274,11 +292,11 @@ async function start(options: Options, program: Command): Promise<number> {
     program.error(`--output-format ${format} needs a task: use -p "task" or give it on stdin.`);
   }
 
-  const spec = options.model ?? job?.job.model ?? process.env.GARUDA_MODEL;
-  if (!spec) program.error("Set a model with --model <id> or the GARUDA_MODEL variable.");
   // Providers come only from the user's own ~/.garuda/models.json (never from the project).
   const models = await loadModelsConfig();
   if (models.problem !== undefined) program.error(models.problem);
+  const spec = chooseModel(models.config, options.model, job?.job.model, process.env.GARUDA_MODEL);
+  if (!spec) program.error(NO_MODEL);
   let resolved: ResolvedModel;
   try {
     resolved = resolveModel(spec as string, models.config);
@@ -303,10 +321,13 @@ async function start(options: Options, program: Command): Promise<number> {
   // Take the model-provider keys out of Garuda's own environment (0.14, review): a command in the
   // OS sandbox could otherwise read them from /proc/<pid>/environ of the Garuda process. create()
   // reads them from the kept store instead. Done after the models and search config are loaded.
-  const hasApiKey = hasProviderKey("ANTHROPIC_API_KEY");
-  for (const name of [resolved.def.apiKeyEnv, sub?.def.apiKeyEnv, "ANTHROPIC_API_KEY"]) {
-    if (name !== undefined) keepProviderKey(name);
-  }
+  // Stored keys from ~/.garuda/credentials (0.16) fill the names that no variable sets.
+  const credentialsWarning = await keepProviderKeys([
+    resolved.def.apiKeyEnv,
+    sub?.def.apiKeyEnv,
+    "ANTHROPIC_API_KEY",
+  ]);
+  const anthropicKey = providerKeySource("ANTHROPIC_API_KEY");
 
   // Team policy: the managed file and ~/.garuda/policy.json, never the project (merge gate). The
   // chat, -p, `garuda run` (a job) and the night shift (a `garuda run` per job) all start here.
@@ -441,6 +462,7 @@ async function start(options: Options, program: Command): Promise<number> {
     );
   }
   for (const note of resolved.notes) renderer.info(note);
+  if (credentialsWarning !== undefined) renderer.warn(credentialsWarning);
   if (runtime.price === undefined) {
     renderer.warn(
       `Garuda has no price for ${modelId}. Set "price" for it in ~/.garuda/models.json to see cost.`,
@@ -471,7 +493,12 @@ async function start(options: Options, program: Command): Promise<number> {
               ],
               skills: runtime.skills.map((k) => k.name),
               agents: runtime.agents.map((a) => a.name),
-              apiKeySource: !modelId.includes("/") && hasApiKey ? "ANTHROPIC_API_KEY" : "none",
+              apiKeySource:
+                modelId.includes("/") || anthropicKey === undefined
+                  ? "none"
+                  : anthropicKey === "file"
+                    ? "credentials"
+                    : "ANTHROPIC_API_KEY",
             }),
           });
     if (output !== undefined) events = output;

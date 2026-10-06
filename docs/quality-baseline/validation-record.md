@@ -143,3 +143,16 @@ fixed in 0164. Details in [acp.md](../lld/acp.md#tests).
 Release 0.15.0 (patches 0159–0166): `pnpm check` on Linux (Node v22.22.2): 83 test files, 862
 tests: 855 passed, 1 expected failure (G09) and 6 skipped. After 0164 and 0165 (a stop names what
 it ended; running calls settle), the stop in the live test showed `Garuda: $ sleep 60 cancelled.`
+
+## Setup and the editor sign-in, release 0.16.0
+
+Patches 0167–0172 on the `setup-design` branch: the design ([setup.md](../lld/setup.md)), stored
+keys in `~/.garuda/credentials` with the sandbox rule and the default model, `garuda setup`, ACP
+Terminal Auth in `garuda acp`, the docs and the release. `pnpm check` on Linux (Node v22.22.2): 86
+test files, 899 tests: 892 passed, 1 expected failure (G09) and 6 skipped. On macOS, the real
+Seatbelt sandbox could not read `~/.garuda/credentials`. Each rule's test was checked against a
+negative control (the test fails without the rule).
+
+Live tests on macOS (2026-10-06): `garuda setup` in a terminal with a temporary home (key check at
+Anthropic, file mode 0600, masked summary); Zed 1.22 with an agent entry that gave no model and no
+key: the sign-in ran `garuda acp setup` in a terminal, and the next thread worked with no restart.

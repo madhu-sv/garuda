@@ -4,8 +4,9 @@
 
 Website and docs: https://madhu-sv.github.io/garuda/
 
-Garuda is a terminal coding agent. This is version 0.15.0: Garuda in your editor over the Agent Client
-Protocol (`garuda acp`), on top of 0.14.1 (the 0.14–0.17 branches after the merge gate and Garuda's own
+Garuda is a terminal coding agent. This is version 0.16.0: `garuda setup` (choose a model and store
+its key once) and the sign-in from editors, on top of 0.15.0 (Garuda in your editor over the Agent
+Client Protocol, `garuda acp`) and 0.14.1 (the 0.14–0.17 branches after the merge gate and Garuda's own
 review; see the notes under the status table). Release notes: [CHANGELOG.md](CHANGELOG.md).
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
@@ -36,9 +37,10 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.16: language plugins (Go and Rust built in, user plugins in ~/.garuda/languages, /languages; project plugins not loaded) | Done (0.14.0) |
 | 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | Done (0.14.0) |
 | Editors over the Agent Client Protocol (`garuda acp`: VS Code with an extension, Zed, JetBrains, Neovim, Emacs) | Done (0.15.0) |
+| `garuda setup` (model and stored key) and the editor sign-in (ACP Terminal Auth) | Done (0.16.0) |
 
-The rows labelled 0.14–0.17 are branch labels, not versions: the "0.15" branch (code intelligence)
-shipped in 0.14.0. The editors row is version 0.15.0.
+The rows labelled 0.14–0.17 are branch labels, not versions: the "0.15" and "0.16" branches (code
+intelligence, language plugins) shipped in 0.14.0. The last two rows are versions 0.15.0 and 0.16.0.
 
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
@@ -50,7 +52,7 @@ headings below keep the branch labels (0.14–0.17).
 Before 0.14.0, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
 permissions, tools, sandbox, audit, loop, agents), in plan mode. 0.14.1 adds the cli and extensions
 areas and fixes the open findings of all nine areas (see [CHANGELOG.md](CHANGELOG.md)). Known limits
-in 0.15.0:
+in 0.16.0:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Subagents: each child has its own step and token budget (capped by the team policy); it does not
@@ -65,6 +67,9 @@ in 0.15.0:
 - Editors (`garuda acp`): Garuda's session history is not in the editor (no `session/load`), the
   editor's MCP servers are not started, Garuda reads saved files (not unsaved buffers), the terminal's
   own commands (`/undo`, `/diff` …) are not available, and an edit is approved as a whole (no hunks).
+- Stored keys are in a file (`~/.garuda/credentials`, mode 0600, hidden from the sandbox), not in the
+  OS keychain yet. Keep the file out of backups and dotfile sync.
+- Native Windows is not supported; use WSL.
 
 ## Use
 
@@ -98,14 +103,20 @@ pnpm link --global  # optional: puts `garuda` on your PATH (run `pnpm setup` onc
 Then:
 
 ```sh
-export ANTHROPIC_API_KEY=...
-export GARUDA_MODEL=<model-id>
+garuda setup                            # once: pick a provider and model, enter the key
 garuda                                  # chat in the current folder
 garuda -p "Explain what this repo does" # run one task and exit
 echo "Explain this repo" | garuda       # the same, from stdin
 ```
 
 From a source build without `pnpm link`, use `node dist/cli/index.js` in place of `garuda`.
+
+`garuda setup` (0.16) asks for the provider, the model and the key (hidden input), checks the key
+with one free request to the provider, and stores the model as `"default"` in
+`~/.garuda/models.json` and the key in `~/.garuda/credentials` (mode 0600; commands in the sandbox
+cannot read it). `garuda setup --show` shows the model and where each key comes from (masked);
+`garuda setup --forget [NAME]` removes stored keys. Environment variables still work and win:
+`ANTHROPIC_API_KEY`, `GARUDA_MODEL`. Do not sync or back up `~/.garuda/credentials` to other places.
 
 Tools: read_file, glob and grep run with no question.
 write_file, edit_file and bash show a diff or the command first. You pick: allow once, allow for this session, or deny.
@@ -150,13 +161,15 @@ Set the context window, price and output limit per model, and add providers, in 
 ```json
 {
   "providers": { "lab": { "type": "openai-compatible", "baseUrl": "https://llm.example.com/v1", "apiKeyEnv": "LAB_KEY" } },
-  "models": { "ollama/qwen3-coder:30b": { "contextWindow": 65536, "maxTokens": 8192 } }
+  "models": { "ollama/qwen3-coder:30b": { "contextWindow": 65536, "maxTokens": 8192 } },
+  "default": "ollama/qwen3-coder:30b"
 }
 ```
 
 - Only this file in your home folder can define providers; a project cannot send your code elsewhere.
   Keys come from environment variables. Plain http works only to this machine (or with
   `"allowInsecureHttp": true`).
+- `"default"` is the model when neither `--model` nor `GARUDA_MODEL` names one.
 - Some small models write a tool call as JSON text. When the whole reply is such a call to a known
   tool, Garuda runs it as a real call, with the usual approvals. For a model that also writes
   sentences around the call (for example `qwen2.5-coder:7b`), set `"textToolCalls": "lines"` for that
@@ -252,11 +265,13 @@ Set the context window, price and output limit per model, and add providers, in 
 
 Model text goes to stdout; tool activity and notes go to stderr. So `garuda -p "…" > answer.md` keeps only the answer.
 
-## Editors (ACP, 0.15)
+## Editors (ACP, 0.15; sign-in 0.16)
 
 `garuda acp` runs Garuda as an agent for editors that speak the Agent Client Protocol. The editor
 starts it, shows the conversation, the tool calls and the questions, and Garuda does the work with
 the same permission engine, OS sandbox, team policy, hooks and audit log as in the terminal.
+
+Run `garuda setup` once in a terminal (see Use): then the editor needs no key in its settings.
 
 VS Code, with the extension "ACP Client" (`formulahendry.acp-client`), in the user settings
 (Cmd+Shift+P, **Preferences: Open User Settings (JSON)**). Use the full path from `which garuda`:
@@ -265,18 +280,16 @@ VS Code started from the Dock does not get your shell's `PATH`.
 ```json
 {
   "acp.agents": {
-    "Garuda": {
-      "command": "/opt/homebrew/bin/garuda",
-      "args": ["acp"],
-      "env": { "GARUDA_MODEL": "claude-sonnet-5", "ANTHROPIC_API_KEY": "..." }
-    }
+    "Garuda": { "command": "/opt/homebrew/bin/garuda", "args": ["acp"] }
   }
 }
 ```
 
-Zed: the same command, argument and environment under `agent_servers` (with `"type": "custom"`).
-The website's [Editors](https://madhu-sv.github.io/garuda/docs/editors/) page has the steps, a way
-to keep the API key out of `settings.json`, and what the editor shows.
+Zed: the same command and argument under `agent_servers` (with `"type": "custom"`). With no model
+or key, Zed offers **Set up Garuda** (ACP Terminal Auth, 0.16): it runs `garuda acp setup` in a
+terminal, and the next thread works. The website's
+[Editors](https://madhu-sv.github.io/garuda/docs/editors/) page has the steps and what the editor
+shows.
 
 - Each edit asks in the editor, with the editor's diff view; "Allow for this session" lasts for this
   session only. Keep an extension's auto-approve off: it answers Garuda's questions for you.

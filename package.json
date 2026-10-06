@@ -1,6 +1,6 @@
 {
   "name": "@garuda-agent/garuda",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Garuda: a terminal coding agent with an OS sandbox, approvals and an audit log.",
   "license": "Apache-2.0",
   "author": "Madhusudhan Vasanth Kumar",

@@ -1,6 +1,8 @@
 # Setup and stored keys (`garuda setup`, 0.16, planned)
 
-Status: design. Nothing in this document is built yet. The plan is at the end.
+Status: released in 0.16.0 (patches 0167–0172): reading the credentials file, the sandbox rule and
+the default model (0168), `garuda setup` (0169), Terminal Auth in `garuda acp` (0170), docs and the
+live test in Zed (0171). Planned: the ACP Registry and VS Code pull requests. The plan is at the end.
 
 ## Purpose
 
@@ -53,6 +55,12 @@ loaded:
    `process.env`, so no command and no `/proc/<pid>/environ` can see it, and the redactor knows it
    (`keepSecretForRedaction`), so a session file cannot hold it.
 
+Built as `readCredentials` (`src/model/credentials.ts`) and `keepProviderKeys` (`providers.ts`).
+Garuda keeps every stored key, not only the current model's, so `/model` can switch to another
+stored provider. The redactor knows each stored key whatever its name (a custom `apiKeyEnv` need not
+look secret). The file is opened with `O_NOFOLLOW` and checked on the open file (`fstat`), so it
+cannot change between the check and the read. A file larger than 64 KiB is ignored.
+
 A project cannot add or change a stored key: only `garuda setup` writes the file, and only providers
 from `~/.garuda/models.json` (never from the project) can name a key (0.14 rule, unchanged).
 
@@ -88,7 +96,28 @@ Other forms:
 - With no terminal (stdin not a TTY), `garuda setup` stops with a message: it never reads a key from
   a pipe by mistake. A script sets the environment variable instead.
 
-Exit code 0 means done (Terminal Auth needs this: "a zero exit status signals success").
+Exit code 0 means done (Terminal Auth needs this: "a zero exit status signals success"). A stop
+after a failed check, or no terminal, gives 1; Ctrl-C gives 130. Nothing is written before the last
+step.
+
+Built as `src/cli/setupCommand.ts` (patch 3):
+
+- Before any question, setup reads `~/.garuda/credentials`. When Garuda would ignore the file (a
+  link, another owner, loose bits, invalid JSON), setup stops and says so: it never writes over such
+  a file.
+- The key file is written as a temporary file with mode 0600 from the start, then renamed into place
+  (a rename replaces a link itself, never its target). Other stored keys stay. A new `~/.garuda` is
+  0700; an existing one keeps its mode (the key file itself is 0600).
+- `models.json` keeps its content; setup writes it again as JSON with two-space indents, with
+  `"default"` set. A file that is not a JSON object stops setup.
+- The check for Claude goes to `ANTHROPIC_BASE_URL` when it is set (the SDK's base URL, where the
+  model calls go too), else `https://api.anthropic.com`. No redirects; 10 s at most.
+- Keys and model names must be visible ASCII with no spaces. A local server's model list keeps only
+  such names (at most 50).
+- `maskKey`: at most the start (for example `sk-ant-`) and the last four characters; a key shorter
+  than 32 characters shows only its last four, and one shorter than 16 shows nothing.
+- `--show` needs no terminal; `--forget` asks, so it needs one. Removing the last key removes the
+  file.
 
 ## ACP: Terminal Auth
 
@@ -96,16 +125,33 @@ Exit code 0 means done (Terminal Auth needs this: "a zero exit status signals su
   `authMethods: [{ "type": "terminal", "id": "garuda-setup", "name": "Set up Garuda", "description":
   "Choose a model and enter its API key.", "args": ["setup"] }]`. Without that capability, the list
   stays empty (the spec says an agent must not offer the method then).
-- The editor runs the same program with `args` (`garuda setup`, or `npx @garuda-agent/garuda setup`)
-  in a terminal, and the user answers there.
-- `session/new` reads the setup again for each new session (today `garuda acp` reads it once at
-  start), so a session after the setup works with no restart. With no model, or no key for the
+- The editor runs its configured agent command with `args` added (the spec: "additional arguments
+  to append to the configured agent invocation"). The configured command is `garuda acp` (or
+  `npx @garuda-agent/garuda acp`), so the editor runs `garuda acp setup` in a terminal, and
+  `garuda acp setup` runs `garuda setup`. The user answers there.
+- `session/new` reads the setup again for each new session (0.15 read it once at start), so a
+  session after the setup works with no restart. Each read replaces the stored keys of the last one,
+  so a key that `--forget` removed is gone from the next session. With no model, or no key for the
   model's provider, `session/new` fails with the ACP error "auth required"
   (`RequestError.authRequired`) and the message, so the editor offers the setup.
 - `authenticate`: a terminal method is never sent there (the spec forbids it); the method keeps
   answering `{}`.
 - Native Windows: `session/new` fails with "Garuda supports macOS and Linux. On Windows, run Garuda
-  in WSL." (not "auth required", so the editor does not loop on the setup).
+  in WSL (Windows Subsystem for Linux)." (not "auth required", so the editor does not loop on the
+  setup). `initialize` offers no Terminal Auth there, and `garuda setup` stops with the same message:
+  a key file needs Unix permissions (0600) to stay private.
+
+Built in `src/acp/server.ts` (`terminalAuth`, `setupNeeded`, `SETUP_METHOD_ID`) and
+`src/cli/acpCommand.ts` (`prepare` per session, `garuda acp setup`) (patch 4):
+
+- "No key": the model's key name (`apiKeyEnv`, or `ANTHROPIC_API_KEY` for Claude) has no value in
+  the environment or the file. For Claude, `ANTHROPIC_AUTH_TOKEN` also counts (the SDK's other way
+  to sign in). A local server needs no key.
+- The message says what is missing ("Garuda has no model." or "Garuda has no key for <model>
+  (<NAME>).", with the warning when the file was ignored) and how to fix it.
+- Other problems (an invalid `models.json`, an unknown provider, a broken team policy) stay a
+  plain error: a setup would not fix them.
+- `garuda acp <anything else>` stops with exit code 1.
 
 ## Security
 
@@ -120,7 +166,7 @@ Exit code 0 means done (Terminal Auth needs this: "a zero exit status signals su
 | Backups or dotfile sync copy the file | Documented: exclude `~/.garuda/credentials`, or use environment variables. |
 | A pipe or script answers the setup | No TTY, no setup. |
 
-## Tests (planned)
+## Tests
 
 All with a temporary home, never the user's:
 
@@ -139,14 +185,17 @@ All with a temporary home, never the user's:
   message.
 - Each rule gets a negative control: without it, its test fails.
 
+Files: `test/credentials.test.ts`, `test/sandbox.test.ts` (patch 2), `test/setup.test.ts` (patch 3),
+`test/acpAuth.test.ts` (patch 4).
+
 ## Plan
 
 | Patch | Content |
 | --- | --- |
 | 1 | This design; the architecture (data stores, N6 exception, trust boundary, decision) and the HLD (`garuda setup`). |
-| 2 | The credentials file: reading, checks, the in-process store, `DENY_READ_IN_HOME`, the default model in `models.json`. Tests, including the sandbox on macOS and Linux. |
-| 3 | `garuda setup` (`--show`, `--forget`). Tests. |
-| 4 | ACP: Terminal Auth, "auth required", setup read per session, the Windows message. Tests. |
-| 5 | Docs (user guide, Editors page, README) and a live test in Zed: an agent entry with no `env`, the setup from the editor, then a chat. |
-| 6 | Release 0.16.0. |
+| 2 (built) | The credentials file: reading, checks, the in-process store, `DENY_READ_IN_HOME`, the default model in `models.json`. Tests, including the sandbox on macOS and Linux. |
+| 3 (built) | `garuda setup` (`--show`, `--forget`). Tests. |
+| 4 (built) | ACP: Terminal Auth, "auth required", setup read per session, the Windows message. Tests. |
+| 5 (built) | Docs (user guide, Editors page, README) and a live test in Zed: an agent entry with no `env`, the setup from the editor, then a chat. |
+| 6 (0172) | Release 0.16.0. |
 | 7 | The ACP Registry pull request (manifest per its CONTRIBUTING.md), and a pull request to VS Code's ACP Client agent list. |

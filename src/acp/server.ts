@@ -26,6 +26,16 @@ import { type AcpClient, EventMapper, KnownCalls, SessionChannel } from "./updat
 /** What `garuda acp` gives the server: how to make the runtime of one editor session. */
 export interface AcpServerOptions {
   version: string;
+  /**
+   * Terminal Auth (0.16, docs/lld/setup.md): the editor runs the agent's own command with these
+   * arguments added, in a terminal (`garuda acp setup`). Offered only to an editor that declares
+   * `auth.terminal`. Undefined: no auth method (for example on native Windows).
+   */
+  terminalAuth?: { args: string[] };
+  /**
+   * Make the runtime of one session. An error with `authRequired: true` (no model or no key) ends
+   * `session/new` with ACP's "auth required", so the editor can offer the setup.
+   */
   createRuntime(input: {
     root: string;
     approver: Approver;
@@ -45,6 +55,14 @@ interface AcpSession {
 
 /** JSON-RPC "internal error", with Garuda's message for the editor to show. */
 const INTERNAL_ERROR = -32603;
+
+/** The id of Garuda's Terminal Auth method (`garuda acp setup`). */
+export const SETUP_METHOD_ID = "garuda-setup";
+
+/** An error for `createRuntime`: the setup is missing (no model, or no key for its provider). */
+export function setupNeeded(message: string): Error {
+  return Object.assign(new Error(message), { authRequired: true as const });
+}
 
 const MODES: Readonly<Record<AgentMode, { name: string; description: string }>> = {
   build: { name: "Build", description: "Edits and commands, each one asks first." },
@@ -95,7 +113,7 @@ export function acpServer(options: AcpServerOptions): AcpServer {
     })
     .onRequest(
       methods.agent.initialize,
-      (): InitializeResponse => ({
+      (c): InitializeResponse => ({
         protocolVersion: PROTOCOL_VERSION,
         agentInfo: { name: "garuda", title: "Garuda", version: options.version },
         agentCapabilities: {
@@ -103,8 +121,19 @@ export function acpServer(options: AcpServerOptions): AcpServer {
           promptCapabilities: { image: false, audio: false, embeddedContext: true },
           mcpCapabilities: { http: false, sse: false },
         },
-        // The keys come from the environment, as in the terminal.
-        authMethods: [],
+        // Terminal Auth (0.16) only for an editor that can run it (the spec: never offer it else).
+        authMethods:
+          options.terminalAuth !== undefined && c.params.clientCapabilities?.auth?.terminal === true
+            ? [
+                {
+                  type: "terminal",
+                  id: SETUP_METHOD_ID,
+                  name: "Set up Garuda",
+                  description: "Choose a model and enter its API key.",
+                  args: options.terminalAuth.args,
+                },
+              ]
+            : [],
       }),
     )
     .onRequest(methods.agent.authenticate, () => ({}))
@@ -129,7 +158,11 @@ export function acpServer(options: AcpServerOptions): AcpServer {
           onNotice: (text) => channel.notice(text),
         });
       } catch (error) {
-        throw new RequestError(INTERNAL_ERROR, (error as Error).message);
+        const message = (error as Error).message;
+        if ((error as { authRequired?: unknown }).authRequired === true) {
+          throw RequestError.authRequired(undefined, message);
+        }
+        throw new RequestError(INTERNAL_ERROR, message);
       }
       if (runtime.executorNotice !== undefined) channel.notice(runtime.executorNotice);
       const skipped = editorServers(c.params.mcpServers);
