@@ -281,3 +281,19 @@ describe("maskKey", () => {
     expect(maskKey("short-key")).toBe("…");
   });
 });
+
+describe("garuda setup on native Windows (0.16)", () => {
+  it("says to use WSL, asks nothing and writes nothing", async () => {
+    const home = newHome();
+    const { io, asked, printed } = scripted([]);
+    expect(
+      await setupCommand(
+        {},
+        { io, home, env: {}, fetch: fakeFetch(200).fetcher, platform: "win32" },
+      ),
+    ).toBe(1);
+    expect(asked).toEqual([]);
+    expect(printed.join("\n")).toContain("WSL");
+    expect(existsSync(join(home, ".garuda"))).toBe(false);
+  });
+});

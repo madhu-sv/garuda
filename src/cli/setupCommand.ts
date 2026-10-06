@@ -53,6 +53,7 @@ export interface SetupDeps {
   home?: string;
   env?: NodeJS.ProcessEnv;
   fetch?: typeof fetch;
+  platform?: NodeJS.Platform;
 }
 
 /** The longest wait for the key check and for a local server's model list. */
@@ -75,6 +76,13 @@ const PROVIDER_TITLES: Record<string, string> = {
 
 export async function setupCommand(options: SetupOptions, deps: SetupDeps): Promise<number> {
   const { io } = deps;
+  if ((deps.platform ?? process.platform) === "win32") {
+    // A key file needs Unix permissions (0600) to stay private; Windows has other rules.
+    io.print(
+      "Garuda supports macOS and Linux. On Windows, run Garuda in WSL (Windows Subsystem for Linux).",
+    );
+    return 1;
+  }
   const home = deps.home ?? homedir();
   const env = deps.env ?? process.env;
   const models = await loadModelsConfig(home);

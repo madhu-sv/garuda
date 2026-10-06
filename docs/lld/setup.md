@@ -1,7 +1,7 @@
 # Setup and stored keys (`garuda setup`, 0.16, planned)
 
 Status: in progress. Built: patch 2 (reading the credentials file, the sandbox rule, the default
-model) and patch 3 (`garuda setup`). Planned: the rest. The plan is at the end.
+model), patch 3 (`garuda setup`) and patch 4 (Terminal Auth in `garuda acp`). Planned: the rest. The plan is at the end.
 
 ## Purpose
 
@@ -124,16 +124,33 @@ Built as `src/cli/setupCommand.ts` (patch 3):
   `authMethods: [{ "type": "terminal", "id": "garuda-setup", "name": "Set up Garuda", "description":
   "Choose a model and enter its API key.", "args": ["setup"] }]`. Without that capability, the list
   stays empty (the spec says an agent must not offer the method then).
-- The editor runs the same program with `args` (`garuda setup`, or `npx @garuda-agent/garuda setup`)
-  in a terminal, and the user answers there.
-- `session/new` reads the setup again for each new session (today `garuda acp` reads it once at
-  start), so a session after the setup works with no restart. With no model, or no key for the
+- The editor runs its configured agent command with `args` added (the spec: "additional arguments
+  to append to the configured agent invocation"). The configured command is `garuda acp` (or
+  `npx @garuda-agent/garuda acp`), so the editor runs `garuda acp setup` in a terminal, and
+  `garuda acp setup` runs `garuda setup`. The user answers there.
+- `session/new` reads the setup again for each new session (0.15 read it once at start), so a
+  session after the setup works with no restart. Each read replaces the stored keys of the last one,
+  so a key that `--forget` removed is gone from the next session. With no model, or no key for the
   model's provider, `session/new` fails with the ACP error "auth required"
   (`RequestError.authRequired`) and the message, so the editor offers the setup.
 - `authenticate`: a terminal method is never sent there (the spec forbids it); the method keeps
   answering `{}`.
 - Native Windows: `session/new` fails with "Garuda supports macOS and Linux. On Windows, run Garuda
-  in WSL." (not "auth required", so the editor does not loop on the setup).
+  in WSL (Windows Subsystem for Linux)." (not "auth required", so the editor does not loop on the
+  setup). `initialize` offers no Terminal Auth there, and `garuda setup` stops with the same message:
+  a key file needs Unix permissions (0600) to stay private.
+
+Built in `src/acp/server.ts` (`terminalAuth`, `setupNeeded`, `SETUP_METHOD_ID`) and
+`src/cli/acpCommand.ts` (`prepare` per session, `garuda acp setup`) (patch 4):
+
+- "No key": the model's key name (`apiKeyEnv`, or `ANTHROPIC_API_KEY` for Claude) has no value in
+  the environment or the file. For Claude, `ANTHROPIC_AUTH_TOKEN` also counts (the SDK's other way
+  to sign in). A local server needs no key.
+- The message says what is missing ("Garuda has no model." or "Garuda has no key for <model>
+  (<NAME>).", with the warning when the file was ignored) and how to fix it.
+- Other problems (an invalid `models.json`, an unknown provider, a broken team policy) stay a
+  plain error: a setup would not fix them.
+- `garuda acp <anything else>` stops with exit code 1.
 
 ## Security
 
@@ -148,7 +165,7 @@ Built as `src/cli/setupCommand.ts` (patch 3):
 | Backups or dotfile sync copy the file | Documented: exclude `~/.garuda/credentials`, or use environment variables. |
 | A pipe or script answers the setup | No TTY, no setup. |
 
-## Tests (planned)
+## Tests
 
 All with a temporary home, never the user's:
 
@@ -167,6 +184,9 @@ All with a temporary home, never the user's:
   message.
 - Each rule gets a negative control: without it, its test fails.
 
+Files: `test/credentials.test.ts`, `test/sandbox.test.ts` (patch 2), `test/setup.test.ts` (patch 3),
+`test/acpAuth.test.ts` (patch 4).
+
 ## Plan
 
 | Patch | Content |
@@ -174,7 +194,7 @@ All with a temporary home, never the user's:
 | 1 | This design; the architecture (data stores, N6 exception, trust boundary, decision) and the HLD (`garuda setup`). |
 | 2 (built) | The credentials file: reading, checks, the in-process store, `DENY_READ_IN_HOME`, the default model in `models.json`. Tests, including the sandbox on macOS and Linux. |
 | 3 (built) | `garuda setup` (`--show`, `--forget`). Tests. |
-| 4 | ACP: Terminal Auth, "auth required", setup read per session, the Windows message. Tests. |
+| 4 (built) | ACP: Terminal Auth, "auth required", setup read per session, the Windows message. Tests. |
 | 5 | Docs (user guide, Editors page, README) and a live test in Zed: an agent entry with no `env`, the setup from the editor, then a chat. |
 | 6 | Release 0.16.0. |
 | 7 | The ACP Registry pull request (manifest per its CONTRIBUTING.md), and a pull request to VS Code's ACP Client agent list. |

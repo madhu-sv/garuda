@@ -216,10 +216,14 @@ async function main(): Promise<void> {
     .description(
       "run as an agent for an editor over the Agent Client Protocol (VS Code with an extension, Zed, JetBrains, Neovim, Emacs); the editor starts it",
     )
+    .argument("[action]", "setup: run garuda setup (the editor's sign-in, ACP Terminal Auth)")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
-    .action(async (options: { model?: string }) => {
+    .action(async (action: string | undefined, options: { model?: string }) => {
       const { acpCommand } = await import("./acpCommand.js");
-      process.exitCode = await acpCommand(options);
+      process.exitCode = await acpCommand({
+        ...options,
+        ...(action === undefined ? {} : { action }),
+      });
     });
 
   const lsp = program

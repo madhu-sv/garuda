@@ -237,6 +237,9 @@ export async function keepProviderKeys(
   const wanted = names.filter((name): name is string => name !== undefined);
   for (const name of wanted) keepProviderKey(name);
   const stored = await readCredentials(home);
+  // A new read replaces the stored keys of an older one (`garuda acp` reads at each session): a key
+  // that `garuda setup --forget` removed is gone from the next session.
+  for (const [name, kept] of keptKeys) if (kept.from === "file") keptKeys.delete(name);
   for (const [name, value] of Object.entries(stored.keys)) {
     // All stored keys, so `/model` can switch to another stored provider. The redactor knows each.
     if (!keepStoredKey(name, value)) keepSecretForRedaction(name, value);

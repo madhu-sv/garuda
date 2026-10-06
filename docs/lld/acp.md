@@ -47,11 +47,14 @@ working root). Stdout carries only protocol messages: one JSON object per line.
   redirects `process.stdout.write` to stderr, with all its arguments. A notice, a warning or a
   library that prints to stdout then goes to stderr and cannot break the protocol stream. Editors
   show stderr in their logs.
-- The model comes from `--model` or `GARUDA_MODEL`, the providers from `~/.garuda/models.json`, the
-  keys from the environment: the same rules as the terminal. The editor's agent settings pass the
-  environment (for example `ANTHROPIC_API_KEY`).
-- The provider keys leave Garuda's environment at startup (`keepProviderKey`), as in the terminal.
+- The model comes from `--model`, `GARUDA_MODEL` or (0.16) the default in `~/.garuda/models.json`,
+  the providers from `~/.garuda/models.json`, the keys from the environment or (0.16)
+  `~/.garuda/credentials`: the same rules as the terminal. The editor's agent settings may pass the
+  environment (for example `ANTHROPIC_API_KEY`); with `garuda setup` they need not.
+- The provider keys leave Garuda's environment (`keepProviderKeys`), as in the terminal.
 - The team policy loads from the managed file and `~/.garuda/policy.json`, never from the project.
+- 0.16: all of this is read again for each `session/new` (`prepare`), so a session after
+  `garuda setup` works with no restart. See [setup.md](setup.md).
 - When stdin closes (the editor stops the agent), every runtime closes and every executor shuts
   down, so no command keeps running. On SIGTERM, and in the exit handler, every executor shuts down
   at once.
@@ -65,8 +68,10 @@ working root). Stdout carries only protocol messages: one JSON object per line.
 | Several sessions | Several runtimes in one process. Each has its own executor (0.14.1), so one session's end does not stop another's commands. |
 
 - `cwd` must be an absolute path to a folder. Else `session/new` fails with a clear error.
-- A missing model or key makes `session/new` fail with the message that the terminal would show
-  ("Set a model with --model <id> or the GARUDA_MODEL variable."). The editor shows it.
+- A missing model or key makes `session/new` fail with ACP's "auth required" (code -32000, 0.16) and
+  a message that says what is missing and to run `garuda setup`. The editor offers its sign-in, or
+  shows the message. Other setup problems are a plain error with the message. Native Windows: a
+  plain error that says to use WSL.
 - Project settings that loosen safety (0.14, `projectSettings`) need a yes. The editor cannot answer
   a question about a session before `session/new` has returned, so in the first iteration the ACP
   session uses only settings that the user already approved in a terminal (pinned in
@@ -90,7 +95,11 @@ The answer to `initialize`:
 }
 ```
 
-- No `authMethods`: the keys come from the environment, as in the terminal.
+- `authMethods` (0.16): when the editor's `clientCapabilities.auth.terminal` is true (and not on
+  native Windows), one Terminal Auth method: `{ "type": "terminal", "id": "garuda-setup", "name":
+  "Set up Garuda", "description": "Choose a model and enter its API key.", "args": ["setup"] }`. The
+  editor runs `garuda acp setup` in a terminal; exit code 0 means done. Else the list is empty.
+- `authenticate` answers `{}` (a terminal method is never sent there).
 - The client's `fs` and `terminal` capabilities are read but not used (see "What Garuda does not
   give to the editor").
 
