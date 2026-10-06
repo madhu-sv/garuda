@@ -274,6 +274,7 @@ to keep the API key out of `settings.json`, and what the editor shows.
 - Each edit asks in the editor, with the editor's diff view; "Allow for this session" lasts for this
   session only. Keep an extension's auto-approve off: it answers Garuda's questions for you.
 - The editor's stop button ends the turn: a running command stops, and a waiting question is a deny.
+  Each call that the stop ended shows as failed, with a line such as "Garuda: $ sleep 60 cancelled."
   A command that exits with an error shows as done (the model reads the error); a refused call shows
   as failed.
 - Build and plan modes are in the editor's mode menu; custom commands and skills are in its `/` menu.

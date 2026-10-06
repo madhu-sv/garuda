@@ -136,5 +136,6 @@ stdout and exited with 0 when stdin closed.
 
 Live test (2026-10-06, macOS, VS Code with the ACP Client extension, Claude Sonnet 5): a question
 about the project, an edit after "Allow once", a command outside the sandbox that was denied, stop
-during `sleep 60`, and Plan mode all behaved as designed. Details in
-[acp.md](../lld/acp.md#tests).
+during `sleep 60`, and Plan mode all behaved as designed. The same five steps in Zed 1.22, checked
+in Zed's ACP log, behaved as designed too; the one finding (a stopped command showed as done) is
+fixed in 0164. Details in [acp.md](../lld/acp.md#tests).

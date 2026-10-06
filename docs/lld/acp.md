@@ -138,7 +138,8 @@ runtime records the stop (`recordStop("error")`), as the terminal does.
 | `notice`, `compaction`, `model_retry` | `agent_message_chunk` with a short line that starts with "Garuda:" |
 | `step_end` | nothing in the first iteration |
 
-- A denied call ends as `failed`, with the reason as content.
+- A denied call ends as `failed`, with the reason as content; so does a call that the editor's stop
+  ended (see Cancel).
 - After `model_retry`, the text of the broken stream is void in Garuda, but the editor has already
   shown it. The notice line says that the answer starts again; the old text stays on screen. This is
   a limit of streaming over ACP.
@@ -204,6 +205,12 @@ editor can follow the agent.
 executor kills its process group), a waiting approval answers `deny`, and `session/prompt` returns
 `{ stopReason: "cancelled" }`. The next prompt closes the open tool call first
 (`closeOpenToolCalls`), as after Ctrl-C.
+
+The user sees what the stop ended (0.15, from the live test in Zed). A tool call that ends after the
+stop is `failed`, also when its command returned a result (killed by SIGTERM): before, a stopped
+`sleep 60` showed as `completed`. Before the response, one line per such call says so
+(`Garuda: $ sleep 60 cancelled.`, `Garuda: Write a.txt cancelled.`); with no call running (the
+model was writing), the line is `Garuda: the turn was cancelled.`
 
 ## Modes
 
@@ -299,6 +306,14 @@ of README.md after "Allow once"; `curl` failed in the sandbox (no network), the 
 outside the sandbox was denied and the call ended failed; stop during `sleep 60` ended the turn at
 once and the next prompt worked; in Plan mode a request for an edit gave a plan, no question and no
 change.
+
+Live test in Zed (2026-10-06, macOS, Zed 1.22, the same five steps), checked in Zed's ACP log
+(`dev: open acp logs`): `initialize` and `session/new` as designed; the `/` menu with the user's two
+skills; the edit question for the right `toolCallId` with a `diff` part (old and new text) and the
+text preview; the outside-sandbox question with its warning, denied, the call `failed`;
+`session/cancel` during `sleep 60` stopped the command and the prompt ended `cancelled`;
+`session/set_mode` to `plan`, then a plan with no question. One finding: the stopped `sleep` call
+ended `completed`. Fixed in 0164: it ends `failed`, and a line says `$ sleep 60 cancelled.`
 
 ## Editor setup (for the user guide)
 

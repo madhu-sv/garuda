@@ -85,7 +85,8 @@ three things: the command, the argument `acp`, and the environment.
   session" lasts until the editor closes the session. Hidden or control characters in a command are
   shown as ␍, ␛ or [U+…], with a warning line.
 - **Stop** (the editor's stop button) ends the turn: a running command stops, and a waiting question
-  counts as "Deny".
+  counts as "Deny". Each tool call that the stop ended shows as failed, with a line such as
+  "Garuda: $ sleep 60 cancelled."
 - **Modes**: Build and Plan, in the editor's mode menu. In Plan, Garuda reads and plans; it makes no
   edits and asks no questions.
 - **Commands**: your custom commands and skills are in the editor's `/` menu. The terminal's own

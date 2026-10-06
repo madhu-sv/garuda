@@ -16,7 +16,7 @@ import { Runtime } from "../src/app/runtime.js";
 import { protocolOutput } from "../src/cli/acpCommand.js";
 import { HIDDEN_WARNING } from "../src/cli/approver.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
-import type { ModelRequest } from "../src/model/types.js";
+import type { ModelClient, ModelRequest } from "../src/model/types.js";
 import { parseSettings } from "../src/permissions/settings.js";
 import { Redactor } from "../src/session/redact.js";
 import { FileSessionStore } from "../src/session/store.js";
@@ -72,7 +72,7 @@ async function withSession<T>(
     sessionId: string,
     run: Run,
   ) => Promise<T>,
-  options: { answer?: Answer; mcpServers?: unknown[] } = {},
+  options: { answer?: Answer; mcpServers?: unknown[]; client?: ModelClient } = {},
 ): Promise<{ result: T } & Run> {
   const model = new FakeModelClient(steps);
   let seen: () => void = () => {};
@@ -86,7 +86,7 @@ async function withSession<T>(
       Runtime.create({
         root,
         modelId: "claude-sonnet-5",
-        model: async () => model,
+        model: async () => options.client ?? model,
         approver,
         store: new FileSessionStore(root, new Redactor({})),
         settings: parseSettings({}),
@@ -325,6 +325,7 @@ describe("garuda acp (0.15)", () => {
       next: { stopReason: "end_turn" },
     });
     expect(() => readFileSync(join(where.root, "no.txt"))).toThrow();
+    expect(messages(run)).toContain("Garuda: Write no.txt cancelled.");
     expect(messages(run)).toContain("Fresh start.");
   });
 
@@ -359,6 +360,44 @@ describe("garuda acp (0.15)", () => {
     );
     expect(run.result).toEqual({ stopReason: "cancelled" });
     await waitUntil(async () => !(await sleeping(marker, where.root)));
+    // The stopped call shows as failed, not done, and a line names it.
+    const last = run.updates
+      .map((u) => u.update)
+      .filter((u) => u.sessionUpdate === "tool_call_update" && u.toolCallId === "b1")
+      .at(-1);
+    expect(last).toMatchObject({ status: "failed" });
+    expect(messages(run)).toContain(`Garuda: $ sleep ${marker} cancelled.`);
+  });
+
+  it("session/cancel while the model writes: a line says that the turn was cancelled", async () => {
+    let started: () => void = () => {};
+    const writing = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const client: ModelClient = {
+      async *stream(_request, options) {
+        yield { type: "text_delta", text: "Let me think" };
+        started();
+        await new Promise((_, reject) => {
+          options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), {
+            once: true,
+          });
+        });
+      },
+    };
+    const run = await withSession(
+      project(),
+      [],
+      async (agent, id) => {
+        const first = agent.request(methods.agent.session.prompt, prompt(id, "think"));
+        await writing;
+        await agent.notify(methods.agent.session.cancel, { sessionId: id });
+        return first;
+      },
+      { client },
+    );
+    expect(run.result).toEqual({ stopReason: "cancelled" });
+    expect(messages(run)).toContain("Garuda: the turn was cancelled.");
   });
 
   it("a second prompt while one runs gets an error", async () => {

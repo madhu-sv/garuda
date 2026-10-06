@@ -159,7 +159,10 @@ export function acpServer(options: AcpServerOptions): AcpServer {
       return {};
     })
     .onNotification(methods.agent.session.cancel, (c) => {
-      sessions.get(c.params.sessionId)?.running?.abort();
+      const session = sessions.get(c.params.sessionId);
+      if (session?.running === undefined) return;
+      session.channel.cancel();
+      session.running.abort();
     })
     .onRequest(methods.agent.session.prompt, async (c) => {
       const session = sessionOf(c.params.sessionId);
@@ -171,7 +174,10 @@ export function acpServer(options: AcpServerOptions): AcpServer {
       }
       const controller = new AbortController();
       session.running = controller;
-      const onCancel = () => controller.abort();
+      const onCancel = () => {
+        session.channel.cancel();
+        controller.abort();
+      };
       c.signal.addEventListener("abort", onCancel, { once: true });
       session.channel.open(c.client);
       try {
@@ -236,6 +242,13 @@ async function turn(session: AcpSession, text: string, signal: AbortSignal): Pro
   } catch (error) {
     if (signal.aborted) {
       runtime.recordStop("interrupted");
+      // Tell the user what the stop ended: "$ sleep 60 cancelled." per call.
+      const calls = channel.takeCancelled();
+      channel.notice(
+        calls.length === 0
+          ? "the turn was cancelled."
+          : calls.map((title) => `${title} cancelled.`).join("\n"),
+      );
       return "cancelled";
     }
     runtime.recordStop("error");

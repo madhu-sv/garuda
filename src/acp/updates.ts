@@ -34,13 +34,36 @@ export class SessionChannel {
   private client: AcpClient | undefined;
   private chain: Promise<void> = Promise.resolve();
   private readonly waiting: string[] = [];
+  private stopped = false;
+  private readonly stoppedCalls: string[] = [];
 
   constructor(readonly sessionId: string) {}
 
   /** The prompt starts: send to this client, and send the notices that waited. */
   open(client: AcpClient): void {
     this.client = client;
+    this.stopped = false;
+    this.stoppedCalls.length = 0;
     for (const text of this.waiting.splice(0)) this.message(text);
+  }
+
+  /** The editor stopped the running prompt: tool calls that end from now on were cancelled. */
+  cancel(): void {
+    this.stopped = true;
+  }
+
+  get cancelled(): boolean {
+    return this.stopped;
+  }
+
+  /** A tool call that the stop ended (its title), for the message at the end of the turn. */
+  noteCancelled(title: string): void {
+    this.stoppedCalls.push(title);
+  }
+
+  /** The titles of the tool calls that the stop ended, once. */
+  takeCancelled(): string[] {
+    return this.stoppedCalls.splice(0);
   }
 
   /** The prompt ends: wait for every update, then stop sending. */
@@ -135,14 +158,21 @@ export class EventMapper {
           content: [textContent(oneLine(event.text))],
         });
         break;
-      case "tool_result":
+      case "tool_result": {
+        // A call that ends after the editor's stop was cancelled, also when its command returned a
+        // result (killed by SIGTERM): it shows as failed, and the turn ends with a line for it.
+        const stopped = this.channel.cancelled;
+        if (stopped) {
+          this.channel.noteCancelled(this.calls.title(event.call.id) ?? event.call.name);
+        }
         send({
           sessionUpdate: "tool_call_update",
           toolCallId: event.call.id,
-          status: event.outcome.isError ? "failed" : "completed",
+          status: stopped || event.outcome.isError ? "failed" : "completed",
           content: [textContent(cut(event.outcome.content))],
         });
         break;
+      }
       case "server_tool": {
         const input = event.call.input as { query?: unknown } | undefined;
         const query = typeof input?.query === "string" ? input.query : "";
