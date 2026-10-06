@@ -121,3 +121,25 @@ passed 25 runs in a row with it (it failed at runs 3 and 6 without it).
 Run on Linux (Node v22.22.2), `pnpm check`: 81 test files, 837 tests: 830 passed, 1 expected
 failure (G09) and 6 skipped. The known limits of 0.14.1 are listed in the README under the status
 table.
+
+## Editors over ACP and release 0.15.0
+
+Patches 0159–0163 on the `acp` branch: the design, the call id in approval questions, `garuda acp`
+and its docs. `pnpm check` on Linux (Node v22.22.2): 83 test files, 859 tests: 852 passed, 1
+expected failure (G09) and 6 skipped. Each rule of the adapter has a test that fails without it
+(negative controls run by hand: call id, visible characters, the diff, the stdout guard, cancel
+during a question and during a command, one prompt at a time, plan mode, deny on a cancelled
+answer).
+
+Process test (Linux): `node dist/cli/index.js acp`, driven over stdio, wrote only JSON-RPC lines on
+stdout and exited with 0 when stdin closed.
+
+Live test (2026-10-06, macOS, VS Code with the ACP Client extension, Claude Sonnet 5): a question
+about the project, an edit after "Allow once", a command outside the sandbox that was denied, stop
+during `sleep 60`, and Plan mode all behaved as designed. The same five steps in Zed 1.22, checked
+in Zed's ACP log, behaved as designed too; the one finding (a stopped command showed as done) is
+fixed in 0164. Details in [acp.md](../lld/acp.md#tests).
+
+Release 0.15.0 (patches 0159–0166): `pnpm check` on Linux (Node v22.22.2): 83 test files, 862
+tests: 855 passed, 1 expected failure (G09) and 6 skipped. After 0164 and 0165 (a stop names what
+it ended; running calls settle), the stop in the live test showed `Garuda: $ sleep 60 cancelled.`

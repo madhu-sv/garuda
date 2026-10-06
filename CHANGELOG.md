@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.15.0 (2026-10-06)
+
+Garuda in your editor. Version 0.15.0 is not the old "0.15" branch label of the status table (code
+intelligence), which shipped in 0.14.0.
+
+### Editors
+
+- `garuda acp`: Garuda as an agent for editors over the Agent Client Protocol (v1): VS Code (with
+  the "ACP Client" extension), Zed, JetBrains, Neovim, Emacs. One runtime per editor session, with
+  the same permission engine, OS sandbox, team policy, hooks and audit log as the terminal.
+- Approval questions name their tool call (`callId`), and file writes carry the whole change, so an
+  editor shows each question next to the right call, with its own diff view.
+- A stop in the editor names what it ended: each stopped tool call shows as failed, with a line
+  such as "Garuda: $ sleep 60 cancelled." (or "the turn was cancelled." when no call ran). A call
+  that has not reported within 3 s of the stop ends as failed, so none stays "running".
+- Docs: the website's Editors page (VS Code with ACP Client, Zed, other ACP editors). Tested live
+  in VS Code and Zed on macOS.
+
 ## 0.14.1 (2026-10)
 
 The first version on npm (`@garuda-agent/garuda`) and Homebrew (`madhu-sv/garuda/garuda`). It fixes

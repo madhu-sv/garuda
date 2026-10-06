@@ -33,6 +33,7 @@ export default defineConfig({
             { label: "Introduction", slug: "docs" },
             { label: "Install", slug: "docs/install" },
             { label: "Quick start", slug: "docs/quick-start" },
+            { label: "Editors", slug: "docs/editors" },
             { label: "Security model", slug: "docs/security" },
           ],
         },

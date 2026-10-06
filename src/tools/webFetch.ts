@@ -115,6 +115,7 @@ export function createWebFetchTool(options: WebFetchOptions = {}): Tool<Input, s
                     target: { kind: "url", url: next.toString(), host: next.hostname },
                     preview: `  GET ${next.toString()}\n  (a redirect from ${new URL(key).host})`,
                   },
+                  ...(context.callId === undefined ? {} : { callId: context.callId }),
                 },
                 context.signal,
               );

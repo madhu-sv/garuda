@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.14.1 (the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas). This document describes the parts of Garuda, their dependencies, the trust
+Version 0.15.0 (editors over ACP, on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas). This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -12,6 +12,7 @@ action that can change something, unless a sandbox or a rule makes the action sa
 ```mermaid
 flowchart LR
   user([User in a terminal]) <--> garuda[Garuda process]
+  editor([User in an editor: VS Code, Zed]) <-->|ACP v1, JSON-RPC on stdio, 0.15| garuda
   garuda <-->|HTTPS, streaming| api[(Anthropic API)]
   garuda <-->|Chat Completions, streaming| oss[(Local or hosted open models)]
   garuda -->|read, write, run| repo[(Working root)]
@@ -29,7 +30,7 @@ flowchart LR
 | N1 | Provider-neutral model access | The loop sees only the `ModelClient` interface. `anthropic.ts` (the only module with the Anthropic SDK) and `openaiCompatible.ts` (plain fetch) are the adapters. |
 | N2 | Prompt caching | The system prompt and the tool list stay the same bytes for a whole session. Cache breakpoints on the system prompt, the last tool and the last message. |
 | N3 | Start in less than 1 s | Heavy modules load with `import()` on first use: the SDK, inquirer, Ink and React, TypeScript 6, the MCP SDK, the HTML converter. `--version` takes about 240 ms. |
-| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0; 804 at 0.14.0: 797 pass, 1 open-gap expected failure, 6 skipped on Linux; 837 at 0.14.1: 830 pass, 1 open-gap expected failure, 6 skipped on Linux). |
+| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0; 804 at 0.14.0: 797 pass, 1 open-gap expected failure, 6 skipped on Linux; 837 at 0.14.1: 830 pass, 1 open-gap expected failure, 6 skipped on Linux; 862 at 0.15.0: 855 pass, 1 open-gap expected failure, 6 skipped on Linux). |
 | N5 | Measured quality | `garuda eval` runs fixed tasks in scratch folders and reports pass rate, steps, tokens and cost. |
 | N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). |
 | N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. The user's own editor (Ctrl-G, 0.6) runs on the real terminal through `src/sandbox/terminal.ts`, never through a tool. |
@@ -43,6 +44,7 @@ written in TypeScript; the code index uses TypeScript 6 (the last compiler writt
 flowchart TB
   subgraph UI[Interface layer]
     cli[cli: commands, plain chat, Ink chat, approver, renderer]
+    acp[acp: editor front end over ACP, 0.15]
   end
   subgraph App[Application layer]
     runtime[app/Runtime]
@@ -74,6 +76,7 @@ flowchart TB
     net[net: address checks]
   end
   cli --> runtime
+  acp --> runtime
   evals --> runtime
   runtime --> loop
   runtime --> mcp
@@ -104,6 +107,7 @@ flowchart TB
 | Component | Folder | Responsibility |
 | --- | --- | --- |
 | CLI | `src/cli/` | Parse the command line; run one task (`-p`), a chat (plain or Ink), `--resume`, `--replay` or `eval`. Ask the user for approvals. Show events. Chat input (0.6): Esc, multi-line, `$EDITOR`, `@path`, `!command`, Tab completion; `/sessions`, `/models`, `/export`, `/diff`; notifications that respect the window focus. 0.8: `/compact`, `/sessions rename` and `delete`, `/plan <task>`, Tab for command arguments, a fuzzy `@` search. 0.9: `/details`, `/thinking`, the command palette (Ctrl-P); after Ctrl-C the model learns that the user stopped the task. |
+| ACP (0.15) | `src/acp/`, `src/cli/acpCommand.ts` | `garuda acp`: Garuda as an agent for editors that speak the Agent Client Protocol. One runtime per editor session; maps the runtime's events to `session/update` and its approval questions to `session/request_permission`. See [acp.md](lld/acp.md). |
 | Runtime | `src/app/` | Build everything one Garuda process needs from settings: executor, permission engine, tools, system prompt, session, MCP servers, hooks. Run one turn; attach `@path` files to the prompt (0.6); run the user's `!command`; switch the session or the model from the chat (0.6). |
 | Agent loop | `src/loop/` | Call the model, run the tool calls, repeat until the model stops or a limit hits. Replay a recorded session. |
 | Model | `src/model/` | The `ModelClient` interface, providers and model specs, the Anthropic and OpenAI-compatible adapters, the fake model, prices and context windows. Server tools (0.6): Claude's web search runs inside the reply; its blocks go back unchanged; so do thinking blocks (0.9). The Batch API (0.7): a batch-of-one client at half the token price, and the `DeadlineClient` that moves a job to the normal API at its switch time or after a slow step. |
@@ -143,6 +147,10 @@ The rules keep the core independent of the interface, and keep risky code in one
 5. Only `src/cli/chat/ui.tsx` and `src/cli/chat/inkChat.ts` import Ink or React.
 6. The CLI and the app load no heavy module at startup: the model adapters, inquirer, the MCP manager and
    TypeScript 6 load with `import()` (N3).
+7. (0.15) Only `src/acp/` imports `@agentclientprotocol/*`, and only `garuda acp` loads it,
+   with `import()`. The app, the loop and the CLI's other commands never import `src/acp/`. `src/acp/`
+   never imports `child_process` and never writes to stdout itself: only the SDK writes protocol
+   messages.
 
 ## 5. Trust boundaries
 
@@ -152,7 +160,7 @@ configuration as untrusted. The user and the user's own files in `~/.garuda` are
 ```mermaid
 flowchart LR
   subgraph Trusted
-    U[User answers]
+    U[User answers: terminal or editor]
     UC[~/.garuda: mcp.json, hooks.json, trust.json]
   end
   subgraph Garuda[Garuda process: the policy point]
@@ -183,6 +191,7 @@ flowchart LR
 
 | Boundary | Threat | Control |
 | --- | --- | --- |
+| Editor → Garuda (ACP, 0.15) | The editor (or an extension in it) sends prompts and answers questions; it offers its own file and terminal access; it can start MCP servers for the agent; output on stdout breaks or fakes protocol messages. | The editor is the user's program, as the terminal is: it answers, Garuda enforces. Every tool call passes the same permission engine, OS sandbox, team policy, hooks and audit log. Garuda never uses the editor's `fs/*` or `terminal/*` methods, and does not start the editor's MCP servers (0.15). The question shows hidden characters, as in the terminal. Project settings that loosen safety apply only when already approved in a terminal. stdout carries only SDK messages; everything else goes to stderr. An editor that auto-approves answers "yes" for the user, but cannot pass a deny rule, the sandbox or the policy. |
 | Model → tools | A prompt injection makes the model do harm. | Permission engine: read-only tools run; writes, commands outside the sandbox, MCP calls and new web hosts ask. Deny rules always win. The approval screen shows hidden characters (␍, ␛, [U+…]), so a carriage return in a command cannot hide what runs (0.14.1, review). |
 | Commands → machine | A command deletes or leaks data. | OS sandbox: writes only in the root, temp and caches; home secrets unreadable; no network. Escape asks. On macOS a command cannot start apps through LaunchServices or Apple Events (they would run outside the sandbox); on Linux it has its own process space, so it does not see Garuda's or the user's processes (0.14, review). A command sees only allowlisted environment variables, and the model-provider API keys are taken out of Garuda's own process environment at startup (0.14, review), so a command cannot read them from `/proc/<pid>/environ` of the Garuda process either. |
 | Project config → Garuda | A cloned repo starts code (MCP servers, hooks). | Consent with the full command; answer pinned to a hash in `~/.garuda/trust.json`; changes ask again. |
@@ -282,5 +291,6 @@ All state is in files. There is no server and no database.
 | Sandbox capability probe (0.14) | Active Seatbelt execution probe on macOS at startup to detect nested sandboxes (error 71 `EX_OSPERM`); graceful fallback to `HostExecutor` | Seatbelt binary can be present but blocked by the macOS kernel inside nested sandboxes or containers; an active probe prevents unexpected crashes at startup. |
 | Background daemons (0.14) | Off by default (`daemons.enabled`). `is_daemon: true` on `bash`, companion `process_manager` tool (`list`, `logs`, `status`, `kill`); a capped in-memory line buffer; `Runtime.close()` stops all daemons | Long-running servers should not block turns. Off by default because no eval measured a gain; the caps keep a noisy daemon from filling memory or the model's context. |
 | Interactive patch staging (0.14) | Ink chat hunk-by-hunk diff review (`[h]` key); stage (`y`), skip (`n`), stage all (`a`), discard (`d`) | Fine-grained control over a model's edit. The selection is enforced: only accepted hunks reach the disk (merge gate, U0), and only when every hunk was shown. |
+| Editors (0.15) | The Agent Client Protocol (v1, the official TypeScript SDK) as a second front end, `garuda acp`; files and commands stay in Garuda | One protocol reaches VS Code (an extension), Zed, JetBrains, Neovim and Emacs, so Garuda needs no plugin per editor. The editor's own file and terminal methods would bypass the sandbox and the policy, so Garuda does not use them; the cost is that Garuda reads saved files, not unsaved buffers. |
 | Loop and runtime modularization (0.14) | Extracted `limits`, `loopDetector`, `callModel`, `toolRunner`, `modelState`, `sessionManager`, `undoCoordinator` | Smaller loop files (each under 300 lines); `src/app/runtime.ts` is still large (about 2,000 lines) and is the next split. |
 

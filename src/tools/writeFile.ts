@@ -24,8 +24,14 @@ export const writeFileTool: Tool<z.infer<typeof input>> = {
   readOnly: false,
 
   async describe({ path, content }, { root }) {
-    const shown = displayPath(root, await resolveInRoot(root, path));
-    return { target: { kind: "path", path: shown }, preview: unifiedDiff(shown, "", content) };
+    const absolute = await resolveInRoot(root, path);
+    const shown = displayPath(root, absolute);
+    return {
+      target: { kind: "path", path: shown },
+      preview: unifiedDiff(shown, "", content),
+      // write_file only creates files, so there is no old text (0.15: ACP's diff view).
+      change: { path: absolute, oldText: null, newText: content },
+    };
   },
 
   async run({ path, content }, context) {

@@ -197,6 +197,17 @@ async function main(): Promise<void> {
       process.exitCode = await nightCommand(options, new PlainRenderer());
     });
 
+  program
+    .command("acp")
+    .description(
+      "run as an agent for an editor over the Agent Client Protocol (VS Code with an extension, Zed, JetBrains, Neovim, Emacs); the editor starts it",
+    )
+    .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
+    .action(async (options: { model?: string }) => {
+      const { acpCommand } = await import("./acpCommand.js");
+      process.exitCode = await acpCommand(options);
+    });
+
   const lsp = program
     .command("lsp")
     .description("show the language servers for diagnostics (TS/JS, Python, Java)")

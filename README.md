@@ -4,8 +4,9 @@
 
 Website and docs: https://madhu-sv.github.io/garuda/
 
-Garuda is a terminal coding agent. This is version 0.14.1: the 0.14–0.17 branches after the merge gate
-and Garuda's own review (see the notes under the status table). Release notes: [CHANGELOG.md](CHANGELOG.md).
+Garuda is a terminal coding agent. This is version 0.15.0: Garuda in your editor over the Agent Client
+Protocol (`garuda acp`), on top of 0.14.1 (the 0.14–0.17 branches after the merge gate and Garuda's own
+review; see the notes under the status table). Release notes: [CHANGELOG.md](CHANGELOG.md).
 Design documents: [docs/](docs/README.md) (architecture, high-level design, low-level design per component).
 The requirements doc defines the scope. Code, tests and commits refer to its IDs (F1–F26, N1–N8).
 
@@ -34,6 +35,10 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.15: multi-language AST code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done (0.14.0) |
 | 0.16: language plugins (Go and Rust built in, user plugins in ~/.garuda/languages, /languages; project plugins not loaded) | Done (0.14.0) |
 | 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | Done (0.14.0) |
+| Editors over the Agent Client Protocol (`garuda acp`: VS Code with an extension, Zed, JetBrains, Neovim, Emacs) | Done (0.15.0) |
+
+The rows labelled 0.14–0.17 are branch labels, not versions: the "0.15" branch (code intelligence)
+shipped in 0.14.0. The editors row is version 0.15.0.
 
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
@@ -45,7 +50,7 @@ headings below keep the branch labels (0.14–0.17).
 Before 0.14.0, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
 permissions, tools, sandbox, audit, loop, agents), in plan mode. 0.14.1 adds the cli and extensions
 areas and fixes the open findings of all nine areas (see [CHANGELOG.md](CHANGELOG.md)). Known limits
-in 0.14.1:
+in 0.15.0:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Subagents: each child has its own step and token budget (capped by the team policy); it does not
@@ -57,6 +62,9 @@ in 0.14.1:
   `~/.m2/wrapper`) hold programs that a build runs later outside the sandbox. They stay writable, because
   `./gradlew` needs them in the sandbox; a sandboxed command could change them.
 - The jdtls download is checked against the `.sha256` file of the same server, not a pinned hash.
+- Editors (`garuda acp`): Garuda's session history is not in the editor (no `session/load`), the
+  editor's MCP servers are not started, Garuda reads saved files (not unsaved buffers), the terminal's
+  own commands (`/undo`, `/diff` …) are not available, and an edit is approved as a whole (no hunks).
 
 ## Use
 
@@ -243,6 +251,47 @@ Set the context window, price and output limit per model, and add providers, in 
 - `garuda --resume` continues the latest session in chat mode.
 
 Model text goes to stdout; tool activity and notes go to stderr. So `garuda -p "…" > answer.md` keeps only the answer.
+
+## Editors (ACP, 0.15)
+
+`garuda acp` runs Garuda as an agent for editors that speak the Agent Client Protocol. The editor
+starts it, shows the conversation, the tool calls and the questions, and Garuda does the work with
+the same permission engine, OS sandbox, team policy, hooks and audit log as in the terminal.
+
+VS Code, with the extension "ACP Client" (`formulahendry.acp-client`), in the user settings
+(Cmd+Shift+P, **Preferences: Open User Settings (JSON)**). Use the full path from `which garuda`:
+VS Code started from the Dock does not get your shell's `PATH`.
+
+```json
+{
+  "acp.agents": {
+    "Garuda": {
+      "command": "/opt/homebrew/bin/garuda",
+      "args": ["acp"],
+      "env": { "GARUDA_MODEL": "claude-sonnet-5", "ANTHROPIC_API_KEY": "..." }
+    }
+  }
+}
+```
+
+Zed: the same command, argument and environment under `agent_servers` (with `"type": "custom"`).
+The website's [Editors](https://madhu-sv.github.io/garuda/docs/editors/) page has the steps, a way
+to keep the API key out of `settings.json`, and what the editor shows.
+
+- Each edit asks in the editor, with the editor's diff view; "Allow for this session" lasts for this
+  session only. Keep an extension's auto-approve off: it answers Garuda's questions for you.
+- The editor's stop button ends the turn: a running command stops, and a waiting question is a deny.
+  Each call that the stop ended shows as failed, with a line such as "Garuda: $ sleep 60 cancelled."
+  A command that exits with an error shows as done (the model reads the error); a refused call shows
+  as failed.
+- Build and plan modes are in the editor's mode menu; custom commands and skills are in its `/` menu.
+  Built-in chat commands (`/undo`, `/diff` ...) are only in the terminal in this version.
+- Garuda reads and writes files and runs commands itself; it does not use the editor's file or
+  terminal access, so it reads the saved file, not an unsaved buffer. It does not start MCP servers
+  that the editor sends (its own `~/.garuda/mcp.json` and the project's work as usual).
+- Project settings that loosen safety apply only after a yes in a terminal (`garuda` in that folder).
+
+Design: [docs/lld/acp.md](docs/lld/acp.md).
 
 ## Init: set up a folder
 

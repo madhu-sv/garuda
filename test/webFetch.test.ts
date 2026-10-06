@@ -296,6 +296,8 @@ describe("web_fetch approvals", () => {
     const redirected = await fetch(`${base}/other`);
     expect(redirected.content).toMatch(/redirect to localhost:\d+ was not allowed/);
     expect(approver.requests[1]?.preview).toMatch(/a redirect from 127\.0\.0\.1/);
+    // Each question names its tool call (0.15): the first fetch, then the redirect of the third.
+    expect(approver.requests.slice(0, 2).map((r) => r.callId)).toEqual(["w0", "w2"]);
 
     const unusual = await fetch(`${base}/page?t=${"Z".repeat(80)}`);
     expect(unusual.content).toMatch(/^Permission denied/);

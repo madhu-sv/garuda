@@ -1,6 +1,6 @@
 {
   "name": "@garuda-agent/garuda",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Garuda: a terminal coding agent with an OS sandbox, approvals and an audit log.",
   "license": "Apache-2.0",
   "author": "Madhusudhan Vasanth Kumar",
@@ -52,6 +52,7 @@
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
+    "@agentclientprotocol/sdk": "1.7.0",
     "@anthropic-ai/sdk": "^0.128.0",
     "@inquirer/prompts": "^8.7.2",
     "@modelcontextprotocol/client": "^2.1.0",

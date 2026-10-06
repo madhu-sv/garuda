@@ -46,6 +46,7 @@ export const editFileTool: Tool<Input> = {
     return {
       target: { kind: "path", path: edit.shown },
       preview,
+      change: { path: edit.absolute, oldText: edit.before, newText: edit.after },
       // Hunk-by-hunk approval only when the user sees every hunk (U0).
       ...(previewIsComplete(preview) ? { hunks: true as const } : {}),
     };
