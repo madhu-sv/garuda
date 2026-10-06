@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.16.0 (unreleased)
+## 0.16.0 (2026-10-06)
 
 Setup for editors and the ACP Registry (design: [docs/lld/setup.md](docs/lld/setup.md)).
 

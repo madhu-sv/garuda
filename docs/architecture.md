@@ -1,6 +1,6 @@
 # Architecture
 
-Version 0.15.0 (editors over ACP, on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas). This document describes the parts of Garuda, their dependencies, the trust
+Version 0.16.0 (`garuda setup` and the editor sign-in; editors over ACP since 0.15.0; on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas). This document describes the parts of Garuda, their dependencies, the trust
 boundaries, and the main decisions.
 
 ## 1. Context
@@ -30,7 +30,7 @@ flowchart LR
 | N1 | Provider-neutral model access | The loop sees only the `ModelClient` interface. `anthropic.ts` (the only module with the Anthropic SDK) and `openaiCompatible.ts` (plain fetch) are the adapters. |
 | N2 | Prompt caching | The system prompt and the tool list stay the same bytes for a whole session. Cache breakpoints on the system prompt, the last tool and the last message. |
 | N3 | Start in less than 1 s | Heavy modules load with `import()` on first use: the SDK, inquirer, Ink and React, TypeScript 6, the MCP SDK, the HTML converter. `--version` takes about 240 ms. |
-| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0; 804 at 0.14.0: 797 pass, 1 open-gap expected failure, 6 skipped on Linux; 837 at 0.14.1: 830 pass, 1 open-gap expected failure, 6 skipped on Linux; 862 at 0.15.0: 855 pass, 1 open-gap expected failure, 6 skipped on Linux). |
+| N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0; 804 at 0.14.0: 797 pass, 1 open-gap expected failure, 6 skipped on Linux; 837 at 0.14.1: 830 pass, 1 open-gap expected failure, 6 skipped on Linux; 862 at 0.15.0: 855 pass, 1 open-gap expected failure, 6 skipped on Linux; 899 at 0.16.0: 892 pass, 1 open-gap expected failure, 6 skipped on Linux). |
 | N5 | Measured quality | `garuda eval` runs fixed tasks in scratch folders and reports pass rate, steps, tokens and cost. |
 | N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). One exception (0.16): `~/.garuda/credentials`, which only `garuda setup` writes, at the user's request (see [setup.md](lld/setup.md)). |
 | N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. The user's own editor (Ctrl-G, 0.6) runs on the real terminal through `src/sandbox/terminal.ts`, never through a tool. |
