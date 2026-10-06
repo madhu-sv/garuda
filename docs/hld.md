@@ -28,7 +28,10 @@ sequenceDiagram
   participant RT as Runtime.create
   participant FS as Files
   CLI->>FS: ~/.garuda/models.json
+  CLI->>CLI: chooseModel: --model, GARUDA_MODEL, else "default" (0.16)
   CLI->>CLI: resolveModel(spec): provider, model, window, price
+  CLI->>FS: ~/.garuda/credentials (0.16)
+  CLI->>CLI: keepProviderKeys: keys leave process.env, stored keys fill the rest
   CLI->>RT: root, model spec and info, approver, store, event target
   RT->>FS: .garuda/settings.json
   RT->>RT: createExecutor(auto|os|host)

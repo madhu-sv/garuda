@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.16.0 (unreleased)
+
+Setup for editors and the ACP Registry (design: [docs/lld/setup.md](docs/lld/setup.md)).
+
+- Stored provider keys: Garuda reads `~/.garuda/credentials` (JSON, key name → key) when no
+  environment variable sets the key. It reads the file only when it is a regular file (not a link),
+  owned by you, with mode 0600; else it ignores the file with a warning. The key never enters
+  Garuda's environment, and the redactor knows it. `garuda setup` will write this file.
+- Commands in the OS sandbox cannot read `~/.garuda/credentials` (macOS and Linux).
+- `"default"` in `~/.garuda/models.json`: the model when neither `--model` nor `GARUDA_MODEL` names
+  one.
+- The redactor removes every provider key that Garuda keeps, also one whose variable name does not
+  look secret (a custom provider's `apiKeyEnv`).
+- `-p --output-format stream-json`: `apiKeySource` in `system/init` is `credentials` for a stored
+  Claude key.
+
 ## 0.15.0 (2026-10-06)
 
 Garuda in your editor. Version 0.15.0 is not the old "0.15" branch label of the status table (code

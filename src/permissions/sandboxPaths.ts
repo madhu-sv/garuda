@@ -27,6 +27,8 @@ export const DENY_READ_IN_HOME = [
   // Garuda's OAuth tokens for remote MCP servers (0.4). The rest of ~/.garuda stays readable:
   // skills and their scripts live there (0.5).
   ".garuda/mcp-auth.json",
+  // Provider keys that `garuda setup` stored (0.16).
+  ".garuda/credentials",
   // Claude Code: its config can hold MCP server tokens in env values; its credentials on Linux.
   ".claude.json",
   ".claude/.credentials.json",

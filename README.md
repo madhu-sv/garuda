@@ -150,13 +150,15 @@ Set the context window, price and output limit per model, and add providers, in 
 ```json
 {
   "providers": { "lab": { "type": "openai-compatible", "baseUrl": "https://llm.example.com/v1", "apiKeyEnv": "LAB_KEY" } },
-  "models": { "ollama/qwen3-coder:30b": { "contextWindow": 65536, "maxTokens": 8192 } }
+  "models": { "ollama/qwen3-coder:30b": { "contextWindow": 65536, "maxTokens": 8192 } },
+  "default": "ollama/qwen3-coder:30b"
 }
 ```
 
 - Only this file in your home folder can define providers; a project cannot send your code elsewhere.
   Keys come from environment variables. Plain http works only to this machine (or with
   `"allowInsecureHttp": true`).
+- `"default"` is the model when neither `--model` nor `GARUDA_MODEL` names one.
 - Some small models write a tool call as JSON text. When the whole reply is such a call to a known
   tool, Garuda runs it as a real call, with the usual approvals. For a model that also writes
   sentences around the call (for example `qwen2.5-coder:7b`), set `"textToolCalls": "lines"` for that

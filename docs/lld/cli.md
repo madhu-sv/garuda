@@ -52,7 +52,7 @@ for `claude -p --output-format …` read Garuda too.
 
 | Line | When | Main fields |
 | --- | --- | --- |
-| `system/init` | before the first other line | `cwd`, `tools`, `mcp_servers` (`name`, `status`), `model`, `permissionMode` (`default` or `plan`), `slash_commands`, `apiKeySource`, `garuda_version` |
+| `system/init` | before the first other line | `cwd`, `tools`, `mcp_servers` (`name`, `status`), `model`, `permissionMode` (`default` or `plan`), `slash_commands`, `apiKeySource` (`ANTHROPIC_API_KEY`, `credentials` (0.16) or `none`), `garuda_version` |
 | `assistant` | each model response (`step_end`) | `message`: an Anthropic Messages API message with all blocks (`text`, `tool_use`), `stop_reason`, `usage` |
 | `user` | each tool result | `message.content`: one `tool_result` block (`tool_use_id`, `content`, `is_error`) |
 | `system/api_retry` | a broken stream is sent again | `attempt`, `max_retries`, `retry_delay_ms`, `message` |

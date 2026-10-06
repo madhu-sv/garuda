@@ -64,7 +64,14 @@ export class Redactor {
    */
   constructor(env: NodeJS.ProcessEnv = { ...process.env, ...Object.fromEntries(movedSecrets) }) {
     this.literals = Object.entries(env)
-      .filter(([name, value]) => SECRET_ENV_NAME.test(name) && (value?.length ?? 0) >= 8)
+      // A kept provider key counts whatever its name (0.16: a custom provider's `apiKeyEnv` need
+      // not look secret, and a stored key has no other way to the redactor).
+      .filter(
+        ([name, value]) =>
+          (SECRET_ENV_NAME.test(name) ||
+            (value !== undefined && movedSecrets.get(name) === value)) &&
+          (value?.length ?? 0) >= 8,
+      )
       .map(([, value]) => value as string)
       .sort((a, b) => b.length - a.length);
   }

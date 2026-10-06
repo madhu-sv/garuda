@@ -32,7 +32,7 @@ flowchart LR
 | N3 | Start in less than 1 s | Heavy modules load with `import()` on first use: the SDK, inquirer, Ink and React, TypeScript 6, the MCP SDK, the HTML converter. `--version` takes about 240 ms. |
 | N4 | Testable without the network | `FakeModelClient` plays a script. More than 450 tests run with no API calls (459 at 0.5.0, 538 at 0.7.0, 552 at 0.8.0, 571 at 0.9.0, 577 at 0.10.0, 589 at 0.11.0, 603 at 0.12.0, 621 at 0.13.0; 804 at 0.14.0: 797 pass, 1 open-gap expected failure, 6 skipped on Linux; 837 at 0.14.1: 830 pass, 1 open-gap expected failure, 6 skipped on Linux; 862 at 0.15.0: 855 pass, 1 open-gap expected failure, 6 skipped on Linux). |
 | N5 | Measured quality | `garuda eval` runs fixed tasks in scratch folders and reports pass rate, steps, tokens and cost. |
-| N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). One exception (0.16, planned): `~/.garuda/credentials`, which only `garuda setup` writes, at the user's request (see [setup.md](lld/setup.md)). |
+| N6 | No secrets on disk | Session files pass through a redactor. Trust and session files are private (0600). One exception (0.16): `~/.garuda/credentials`, which only `garuda setup` writes, at the user's request (see [setup.md](lld/setup.md)). |
 | N8 | One place starts processes | Only `src/sandbox/` starts processes. A test and a Biome rule enforce this. The user's own editor (Ctrl-G, 0.6) runs on the real terminal through `src/sandbox/terminal.ts`, never through a tool. |
 
 Other constraints: a single binary is possible (Node SEA), so Garuda uses no native add-ons; grep is
@@ -216,8 +216,8 @@ flowchart LR
 | web_fetch → network | Server-side request forgery; data leaks through URLs. | Only public addresses, checked on the resolved IP and pinned; each redirect hop checked; new hosts ask; unusual URLs always ask. |
 | Garuda → disk | Secrets in session logs. | Redactor on every journal line; files 0600. |
 | Model text → tool call | A small model's text (or file text it repeats) is read as a tool call. | Default: only when the whole reply is calls to tools of this request. A user can allow calls on their own lines for one model (`"textToolCalls": "lines"` in `~/.garuda/models.json`; never from project settings). A call in the middle of a sentence never runs. The call then passes the same input check, hooks and permissions. |
-| Project config → model provider | A cloned repo sends the code and an API key to its own server. | Providers only in `~/.garuda/models.json`; keys only from environment variables (0.16, planned: or `~/.garuda/credentials`, which only `garuda setup` writes); plain http only to this machine unless allowed. |
-| Sandboxed command → stored key (0.16, planned) | A command (or injected instructions) reads `~/.garuda/credentials`; a project plants a link or a looser file there. | The file is in `DENY_READ_IN_HOME` (Seatbelt, bubblewrap); the key never enters `process.env`; only a regular file, owned by the user, mode 0600, no link; the redactor knows the key. See [setup.md](lld/setup.md). |
+| Project config → model provider | A cloned repo sends the code and an API key to its own server. | Providers only in `~/.garuda/models.json`; keys only from environment variables or (0.16) `~/.garuda/credentials`, which only `garuda setup` writes; plain http only to this machine unless allowed. |
+| Sandboxed command → stored key (0.16) | A command (or injected instructions) reads `~/.garuda/credentials`; a project plants a link or a looser file there. | The file is in `DENY_READ_IN_HOME` (Seatbelt, bubblewrap); the key never enters `process.env`; only a regular file, owned by the user, mode 0600, no link; the redactor knows the key. See [setup.md](lld/setup.md). |
 
 ## 6. Data stores
 
@@ -241,8 +241,8 @@ All state is in files. There is no server and no database.
 | `~/.garuda/mcp.json`, `hooks.json` | User | Trusted MCP servers and hooks. |
 | `~/.garuda/trust.json` | Garuda | Consent hashes for project MCP servers, hooks, slash commands, skills and agents, the network list and the project settings that loosen safety; tool-list hashes. 0600. |
 | `~/.garuda/search.json` | User | The web search backend (Brave, Tavily, SearXNG); keys come from environment variables. A `claude` section turns on Claude's search (0.6). |
-| `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. 0.16, planned: an optional `"default"` model, which `garuda setup` writes. |
-| `~/.garuda/credentials` (0.16, planned) | Garuda (`garuda setup`) | Provider keys by key name (JSON). 0600 in `~/.garuda` (0700). An environment variable wins. Commands in the sandbox cannot read it. |
+| `~/.garuda/models.json` | User | Model providers (base URL, API key variable) and per-model context window, price, max tokens. 0.16: an optional `"default"` model (`garuda setup` writes it, planned). |
+| `~/.garuda/credentials` (0.16) | Garuda (`garuda setup`, planned) | Provider keys by key name (JSON). 0600 in `~/.garuda` (0700). An environment variable wins. Commands in the sandbox cannot read it. |
 | `~/.garuda/mcp-auth.json` | Garuda | OAuth clients and tokens of remote MCP servers. 0600. |
 | `~/.garuda/snapshots/<hash of root>/` | Garuda | Undo snapshots: a git folder per project (0700). |
 | `~/.garuda/lsp.json`, `~/.garuda/lsp/<language>/` | User, Garuda | `autoInstall`; the managed language servers (npm, pinned versions). |
@@ -260,7 +260,7 @@ All state is in files. There is no server and no database.
 | Approvals in the sandbox | Commands in the sandbox need no approval | The sandbox is the control; approvals stay for escapes and writes. |
 | Code index | Off for the model by default | An A/B test with 3 runs per task showed no gain in steps or cost. The index stays for the user (`/where`, `/refs`, `/map`). |
 | MCP | stdio in the sandbox (0.2); Streamable HTTP with OAuth (0.4, SDK flow, tokens in `~/.garuda/mcp-auth.json`); consent for project servers | Local servers are contained by the sandbox. A remote server cannot be: consent pinned to its URL, public addresses only for project servers, and every call still asks. |
-| Stored keys (0.16, planned) | `~/.garuda/credentials` (0600) from `garuda setup`; the OS keychain later | Editors started from the Dock and the ACP Registry give no environment. The file works on macOS and every Linux, and the sandbox can hide it with a tested rule. A sandboxed command could read a keychain item back (`security`, `secret-tool`), so a keychain needs new sandbox rules first. Windows stays unsupported (WSL works). |
+| Stored keys (0.16) | `~/.garuda/credentials` (0600) from `garuda setup`; the OS keychain later | Editors started from the Dock and the ACP Registry give no environment. The file works on macOS and every Linux, and the sandbox can hide it with a tested rule. A sandboxed command could read a keychain item back (`security`, `secret-tool`), so a keychain needs new sandbox rules first. Windows stays unsupported (WSL works). |
 | Hooks | Block only; fail closed | A hook must never approve or let a call through by accident. |
 | Chat UI | Ink, loaded only for a chat on a terminal | Rich UI without slowing `-p`, pipes and evals. |
 | Sessions | JSONL files behind `SessionStore` | Simple, readable, append-only; replaceable later. |

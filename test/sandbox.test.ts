@@ -262,6 +262,19 @@ describe.runIf(osExecutor !== undefined)("OS sandbox on this machine", () => {
     expect(open.stdout.text).toContain("skill text");
   });
 
+  it("a command cannot read ~/.garuda/credentials; ~/.garuda/skills stays readable (0.16)", async () => {
+    // The real default list, for a home folder of this test (never the user's).
+    const home = join(base, "home");
+    mkdirSync(join(home, ".garuda", "skills"), { recursive: true });
+    writeFileSync(join(home, ".garuda", "credentials"), '{"ANTHROPIC_API_KEY":"sk-ant-hidden-1"}');
+    writeFileSync(join(home, ".garuda", "skills", "SKILL.md"), "skill text\n");
+    const policy = sandboxed({ denyReadPaths: sandboxPaths(root, {}, home).denyReadPaths });
+    const hidden = await executor.run(`cat "${home}/.garuda/credentials"`, policy);
+    expect(hidden.stdout.text).not.toContain("sk-ant-hidden-1");
+    const open = await executor.run(`cat "${home}/.garuda/skills/SKILL.md"`, policy);
+    expect(open.stdout.text).toContain("skill text");
+  });
+
   it("has no network", async () => {
     const r = await executor.run(
       `node -e "require('net').connect(53, '1.1.1.1').on('connect', () => process.exit(0)).on('error', (e) => { console.log(e.code); process.exit(1); })"`,

@@ -3,8 +3,10 @@ import { Readable } from "node:stream";
 import { Runtime } from "../app/runtime.js";
 import { auditDirFor } from "../audit/logger.js";
 import {
-  keepProviderKey,
+  chooseModel,
+  keepProviderKeys,
   loadModelsConfig,
+  NO_MODEL,
   type ResolvedModel,
   resolveModel,
 } from "../model/providers.js";
@@ -71,6 +73,8 @@ interface Setup {
   models: Awaited<ReturnType<typeof loadModelsConfig>>["config"];
   team?: { policy: NonNullable<Runtime["teamPolicy"]>; sources: string[] };
   search: Awaited<ReturnType<typeof loadSearchConfig>>;
+  /** ~/.garuda/credentials was ignored (0.16): the reason, for the first session's notices. */
+  credentialsWarning?: string;
 }
 
 /**
@@ -78,10 +82,10 @@ interface Setup {
  * message of `session/new`, so the editor shows it (the process itself keeps running).
  */
 async function prepare(options: { model?: string }): Promise<Setup | string> {
-  const spec = options.model ?? process.env.GARUDA_MODEL;
-  if (!spec) return "Set a model with --model <id> or the GARUDA_MODEL variable.";
   const models = await loadModelsConfig();
   if (models.problem !== undefined) return models.problem;
+  const spec = chooseModel(models.config, options.model, process.env.GARUDA_MODEL);
+  if (!spec) return NO_MODEL;
   let resolved: ResolvedModel;
   let sub: ResolvedModel | undefined;
   try {
@@ -93,10 +97,14 @@ async function prepare(options: { model?: string }): Promise<Setup | string> {
   }
   // Web search reads its keys before the model keys leave the environment.
   const search = await loadSearchConfig();
-  // The provider keys leave Garuda's own environment (0.14, review), as in the terminal.
-  for (const name of [resolved.def.apiKeyEnv, sub?.def.apiKeyEnv, "ANTHROPIC_API_KEY"]) {
-    if (name !== undefined) keepProviderKey(name);
-  }
+  // The provider keys leave Garuda's own environment (0.14, review), as in the terminal; stored
+  // keys fill the rest (0.16).
+  const credentialsWarning = await keepProviderKeys([
+    resolved.def.apiKeyEnv,
+    sub?.def.apiKeyEnv,
+    "ANTHROPIC_API_KEY",
+  ]);
+  if (credentialsWarning !== undefined) process.stderr.write(`garuda acp: ${credentialsWarning}\n`);
   const { loadTeamPolicy } = await import("../permissions/policy.js");
   let team: Awaited<ReturnType<typeof loadTeamPolicy>>;
   try {
@@ -110,6 +118,7 @@ async function prepare(options: { model?: string }): Promise<Setup | string> {
     models: models.config,
     ...(team === undefined ? {} : { team: { policy: team.policy, sources: team.sources } }),
     search,
+    ...(credentialsWarning === undefined ? {} : { credentialsWarning }),
   };
 }
 
@@ -172,5 +181,8 @@ function createRuntime(
     },
     ...(input.onEvent === undefined ? {} : { onEvent: input.onEvent }),
     onNotice: input.onNotice,
+  }).then((runtime) => {
+    if (setup.credentialsWarning !== undefined) input.onNotice(setup.credentialsWarning);
+    return runtime;
   });
 }

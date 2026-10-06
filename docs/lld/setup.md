@@ -1,6 +1,7 @@
 # Setup and stored keys (`garuda setup`, 0.16, planned)
 
-Status: design. Nothing in this document is built yet. The plan is at the end.
+Status: in progress. Built: patch 2 (reading the credentials file, the sandbox rule, the default
+model). Planned: the rest. The plan is at the end.
 
 ## Purpose
 
@@ -52,6 +53,12 @@ loaded:
 3. The key goes into the same in-process store as `keepProviderKey` (0.14): it never enters
    `process.env`, so no command and no `/proc/<pid>/environ` can see it, and the redactor knows it
    (`keepSecretForRedaction`), so a session file cannot hold it.
+
+Built as `readCredentials` (`src/model/credentials.ts`) and `keepProviderKeys` (`providers.ts`).
+Garuda keeps every stored key, not only the current model's, so `/model` can switch to another
+stored provider. The redactor knows each stored key whatever its name (a custom `apiKeyEnv` need not
+look secret). The file is opened with `O_NOFOLLOW` and checked on the open file (`fstat`), so it
+cannot change between the check and the read. A file larger than 64 KiB is ignored.
 
 A project cannot add or change a stored key: only `garuda setup` writes the file, and only providers
 from `~/.garuda/models.json` (never from the project) can name a key (0.14 rule, unchanged).
@@ -144,7 +151,7 @@ All with a temporary home, never the user's:
 | Patch | Content |
 | --- | --- |
 | 1 | This design; the architecture (data stores, N6 exception, trust boundary, decision) and the HLD (`garuda setup`). |
-| 2 | The credentials file: reading, checks, the in-process store, `DENY_READ_IN_HOME`, the default model in `models.json`. Tests, including the sandbox on macOS and Linux. |
+| 2 (built) | The credentials file: reading, checks, the in-process store, `DENY_READ_IN_HOME`, the default model in `models.json`. Tests, including the sandbox on macOS and Linux. |
 | 3 | `garuda setup` (`--show`, `--forget`). Tests. |
 | 4 | ACP: Terminal Auth, "auth required", setup read per session, the Windows message. Tests. |
 | 5 | Docs (user guide, Editors page, README) and a live test in Zed: an agent entry with no `env`, the setup from the editor, then a chat. |

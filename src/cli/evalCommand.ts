@@ -21,7 +21,14 @@ import {
   DEFAULT_CODE_INDEX_MODE,
 } from "../knowledge/mode.js";
 import { detectProfiles } from "../lang/profiles.js";
-import { loadModelsConfig, type ResolvedModel, resolveModel } from "../model/providers.js";
+import {
+  chooseModel,
+  keepProviderKeys,
+  loadModelsConfig,
+  NO_MODEL,
+  type ResolvedModel,
+  resolveModel,
+} from "../model/providers.js";
 import { expandAllowlist } from "../net/allowlist.js";
 import { HostExecutor } from "../sandbox/host.js";
 import { createExecutor, EXECUTOR_NAMES, type ExecutorName } from "../sandbox/index.js";
@@ -100,14 +107,14 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     return 0;
   }
   if (options.prepare !== undefined) return prepare(options.prepare);
-  const modelId = options.model;
-  if (!modelId) {
-    process.stderr.write("Set a model with --model <id> or the GARUDA_MODEL variable.\n");
-    return 1;
-  }
   const models = await loadModelsConfig();
   if (models.problem !== undefined) {
     process.stderr.write(`${models.problem}\n`);
+    return 1;
+  }
+  const modelId = chooseModel(models.config, options.model);
+  if (!modelId) {
+    process.stderr.write(`${NO_MODEL}\n`);
     return 1;
   }
   let resolved: ResolvedModel;
@@ -216,6 +223,13 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     process.stderr.write(`Team policy: ${(error as Error).message}\n`);
     return 1;
   }
+  // As in the chat: the provider keys leave the environment, stored keys fill the rest (0.16).
+  const credentialsWarning = await keepProviderKeys([
+    resolved.def.apiKeyEnv,
+    sub?.def.apiKeyEnv,
+    "ANTHROPIC_API_KEY",
+  ]);
+  if (credentialsWarning !== undefined) process.stderr.write(`${credentialsWarning}\n`);
   const suite = options.suite ?? "basic";
   const suiteTasks =
     suite === "all" ? ALL_TASKS : suite === "repo" ? repoTasks : EVAL_SUITES[suite];
