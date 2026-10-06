@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.1 (unreleased)
+
+- `garuda acp` offers its sign-in (Terminal Auth) also to clients that declare the capability in
+  its older form, `_meta["terminal-auth"]`. The ACP Registry's checker sends only that form, so
+  0.16.0 answered it with no sign-in method and failed the registry's auth check.
+
 ## 0.16.0 (2026-10-06)
 
 Setup for editors and the ACP Registry (design: [docs/lld/setup.md](docs/lld/setup.md)).

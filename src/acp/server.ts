@@ -59,6 +59,19 @@ const INTERNAL_ERROR = -32603;
 /** The id of Garuda's Terminal Auth method (`garuda acp setup`). */
 export const SETUP_METHOD_ID = "garuda-setup";
 
+/**
+ * The client can run Terminal Auth: `auth.terminal` (the spec), or the older form of the same
+ * capability, `_meta["terminal-auth"]`, which Zed also sends and the ACP Registry's checker sends
+ * alone (0.16.1).
+ */
+export function canRunTerminalAuth(
+  capabilities:
+    | { auth?: { terminal?: boolean }; _meta?: { [key: string]: unknown } | null }
+    | undefined,
+): boolean {
+  return capabilities?.auth?.terminal === true || capabilities?._meta?.["terminal-auth"] === true;
+}
+
 /** An error for `createRuntime`: the setup is missing (no model, or no key for its provider). */
 export function setupNeeded(message: string): Error {
   return Object.assign(new Error(message), { authRequired: true as const });
@@ -123,7 +136,7 @@ export function acpServer(options: AcpServerOptions): AcpServer {
         },
         // Terminal Auth (0.16) only for an editor that can run it (the spec: never offer it else).
         authMethods:
-          options.terminalAuth !== undefined && c.params.clientCapabilities?.auth?.terminal === true
+          options.terminalAuth !== undefined && canRunTerminalAuth(c.params.clientCapabilities)
             ? [
                 {
                   type: "terminal",

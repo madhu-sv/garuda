@@ -95,8 +95,10 @@ The answer to `initialize`:
 }
 ```
 
-- `authMethods` (0.16): when the editor's `clientCapabilities.auth.terminal` is true (and not on
-  native Windows), one Terminal Auth method: `{ "type": "terminal", "id": "garuda-setup", "name":
+- `authMethods` (0.16): when the editor can run Terminal Auth (and not on native Windows), one
+  Terminal Auth method. "Can run" means `clientCapabilities.auth.terminal` is true, or (0.16.1) the
+  older form of the same capability, `clientCapabilities._meta["terminal-auth"]` is true: Zed sends
+  both, and the ACP Registry's checker sends only the older one. The method: `{ "type": "terminal", "id": "garuda-setup", "name":
   "Set up Garuda", "description": "Choose a model and enter its API key.", "args": ["setup"] }`. The
   editor runs `garuda acp setup` in a terminal; exit code 0 means done. Else the list is empty.
 - `authenticate` answers `{}` (a terminal method is never sent there).
