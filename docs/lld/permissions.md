@@ -23,7 +23,7 @@ type PermissionDecision =
   | { allowed: false; by: "rule" | "sensitive" | "user" | "unattended" | "policy"; reason };
 
 interface Approver { ask(request: ApprovalRequest, signal): Promise<"once" | "session" | "deny"> }
-interface ApprovalRequest { tool; target; preview; isolation; title?; question?; choices?; labels?; selectHunks?; callId? }
+interface ApprovalRequest { tool; target; preview; isolation; title?; question?; choices?; labels?; selectHunks?; callId?; change? }
 ```
 
 `question` replaces "Allow?" above the choices; `choices` shows a subset (for example yes or no, with no
@@ -33,6 +33,11 @@ interface ApprovalRequest { tool; target; preview; isolation; title?; question?;
 and the engine copies it into the `ApprovalRequest`. Read-only calls run in parallel, so a front end
 that shows each question next to its tool call (ACP, [acp.md](acp.md)) needs it. Questions that are
 not about a tool call (consents, an `@path` attachment) have none.
+
+`change` (0.15) is the whole change of a file write: `{ path (absolute), oldText (null for a new
+file), newText }`. `write_file` and `edit_file` set it in `CallInfo.change` from their `describe()`,
+the same text as the preview; the engine copies it into the question. The terminal shows the
+preview; ACP sends both texts as the editor's diff view.
 
 Approvers: `TerminalApprover` (inquirer), `ChatStore` (Ink), `AutoApprover` (tests, evals),
 `SwitchApprover` (swaps to the Ink chat when it starts).

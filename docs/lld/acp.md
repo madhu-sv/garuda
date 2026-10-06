@@ -1,7 +1,7 @@
-# Editors over ACP (`src/acp/`, 0.15, planned)
+# Editors over ACP (`src/acp/`, 0.15)
 
-Status: design. The core change (patch 2: `callId` in approval questions) is built; the rest is not
-yet. The plan and the scope of the first iteration are at the end.
+Status: built on the `acp` branch (patches 0161, 0162), not released yet. The live test in an editor
+and the user guide are next. The plan and the scope of the first iteration are at the end.
 
 ## Purpose
 
@@ -29,28 +29,31 @@ shows and answers; it never runs a command or writes a file for Garuda.
 
 | File | Role |
 | --- | --- |
-| `src/cli/acpCommand.ts` | The `garuda acp` command: model and policy setup (as for the chat), stdout guard, start the server. |
+| `src/cli/acpCommand.ts` | The `garuda acp` command: model and policy setup (as for the chat), the stdout guard `protocolOutput`, start the server, shutdown on SIGTERM and exit. |
 | `src/acp/server.ts` | The ACP agent: `initialize`, `session/new`, `session/prompt`, `session/cancel`, `session/set_mode`. One `Runtime` per ACP session. |
 | `src/acp/approver.ts` | `AcpApprover`: an `Approver` that asks with `session/request_permission`. |
-| `src/acp/updates.ts` | Maps `AgentEvent`s to `session/update` notifications (text, thoughts, tool calls). |
+| `src/acp/updates.ts` | `SessionChannel` (the session's updates, in order, only while a prompt runs), `KnownCalls` (the tool calls the editor knows) and `EventMapper` (`AgentEvent` → `session/update`). |
 | `src/acp/prompt.ts` | Turns the editor's content blocks into Garuda's prompt text. |
-| `src/acp/toolCalls.ts` | Title, kind, locations and diff content of a tool call. |
+| `src/acp/toolCalls.ts` | Title, kind and locations of a tool call; `oneLine` for titles. |
+| `src/cli/approver.ts` | `headerText` and `HIDDEN_WARNING`: the question's plain header and the hidden-character line, shared by the terminal and ACP. |
 
 ## Process and stdout
 
 The editor starts `garuda acp` in the project folder (or another folder; `session/new` gives the
 working root). Stdout carries only protocol messages: one JSON object per line.
 
-- Before anything else, the command keeps the real stdout for the protocol and redirects
-  `process.stdout.write` to stderr. A notice, a warning or a library that prints to stdout then
-  goes to stderr and cannot break the protocol stream. Editors show stderr in their logs.
+- Before anything else, `protocolOutput(stdout, stderr)` keeps the real stdout for the protocol and
+  redirects `process.stdout.write` to stderr, with all its arguments. A notice, a warning or a
+  library that prints to stdout then goes to stderr and cannot break the protocol stream. Editors
+  show stderr in their logs.
 - The model comes from `--model` or `GARUDA_MODEL`, the providers from `~/.garuda/models.json`, the
   keys from the environment: the same rules as the terminal. The editor's agent settings pass the
   environment (for example `ANTHROPIC_API_KEY`).
 - The provider keys leave Garuda's environment at startup (`keepProviderKey`), as in the terminal.
 - The team policy loads from the managed file and `~/.garuda/policy.json`, never from the project.
 - When stdin closes (the editor stops the agent), every runtime closes and every executor shuts
-  down, so no command keeps running.
+  down, so no command keeps running. On SIGTERM, and in the exit handler, every executor shuts down
+  at once.
 
 ## Sessions
 
@@ -166,14 +169,16 @@ editor can follow the agent.
 - **Which tool call.** Read-only calls run in parallel (F8), so "the last tool call" is not a safe
   guess. A small core change passes the tool call id: the registry gives `callId` in the
   `PermissionRequest`, and the engine puts it in the `ApprovalRequest`. The question then names the
-  right `toolCallId`. A question that is not about a tool call (an MCP server consent, a hook
-  consent, the network allowlist, a skill or agent consent) gets its own `toolCallId` with kind
+  right `toolCallId`. A question that is not about a tool call the editor knows (an MCP server
+  consent, a hook consent, the network allowlist, a skill or command consent, or a call inside a
+  subagent) gets its own entry first: a `tool_call` with `toolCallId: garuda-question-<n>` and kind
   `other`.
 - **The question.** `toolCall.title` is the request's title (or the tool call's title).
   `toolCall.content` is the preview as text. For `write_file` and `edit_file`, the content is also an
-  ACP `diff` (`path`, `oldText`, `newText`), so the editor shows its own diff view: `newText` comes
-  from the tool input (the new content, or the replacement applied to the current file). If that
-  fails, only the text preview is sent.
+  ACP `diff` (`path`, `oldText`, `newText`), so the editor shows its own diff view. The texts come
+  from the tool itself: `describe()` of `write_file` and `edit_file` sets `CallInfo.change`, the
+  same text that the preview shows, and the engine passes it in the `ApprovalRequest`. Above 1 MB
+  (old and new together), only the text preview is sent.
 - **Hidden characters.** The preview goes through `visible()`, and `hasHidden()` adds the warning
   line, as in the terminal (0.14.1 high finding). An editor must not show a command that looks like
   another one.
@@ -218,7 +223,13 @@ Garuda's agent modes become ACP session modes:
 ## Commands
 
 After `session/new`, Garuda sends `available_commands_update` with its custom commands and skills
-(name, description, argument hint). The editor shows them when the user types `/`.
+(name, description, argument hint). The editor shows them when the user types `/`. The update goes
+out just after the response, through the connection's client (from `onConnect`): a request's own
+handle closes when its response is sent.
+
+Lines from Garuda (notices) are `agent_message_chunk`s that start with "Garuda:". A notice from
+`session/new` (no sandbox, ignored project settings, editor MCP servers) waits for the first
+prompt, because an update needs a running prompt in this design.
 
 ## What Garuda does not give to the editor
 
@@ -246,34 +257,61 @@ After `session/new`, Garuda sends `available_commands_update` with its custom co
 
 The audit log records the same events as in the terminal.
 
-## Tests (planned)
+## Tests
 
-All tests run in one process with the SDK's client side over paired streams and Garuda's
-`FakeModelClient`, with temporary homes and roots (no network, no API key):
+`test/acp.test.ts` connects the SDK's client to the server in one process, with Garuda's
+`FakeModelClient`, a temporary root and a temporary home (no network, no API key, never the user's
+`~/.garuda`):
 
 - `initialize`: protocol version 1 and the capabilities above.
-- `session/new` with a relative `cwd` fails; with no model it fails with the terminal's message.
+- `session/new` with a relative `cwd` fails; a setup problem (no model) is the error message.
 - A prompt streams `agent_message_chunk`s and returns `end_turn`.
-- A tool call: `tool_call` then `tool_call_update` with `completed`; titles and kinds.
-- An edit asks with `session/request_permission` for the right `toolCallId`, with a `diff`; `once`
-  writes the file; `deny` does not, and the call ends `failed`.
-- Two parallel read-only calls that both ask (two `web_fetch`) get questions with their own ids.
-- `session` (allow_always) answers the next same call with no question.
-- A preview with a carriage return or an escape sequence arrives with visible characters and the
-  warning line.
-- `session/cancel` during a question and during a command: `cancelled`, no file written, the
-  command is gone, and the next prompt works.
+- A tool call: `tool_call` (title, kind, location) then `tool_call_update` `completed`.
+- An edit asks for its own `toolCallId`, with the three options, the ACP `diff`, and visible hidden
+  characters with the warning line; "once" writes the file.
+- "Deny": no file, the call ends `failed`, and the model hears the denial.
+- A `cancelled` answer or an unknown option is a deny.
+- "Allow for this session": the next call of the tool asks no question.
+- `session/cancel` during a question (nothing written, the next prompt works) and during a command
+  (`cancelled`, the process is gone).
 - A second prompt while one runs gets an error.
-- `session/set_mode` to `plan`: an edit is denied.
-- `resource_link` to a file in the root attaches it; one outside the root does not.
-- `/name` runs a custom command.
-- Process test: `node dist/cli/index.js acp` with a notice-producing setup writes only JSON-RPC lines
-  on stdout.
+- Plan mode: an edit is denied with no question.
+- A file link in the root is attached with `@path`; one outside the root stays text; embedded
+  context goes into the prompt.
+- `/name` runs a custom command; `/diff` does not reach the model; the `/` menu lists the command.
+- A consent that is not a tool call gets its own entry; editor MCP servers get a notice.
+- A model error and an unknown session are errors.
+- The stdout guard: other writes go to stderr (also with an encoding argument); the protocol stream
+  writes to the real stdout.
 
-Each fix-like rule (the stdout guard, the call id, visible characters) gets a test that fails
-without it.
+`test/approvalCallId.test.ts` checks the call id of parallel questions and the `change` of
+`edit_file` and `write_file`; `test/architecture.test.ts` checks rule 7. Each rule was checked with
+a negative control: without it, its test fails.
+
+A process test is not in the suite (the suite runs before the build). It was run by hand: `node
+dist/cli/index.js acp`, driven over stdio, wrote only JSON-RPC lines on stdout and exited with 0
+when stdin closed.
 
 ## Editor setup (for the user guide)
+
+VS Code has no ACP client of its own. The extension "ACP Client" (`formulahendry.acp-client`) adds
+one; in VS Code's `settings.json`:
+
+```json
+{
+  "acp.agents": {
+    "Garuda": {
+      "command": "garuda",
+      "args": ["acp"],
+      "env": { "GARUDA_MODEL": "claude-sonnet-5", "ANTHROPIC_API_KEY": "…" }
+    }
+  }
+}
+```
+
+Keep the extension's auto-approve off: it answers Garuda's questions for the user. The sandbox and
+the team policy still apply, but the question for an edit or a command outside the sandbox does not
+reach the user.
 
 Zed, in `settings.json`:
 
@@ -326,8 +364,8 @@ Never (by design): commands through the editor's terminal, writes through the ed
 
 | Patch | Content | Check |
 | --- | --- | --- |
-| 1 | This design document. | Review. |
-| 2 | Core: `callId` from the registry through `PermissionRequest` to `ApprovalRequest`. No change of behaviour. | A test that the approver gets the id of each parallel call. |
-| 3 | `src/acp/` and `garuda acp`: server, approver, updates, prompt, tool calls; the SDK dependency. | The tests above. |
-| 4 | Docs: user guide (editor setup), README, site, architecture (a new front end and its trust boundary), CHANGELOG. | Live test in Zed on macOS: chat, an edit with the diff view, a denied command, cancel, plan mode. |
+| 1 (0159, 0160) | This design document; ACP in the architecture and the HLD. | Review. Done. |
+| 2 (0161) | Core: `callId` from the registry through `PermissionRequest` to `ApprovalRequest`. No change of behaviour. | A test that the approver gets the id of each parallel call. Done. |
+| 3 (0162) | `src/acp/` and `garuda acp`: server, approver, updates, prompt, tool calls; `CallInfo.change`; the SDK dependency. | The tests above. Done. |
+| 4 | Docs: user guide (editor setup), site, CHANGELOG. | Live test in VS Code (ACP Client) on macOS: chat, an edit with the diff view, a denied command, cancel, plan mode. |
 | 5 | Release 0.15.0. | `pnpm check`, CI, the release workflow. |

@@ -97,4 +97,30 @@ describe("architecture rules", () => {
     );
     expect(offenders).toEqual([]);
   });
+
+  it("only src/acp imports the ACP SDK, and only `garuda acp` loads src/acp, with import() (rule 7)", () => {
+    const acp = join(SRC, "acp");
+    const sdkUsers = sourceFiles(SRC).filter(
+      (file) =>
+        !file.startsWith(acp) &&
+        imports(file).some((spec) => spec.startsWith("@agentclientprotocol/")),
+    );
+    expect(sdkUsers).toEqual([]);
+    // Static imports of src/acp from outside it: none (acpCommand loads it with import()).
+    const loaders = sourceFiles(SRC).filter(
+      (file) => !file.startsWith(acp) && valueImports(file).some((spec) => /\/acp\//.test(spec)),
+    );
+    expect(loaders).toEqual([]);
+    // The CLI loads the command itself with import() too, so other commands start as before (N3).
+    expect(valueImports(join(SRC, "cli", "index.ts")).filter((s) => /acpCommand/.test(s))).toEqual(
+      [],
+    );
+  });
+
+  it("src/acp never writes to stdout: only the SDK writes protocol messages (rule 7)", () => {
+    const offenders = sourceFiles(join(SRC, "acp")).filter((file) =>
+      /process\.stdout|console\.(log|info|debug)\(/.test(readFileSync(file, "utf8")),
+    );
+    expect(offenders).toEqual([]);
+  });
 });

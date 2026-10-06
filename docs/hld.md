@@ -15,7 +15,7 @@ Version 0.14.1 (the 0.14–0.17 branches after the merge gate and Garuda's own r
 | `garuda eval` | Run eval tasks in scratch folders; `--parallel n`, `--batch on` (0.7) for the Batch API. | A table and `report.json`. |
 | `garuda run <job> [--at HH:MM] [-m model]` | Run a scheduled job (0.7): its plan, unattended, in its own worktree and branch. | The run's lines, then the job report (also in `.garuda/jobs/<id>.md`). |
 | `garuda night [--at HH:MM] [--parallel n]` | Run the project's night queue (0.11), up to 3 jobs at a time. | One line per job; the digest (also in `.garuda/jobs/night-<date>.md`). |
-| `garuda acp` (0.15, planned) | Garuda as an agent for an editor over the Agent Client Protocol (VS Code with an extension, Zed, JetBrains, Neovim, Emacs). The editor starts it. | JSON-RPC on stdout for the editor; logs and notices on stderr. |
+| `garuda acp` (0.15) | Garuda as an agent for an editor over the Agent Client Protocol (VS Code with an extension, Zed, JetBrains, Neovim, Emacs). The editor starts it. | JSON-RPC on stdout for the editor; logs and notices on stderr. |
 | `garuda eval -s java` / `--prepare java` | Check the toolchain, then run the Java (or Python) suite; `--prepare` fills `~/.m2` once. | A hint when a toolchain is missing; otherwise the same report. |
 | `garuda eval --from-git` / `-s repo` (0.12) | Turn recent commits (code + tests, tests fail at the parent and pass at the commit) into tasks in `.garuda/evals/repo-suite.json`; run them in git worktrees at the parent. | The kept count and skip reasons; then the same report. |
 
@@ -417,7 +417,7 @@ task ends, and stays quiet while the window has focus (terminal focus reporting)
 Custom slash commands (0.4) are Markdown prompts in `~/.garuda/commands` and `.garuda/commands`. A project
 command shows its text and asks the first time, like project hooks. See [commands.md](lld/commands.md).
 
-### Editors over ACP (0.15, planned)
+### Editors over ACP (0.15)
 
 `garuda acp` is a second front end on the same runtime. The editor starts it, and each editor
 session gets its own runtime: the permission engine, the sandbox, the policy and the audit log are

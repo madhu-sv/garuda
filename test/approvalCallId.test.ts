@@ -1,11 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { runTools } from "../src/loop/toolRunner.js";
 import type { ToolUseBlock } from "../src/model/types.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../src/permissions/types.js";
+import { FileTracker } from "../src/session/fileTracker.js";
+import { editFileTool } from "../src/tools/editFile.js";
 import { ToolRegistry } from "../src/tools/registry.js";
 import type { Tool } from "../src/tools/types.js";
+import { writeFileTool } from "../src/tools/writeFile.js";
 import { toolContext } from "./helpers.js";
 
 /**
@@ -70,5 +76,48 @@ describe("approval questions name their tool call (0.15)", () => {
         { callId: "call_b", target: "b.txt" },
       ]),
     );
+  });
+});
+
+describe("approval questions carry the whole file change (0.15)", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "garuda-change-")));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  it("edit_file gives the text before and after; write_file gives no old text", async () => {
+    const asked: ApprovalRequest[] = [];
+    const approver: Approver = {
+      ask: async (request) => {
+        asked.push(request);
+        return "deny";
+      },
+    };
+    const permissions = new PermissionEngine({ root, approver });
+    const files = new FileTracker();
+    writeFileSync(join(root, "a.txt"), "one\ntwo\n");
+    files.record(join(root, "a.txt"), "one\ntwo\n");
+    const tools = new ToolRegistry([editFileTool, writeFileTool]);
+    const context = toolContext(root, { permissions, files });
+    await tools.execute(
+      {
+        type: "tool_use",
+        id: "e1",
+        name: "edit_file",
+        input: { path: "a.txt", old_string: "two", new_string: "2" },
+      },
+      context,
+    );
+    await tools.execute(
+      {
+        type: "tool_use",
+        id: "w1",
+        name: "write_file",
+        input: { path: "b.txt", content: "new\n" },
+      },
+      context,
+    );
+    expect(asked.map((r) => r.change)).toEqual([
+      { path: join(root, "a.txt"), oldText: "one\ntwo\n", newText: "one\n2\n" },
+      { path: join(root, "b.txt"), oldText: null, newText: "new\n" },
+    ]);
   });
 });

@@ -34,6 +34,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.15: multi-language AST code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done (0.14.0) |
 | 0.16: language plugins (Go and Rust built in, user plugins in ~/.garuda/languages, /languages; project plugins not loaded) | Done (0.14.0) |
 | 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | Done (0.14.0) |
+| 0.15: editors over the Agent Client Protocol (`garuda acp`: VS Code with an extension, Zed, JetBrains, Neovim, Emacs) | Built, not released (branch `acp`) |
 
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
@@ -243,6 +244,39 @@ Set the context window, price and output limit per model, and add providers, in 
 - `garuda --resume` continues the latest session in chat mode.
 
 Model text goes to stdout; tool activity and notes go to stderr. So `garuda -p "…" > answer.md` keeps only the answer.
+
+## Editors (ACP, 0.15)
+
+`garuda acp` runs Garuda as an agent for editors that speak the Agent Client Protocol. The editor
+starts it, shows the conversation, the tool calls and the questions, and Garuda does the work with
+the same permission engine, OS sandbox, team policy, hooks and audit log as in the terminal.
+
+VS Code, with the extension "ACP Client" (`formulahendry.acp-client`), in `settings.json`:
+
+```json
+{
+  "acp.agents": {
+    "Garuda": {
+      "command": "garuda",
+      "args": ["acp"],
+      "env": { "GARUDA_MODEL": "claude-sonnet-5", "ANTHROPIC_API_KEY": "..." }
+    }
+  }
+}
+```
+
+Zed: the same command, argument and environment under `agent_servers` (with `"type": "custom"`).
+
+- Each edit asks in the editor, with the editor's diff view; "Allow for this session" lasts for this
+  session only. Keep an extension's auto-approve off: it answers Garuda's questions for you.
+- Build and plan modes are in the editor's mode menu; custom commands and skills are in its `/` menu.
+  Built-in chat commands (`/undo`, `/diff` ...) are only in the terminal in this version.
+- Garuda reads and writes files and runs commands itself; it does not use the editor's file or
+  terminal access, so it reads the saved file, not an unsaved buffer. It does not start MCP servers
+  that the editor sends (its own `~/.garuda/mcp.json` and the project's work as usual).
+- Project settings that loosen safety apply only after a yes in a terminal (`garuda` in that folder).
+
+Design: [docs/lld/acp.md](docs/lld/acp.md).
 
 ## Init: set up a folder
 

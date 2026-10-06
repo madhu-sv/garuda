@@ -105,10 +105,14 @@ export function hasHidden(text: string): boolean {
   return visible(text) !== text;
 }
 
-export function header(request: ApprovalRequest): string {
+/** The line under a preview with hidden characters (terminal and editors). */
+export const HIDDEN_WARNING =
+  "! This holds hidden or control characters, shown as ␍, ␛ or [U+…]. Read it with care.";
+
+/** The question's header as plain text, hidden characters made visible (terminal and editors). */
+export function headerText(request: ApprovalRequest): string {
   const { tool, target, isolation } = request;
-  const title = request.title === undefined ? undefined : visible(request.title);
-  if (title !== undefined) return styleText("bold", title);
+  if (request.title !== undefined) return visible(request.title);
   if (target.kind === "command") {
     const where =
       isolation === "none"
@@ -116,18 +120,19 @@ export function header(request: ApprovalRequest): string {
         : target.outsideSandbox
           ? "OUTSIDE the sandbox: network on, writes anywhere"
           : `sandbox: ${isolation}`;
-    return styleText("bold", `${tool} wants to run a command (${where}):`);
+    return `${tool} wants to run a command (${where}):`;
   }
-  if (target.kind === "input") return styleText("bold", `${tool} wants to run with this input:`);
-  if (target.kind === "url")
-    return styleText("bold", `${tool} wants to fetch from ${visible(target.host)}:`);
-  return styleText("bold", `${tool} wants to change ${visible(target.path)}:`);
+  if (target.kind === "input") return `${tool} wants to run with this input:`;
+  if (target.kind === "url") return `${tool} wants to fetch from ${visible(target.host)}:`;
+  return `${tool} wants to change ${visible(target.path)}:`;
+}
+
+export function header(request: ApprovalRequest): string {
+  return styleText("bold", headerText(request));
 }
 
 export function colorPreview({ target, preview }: ApprovalRequest): string {
-  const warning = hasHidden(preview)
-    ? `\n${styleText("yellow", "  ! This holds hidden or control characters, shown as ␍, ␛ or [U+…]. Read it with care.")}`
-    : "";
+  const warning = hasHidden(preview) ? `\n${styleText("yellow", `  ${HIDDEN_WARNING}`)}` : "";
   if (target.kind === "command") return `${styleText("cyan", `  $ ${visible(preview)}`)}${warning}`;
   if (target.kind === "url") return `${visible(preview)}${warning}`;
   return `${colorDiff(visible(preview))}${warning}`;

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.0 (not released)
+
+### Editors
+
+- `garuda acp`: Garuda as an agent for editors over the Agent Client Protocol (v1): VS Code (with
+  the "ACP Client" extension), Zed, JetBrains, Neovim, Emacs. One runtime per editor session, with
+  the same permission engine, OS sandbox, team policy, hooks and audit log as the terminal.
+- Approval questions name their tool call (`callId`), and file writes carry the whole change, so an
+  editor shows each question next to the right call, with its own diff view.
+
 ## 0.14.1 (2026-10)
 
 The first version on npm (`@garuda-agent/garuda`) and Homebrew (`madhu-sv/garuda/garuda`). It fixes

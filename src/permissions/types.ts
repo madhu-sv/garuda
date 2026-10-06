@@ -48,6 +48,18 @@ export interface CallInfo {
    * kill). The permission check then treats the call as a write: rules apply, plan mode refuses it.
    */
   mutates?: true;
+  /**
+   * The whole change of a file write (0.15): the absolute path, the text before (null for a new
+   * file) and after. The preview stays the diff that the terminal shows; a front end with its own
+   * diff view (ACP) shows this.
+   */
+  change?: FileChange;
+}
+
+export interface FileChange {
+  path: string;
+  oldText: string | null;
+  newText: string;
 }
 
 export interface PermissionRequest {
@@ -130,6 +142,8 @@ export interface ApprovalRequest {
   selectHunks?: (accepted: readonly number[]) => void;
   /** The id of the tool call that asks (0.15), from `PermissionRequest.callId`. */
   callId?: string;
+  /** The whole change of a file write (0.15), from `CallInfo.change`. */
+  change?: FileChange;
 }
 
 /** Asks the user. The CLI implements it with a prompt. Tests use AutoApprover. */
