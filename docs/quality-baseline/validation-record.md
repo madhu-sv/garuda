@@ -156,3 +156,9 @@ negative control (the test fails without the rule).
 Live tests on macOS (2026-10-06): `garuda setup` in a terminal with a temporary home (key check at
 Anthropic, file mode 0600, masked summary); Zed 1.22 with an agent entry that gave no model and no
 key: the sign-in ran `garuda acp setup` in a terminal, and the next thread worked with no restart.
+
+Release 0.16.1 (patches 0174–0175): the ACP Registry's auth check (`verify_agents.py --auth-check`,
+run on macOS against 0.16.0 from npm) failed with "No authMethods in response": its checker declares
+Terminal Auth only as `_meta["terminal-auth"]`. 0174 accepts that form. `pnpm check` on Linux (Node
+v22.22.2): 86 test files, 901 tests: 894 passed, 1 expected failure (G09) and 6 skipped. Over stdio
+with the checker's capabilities, `initialize` returned the `garuda-setup` method.

@@ -2,7 +2,7 @@
 
 Status: released in 0.16.0 (patches 0167–0172): reading the credentials file, the sandbox rule and
 the default model (0168), `garuda setup` (0169), Terminal Auth in `garuda acp` (0170), docs and the
-live test in Zed (0171). Planned: the ACP Registry and VS Code pull requests. The plan is at the end.
+live test in Zed (0171). 0.16.1 (0174, 0175): the older form of the Terminal Auth capability, for the ACP Registry's checker. Planned: the ACP Registry and VS Code pull requests. The plan is at the end.
 
 ## Purpose
 
