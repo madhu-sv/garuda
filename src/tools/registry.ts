@@ -114,7 +114,13 @@ export class ToolRegistry implements ToolRunner {
       // A read-only tool can mark one call as a change (CallInfo.mutates).
       const readOnly = tool.readOnly && info?.mutates !== true;
       const decision = await context.permissions.check(
-        info === undefined ? { tool: tool.name, readOnly } : { tool: tool.name, readOnly, info },
+        {
+          tool: tool.name,
+          readOnly,
+          ...(info === undefined ? {} : { info }),
+          // The question names this call (0.15: ACP shows it next to the right tool call).
+          callId: call.id,
+        },
         context.signal,
       );
       if (!decision.allowed) {
@@ -122,11 +128,13 @@ export class ToolRegistry implements ToolRunner {
       }
       startTime = Date.now();
       // Partial approval (U0): the tool must apply only the accepted hunks.
-      const runContext =
+      // The tool knows its call id (0.15: a web_fetch redirect asks again and names this call).
+      const runContext: ToolContext =
         decision.hunks === undefined
-          ? context
+          ? { ...context, callId: call.id }
           : {
               ...context,
+              callId: call.id,
               approvedHunks: decision.hunks,
               ...(info?.preview === undefined ? {} : { approvedPreview: info.preview }),
             };

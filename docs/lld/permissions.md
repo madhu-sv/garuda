@@ -15,7 +15,7 @@ type CallTarget =
   | { kind: "input"; json };                         // tools with no specific target
 
 interface PermissionGate {
-  check(request: { tool; readOnly; info?: { target; preview? } }, signal): Promise<PermissionDecision>;
+  check(request: { tool; readOnly; info?: { target; preview? }; callId? }, signal): Promise<PermissionDecision>;
   execPolicy(timeoutMs, { sandbox?, readOnlyRoot? }): ExecPolicy;
 }
 type PermissionDecision =
@@ -23,11 +23,16 @@ type PermissionDecision =
   | { allowed: false; by: "rule" | "sensitive" | "user" | "unattended" | "policy"; reason };
 
 interface Approver { ask(request: ApprovalRequest, signal): Promise<"once" | "session" | "deny"> }
-interface ApprovalRequest { tool; target; preview; isolation; title?; question?; choices?; labels? }
+interface ApprovalRequest { tool; target; preview; isolation; title?; question?; choices?; labels?; selectHunks?; callId? }
 ```
 
 `question` replaces "Allow?" above the choices; `choices` shows a subset (for example yes or no, with no
 "session" choice).
+
+`callId` (0.15) is the id of the tool call that asks. The registry puts it in the `PermissionRequest`,
+and the engine copies it into the `ApprovalRequest`. Read-only calls run in parallel, so a front end
+that shows each question next to its tool call (ACP, [acp.md](acp.md)) needs it. Questions that are
+not about a tool call (consents, an `@path` attachment) have none.
 
 Approvers: `TerminalApprover` (inquirer), `ChatStore` (Ink), `AutoApprover` (tests, evals),
 `SwitchApprover` (swaps to the Ink chat when it starts).

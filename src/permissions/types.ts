@@ -54,6 +54,12 @@ export interface PermissionRequest {
   tool: string;
   readOnly: boolean;
   info?: CallInfo;
+  /**
+   * The id of the tool call that asks (0.15). Read-only calls run in parallel, so a front end that
+   * shows questions next to tool calls (ACP) needs it to name the right call. Absent for checks
+   * that are not a tool call (an `@path` attachment).
+   */
+  callId?: string;
 }
 
 export type PermissionDecision =
@@ -122,6 +128,8 @@ export interface ApprovalRequest {
    * the whole change.
    */
   selectHunks?: (accepted: readonly number[]) => void;
+  /** The id of the tool call that asks (0.15), from `PermissionRequest.callId`. */
+  callId?: string;
 }
 
 /** Asks the user. The CLI implements it with a prompt. Tests use AutoApprover. */

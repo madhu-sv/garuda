@@ -1,7 +1,7 @@
 # Editors over ACP (`src/acp/`, 0.15, planned)
 
-Status: design. Nothing in this document is built yet. The plan and the scope of the first iteration
-are at the end.
+Status: design. The core change (patch 2: `callId` in approval questions) is built; the rest is not
+yet. The plan and the scope of the first iteration are at the end.
 
 ## Purpose
 
