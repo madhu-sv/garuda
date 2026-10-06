@@ -8,7 +8,24 @@ description: Use Garuda in VS Code, Zed and other editors over the Agent Client 
 the conversation, the tool calls and the questions. Garuda does the work with the same permission
 engine, OS sandbox, team policy, hooks and audit log as in the terminal.
 
-Available from version 0.15.
+Available from version 0.15. Sign-in from the editor (`garuda setup`): version 0.16.
+
+## First: the model and the key
+
+Run this once in a terminal:
+
+```sh
+garuda setup
+```
+
+It asks for the provider, the model and the key (the input is hidden), checks the key with one free
+request, and stores the model in `~/.garuda/models.json` and the key in `~/.garuda/credentials`.
+Only you can read that file, and commands in Garuda's sandbox cannot read it. Then the editor needs
+no API key in its settings.
+
+Zed (and other editors that support ACP's Terminal Auth) can also run the setup for you: see
+[Zed](#zed). Environment variables still work and win over the stored values: `GARUDA_MODEL`,
+`ANTHROPIC_API_KEY` and the other providers' key variables.
 
 ## VS Code
 
@@ -25,8 +42,7 @@ one.
    "acp.agents": {
      "Garuda": {
        "command": "/opt/homebrew/bin/garuda",
-       "args": ["acp"],
-       "env": { "GARUDA_MODEL": "claude-sonnet-5", "ANTHROPIC_API_KEY": "..." }
+       "args": ["acp"]
      }
    }
    ```
@@ -37,23 +53,12 @@ Keep the extension's auto-approve off. It answers Garuda's questions for you: th
 team policy still apply, but you no longer see the question for an edit or for a command outside
 the sandbox.
 
-### Keep the API key out of settings.json
+### Keys in the environment instead
 
-If you use Settings Sync, `settings.json` goes to your sync account. A small script keeps the key on
-your machine:
-
-```sh
-mkdir -p ~/bin && cat > ~/bin/garuda-acp <<'EOF'
-#!/bin/zsh
-source ~/.zshrc >/dev/null 2>&1   # loads ANTHROPIC_API_KEY and PATH
-export GARUDA_MODEL=claude-sonnet-5
-exec garuda acp
-EOF
-chmod +x ~/bin/garuda-acp
-```
-
-Then set `"command"` to the full path of `~/bin/garuda-acp`, `"args"` to `[]`, and leave out
-`"env"`.
+Without `garuda setup`, give the model and the key in the agent's `"env"`:
+`{ "GARUDA_MODEL": "claude-sonnet-5", "ANTHROPIC_API_KEY": "..." }`. If you use Settings Sync,
+`settings.json` then goes to your sync account with the key in it, so `garuda setup` is the better
+choice.
 
 ## Zed
 
@@ -65,15 +70,20 @@ In Zed's `settings.json`:
     "Garuda": {
       "type": "custom",
       "command": "/opt/homebrew/bin/garuda",
-      "args": ["acp"],
-      "env": { "GARUDA_MODEL": "claude-sonnet-5", "ANTHROPIC_API_KEY": "..." }
+      "args": ["acp"]
     }
   }
 }
 ```
 
+**Sign-in from Zed** (0.16): when Garuda has no model or no key, a new thread fails with
+"Authentication required", and Zed offers **Set up Garuda**. Zed then runs `garuda acp setup` in a
+terminal: answer the questions there. The next thread works; Zed need not restart Garuda. (Zed
+declares ACP's Terminal Auth; tested with Zed 1.22.)
+
 Other ACP editors (JetBrains IDEs, Neovim with CodeCompanion, Emacs with agent-shell) take the same
-three things: the command, the argument `acp`, and the environment.
+two things: the command and the argument `acp`. Editors that support Terminal Auth offer the same
+sign-in; in the others, run `garuda setup` in a terminal first.
 
 ## What you see
 
@@ -107,7 +117,11 @@ three things: the command, the argument `acp`, and the environment.
 ## When it does not start
 
 The editor shows Garuda's messages from stderr in its log (VS Code: View → Output, then the ACP
-Client channel). A missing model or key is the error of the new session, for example "Set a model
-with --model <id> or the GARUDA_MODEL variable."
+Client channel; Zed: `dev: open acp logs`). A missing model or key is the error of the new session:
+"Authentication required: Garuda has no model." or "… has no key for <model> (<NAME>)". Run
+`garuda setup` in a terminal (or use the editor's sign-in), then start a new session.
+`garuda setup --show` shows the model and where each key comes from.
+
+On native Windows, Garuda does not run: use WSL (Windows Subsystem for Linux).
 
 The design is in [Editors over ACP](/garuda/docs/design/lld/acp/).

@@ -260,11 +260,13 @@ Set the context window, price and output limit per model, and add providers, in 
 
 Model text goes to stdout; tool activity and notes go to stderr. So `garuda -p "…" > answer.md` keeps only the answer.
 
-## Editors (ACP, 0.15)
+## Editors (ACP, 0.15; sign-in 0.16)
 
 `garuda acp` runs Garuda as an agent for editors that speak the Agent Client Protocol. The editor
 starts it, shows the conversation, the tool calls and the questions, and Garuda does the work with
 the same permission engine, OS sandbox, team policy, hooks and audit log as in the terminal.
+
+Run `garuda setup` once in a terminal (see Use): then the editor needs no key in its settings.
 
 VS Code, with the extension "ACP Client" (`formulahendry.acp-client`), in the user settings
 (Cmd+Shift+P, **Preferences: Open User Settings (JSON)**). Use the full path from `which garuda`:
@@ -273,18 +275,16 @@ VS Code started from the Dock does not get your shell's `PATH`.
 ```json
 {
   "acp.agents": {
-    "Garuda": {
-      "command": "/opt/homebrew/bin/garuda",
-      "args": ["acp"],
-      "env": { "GARUDA_MODEL": "claude-sonnet-5", "ANTHROPIC_API_KEY": "..." }
-    }
+    "Garuda": { "command": "/opt/homebrew/bin/garuda", "args": ["acp"] }
   }
 }
 ```
 
-Zed: the same command, argument and environment under `agent_servers` (with `"type": "custom"`).
-The website's [Editors](https://madhu-sv.github.io/garuda/docs/editors/) page has the steps, a way
-to keep the API key out of `settings.json`, and what the editor shows.
+Zed: the same command and argument under `agent_servers` (with `"type": "custom"`). With no model
+or key, Zed offers **Set up Garuda** (ACP Terminal Auth, 0.16): it runs `garuda acp setup` in a
+terminal, and the next thread works. The website's
+[Editors](https://madhu-sv.github.io/garuda/docs/editors/) page has the steps and what the editor
+shows.
 
 - Each edit asks in the editor, with the editor's diff view; "Allow for this session" lasts for this
   session only. Keep an extension's auto-approve off: it answers Garuda's questions for you.

@@ -5,14 +5,24 @@ description: Your first session with Garuda.
 
 ## 1. Choose a model
 
-Set a key and a model. With Claude:
+Run the setup once:
+
+```sh
+garuda setup
+```
+
+Pick the provider (Claude, OpenRouter, or a local server such as Ollama) and the model, and paste
+the key (the input is hidden; a local model needs no key). Garuda checks the key with one free
+request, then stores the model as your default and the key in `~/.garuda/credentials`, which only
+you can read. `garuda setup --show` shows what is set.
+
+Environment variables work too, and win over the stored values:
 
 ```sh
 export ANTHROPIC_API_KEY=...
 export GARUDA_MODEL=claude-sonnet-5
 ```
 
-With a local model, no key is needed, for example `export GARUDA_MODEL=ollama/qwen3-coder:30b`.
 See [Models](/garuda/docs/guide/#models) for other providers.
 
 ## 2. Start a chat in your project

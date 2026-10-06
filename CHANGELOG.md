@@ -23,6 +23,9 @@ Setup for editors and the ACP Registry (design: [docs/lld/setup.md](docs/lld/set
   ACP's "auth required", so the editor offers the setup. The setup is read again for each new
   session: no restart after `garuda setup`.
 - Native Windows: `garuda acp` sessions and `garuda setup` stop with a message to use WSL.
+- Docs: `garuda setup` in the quick start, the landing page, the README and the Editors page; editor
+  entries need no API key in their settings. Tested live in Zed 1.22: with no model and no key, Zed
+  offered the setup, ran it in a terminal, and the next thread worked with no restart.
 - `-p --output-format stream-json`: `apiKeySource` in `system/init` is `credentials` for a stored
   Claude key.
 

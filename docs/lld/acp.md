@@ -331,7 +331,19 @@ text preview; the outside-sandbox question with its warning, denied, the call `f
 `session/set_mode` to `plan`, then a plan with no question. One finding: the stopped `sleep` call
 ended `completed`. Fixed in 0164: it ends `failed`, and a line says `$ sleep 60 cancelled.`
 
+Live test of Terminal Auth in Zed (0.16, 2026-10-06, macOS, Zed 1.22, Garuda from the
+`setup-design` branch; the agent entry with `"env": { "ANTHROPIC_API_KEY": "", "GARUDA_MODEL": "" }`
+and no `~/.garuda/credentials`, as after an install from the ACP Registry), checked in Zed's ACP
+log: Zed's `initialize` declares `auth.terminal: true`; Garuda answered with the `garuda-setup`
+method; the first `session/new` failed with -32000 "Authentication required: Garuda has no model.
+…"; Zed ran the setup in a terminal; the next `session/new` on the same connection (no new
+`initialize`, so no restart) returned a session, and a prompt ran two tool calls and ended
+`end_turn`.
+
 ## Editor setup (for the user guide)
+
+0.16: after `garuda setup`, the entries below need no `"env"`. The user guide (the Editors page)
+shows them without it.
 
 VS Code has no ACP client of its own. The extension "ACP Client" (`formulahendry.acp-client`) adds
 one; in VS Code's `settings.json`:

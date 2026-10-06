@@ -1,7 +1,8 @@
 # Setup and stored keys (`garuda setup`, 0.16, planned)
 
 Status: in progress. Built: patch 2 (reading the credentials file, the sandbox rule, the default
-model), patch 3 (`garuda setup`) and patch 4 (Terminal Auth in `garuda acp`). Planned: the rest. The plan is at the end.
+model), patch 3 (`garuda setup`), patch 4 (Terminal Auth in `garuda acp`) and patch 5 (docs; live
+test in Zed passed). Planned: the release and the registry. The plan is at the end.
 
 ## Purpose
 
@@ -195,6 +196,6 @@ Files: `test/credentials.test.ts`, `test/sandbox.test.ts` (patch 2), `test/setup
 | 2 (built) | The credentials file: reading, checks, the in-process store, `DENY_READ_IN_HOME`, the default model in `models.json`. Tests, including the sandbox on macOS and Linux. |
 | 3 (built) | `garuda setup` (`--show`, `--forget`). Tests. |
 | 4 (built) | ACP: Terminal Auth, "auth required", setup read per session, the Windows message. Tests. |
-| 5 | Docs (user guide, Editors page, README) and a live test in Zed: an agent entry with no `env`, the setup from the editor, then a chat. |
+| 5 (built) | Docs (user guide, Editors page, README) and a live test in Zed: an agent entry with no `env`, the setup from the editor, then a chat. |
 | 6 | Release 0.16.0. |
 | 7 | The ACP Registry pull request (manifest per its CONTRIBUTING.md), and a pull request to VS Code's ACP Client agent list. |
