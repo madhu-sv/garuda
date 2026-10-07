@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.2 (unreleased)
+
+- The system prompt names Garuda's version and the model, so "which model are you?" gets a true
+  answer. After `/models`, the next message tells the model about the switch; the system prompt
+  stays the same bytes, so the prompt cache stays valid.
+
 ## 0.16.1 (2026-10-06)
 
 - `garuda acp` offers its sign-in (Terminal Auth) also to clients that declare the capability in

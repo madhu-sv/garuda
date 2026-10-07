@@ -407,6 +407,13 @@ export class Runtime {
   private readonly sessionBase = new Map<string, string>();
   /** Notes for the next turn, for example after an undo that kept the conversation. */
   private readonly pendingNotes: string[] = [];
+  /**
+   * The model that the conversation knows of (0.16.2): the start model of the system prompt, or
+   * the last one a note named. A new or another session starts again from the system prompt.
+   */
+  private toldModel: string;
+  /** The model of the system prompt. */
+  private readonly startModel: string;
   /** The prompt of the turn that runs or ran last (0.9: the note after a stopped turn). */
   private lastPrompt: string | undefined;
   /** LSP diagnostics after edits are on (0.4). */
@@ -458,6 +465,8 @@ export class Runtime {
     this.store = options.store;
     this.onEvent = options.onEvent;
     this.system = system;
+    this.startModel = options.modelId;
+    this.toldModel = options.modelId;
     this.knowledge = new KnowledgeIndex(options.root, {
       // G04: files that the team policy denies are not indexed (find_symbol, repo_map, …).
       hidden: (path) => this.permissions.deniedByPolicy(path),
@@ -727,6 +736,7 @@ export class Runtime {
         lsp: options.lsp?.enabled ?? settings.lsp?.enabled === true,
         skills: skills.some((s) => s.modelInvocable),
         agents: agents.length > 0,
+        identity: { version: VERSION, model: options.modelId },
       },
     );
     const runtime = new Runtime(
@@ -1043,6 +1053,7 @@ export class Runtime {
     this.current = undefined;
     // Notes of the old session (a !command output, a stop note) do not go to the new one (0.14, review).
     this.pendingNotes.length = 0;
+    this.toldModel = this.startModel;
     // A plan belongs to its session: /schedule after /new must not use the old one (0.14.1, review).
     this.plan = undefined;
     this.claudeSearch = this.searchStart();
@@ -1226,6 +1237,7 @@ export class Runtime {
     this.adoptThinking(this.current);
     // Notes, approvals and the plan of the old session do not carry over; process-wide ones do.
     this.pendingNotes.length = 0;
+    this.toldModel = this.startModel;
     this.plan = undefined;
     this.claudeSearch = this.searchStart();
     const s = this.current;
@@ -1295,7 +1307,17 @@ export class Runtime {
    * session records the change; new chats start with -m or GARUDA_MODEL again. Explore keeps the
    * start model. The prompt cache of the old model does not carry over.
    */
+  /** A note for the next user message when the model is not the one the conversation knows. */
+  private modelNote(): string | undefined {
+    const now = this.modelState.modelId;
+    if (now === this.toldModel) return undefined;
+    this.toldModel = now;
+    return `The user switched the model with /models: the model is now ${now}. When asked, give this model, not the one in the system prompt.`;
+  }
+
   async setModel(ref: string): Promise<{ ok: boolean; text: string }> {
+    // The system prompt names the start model and stays the same bytes (N2); the next turn tells
+    // the model about a switch (`modelNote`, 0.16.2).
     return this.modelState.setModel(ref, this.current, () => this.startFields());
   }
 
@@ -1317,6 +1339,8 @@ export class Runtime {
     const serverTools = await this.claudeSearchTools(signal);
     const notes = [...this.pendingNotes.splice(0), ...(this.mcp?.takeNotes() ?? [])];
     if (this.turnMode === "plan") notes.unshift(PLAN_NOTE);
+    const modelNote = this.modelNote();
+    if (modelNote !== undefined) notes.push(modelNote);
     // @path in the prompt (0.6): the files go with the message and count as read.
     const mentions = await attachMentions(prompt, this.root, session.files, async (shown) => {
       const decision = await this.permissions.check(
