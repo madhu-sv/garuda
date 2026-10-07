@@ -56,7 +56,10 @@ function storeKey(dir: string, keys: Record<string, string>) {
   chmodSync(join(dir, CREDENTIALS_FILE), 0o600);
 }
 
-const initialize = (auth: { terminal?: boolean } | undefined, terminalAuth = true) => {
+const initialize = (auth: { terminal?: boolean } | undefined, terminalAuth = true) =>
+  initializeWith(auth === undefined ? {} : { auth }, terminalAuth);
+
+const initializeWith = (clientCapabilities: Record<string, unknown>, terminalAuth = true) => {
   const server = acpServer({
     version: "t",
     ...(terminalAuth ? { terminalAuth: { args: ["setup"] } } : {}),
@@ -67,7 +70,7 @@ const initialize = (auth: { terminal?: boolean } | undefined, terminalAuth = tru
     (agent): Promise<InitializeResponse> =>
       agent.request(methods.agent.initialize, {
         protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: auth === undefined ? {} : { auth },
+        clientCapabilities: clientCapabilities as never,
       }),
   );
 };
@@ -90,6 +93,18 @@ describe("ACP Terminal Auth (0.16)", () => {
     expect((await initialize(undefined)).authMethods).toEqual([]);
     expect((await initialize({ terminal: false })).authMethods).toEqual([]);
     expect((await initialize({ terminal: true }, false)).authMethods).toEqual([]);
+  });
+
+  it("accepts the older form of the capability, as the ACP Registry's checker sends it (0.16.1)", async () => {
+    // The registry's client.py sends only this (no `auth`); Zed sends both forms.
+    const registry = { terminal: true, _meta: { terminal_output: true, "terminal-auth": true } };
+    const methods = (await initializeWith(registry)).authMethods ?? [];
+    expect(methods.map((m) => [m.id, "type" in m ? m.type : undefined])).toEqual([
+      [SETUP_METHOD_ID, "terminal"],
+    ]);
+    expect((await initializeWith({ _meta: { "terminal-auth": false } })).authMethods).toEqual([]);
+    expect((await initializeWith({ _meta: { "terminal-auth": "yes" } })).authMethods).toEqual([]);
+    expect((await initializeWith(registry, false)).authMethods).toEqual([]);
   });
 
   it("session/new: a missing setup is 'auth required'; another problem is an internal error", async () => {
@@ -168,6 +183,23 @@ describe("the setup, read for each session (0.16)", () => {
       problem: WINDOWS_MESSAGE,
       setupNeeded: false,
     });
+  });
+
+  it("`garuda acp setup` runs the setup (an editor that appends the auth args)", async () => {
+    // With no terminal (as in the tests), the setup stops with its own message: proof that the
+    // setup ran, and that nothing started the protocol on stdout.
+    const write = process.stdout.write;
+    let said = "";
+    process.stdout.write = ((chunk: string) => {
+      said += chunk;
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      expect(await acpCommand({ action: "setup" })).toBe(1);
+    } finally {
+      process.stdout.write = write;
+    }
+    expect(said).toContain("garuda setup asks questions, so it needs a terminal");
   });
 
   it("`garuda acp <other>` is refused", async () => {

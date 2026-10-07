@@ -4,7 +4,7 @@
 
 Website and docs: https://madhu-sv.github.io/garuda/
 
-Garuda is a terminal coding agent. This is version 0.16.0: `garuda setup` (choose a model and store
+Garuda is a terminal coding agent. This is version 0.16.1: `garuda setup` (choose a model and store
 its key once) and the sign-in from editors, on top of 0.15.0 (Garuda in your editor over the Agent
 Client Protocol, `garuda acp`) and 0.14.1 (the 0.14–0.17 branches after the merge gate and Garuda's own
 review; see the notes under the status table). Release notes: [CHANGELOG.md](CHANGELOG.md).
@@ -52,7 +52,7 @@ headings below keep the branch labels (0.14–0.17).
 Before 0.14.0, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
 permissions, tools, sandbox, audit, loop, agents), in plan mode. 0.14.1 adds the cli and extensions
 areas and fixes the open findings of all nine areas (see [CHANGELOG.md](CHANGELOG.md)). Known limits
-in 0.16.0:
+in 0.16.1:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Subagents: each child has its own step and token budget (capped by the team policy); it does not

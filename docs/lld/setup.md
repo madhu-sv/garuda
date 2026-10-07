@@ -2,7 +2,7 @@
 
 Status: released in 0.16.0 (patches 0167–0172): reading the credentials file, the sandbox rule and
 the default model (0168), `garuda setup` (0169), Terminal Auth in `garuda acp` (0170), docs and the
-live test in Zed (0171). Planned: the ACP Registry and VS Code pull requests. The plan is at the end.
+live test in Zed (0171). 0.16.1 (0174, 0175): the older form of the Terminal Auth capability, for the ACP Registry's checker. Planned: the ACP Registry and VS Code pull requests. The plan is at the end.
 
 ## Purpose
 
@@ -125,10 +125,12 @@ Built as `src/cli/setupCommand.ts` (patch 3):
   `authMethods: [{ "type": "terminal", "id": "garuda-setup", "name": "Set up Garuda", "description":
   "Choose a model and enter its API key.", "args": ["setup"] }]`. Without that capability, the list
   stays empty (the spec says an agent must not offer the method then).
-- The editor runs its configured agent command with `args` added (the spec: "additional arguments
-  to append to the configured agent invocation"). The configured command is `garuda acp` (or
-  `npx @garuda-agent/garuda acp`), so the editor runs `garuda acp setup` in a terminal, and
-  `garuda acp setup` runs `garuda setup`. The user answers there.
+- The editor runs the agent's command with the method's `args`. The SDK's schema says the args are
+  appended to the configured invocation (Zed does this: `garuda acp setup`); the registry's
+  AUTHENTICATION.md says they replace the normal args (`garuda setup`). Both run the setup: `garuda
+  acp setup` runs `garuda setup`. The user answers in that terminal.
+- 0.16.1: the capability may also come in its older form, `_meta["terminal-auth"]: true` (the ACP
+  Registry's checker sends only that one; `canRunTerminalAuth`).
 - `session/new` reads the setup again for each new session (0.15 read it once at start), so a
   session after the setup works with no restart. Each read replaces the stored keys of the last one,
   so a key that `--forget` removed is gone from the next session. With no model, or no key for the
