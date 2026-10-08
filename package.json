@@ -17,7 +17,17 @@
     "sandbox",
     "anthropic",
     "claude",
-    "mcp"
+    "mcp",
+    "ai",
+    "ai-agent",
+    "agent",
+    "llm",
+    "ollama",
+    "openrouter",
+    "acp",
+    "agent-client-protocol",
+    "zed",
+    "code-assistant"
   ],
   "type": "module",
   "bin": {

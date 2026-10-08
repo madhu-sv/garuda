@@ -5,16 +5,20 @@ import "@fontsource-variable/newsreader";
 import "@fontsource-variable/jetbrains-mono";
 import "../styles/site.css";
 import Mark from "../components/Mark.astro";
+import { GOOGLE_SITE_VERIFICATION, SHARE_IMAGE, shareImageUrl } from "../seo";
 
 interface Props {
   title: string;
   description: string;
   current?: "home" | "blog";
+  /** "article" for a blog post: share previews show it as a post. */
+  type?: "website" | "article";
 }
-const { title, description, current = "home" } = Astro.props;
+const { title, description, current = "home", type = "website" } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const repo = "https://github.com/madhu-sv/garuda";
+const image = shareImageUrl(String(Astro.site), import.meta.env.BASE_URL);
 ---
 <!doctype html>
 <html lang="en">
@@ -25,10 +29,23 @@ const repo = "https://github.com/madhu-sv/garuda";
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={type} />
+    <meta property="og:site_name" content="Garuda" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={image} />
+    <meta property="og:image:width" content={String(SHARE_IMAGE.width)} />
+    <meta property="og:image:height" content={String(SHARE_IMAGE.height)} />
+    <meta property="og:image:alt" content={SHARE_IMAGE.alt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={image} />
+    {GOOGLE_SITE_VERIFICATION !== "" && (
+      <meta name="google-site-verification" content={GOOGLE_SITE_VERIFICATION} />
+    )}
+    <slot name="head" />
     <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0d0f13" media="(prefers-color-scheme: dark)" />
     <script is:inline>

@@ -2,10 +2,15 @@
 // GitHub Pages serves it at https://madhu-sv.github.io/garuda/.
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
+import { GOOGLE_SITE_VERIFICATION, SHARE_IMAGE, shareImageUrl } from "./src/seo.ts";
+
+const site = "https://madhu-sv.github.io";
+const base = "/garuda";
+const shareImage = shareImageUrl(site, base);
 
 export default defineConfig({
-  site: "https://madhu-sv.github.io",
-  base: "/garuda",
+  site,
+  base,
   trailingSlash: "always",
   // Code in blog posts: one dark theme, like the terminal blocks of the landing page.
   markdown: { shikiConfig: { theme: "github-dark" } },
@@ -16,6 +21,26 @@ export default defineConfig({
         "A terminal coding agent with an OS sandbox, a permission engine, a team policy and an audit log.",
       logo: { src: "./src/assets/mark.svg", alt: "" },
       favicon: "/favicon.svg",
+      // Starlight sets the other share tags (title, description, twitter:card); the image and the
+      // Search Console tag come from src/seo.ts, as on the landing page.
+      head: [
+        { tag: "meta", attrs: { property: "og:image", content: shareImage } },
+        { tag: "meta", attrs: { property: "og:image:width", content: String(SHARE_IMAGE.width) } },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:height", content: String(SHARE_IMAGE.height) },
+        },
+        { tag: "meta", attrs: { property: "og:image:alt", content: SHARE_IMAGE.alt } },
+        { tag: "meta", attrs: { name: "twitter:image", content: shareImage } },
+        ...(GOOGLE_SITE_VERIFICATION === ""
+          ? []
+          : [
+              {
+                tag: "meta",
+                attrs: { name: "google-site-verification", content: GOOGLE_SITE_VERIFICATION },
+              },
+            ]),
+      ],
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/madhu-sv/garuda" }],
       editLink: { baseUrl: "https://github.com/madhu-sv/garuda/edit/main/site/" },
       lastUpdated: false,
