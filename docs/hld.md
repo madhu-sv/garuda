@@ -40,7 +40,7 @@ sequenceDiagram
   RT->>FS: AGENTS.md, CLAUDE.md, GARUDA.md, .garuda/memory.md
   RT->>FS: ~/.garuda/commands and .garuda/commands
   RT->>FS: ~/.garuda and .garuda: mcp.json, hooks.json
-  RT->>RT: system prompt (fixed for the session)
+  RT->>RT: system prompt (fixed for the session, with the version and start model, 0.16.2)
   RT->>RT: tools, permission engine
   RT-->>CLI: runtime (+ executor notice)
   CLI->>CLI: -p: one turn / chat: Ink or plain REPL

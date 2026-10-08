@@ -36,7 +36,8 @@ imports the CLI.
 1. Load settings (`gateProjectSettings`: the loosening parts only when approved). `createExecutor(settings.executor)` → executor and an optional notice.
 2. Load MCP configs and hooks configs (problems go to `onNotice`).
 3. Detect the language profiles. `buildSystemPrompt(root, GARUDA.md, memory.md, { codeIndex, sandboxed,
-   mcp, web, hooks, languages, explore, todo, lsp })`.
+   mcp, web, hooks, languages, explore, todo, lsp, identity })`; `identity` is Garuda's version and the
+   start model (0.16.2).
 4. Build the tool registry (`defaultTools` with the code index mode and web options), limits (max steps,
    token budget, context window from settings or the model table), the price, the permission engine
    (with the profiles' cache access), and — only with `subagents.enabled: true` — the explore tool with
@@ -107,7 +108,10 @@ Sessions and models in the chat (0.6):
   `limits` and `price` are getters, so the footer, `/usage`, agents without a model and the next turn use the
   new values. Explore without `--subagent-model` keeps the start model (its own client of `options.model`).
   The system prompt does not change (N2), but the provider's prompt cache is per model, so the next request
-  writes the cache again.
+  writes the cache again. 0.16.2: the system prompt names the start model, so the next turn's user
+  message gets a `<garuda_note>` with the new model (`modelNote`). The runtime keeps the model that the
+  conversation knows (`toldModel`): one note per switch, a note again when the user switches back, and
+  a note in a new or another session (its system prompt names the start model).
 
 ## Agent loop (`loop/runAgent.ts`)
 

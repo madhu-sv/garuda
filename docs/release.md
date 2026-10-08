@@ -98,3 +98,20 @@ brew install garuda
 ```
 
 homebrew-core needs a more widely used project, so the tap is the way for now.
+
+## The website: search and share previews
+
+The site (`site/`) has a sitemap (`sitemap-index.xml`), a canonical link per page, share tags with
+an image (`site/public/og.png`, 1200×630) on every page, and structured data
+(`SoftwareApplication`) on the landing page. The settings are in `site/src/seo.ts`.
+
+Google Search Console, once:
+
+1. In Search Console, add a property of the type **URL prefix**: `https://madhu-sv.github.io/garuda/`.
+2. Choose the verification method **HTML tag**. Copy only the value of `content="…"` into
+   `GOOGLE_SITE_VERIFICATION` in `site/src/seo.ts`, merge, and wait for the Pages workflow.
+3. Click **Verify**. Then, under **Sitemaps**, submit `sitemap-index.xml`, and use **URL
+   inspection** → **Request indexing** for the home page, the docs and each blog post.
+
+A new share image: replace `site/public/og.png` (1200×630). LinkedIn keeps a preview for a while; its
+Post Inspector (linkedin.com/post-inspector) loads the new one.

@@ -11,6 +11,10 @@ Parts, in order:
    servers): who Garuda is, the working root, "look before you answer", which tools to use for files
    (not bash), edit rules (read first), bash rules (no `cd` to the root, no pipes into head/tail), what
    to do when the user denies a call, what to save with `remember`, and brevity.
+   With `identity` (0.16.2; the runtime always gives it): "This is Garuda <version>, and the model is
+   <start model>", and to give these when the user asks. Both values pass `visible()` (visible ASCII,
+   no `<` or `>`), so a model spec from a job file cannot add lines or markers. The start model stays
+   in the prompt for the whole process (N2); after `/models`, the next user message gets a note.
 2. Optional lines, only when the feature is on:
 
    | Option | Lines |

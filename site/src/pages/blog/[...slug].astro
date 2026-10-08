@@ -15,7 +15,12 @@ const day = post.data.date.toLocaleDateString("en-GB", {
   year: "numeric",
 });
 ---
-<BaseLayout title={`${post.data.title} — Garuda`} description={post.data.description} current="blog">
+<BaseLayout
+  title={`${post.data.title} — Garuda`}
+  description={post.data.description}
+  current="blog"
+  type="article"
+>
   <article class="article">
     <a class="link-arrow" href={`${base}blog/`}>← Blog</a>
     <h1>{post.data.title}</h1>

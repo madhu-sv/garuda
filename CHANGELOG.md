@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.2 (unreleased)
+
+- The system prompt names Garuda's version and the model, so "which model are you?" gets a true
+  answer. After `/models`, the next message tells the model about the switch; the system prompt
+  stays the same bytes, so the prompt cache stays valid.
+- Website: a share image and share tags (LinkedIn, X and chat previews) on every page, structured
+  data on the landing page, and a place for the Google Search Console tag (`site/src/seo.ts`; see
+  docs/release.md). More npm keywords.
+
 ## 0.16.1 (2026-10-06)
 
 - `garuda acp` offers its sign-in (Terminal Auth) also to clients that declare the capability in

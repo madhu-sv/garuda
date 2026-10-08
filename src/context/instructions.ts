@@ -116,6 +116,7 @@ export function buildSystemPrompt(
     skills = false,
     agents = false,
     search = false,
+    identity,
   }: {
     codeIndex?: CodeIndexMode;
     sandboxed?: boolean;
@@ -138,10 +139,21 @@ export function buildSystemPrompt(
     agents?: boolean;
     /** The web_search tool is there (0.5). */
     search?: boolean;
+    /**
+     * Garuda's version and the start model (0.16.2), so the model can answer "which version and
+     * model are you". Fixed for the process, like the rest (N2); /models sends a note instead.
+     */
+    identity?: { version: string; model: string };
   } = {},
 ): string {
   const base = [
     "You are Garuda, a coding agent in a terminal.",
+    ...(identity === undefined
+      ? []
+      : [
+          `This is Garuda ${visible(identity.version)}, and the model is ${visible(identity.model)}. When the user asks which`,
+          "version or model you are, give these. A <garuda_note> says when the user switches the model.",
+        ]),
     `You work inside one project folder, the working root: ${root}`,
     "Use the tools to look at the code before you answer. Do not guess file contents.",
     "To look at files, use glob (find files by name), grep (search contents) and read_file (read a file).",
@@ -271,4 +283,12 @@ export function buildSystemPrompt(
     );
   }
   return parts.join("\n");
+}
+
+/**
+ * A version or a model spec for the prompt: visible ASCII only, and no angle brackets, so a job file
+ * (its model) cannot add lines or Garuda's markers to the system prompt.
+ */
+function visible(text: string): string {
+  return text.replace(/[^!-~]|[<>]/g, "?");
 }

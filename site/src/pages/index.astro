@@ -85,6 +85,26 @@ const features = [
   title="Garuda — a terminal coding agent that asks first"
   description="Garuda is an open-source terminal coding agent. Commands run in an OS sandbox, changes ask first, and every decision goes to an audit log."
 >
+  <script
+    slot="head"
+    type="application/ld+json"
+    set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "Garuda",
+      alternateName: "Garuda coding agent",
+      description:
+        "An open-source coding agent for the terminal and for editors. Commands run in an OS sandbox, changes ask first, and every decision goes to an audit log. Works with Claude, OpenRouter or local models.",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "macOS, Linux",
+      url: "https://madhu-sv.github.io/garuda/",
+      downloadUrl: "https://www.npmjs.com/package/@garuda-agent/garuda",
+      codeRepository: "https://github.com/madhu-sv/garuda",
+      license: "https://www.apache.org/licenses/LICENSE-2.0",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      author: { "@type": "Person", name: "Madhusudhan Vasanth Kumar" },
+    })}
+  />
   <section class="hero">
     <div class="wrap">
       <div>
