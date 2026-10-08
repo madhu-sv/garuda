@@ -5,7 +5,7 @@
  * prefix property https://madhu-sv.github.io/garuda/. Empty: no tag. The value is public by design
  * (it is in every page).
  */
-export const GOOGLE_SITE_VERIFICATION = "";
+export const GOOGLE_SITE_VERIFICATION = "0xFTn4V1Y_azNh21AfC60Spsx_gJ72F4TKB0pCdqCHQ";
 
 /** The share image for LinkedIn, X and chat previews: 1200×630, in site/public. */
 export const SHARE_IMAGE = {
