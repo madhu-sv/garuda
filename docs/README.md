@@ -38,6 +38,7 @@ Low-level design documents:
 | Scheduled jobs (0.7), proof of work and the night shift (0.11) | `src/jobs/`, `src/cli/jobCommand.ts`, `src/cli/nightCommand.ts` | [jobs.md](lld/jobs.md) |
 | Formatters (0.10) | `src/format/`, `afterWrite` in `src/tools/types.ts` | [format.md](lld/format.md) |
 | Editors over ACP (0.15) | `src/acp/`, `src/cli/acpCommand.ts` | [acp.md](lld/acp.md) |
+| Bounded changes (0.17, planned): staged commands, job write scopes, strict profile, audit checkpoint, shared budget | `src/sandbox/`, `src/permissions/`, `src/jobs/`, `src/audit/`, `src/agents/`, `src/knowledge/` | [bounded-changes.md](lld/bounded-changes.md) |
 | Setup and stored keys (0.16) | `src/model/credentials.ts`, `src/model/providers.ts`, `src/cli/setupCommand.ts` | [setup.md](lld/setup.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
