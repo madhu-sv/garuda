@@ -15,6 +15,7 @@ import { BRIDGE_JS, bwrapArgs } from "../src/sandbox/bwrap.js";
 import { findOsSandbox } from "../src/sandbox/index.js";
 import { proxyEnv } from "../src/sandbox/process.js";
 import type { ExecPolicy } from "../src/sandbox/types.js";
+import { unixSocketsWork } from "./helpers.js";
 
 /** The network allowlist for sandboxed commands (0.13, W6). */
 
@@ -165,7 +166,10 @@ function connectThrough(proxyPort: number, authority: string, send = ""): Promis
   });
 }
 
-describe("the proxy (0.13)", () => {
+/** The proxy listens on a Unix socket too; some containers refuse one (review of 0.16.1). */
+const unixSockets = await unixSocketsWork();
+
+describe.runIf(unixSockets)("the proxy (0.13)", () => {
   let proxy: NetworkProxy;
   let port = 0;
   let up: { server: Server; port: number };
@@ -258,62 +262,65 @@ const hasCurl = ["/usr/bin/curl", "/bin/curl"].some((p) => {
   }
 });
 
-describe.runIf(osExecutor !== undefined && hasCurl)("the proxy with the OS sandbox (0.13)", () => {
-  const executor = osExecutor as NonNullable<typeof osExecutor>;
-  const base = realpathSync(mkdtempSync(join(tmpdir(), "garuda-netbox-")));
-  const root = join(base, "root");
-  mkdirSync(root);
-  let proxy: NetworkProxy;
-  let proxyPolicy: NonNullable<ExecPolicy["proxy"]>;
-  let up: { server: Server; port: number };
+describe.runIf(osExecutor !== undefined && hasCurl && unixSockets)(
+  "the proxy with the OS sandbox (0.13)",
+  () => {
+    const executor = osExecutor as NonNullable<typeof osExecutor>;
+    const base = realpathSync(mkdtempSync(join(tmpdir(), "garuda-netbox-")));
+    const root = join(base, "root");
+    mkdirSync(root);
+    let proxy: NetworkProxy;
+    let proxyPolicy: NonNullable<ExecPolicy["proxy"]>;
+    let up: { server: Server; port: number };
 
-  beforeAll(async () => {
-    up = await upstream();
-    proxy = new NetworkProxy({
-      decide: async (host) => ({ allowed: host === "allowed.test" }),
-      resolve: async () => [{ address: "127.0.0.1", family: 4 }],
-      addressAllowed: () => true,
+    beforeAll(async () => {
+      up = await upstream();
+      proxy = new NetworkProxy({
+        decide: async (host) => ({ allowed: host === "allowed.test" }),
+        resolve: async () => [{ address: "127.0.0.1", family: 4 }],
+        addressAllowed: () => true,
+      });
+      const started = await proxy.start();
+      proxyPolicy = { ...started, bridge: process.execPath };
     });
-    const started = await proxy.start();
-    proxyPolicy = { ...started, bridge: process.execPath };
-  });
-  afterAll(async () => {
-    await proxy.close();
-    up.server.close();
-    rmSync(base, { recursive: true, force: true });
-  });
+    afterAll(async () => {
+      await proxy.close();
+      up.server.close();
+      rmSync(base, { recursive: true, force: true });
+    });
 
-  const policy = (over: Partial<ExecPolicy> = {}): ExecPolicy => ({
-    root,
-    sandbox: true,
-    writePaths: [root],
-    denyWritePaths: [],
-    denyReadPaths: [],
-    network: false,
-    envAllowlist: ["PATH", "HOME"],
-    timeoutMs: 15_000,
-    maxOutputBytes: 10_000,
-    proxy: proxyPolicy,
-    ...over,
-  });
+    const policy = (over: Partial<ExecPolicy> = {}): ExecPolicy => ({
+      root,
+      sandbox: true,
+      writePaths: [root],
+      denyWritePaths: [],
+      denyReadPaths: [],
+      network: false,
+      envAllowlist: ["PATH", "HOME"],
+      timeoutMs: 15_000,
+      maxOutputBytes: 10_000,
+      proxy: proxyPolicy,
+      ...over,
+    });
 
-  it("reaches an allowed host through the proxy, and gets 403 for another", async () => {
-    const ok = await executor.run(`curl -sS http://allowed.test:${up.port}/hi`, policy());
-    expect(ok.stdout.text).toBe("upstream /hi");
-    const no = await executor.run(
-      `curl -sS -o /dev/null -w "%{http_code}" http://denied.test:${up.port}/`,
-      policy(),
-    );
-    expect(no.stdout.text).toBe("403");
-    const tls = await executor.run("curl -sS https://denied.test/ 2>&1; echo", policy());
-    expect(tls.stdout.text).toMatch(/403|CONNECT/);
-  }, 30_000);
+    it("reaches an allowed host through the proxy, and gets 403 for another", async () => {
+      const ok = await executor.run(`curl -sS http://allowed.test:${up.port}/hi`, policy());
+      expect(ok.stdout.text).toBe("upstream /hi");
+      const no = await executor.run(
+        `curl -sS -o /dev/null -w "%{http_code}" http://denied.test:${up.port}/`,
+        policy(),
+      );
+      expect(no.stdout.text).toBe("403");
+      const tls = await executor.run("curl -sS https://denied.test/ 2>&1; echo", policy());
+      expect(tls.stdout.text).toMatch(/403|CONNECT/);
+    }, 30_000);
 
-  it("has no network without the proxy", async () => {
-    const r = await executor.run(
-      `curl -sS --max-time 3 http://allowed.test:${up.port}/hi`,
-      (({ proxy: _, ...rest }) => rest)(policy()),
-    );
-    expect(r.exitCode).not.toBe(0);
-  }, 30_000);
-});
+    it("has no network without the proxy", async () => {
+      const r = await executor.run(
+        `curl -sS --max-time 3 http://allowed.test:${up.port}/hi`,
+        (({ proxy: _, ...rest }) => rest)(policy()),
+      );
+      expect(r.exitCode).not.toBe(0);
+    }, 30_000);
+  },
+);

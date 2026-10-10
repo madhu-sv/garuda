@@ -78,9 +78,14 @@ describe("reading ~/.garuda/credentials (0.16)", () => {
     expect(r.warning).toContain("not a regular file");
   });
 
-  it.runIf(process.getuid?.() === 0)("ignores a file that another user owns", async () => {
+  it.runIf(process.getuid?.() === 0)("ignores a file that another user owns", async (ctx) => {
     const h = home(JSON.stringify({ ANTHROPIC_API_KEY: "sk-ant-other-1" }));
-    chownSync(join(h, CREDENTIALS_FILE), 12345, 12345);
+    try {
+      chownSync(join(h, CREDENTIALS_FILE), 12345, 12345);
+    } catch (error) {
+      // Some containers run as root but cannot change an owner (review of 0.16.1).
+      ctx.skip(`this file system cannot change owners (${(error as NodeJS.ErrnoException).code})`);
+    }
     const r = await readCredentials(h);
     expect(r.keys).toEqual({});
     expect(r.warning).toContain("not owned by you");

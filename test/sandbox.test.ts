@@ -283,7 +283,9 @@ describe.runIf(osExecutor !== undefined)("OS sandbox on this machine", () => {
     expect(r.exitCode).toBe(1);
   });
 
-  it.runIf(executor.name === "bwrap")(
+  // Read the name only through osExecutor: with no sandbox, this block is skipped but still runs
+  // its registration code (review of 0.16.1: a TypeError there failed the whole file).
+  it.runIf(osExecutor?.name === "bwrap")(
     "shows the command only its own processes (0.14, review)",
     async () => {
       // Garuda's own process (this test runner) is not in the sandbox's /proc.
