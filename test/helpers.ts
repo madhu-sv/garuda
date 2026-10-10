@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Writable } from "node:stream";
 import { z } from "zod";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
@@ -94,5 +98,23 @@ export async function waitUntil(check: () => Promise<boolean>, timeoutMs = 5_000
   while (!(await check())) {
     if (Date.now() > end) throw new Error("waitUntil timed out");
     await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+/**
+ * True when this machine lets a process listen on a Unix socket. Some containers refuse it; tests
+ * of code that needs one then skip instead of failing (review of 0.16.1).
+ */
+export async function unixSocketsWork(): Promise<boolean> {
+  const dir = mkdtempSync(join(tmpdir(), "garuda-sock-"));
+  const server = createServer();
+  try {
+    return await new Promise<boolean>((resolve) => {
+      server.once("error", () => resolve(false));
+      server.listen(join(dir, "probe.sock"), () => resolve(true));
+    });
+  } finally {
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 }

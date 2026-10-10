@@ -7,6 +7,10 @@
   restores them). The website, the blog posts, the share image, the README and the editor's mode
   text said that every change asks first; they now say what each limit does. A test keeps the old
   phrases out.
+- Tests skip cleanly where a machine has no OS sandbox, refuses Unix sockets, or cannot change a
+  file's owner (found by the same review): the sandbox tests no longer fail while they register,
+  the editor tests ignore the "No OS sandbox" notice, and the proxy and ownership tests skip with a
+  reason. Checked with a PATH that has no bubblewrap: 0 failures.
 - The system prompt names Garuda's version and the model, so "which model are you?" gets a true
   answer. After `/models`, the next message tells the model about the switch; the system prompt
   stays the same bytes, so the prompt cache stays valid.

@@ -132,11 +132,13 @@ const prompt = (sessionId: string, value: string) => ({
   prompt: [{ type: "text", text: value }],
 });
 const kinds = (run: Run) => run.updates.map((u) => u.update.sessionUpdate);
+/** The message text. Garuda's "No OS sandbox" notice (on a machine without one) is left out. */
 const messages = (run: Run) =>
   run.updates
     .map((u) => u.update)
     .filter((u) => u.sessionUpdate === "agent_message_chunk")
     .map((u) => (u.content.type === "text" ? u.content.text : ""))
+    .filter((t) => !t.startsWith("\n\nGaruda: No OS sandbox:"))
     .join("");
 
 describe("garuda acp (0.15)", () => {
