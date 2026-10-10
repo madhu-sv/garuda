@@ -12,7 +12,7 @@ export const SHARE_IMAGE = {
   path: "og.png",
   width: 1200,
   height: 630,
-  alt: "Garuda: the open-source coding agent that asks first. OS sandbox, approvals, audit log.",
+  alt: "Garuda: the open-source coding agent that works inside the lines. OS sandbox, edits ask first, audit log.",
 };
 
 /** Absolute URL of the share image. `site` is "https://madhu-sv.github.io", `base` "/garuda". */

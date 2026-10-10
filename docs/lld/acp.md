@@ -238,7 +238,7 @@ Garuda's agent modes become ACP session modes:
 "modes": {
   "currentModeId": "build",
   "availableModes": [
-    { "id": "build", "name": "Build", "description": "Edits and commands, each one asks first." },
+    { "id": "build", "name": "Build", "description": "Edits ask first; commands run in the sandbox." },
     { "id": "plan", "name": "Plan", "description": "Reads and plans. No edits; commands cannot write the project." }
   ]
 }

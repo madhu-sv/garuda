@@ -1,9 +1,14 @@
 ---
-title: "Introducing Garuda: an open-source coding agent that asks first"
-description: "Garuda is an open-source coding agent for the terminal and for editors. Commands run in an OS sandbox, changes ask first, and every decision goes to an audit log. It works with Claude, OpenRouter or local models."
+title: "Introducing Garuda: an open-source coding agent with an OS sandbox"
+description: "Garuda is an open-source coding agent for the terminal and for editors. Commands run in an OS sandbox that writes only in your project, edits ask first, and every decision goes to an audit log. It works with Claude, OpenRouter or local models."
 date: 2026-10-08
 author: Madhusudhan Vasanth Kumar
 ---
+
+*Corrected on 10 October 2026: an earlier version said that every change asks first. Edits do, but
+commands in the sandbox run with no question: they can change project files, within the sandbox's
+limits. The list below now says exactly what each limit does. Thanks to a reviewer who pointed it
+out.*
 
 A coding agent reads your code, edits files and runs commands on your machine. That is what makes it
 useful. It is also what makes it risky: one wrong command, or one instruction hidden in a file that
@@ -23,13 +28,16 @@ Garuda is my answer to that: an open-source coding agent where the limits come f
 system, not from the model's good behaviour. It is free, Apache-2.0, and it runs in your terminal,
 in VS Code and in Zed.
 
-## What "asks first" means
+## The limits, exactly
 
-- **Every command runs in an OS sandbox.** Seatbelt on macOS, bubblewrap on Linux. A command can
-  write only in the project, temp folders and package caches. Your SSH keys, cloud credentials and
-  other home secrets stay unreadable, and there is no network unless you open it.
-- **Every change asks first.** An edit shows its diff, and you allow it once, for the session, or not
-  at all. You can also accept single hunks. Plan mode only reads.
+- **Commands run in an OS sandbox.** Seatbelt on macOS, bubblewrap on Linux. A command can write
+  only in the project, temp folders and package caches. Your SSH keys, cloud credentials and other
+  home secrets stay unreadable, and there is no network unless you open it. Inside the sandbox, a
+  command runs with no question, so it can change project files; `/undo` restores what a turn
+  changed, commands included. A command outside the sandbox always asks. Without a sandbox, each
+  command asks.
+- **Edits ask first.** An edit shows its diff, and you allow it once, for the session, or not at all.
+  You can also accept single hunks. Plan mode only reads.
 - **The network is closed by default.** When you open it, commands reach only the hosts that you
   list, through Garuda's own proxy.
 - **A team policy that a project cannot loosen.** A managed file sets denied commands and paths, a

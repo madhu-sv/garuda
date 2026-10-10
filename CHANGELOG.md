@@ -2,6 +2,11 @@
 
 ## 0.16.2 (unreleased)
 
+- Exact safety claims (an external review found an overclaim): edits ask first, but commands in the
+  OS sandbox run with no question, inside its limits, so they can change project files (`/undo`
+  restores them). The website, the blog posts, the share image, the README and the editor's mode
+  text said that every change asks first; they now say what each limit does. A test keeps the old
+  phrases out.
 - The system prompt names Garuda's version and the model, so "which model are you?" gets a true
   answer. After `/models`, the next message tells the model about the switch; the system prompt
   stays the same bytes, so the prompt cache stays valid.
