@@ -119,9 +119,12 @@ cannot read it). `garuda setup --show` shows the model and where each key comes 
 `ANTHROPIC_API_KEY`, `GARUDA_MODEL`. Do not sync or back up `~/.garuda/credentials` to other places.
 
 Tools: read_file, glob and grep run with no question.
-write_file, edit_file and bash show a diff or the command first. You pick: allow once, allow for this session, or deny.
-Commands run in an OS sandbox when your machine has one (see Sandbox below). Without a sandbox,
-each command asks first, so read each one before you allow it.
+write_file and edit_file show a diff first. You pick: allow once, allow for this session, or deny.
+Commands (bash) run in an OS sandbox when your machine has one (see Sandbox below). There they run
+with no question: the sandbox lets them write only in the project, temp folders and package caches,
+with no network. So a command can change project files without a question; `/undo` restores what a
+turn changed, commands included. A command outside the sandbox always asks. Without a sandbox, each
+command asks first, so read each one before you allow it.
 Garuda removes a leading `cd <working root> &&` from a command, because each command already starts there.
 When the model reads files with bash, or pipes into head or tail, the result adds a short `[Garuda: …]` note that tells it to use the file tools.
 

@@ -22,13 +22,13 @@ const svg = (d: string) =>
 const pillars = [
   {
     icon: icons.box,
-    title: "An OS sandbox for every command",
-    text: "Seatbelt on macOS, bubblewrap on Linux. Commands write only in the project, temp folders and package caches. Home secrets stay unreadable, and there is no network by default.",
+    title: "An OS sandbox for commands",
+    text: "Seatbelt on macOS, bubblewrap on Linux. Commands write only in the project, temp folders and package caches. Home secrets stay unreadable, and there is no network by default. Without a sandbox, each command asks first.",
   },
   {
     icon: icons.hand,
-    title: "It asks before it changes things",
-    text: "An edit shows its diff and a command shows its text. You allow it once, for the session, or not at all, and you can accept single hunks. Plan mode only reads.",
+    title: "Edits ask first",
+    text: "An edit shows its diff: allow it once, for the session, or not at all, or accept single hunks. Commands in the sandbox run with no question, inside its limits; a command outside it always asks. /undo restores what a turn changed. Plan mode only reads.",
   },
   {
     icon: icons.globe,
@@ -82,8 +82,8 @@ const features = [
 ];
 ---
 <BaseLayout
-  title="Garuda — a terminal coding agent that asks first"
-  description="Garuda is an open-source terminal coding agent. Commands run in an OS sandbox, changes ask first, and every decision goes to an audit log."
+  title="Garuda — an open-source coding agent with an OS sandbox"
+  description="Garuda is an open-source coding agent. Commands run in an OS sandbox that writes only in your project, edits ask first, and every decision goes to an audit log."
 >
   <script
     slot="head"
@@ -94,7 +94,7 @@ const features = [
       name: "Garuda",
       alternateName: "Garuda coding agent",
       description:
-        "An open-source coding agent for the terminal and for editors. Commands run in an OS sandbox, changes ask first, and every decision goes to an audit log. Works with Claude, OpenRouter or local models.",
+        "An open-source coding agent for the terminal and for editors. Commands run in an OS sandbox that writes only in the project, edits ask first, and every decision goes to an audit log. Works with Claude, OpenRouter or local models.",
       applicationCategory: "DeveloperApplication",
       operatingSystem: "macOS, Linux",
       url: "https://madhu-sv.github.io/garuda/",
@@ -113,9 +113,9 @@ const features = [
         </a>
         <h1 class="display">A coding agent that works <em>inside the lines</em>.</h1>
         <p class="lede">
-          Garuda reads, edits and runs your code from the terminal, with the model you choose. Every
-          command runs in an OS sandbox, every change asks first, and every decision goes to an
-          audit log.
+          Garuda reads, edits and runs your code from the terminal, with the model you choose.
+          Commands run in an OS sandbox that writes only in your project, edits ask first, and every
+          decision goes to an audit log.
         </p>
         <div class="cta">
           <a class="btn btn-primary" href={`${base}docs/install/`}>Get started</a>

@@ -1,0 +1,51 @@
+---
+import { CONTACT } from "../community";
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const [user, domain] = CONTACT.email.split("@");
+---
+<BaseLayout
+  title="Contact — Garuda"
+  description="How to reach the author of Garuda: bug reports, feature requests, questions and feedback."
+>
+  <div class="article">
+    <p class="kicker">Contact</p>
+    <h1>Get in touch</h1>
+    <div class="prose">
+      <p>
+        Garuda is built by Madhusudhan Vasanth Kumar. Feedback is very welcome, especially on where
+        Garuda asks too much, too little, or at the wrong moment.
+      </p>
+      <ul class="contact-list">
+        <li>
+          <strong>Bugs and feature requests:</strong>{" "}
+          <a href={CONTACT.issues}>GitHub issues</a>. Please include your OS, the Garuda version
+          (<code>garuda --version</code>) and the model.
+        </li>
+        <li>
+          <strong>Security problems:</strong> do not open a public issue. See{" "}
+          <a href="https://github.com/madhu-sv/garuda/blob/main/SECURITY.md">SECURITY.md</a>.
+        </li>
+        {CONTACT.linkedin !== "" && (
+          <li>
+            <strong>LinkedIn:</strong> <a href={CONTACT.linkedin} rel="me">Madhusudhan Vasanth Kumar</a>
+          </li>
+        )}
+        {user && domain && (
+          <li>
+            <strong>Email:</strong>{" "}
+            <a class="email" data-u={user} data-d={domain} href="#">{user} [at] {domain}</a>
+          </li>
+        )}
+      </ul>
+    </div>
+  </div>
+  <script is:inline>
+    // The address is joined in the browser, so simple harvesters that read the HTML miss it.
+    for (const a of document.querySelectorAll("a.email")) {
+      const address = `${a.dataset.u}@${a.dataset.d}`;
+      a.href = `mailto:${address}`;
+      a.textContent = address;
+    }
+  </script>
+</BaseLayout>

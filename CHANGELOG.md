@@ -2,12 +2,19 @@
 
 ## 0.16.2 (unreleased)
 
+- Exact safety claims (an external review found an overclaim): edits ask first, but commands in the
+  OS sandbox run with no question, inside its limits, so they can change project files (`/undo`
+  restores them). The website, the blog posts, the share image, the README and the editor's mode
+  text said that every change asks first; they now say what each limit does. A test keeps the old
+  phrases out.
 - The system prompt names Garuda's version and the model, so "which model are you?" gets a true
   answer. After `/models`, the next message tells the model about the switch; the system prompt
   stays the same bytes, so the prompt cache stays valid.
 - Website: a share image and share tags (LinkedIn, X and chat previews) on every page, structured
   data on the landing page, and a place for the Google Search Console tag (`site/src/seo.ts`; see
   docs/release.md). More npm keywords.
+- Website: comments under blog posts (giscus: threads with replies, stored as GitHub Discussions,
+  sign-in with GitHub) and a contact page. Both use `site/src/community.ts`; empty values hide them.
 
 ## 0.16.1 (2026-10-06)
 

@@ -78,7 +78,7 @@ export function setupNeeded(message: string): Error {
 }
 
 const MODES: Readonly<Record<AgentMode, { name: string; description: string }>> = {
-  build: { name: "Build", description: "Edits and commands, each one asks first." },
+  build: { name: "Build", description: "Edits ask first; commands run in the sandbox." },
   plan: {
     name: "Plan",
     description: "Reads and plans. No edits; commands cannot write the project.",

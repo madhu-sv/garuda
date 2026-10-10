@@ -6,7 +6,7 @@ author: Madhusudhan Vasanth Kumar
 ---
 
 Garuda is a terminal coding agent. Its main promise is safety: commands run in an OS sandbox,
-changes ask first, a team policy sets limits that a project cannot loosen, and an audit log records
+edits ask first, a team policy sets limits that a project cannot loosen, and an audit log records
 every decision. Before I released 0.14.0, I wanted to test that promise on the code that makes it.
 So I asked Garuda to review its own code.
 

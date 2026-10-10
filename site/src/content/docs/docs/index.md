@@ -11,8 +11,9 @@ Garuda is built safety first:
 
 - **Commands run in an OS sandbox.** Seatbelt on macOS, bubblewrap on Linux. They write only in the
   project, the temp folders and the package caches, and they have no network unless you open it.
-- **Changes ask first.** An edit shows its diff and a command shows its text. You allow it once, for
-  the session, or not at all.
+- **Edits ask first.** An edit shows its diff. You allow it once, for the session, or not at all.
+  Commands in the sandbox run with no question, inside its limits; a command outside the sandbox
+  always asks. `/undo` restores what a turn changed, commands included.
 - **Your rules decide.** Deny rules always win. A team policy sets limits that a project cannot
   loosen, and an audit log records every decision.
 
