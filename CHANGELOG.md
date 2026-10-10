@@ -2,6 +2,10 @@
 
 ## 0.16.2 (unreleased)
 
+- Design for 0.17 (planned, no code yet): staged commands (a command's changes ask before they
+  reach the project, opt-in), job write scopes, a strict profile, an audit checkpoint, one token
+  budget for the agent tree, and approximate labels for Java and Python references. See
+  docs/lld/bounded-changes.md.
 - Exact safety claims (an external review found an overclaim): edits ask first, but commands in the
   OS sandbox run with no question, inside its limits, so they can change project files (`/undo`
   restores them). The website, the blog posts, the share image, the README and the editor's mode
