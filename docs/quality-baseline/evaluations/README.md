@@ -26,9 +26,10 @@ model and provider before comparisons. M0 does not run these paid trials or add 
    request/usage records, redacted session, diff, check output, stop reason and interruptions.
 4. Grade scope, unnecessary edits and unsupported completion claims with a published rubric,
    calibrated against human review. Security and ambiguous failures require human adjudication.
-5. Retain all attempts. The existing runner excludes error runs from its success denominator;
-   until that is improved, publish both its conditional rate and an external end-to-end rate
-   including infrastructure and grader failures. Never discard error runs from cost accounting.
+5. Retain all attempts. Since 0.16.2 the runner reports both rates: over the scored runs (error
+   runs left out) and over all attempted runs (error runs count as failures); publish both. An
+   end-to-end rate that also counts grader failures still needs the external harness. Never discard
+   error runs from cost accounting.
 
 `capabilityDraft` reserves 40 tasks in ten archetypes and at least ten held-out tasks. It is a design
 inventory, not forty implemented evaluations. Spread tasks across the five languages and multiple

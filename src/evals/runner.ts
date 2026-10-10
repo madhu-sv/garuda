@@ -307,6 +307,40 @@ export function isErrorRun(result: EvalResult): boolean {
   return result.stopReason === "error";
 }
 
+/**
+ * Pass counts over two denominators (review of 0.16.1): the scored runs (error runs left out, so
+ * the rate says how the agent does when the run completes) and all attempted runs (error runs count
+ * as failures, so the rate says how often a user gets a passing result).
+ */
+export interface EvalSummary {
+  attempted: number;
+  errors: number;
+  scored: number;
+  passed: number;
+  /** passed / scored; undefined when no run was scored. */
+  scoredRate?: number;
+  /** passed / attempted; undefined when no run was attempted. */
+  attemptedRate?: number;
+}
+
+export function summarize(results: readonly EvalResult[]): EvalSummary {
+  const attempted = results.length;
+  const errors = results.filter(isErrorRun).length;
+  const scored = attempted - errors;
+  const passed = results.filter((r) => r.passed).length;
+  return {
+    attempted,
+    errors,
+    scored,
+    passed,
+    ...(scored === 0 ? {} : { scoredRate: passed / scored }),
+    ...(attempted === 0 ? {} : { attemptedRate: passed / attempted }),
+  };
+}
+
+const percent = (rate: number | undefined) =>
+  rate === undefined ? "–" : `${Math.round(rate * 100)}%`;
+
 export function formatReport(results: readonly EvalResult[]): string {
   const rows = results.map((r) =>
     [
@@ -319,13 +353,15 @@ export function formatReport(results: readonly EvalResult[]): string {
       r.stopReason,
     ].join("  "),
   );
-  const passed = results.filter((r) => r.passed).length;
-  const errors = results.filter(isErrorRun).length;
+  const summary = summarize(results);
   const cost = results.every((r) => r.costUsd !== undefined)
     ? `$${results.reduce((s, r) => s + (r.costUsd ?? 0), 0).toFixed(4)}`
     : "unknown";
   const steps = results.reduce((s, r) => s + r.steps, 0);
-  const counted = `${passed}/${results.length - errors} passed${errors > 0 ? ` · ${errors} error run(s) not counted` : ""}`;
+  const counted =
+    `${summary.passed}/${summary.scored} scored runs passed (${percent(summary.scoredRate)})` +
+    ` · ${summary.passed}/${summary.attempted} of all attempted runs (${percent(summary.attemptedRate)})` +
+    (summary.errors > 0 ? ` · ${summary.errors} error run(s)` : "");
   const tokens = results.reduce((s, r) => s + r.tokens, 0);
   const cached = results.reduce((s, r) => s + (r.cacheReadTokens ?? 0), 0);
   const share =
@@ -342,7 +378,9 @@ function meanRows(results: readonly EvalResult[], ids: readonly string[]): strin
     const all = results.filter((r) => r.id === id);
     const runs = all.filter((r) => !isErrorRun(r));
     const errors = all.length - runs.length;
-    const note = errors > 0 ? `  (${errors} error run(s) left out)` : "";
+    const passesAll = all.filter((r) => r.passed).length;
+    const note =
+      errors > 0 ? `  (${passesAll}/${all.length} of all attempts; ${errors} error run(s))` : "";
     if (runs.length === 0) return `${"0/0".padEnd(4)}  ${id.padEnd(18)}${note}`;
     const mean = (f: (r: EvalResult) => number) => runs.reduce((s, r) => s + f(r), 0) / runs.length;
     const passes = runs.filter((r) => r.passed).length;

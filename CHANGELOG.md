@@ -11,6 +11,8 @@
   file's owner (found by the same review): the sandbox tests no longer fail while they register,
   the editor tests ignore the "No OS sandbox" notice, and the proxy and ownership tests skip with a
   reason. Checked with a PATH that has no bubblewrap: 0 failures.
+- `garuda eval` reports success two ways: over the scored runs (error runs left out) and over all
+  attempted runs (error runs count as failures). `report.json` has both in `summary`.
 - The system prompt names Garuda's version and the model, so "which model are you?" gets a true
   answer. After `/models`, the next message tells the model about the switch; the system prompt
   stays the same bytes, so the prompt cache stays valid.
