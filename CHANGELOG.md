@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.0 (unreleased)
+
+- The strict profile: `"profile": "strict"` in a policy file or in `.garuda/settings.json` requires
+  the OS sandbox. Without one, Garuda stops at startup with the reason; `"executor": "host"` is an
+  error; the `bash` tool has no `outside_sandbox`. A project can turn it on, never off (review T7).
+
 ## 0.16.2 (unreleased)
 
 - Design for 0.17 (planned, no code yet): staged commands (a command's changes ask before they

@@ -37,6 +37,7 @@ export function defaultTools({
   web,
   todo = false,
   daemons = false,
+  strict = false,
 }: {
   codeIndex?: CodeIndexMode;
   web?: WebFetchOptions;
@@ -44,6 +45,8 @@ export function defaultTools({
   todo?: boolean;
   /** bash is_daemon and process_manager (0.14). Off by default (merge gate). */
   daemons?: boolean;
+  /** The strict profile (0.17): bash without outside_sandbox. */
+  strict?: boolean;
 } = {}): AnyTool[] {
   return [
     readFileTool,
@@ -55,7 +58,7 @@ export function defaultTools({
     ...(codeIndex === "all" ? [repoMapTool] : []),
     writeFileTool,
     editFileTool,
-    createBashTool({ daemons }),
+    createBashTool({ daemons, strict }),
     ...(daemons ? [processManagerTool] : []),
     rememberTool,
     ...(web === undefined ? [] : [createWebFetchTool(web)]),

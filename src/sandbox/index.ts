@@ -23,14 +23,39 @@ export interface ExecutorChoice {
   notice?: string;
 }
 
-/** One config key picks the executor (N8). The loop receives the result as a dependency. */
+/** Why Garuda stops (0.17): the strict profile needs the OS sandbox. */
+export class StrictProfileError extends Error {}
+
+/** The fix for a missing sandbox in the strict profile: never "use the host". */
+function strictFix(platform: NodeJS.Platform): string {
+  if (platform === "linux")
+    return "Install bubblewrap (for example: sudo apt install bubblewrap) and allow user namespaces, or remove the strict profile.";
+  return 'Run Garuda where the OS sandbox works, or remove the strict profile ("profile": "strict").';
+}
+
+/**
+ * One config key picks the executor (N8). The loop receives the result as a dependency.
+ * `strict` (0.17): the OS sandbox or a StrictProfileError; never the host.
+ */
 export function createExecutor(
   name: ExecutorName = "auto",
   find: () => OsSandbox = findOsSandbox,
+  strict = false,
+  platform: NodeJS.Platform = process.platform,
 ): ExecutorChoice {
+  if (strict && name === "host") {
+    throw new StrictProfileError(
+      'The strict profile requires the OS sandbox, but "executor" is "host". Remove "executor": "host" from .garuda/settings.json, or remove the strict profile.',
+    );
+  }
   if (name === "host") return { executor: new HostExecutor() };
   const found = find();
   if ("executor" in found) return { executor: found.executor };
+  if (strict) {
+    throw new StrictProfileError(
+      `The strict profile requires the OS sandbox, and this machine has none: ${found.problem} Garuda does not run commands on the host in this profile. ${strictFix(platform)}`,
+    );
+  }
   if (name === "os") throw new Error(`No OS sandbox: ${found.problem} ${found.fix}`);
   return {
     executor: new HostExecutor(),

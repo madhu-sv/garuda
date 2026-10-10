@@ -105,6 +105,7 @@ export function buildSystemPrompt(
   {
     codeIndex = DEFAULT_CODE_INDEX_MODE,
     sandboxed = false,
+    strict = false,
     mcp = false,
     web = false,
     hooks = false,
@@ -120,6 +121,8 @@ export function buildSystemPrompt(
   }: {
     codeIndex?: CodeIndexMode;
     sandboxed?: boolean;
+    /** The strict profile (0.17): no outside_sandbox. */
+    strict?: boolean;
     mcp?: boolean;
     web?: boolean;
     hooks?: boolean;
@@ -195,14 +198,21 @@ export function buildSystemPrompt(
           "and mark each completed when it is done. Skip it for a simple task.",
         ]
       : []),
-    ...(sandboxed
+    ...(sandboxed && strict
       ? [
           "Commands run in a sandbox with no approval: no network, and writes only in the working root, temp folders",
           "and package caches.",
-          "If the sandbox blocks a command that must have network or other folders, run it again with",
-          "outside_sandbox: true. The user must approve that. The user approves each file change.",
+          "No command runs outside the sandbox (strict profile). If the sandbox blocks a command that must have",
+          "network or other folders, tell the user what it needs. The user approves each file change.",
         ]
-      : ["The user approves each command and each file change."]),
+      : sandboxed
+        ? [
+            "Commands run in a sandbox with no approval: no network, and writes only in the working root, temp folders",
+            "and package caches.",
+            "If the sandbox blocks a command that must have network or other folders, run it again with",
+            "outside_sandbox: true. The user must approve that. The user approves each file change.",
+          ]
+        : ["The user approves each command and each file change."]),
     "Each bash call starts in the working root. Do not cd to it, and do not use absolute paths.",
     "Do not pipe a command into tail or head: the pipe hides the exit code, and Garuda already cuts long output.",
     "If the user denies a call, do not retry it. Ask what to do instead.",

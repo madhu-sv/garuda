@@ -46,6 +46,11 @@ A managed file and `~/.garuda/policy.json` set the rules for a machine or a team
 denied paths, a required sandbox, blocked hosts, allowed models and step and token limits. A project
 cannot change them, and they hold for subagents and hooks too.
 
+The strict profile (`"profile": "strict"` in a policy file or in `.garuda/settings.json`) requires
+the OS sandbox. Without one, Garuda stops at startup and does not run commands on your machine. The
+`bash` tool then has no `outside_sandbox` option. A project can turn the strict profile on, but not
+off.
+
 ## Consent for project content
 
 A cloned repository can carry hooks, MCP servers, slash commands, skills, agents and settings. Each

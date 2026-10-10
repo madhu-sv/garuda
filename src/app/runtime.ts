@@ -75,7 +75,9 @@ import {
   assertModelAllowedByPolicy,
   ignoredProjectPolicy,
   isHostBlockedByPolicy,
+  isStrict,
   type TeamPolicy,
+  withProfile,
 } from "../permissions/policy.js";
 import { gateProjectSettings } from "../permissions/projectSettings.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
@@ -480,6 +482,7 @@ export class Runtime {
         ...(web.enabled ? { web: { allowLocalhost: web.allowLocalhost } } : {}),
         todo: settings.todo?.enabled === true,
         daemons: settings.daemons?.enabled === true,
+        strict: isStrict(policy),
       }),
     );
     const info = options.modelInfo ?? lookupModel(options.modelId);
@@ -660,26 +663,25 @@ export class Runtime {
   }
 
   static async create(options: RuntimeOptions): Promise<Runtime> {
-    const policy = options.policy;
     const ignored = ignoredProjectPolicy(options.root);
     if (ignored !== undefined) {
       options.onNotice?.(
         `${ignored} is ignored: a team policy comes only from the managed file or ~/.garuda/policy.json, which a project cannot change.`,
       );
     }
-    assertModelAllowedByPolicy(policy, options.modelId);
+    assertModelAllowedByPolicy(options.policy, options.modelId);
     // A new object: the loaded settings may be the shared DEFAULT_SETTINGS, or the caller's own
     // object. Changing either in place gave every later runtime in the process the policy's limits.
-    const settings = withPolicyLimits(
-      options.settings ?? (await gatedProjectSettings(options)),
-      policy,
-    );
+    const loaded = options.settings ?? (await gatedProjectSettings(options));
+    // The strict profile (0.17): from a policy file, or turned on (never off) by the project.
+    const policy = withProfile(options.policy, loaded.profile);
+    const settings = withPolicyLimits(loaded, policy);
     const auditLogger = new AuditLogger(options.audit?.dir ?? options.root, {
       ...(policy === undefined ? {} : { policy }),
       ...(options.audit === undefined ? { enabled: false } : {}),
       ...(options.onNotice === undefined ? {} : { onError: options.onNotice }),
     });
-    const choice = createExecutor(settings.executor);
+    const choice = createExecutor(settings.executor, undefined, isStrict(policy));
     let mcpServers: ServerConfig[] = [];
     if (options.mcp !== false) {
       const loaded = await loadMcpConfig({
@@ -723,6 +725,7 @@ export class Runtime {
       {
         codeIndex: settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE,
         sandboxed: choice.executor.isolation !== "none",
+        strict: isStrict(policy),
         mcp: mcpServers.some((s) => s.def.enabled),
         web: settings.web?.enabled ?? true,
         search:
@@ -1837,7 +1840,7 @@ export class Runtime {
       );
       // Live test (0.13): the model ran `npm view` outside the sandbox at once, because the tool
       // text says the sandbox has no network. Tell it which hosts work in the sandbox.
-      this.pendingNotes.push(networkNote(entries));
+      this.pendingNotes.push(networkNote(entries, isStrict(this.policy)));
     })();
     try {
       await this.networkStarted;

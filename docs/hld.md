@@ -265,7 +265,7 @@ name for MCP servers (`mcp__github__*`).
 
 The executor is Seatbelt on macOS, bubblewrap on Linux, or the host when neither works (`auto`).
 
-0.17, planned (see [lld/bounded-changes.md](lld/bounded-changes.md)): with `"commands": { "mode": "staged" }` (opt-in), a `bash` command runs in a staging copy of the project and its changes ask before they reach the project. A strict profile (opt-in) requires the OS sandbox: no host fallback and no `outside_sandbox`. A job's commands write only in its approved folders.
+0.17, planned (see [lld/bounded-changes.md](lld/bounded-changes.md)): with `"commands": { "mode": "staged" }` (opt-in), a `bash` command runs in a staging copy of the project and its changes ask before they reach the project. The strict profile (0.17, done; opt-in) requires the OS sandbox: no host fallback and no `outside_sandbox`. A job's commands write only in its approved folders.
 
 Network allowlist (0.13). With `network.allow` in the settings, the runtime starts a local proxy
 before the first turn (after the user agreed to the project's list). Sandboxed commands get

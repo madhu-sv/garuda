@@ -86,22 +86,30 @@ const SANDBOX_BLOCK =
   /Operation not permitted|Read-only file system|EROFS|EPERM|EAI_AGAIN|ENOTFOUND|ENETUNREACH|Network is unreachable|Could not resolve host|Temporary failure in name resolution|getaddrinfo/;
 
 /** A note when a failed command in the sandbox looks blocked by it. */
-export function sandboxHint(result: ExecResult, allowlist = false): string | undefined {
+export function sandboxHint(
+  result: ExecResult,
+  allowlist = false,
+  strict = false,
+): string | undefined {
   if (result.exitCode === 0 || result.timedOut || result.aborted) return undefined;
   if (!SANDBOX_BLOCK.test(`${result.stdout.text}\n${result.stderr.text}`)) return undefined;
   const network = allowlist
     ? "it reaches only the hosts on the network allowlist, through Garuda's proxy"
     : "it has no network";
-  return `The sandbox may have blocked this command: ${network}, and it can write only in the working root and temp folders. If the command must have more, run it again with outside_sandbox: true. The user must approve.`;
+  const more = strict
+    ? "In the strict profile no command runs outside the sandbox: if the command must have more, tell the user what it needs."
+    : "If the command must have more, run it again with outside_sandbox: true. The user must approve.";
+  return `The sandbox may have blocked this command: ${network}, and it can write only in the working root and temp folders. ${more}`;
 }
 
 /** The network allowlist (0.13): a note that names the hosts the proxy blocked. */
 export function networkHint(
   blocked: readonly { host: string; port: number; reason: string }[],
+  strict = false,
 ): string | undefined {
   if (blocked.length === 0) return undefined;
   const seen = [...new Map(blocked.map((b) => [`${b.host}:${b.port}`, b.reason])).values()];
-  return `${seen.join(" ")} Commands in the sandbox reach only the hosts on the network allowlist. Do not work around it; if the host is needed, tell the user: they can add it to "network.allow" in .garuda/settings.json, or approve outside_sandbox: true.`;
+  return `${seen.join(" ")} Commands in the sandbox reach only the hosts on the network allowlist. Do not work around it; if the host is needed, tell the user: they can add it to "network.allow" in .garuda/settings.json${strict ? "" : ", or approve outside_sandbox: true"}.`;
 }
 
 /** Notes for the model about the command it ran (see the system prompt for the same rules). */
@@ -132,9 +140,16 @@ export function commandHints(command: string, strippedCd: boolean): string[] {
  */
 export function createBashTool({
   daemons = false,
+  strict = false,
 }: {
   daemons?: boolean;
+  /**
+   * The strict profile (0.17): no `outside_sandbox` in the input, so the model does not see it; a
+   * call that still sends it fails the input check.
+   */
+  strict?: boolean;
 } = {}): Tool<Input, BashOutput> {
+  const withDaemons = daemons ? input : input.omit({ is_daemon: true });
   return {
     name: "bash",
     description: [
@@ -144,22 +159,30 @@ export function createBashTool({
       "Long output is cut in the middle. The result shows the exit code, stdout and stderr.",
       "Use read_file, glob and grep to look at files, not cat, ls, find or grep: they need no approval.",
       "Do not pipe into tail or head: the pipe hides the exit code, and long output is cut already.",
-      "When Garuda has an OS sandbox, commands run in it with no approval: no network (or only the hosts on the user's network allowlist), writes only in the working root and temp folders.",
-      "Otherwise the user must approve each command.",
+      ...(strict
+        ? [
+            "Commands run in the OS sandbox with no approval: no network (or only the hosts on the user's network allowlist), writes only in the working root and temp folders. No command runs outside the sandbox (strict profile).",
+          ]
+        : [
+            "When Garuda has an OS sandbox, commands run in it with no approval: no network (or only the hosts on the user's network allowlist), writes only in the working root and temp folders.",
+            "Otherwise the user must approve each command.",
+          ]),
       ...(daemons
         ? [
             "To run long-running servers or background tasks, set is_daemon: true. Use process_manager to check logs or stop them.",
           ]
         : []),
     ].join("\n"),
-    inputSchema: daemons ? input : input.omit({ is_daemon: true }),
+    inputSchema: (strict
+      ? withDaemons.omit({ outside_sandbox: true }).strict()
+      : withDaemons) as unknown as typeof input,
     readOnly: false,
     runsCommands: true,
 
     // The user approves, and rules match, the command that will really run.
     async describe({ command, outside_sandbox, is_daemon }, { root, executor }) {
       const run = stripRootCd(command, root).command;
-      const outside = outside_sandbox === true && executor?.isolation !== "none";
+      const outside = !strict && outside_sandbox === true && executor?.isolation !== "none";
       return {
         target: { kind: "command", command: run, ...(outside ? { outsideSandbox: true } : {}) },
         preview: is_daemon === true ? `[daemon] ${run}` : run,
@@ -171,6 +194,9 @@ export function createBashTool({
       { executor, permissions, signal, root },
     ) {
       if (executor === undefined) throw new Error("No executor is configured, so bash cannot run.");
+      if (strict && (outside_sandbox === true || executor.isolation === "none")) {
+        throw new Error("The strict profile runs commands only in the OS sandbox.");
+      }
       const sandboxed = executor.isolation !== "none" && outside_sandbox !== true;
       const policy = permissions.execPolicy(timeout_ms ?? BASH_DEFAULT_TIMEOUT_MS, {
         sandbox: sandboxed,
@@ -198,11 +224,13 @@ export function createBashTool({
 
       const result = await executor.run(run, policy, { signal });
       const hints = commandHints(run, stripped);
-      const network = sandboxed ? networkHint(permissions.takeNetworkBlocks?.() ?? []) : undefined;
+      const network = sandboxed
+        ? networkHint(permissions.takeNetworkBlocks?.() ?? [], strict)
+        : undefined;
       if (network !== undefined) hints.push(network);
       const blocked =
         sandboxed && network === undefined
-          ? sandboxHint(result, policy.proxy !== undefined)
+          ? sandboxHint(result, policy.proxy !== undefined, strict)
           : undefined;
       if (blocked !== undefined) hints.push(blocked);
       return { ...result, hints };
