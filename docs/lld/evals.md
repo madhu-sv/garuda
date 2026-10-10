@@ -168,9 +168,16 @@ share of tokens read from the prompt cache (batch caching is best effort), and t
 `report.json` records `batch`, `parallel` and `wallMs`, and each result its `cacheReadTokens`.
 
 Error runs: a run that throws (stop reason `error`, for example an API connection that broke even after
-the loop's retries) says nothing about the agent. The report marks it `ERR`, leaves it out of the pass
-count and the per-task means, and names the number in the totals line (`17/17 passed · 1 error run(s)
-not counted`). Its tokens and cost still count in the totals. A task that runs longer than 10 minutes is
+the loop's retries) says little about the agent, but a user still gets no result. The report marks it
+`ERR` and gives two rates (0.16.2, review of 0.16.1; `summarize` in `runner.ts`):
+
+- **Scored runs:** error runs left out. How the agent does when a run completes.
+- **All attempted runs:** error runs count as failures. How often a user gets a passing result.
+
+For example: `17/17 scored runs passed (100%) · 17/18 of all attempted runs (94%) · 1 error run(s)`.
+The per-task means leave error runs out and add `(passes/all of all attempts; n error run(s))`.
+`report.json` has the same numbers in `summary` (`attempted`, `errors`, `scored`, `passed`,
+`scoredRate`, `attemptedRate`). Tokens and cost of error runs still count in the totals. A task that runs longer than 10 minutes is
 a failure with the stop reason `timeout`, not an error (12 hours with `--batch on`).
 
 ## Method

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HARD_TASKS } from "../src/evals/hardTasks.js";
-import { formatReport, runCheck, runEvalTask, writeFiles } from "../src/evals/runner.js";
+import { formatReport, runCheck, runEvalTask, summarize, writeFiles } from "../src/evals/runner.js";
 import { ALL_TASKS } from "../src/evals/suites.js";
 import { EVAL_TASKS } from "../src/evals/tasks.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
@@ -168,7 +168,9 @@ describe("eval runner (N5)", () => {
     ]);
     expect(report).toContain("PASS  a");
     expect(report).toContain("FAIL  b");
-    expect(report).toContain("1/2 passed · 53 steps · cost $0.2100");
+    expect(report).toContain(
+      "1/2 scored runs passed (50%) · 1/2 of all attempted runs (50%) · 53 steps · cost $0.2100",
+    );
     expect(report).not.toContain("Mean per task");
     const repeated = formatReport([
       {
@@ -212,10 +214,28 @@ describe("eval runner (N5)", () => {
       { ...run, id: "b", passed: false, stopReason: "error", steps: 0, tokens: 0, costUsd: 0 },
     ]);
     expect(withError).toContain("ERR   a");
-    expect(withError).toContain("1/1 passed · 2 error run(s) not counted · 4 steps · cost $0.0250");
+    // Both rates (review of 0.16.1): over the scored runs, and over all attempted runs.
     expect(withError).toContain(
-      "1/1   a                     4.0 steps      2.0k tok  $ 0.0200  (1 error run(s) left out)",
+      "1/1 scored runs passed (100%) · 1/3 of all attempted runs (33%) · 2 error run(s) · 4 steps · cost $0.0250",
     );
-    expect(withError).toContain("0/0   b                   (1 error run(s) left out)");
+    expect(withError).toContain(
+      "1/1   a                     4.0 steps      2.0k tok  $ 0.0200  (1/2 of all attempts; 1 error run(s))",
+    );
+    expect(withError).toContain("0/0   b                   (0/1 of all attempts; 1 error run(s))");
+    expect(summarize([run, { ...run, passed: false, stopReason: "error" }])).toEqual({
+      attempted: 2,
+      errors: 1,
+      scored: 1,
+      passed: 1,
+      scoredRate: 1,
+      attemptedRate: 0.5,
+    });
+    expect(summarize([{ ...run, passed: false, stopReason: "error" }])).toEqual({
+      attempted: 1,
+      errors: 1,
+      scored: 0,
+      passed: 0,
+      attemptedRate: 0,
+    });
   });
 });
