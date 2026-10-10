@@ -1,8 +1,9 @@
 # Bounded changes (0.17, planned)
 
-Status: planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
-2026-10-10). No code exists yet. The patch plan is at the end. Each section has decisions, a threat
-model, a default, tests and the open questions for the user.
+Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184). The
+rest is planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
+2026-10-10). The patch plan is at the end. Each section has decisions, a threat model, a default and
+tests.
 
 ## Purpose
 
@@ -133,13 +134,11 @@ Garuda applies nothing and shows the paths. The staged change stays for one more
 - `outside_sandbox` still asks first and is not staged.
 - Live test on macOS (clone) and Linux (overlay, and copy with an older bwrap).
 
-### Open questions
+### Decisions of the user (2026-10-10)
 
-- **Q1.** Ignored files: keep them only in the staging copy (this design), or apply them with the
-  same yes? Keeping them is safer, but a user may expect build output in the project.
-- **Q2.** Per-file selection in the question (as hunk staging for edits), or all or nothing first?
-- **Q3.** macOS runs the command at the clone's path. Accept that, or keep staged mode Linux-only
-  until there is a better backend?
+- **Q1.** Ignored files stay only in the staging copy. They are never applied.
+- **Q2.** All or nothing first. Per-file selection can come later.
+- **Q3.** On macOS the command runs at the clone's path. Staged mode works on macOS and Linux.
 
 ## T6: job write scopes
 
@@ -181,7 +180,7 @@ enforce the same scope. A folder list is what both can enforce, and what the use
 - Scope validation: `.`, `..`, absolute paths and links are refused.
 - Live test job on macOS and Linux.
 
-## T7: strict profile
+## T7: strict profile (done, 0184)
 
 ### Behaviour
 
@@ -197,6 +196,10 @@ Strict means:
    still sends it is denied.
 3. `!command` in the chat runs in the sandbox only.
 4. `garuda acp`: `session/new` fails with the same message, as a plain error (not "auth required").
+
+As built: a strict policy also has `requireSandbox: true`. The strict `bash` schema rejects unknown
+fields, so a call that still sends `outside_sandbox` fails the input check. See
+[permissions.md](permissions.md#the-strict-profile-017).
 
 Strict does not change the network rules or the edit questions.
 
@@ -318,4 +321,4 @@ claims from T1.
 | 0190 | T5 | The question, apply, discard, conflict check, undo. |
 | 0191 | T5 | Docs, the live tests on macOS and Linux, the measured costs. |
 
-The order puts the small, independent changes first. T5 comes last, after the answers to Q1–Q3.
+The order puts the small, independent changes first. T5 comes last.

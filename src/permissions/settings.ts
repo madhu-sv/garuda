@@ -7,6 +7,7 @@ import type { Price } from "../model/pricing.js";
 import { EFFORTS, type Effort } from "../model/types.js";
 import { expandAllowlist } from "../net/allowlist.js";
 import { EXECUTOR_NAMES } from "../sandbox/index.js";
+import { PROFILES, type Profile } from "./policy.js";
 import { parseRule, type Rule } from "./rules.js";
 import type { SandboxSettings } from "./sandboxPaths.js";
 
@@ -15,6 +16,7 @@ import type { SandboxSettings } from "./sandboxPaths.js";
  *
  * {
  *   "executor": "auto",
+ *   "profile": "strict",
  *   "sandbox": { "writePaths": ["~/tools/cache"], "denyRead": ["~/secrets"] },
  *   "permissions": {
  *     "allow": ["bash(pnpm test*)", "edit_file(src/**)"],
@@ -44,6 +46,7 @@ export type NotifyChoice = (typeof NOTIFY_CHOICES)[number];
 
 const schema = z.strictObject({
   executor: z.enum(EXECUTOR_NAMES).optional(),
+  profile: z.enum(PROFILES).optional(),
   sandbox: z
     .strictObject({
       writePaths: z.array(z.string()).optional(),
@@ -163,6 +166,11 @@ const schema = z.strictObject({
 
 export interface Settings {
   executor: (typeof EXECUTOR_NAMES)[number];
+  /**
+   * The strict profile (0.17): a project can turn it on, never off (see withProfile in policy.ts).
+   * Absent: the policy decides.
+   */
+  profile?: Profile;
   allow: Rule[];
   deny: Rule[];
   /** Extra environment variables that commands may see. */
@@ -202,6 +210,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
   if (!parsed.success) throw new Error(`${source}: ${z.prettifyError(parsed.error)}`);
   const {
     executor = "auto",
+    profile,
     sandbox,
     web,
     permissions = {},
@@ -236,6 +245,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     });
   return {
     executor,
+    ...(profile === undefined ? {} : { profile }),
     allow: rules(permissions.allow),
     deny: rules(permissions.deny),
     envAllow: env.allow ?? [],

@@ -90,6 +90,26 @@ Since 0.14 (Garuda's audit review):
 - Limit of the chain: lines cut from the end of a file, or a removed file, are not detected; that
   needs an anchor outside the file. `/audit verify` says so.
 
+### The strict profile (0.17)
+
+`"profile": "strict"` in the managed policy, in `~/.garuda/policy.json`, or in the project's
+`.garuda/settings.json`. A project can turn it on, never off: `withProfile` (policy.ts) gives a
+strict policy when any source asks for it, and a strict policy also has `requireSandbox: true`.
+`mergePolicies` keeps "strict" when either file sets it.
+
+- `createExecutor(name, find, strict)` (`src/sandbox/index.ts`): the OS sandbox or a
+  `StrictProfileError`. With no sandbox, Garuda stops at startup with the reason and a fix that
+  never says "use the host". `executor: "host"` is an error.
+- The `bash` tool has no `outside_sandbox` in its input schema and its description; the schema is
+  strict, so a call that still sends the field fails the input check. The sandbox hints and the
+  network note do not mention `outside_sandbox`.
+- The system prompt says that no command runs outside the sandbox.
+- `!command` in the chat already runs only in the sandbox (it never sends `outside_sandbox`).
+- `garuda acp`: `session/new` fails with the same message (an internal error, not "auth
+  required": a setup cannot help).
+
+Tests: `test/strictProfile.test.ts`.
+
 ### Plan mode (0.4)
 
 Unattended (0.7, scheduled jobs): with the option `unattended: { reason, onDeny }`, step 7 never asks: the
@@ -158,6 +178,7 @@ A tool's `CallInfo` may carry a `title` (0.5): the engine passes it to the appro
 ```json
 {
   "executor": "auto",
+  "profile": "strict",
   "sandbox": { "writePaths": ["~/tools/cache"], "denyRead": ["~/secrets"] },
   "codeIndex": "off",
   "permissions": { "allow": ["bash(pnpm test*)"], "deny": ["bash(git push*)"] },

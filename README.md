@@ -559,7 +559,7 @@ A team policy sets limits that a project cannot loosen, and an audit log records
 - **Team policy**: guardrails that a project's settings cannot loosen. Garuda reads the managed file
   (`/Library/Application Support/Garuda/policy.json` on macOS, `/etc/garuda/policy.json` on Linux;
   an admin writes it) and `~/.garuda/policy.json`. Where both exist, the stricter value wins: lists of
-  denials add up, `requireSandbox` and `strictAllowlist` are on when either sets them, limits take the
+  denials add up, `requireSandbox`, `strictAllowlist` and the strict `profile` are on when either sets them, limits take the
   lower value, and `allowedModels` and `audit` come from the managed file when it sets them. A broken
   file stops Garuda. A project's own `.garuda/policy.json` is ignored with a notice: a cloned repo
   could otherwise remove its own limits. The chat, `-p`, jobs, the night shift and `garuda eval` all
@@ -568,6 +568,10 @@ A team policy sets limits that a project cannot loosen, and an audit log records
     `["rm -rf *", "git push *--force*"]`). A compound command is denied when one of its parts matches.
   - `requireSandbox`: When `true`, no command runs outside the OS sandbox: `outside_sandbox` is
     denied, and on a machine with no OS sandbox every command is denied.
+  - `profile` (0.17): `"strict"` requires the OS sandbox. Without one, Garuda stops at startup and
+    runs no command on the host; `"executor": "host"` is an error; the `bash` tool has no
+    `outside_sandbox`. Strict wins in a merge. A project's `.garuda/settings.json` can also set
+    `"profile": "strict"`, but cannot turn off a policy's strict profile.
   - `denyPaths`: root-relative path patterns that the agent may not read or write (for example
     `["**/.env*", "secret/**"]`). File tools refuse them; `grep`, `glob` and the code index skip them
     (no content, no name). Commands in the OS sandbox cannot read or write them either: the matching

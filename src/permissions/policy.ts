@@ -37,7 +37,16 @@ export interface LoadedPolicy {
   sources: string[];
 }
 
+/** The profiles (0.17): "strict" requires the OS sandbox, with no host fallback and no outside_sandbox. */
+export const PROFILES = ["default", "strict"] as const;
+export type Profile = (typeof PROFILES)[number];
+
 export interface TeamPolicy {
+  /**
+   * The strict profile (0.17, review T7): the OS sandbox is required. Garuda stops at startup
+   * without one; `executor: "host"` is an error; the bash tool has no `outside_sandbox`.
+   */
+  profile?: Profile;
   /** Disallowed command patterns across all executions (e.g. ["rm -rf *", "git push *--force*"]). */
   disallowedCommands?: string[];
   /** Require OS sandbox for all bash commands (disallowing outsideSandbox: true). */
@@ -64,6 +73,7 @@ export interface TeamPolicy {
 }
 
 const policySchema = z.strictObject({
+  profile: z.enum(PROFILES).optional(),
   disallowedCommands: z.array(z.string()).optional(),
   requireSandbox: z.boolean().optional(),
   denyPaths: z.array(z.string()).optional(),
@@ -95,6 +105,7 @@ export function parsePolicy(json: unknown): TeamPolicy {
   }
   const data = result.data;
   return {
+    ...(data.profile === undefined ? {} : { profile: data.profile }),
     ...(data.disallowedCommands === undefined
       ? {}
       : { disallowedCommands: data.disallowedCommands }),
@@ -182,7 +193,14 @@ export function mergePolicies(
   const maxSteps = lower(user.limits?.maxSteps, managed.limits?.maxSteps);
   const tokenBudget = lower(user.limits?.tokenBudget, managed.limits?.tokenBudget);
   const audit = managed.audit ?? user.audit;
+  const profile =
+    user.profile === undefined && managed.profile === undefined
+      ? undefined
+      : user.profile === "strict" || managed.profile === "strict"
+        ? "strict"
+        : "default";
   return {
+    ...(profile === undefined ? {} : { profile }),
     ...(disallowedCommands === undefined ? {} : { disallowedCommands }),
     ...(requireSandbox === undefined ? {} : { requireSandbox }),
     ...(denyPaths === undefined ? {} : { denyPaths }),
@@ -247,6 +265,23 @@ export function isCommandDisallowedByPolicy(
     }
   }
   return { disallowed: false };
+}
+
+/** Is the strict profile on (0.17)? A policy file or the project's settings can turn it on. */
+export function isStrict(policy: TeamPolicy | undefined): boolean {
+  return policy?.profile === "strict";
+}
+
+/**
+ * The policy with the strict profile applied (pure): strict when the policy or the project's
+ * settings ask for it, and then `requireSandbox` too. A project can turn strict on, never off.
+ */
+export function withProfile(
+  policy: TeamPolicy | undefined,
+  projectProfile: Profile | undefined,
+): TeamPolicy | undefined {
+  if (!isStrict(policy) && projectProfile !== "strict") return policy;
+  return { ...policy, profile: "strict", requireSandbox: true };
 }
 
 export function isSandboxRequiredByPolicy(
