@@ -69,6 +69,11 @@ export interface TeamPolicy {
   audit?: {
     enabled?: boolean;
     level?: "all" | "mutations" | "denials";
+    /**
+     * (0.17, review T8) Keep each log file's last `seq` and `hash` in a checkpoint file, so that
+     * `/audit verify` finds lines cut from the end and deleted files. Off by default.
+     */
+    checkpoint?: boolean;
   };
 }
 
@@ -94,6 +99,7 @@ const policySchema = z.strictObject({
     .strictObject({
       enabled: z.boolean().optional(),
       level: z.enum(["all", "mutations", "denials"]).optional(),
+      checkpoint: z.boolean().optional(),
     })
     .optional(),
 });
@@ -140,6 +146,7 @@ export function parsePolicy(json: unknown): TeamPolicy {
           audit: {
             ...(data.audit.enabled === undefined ? {} : { enabled: data.audit.enabled }),
             ...(data.audit.level === undefined ? {} : { level: data.audit.level }),
+            ...(data.audit.checkpoint === undefined ? {} : { checkpoint: data.audit.checkpoint }),
           },
         }),
   };

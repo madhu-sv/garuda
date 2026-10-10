@@ -1,6 +1,6 @@
 import { SPECIALIST_SPECS } from "../../agents/moe.js";
 import { modelFacts, type Runtime } from "../../app/runtime.js";
-import { verifyAuditFile } from "../../audit/logger.js";
+import { verifyAuditDir } from "../../audit/logger.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { totalTokens, WEB_SEARCH_USD } from "../../model/pricing.js";
 import {
@@ -662,23 +662,40 @@ async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): 
 
   if (arg === "verify") {
     // Check each file's hash chain (merge gate): a changed, removed or inserted line shows here.
-    // Lines cut from the end of a file, or a removed file, do not (no anchor outside the file).
-    const files = await runtime.audit.files();
+    // With the checkpoint (0.17, policy audit.checkpoint), also lines cut from the end of a file
+    // and a deleted file.
+    const results = await verifyAuditDir(runtime.audit.dir);
     lines.push("", `Audit files: ${runtime.audit.dir}`);
-    if (files.length === 0) lines.push("  none yet");
+    if (results.length === 0) lines.push("  none yet");
     let broken = 0;
-    for (const file of files) {
-      const result = await verifyAuditFile(file);
-      const name = file.slice(runtime.audit.dir.length + 1);
-      if (result.ok) {
-        lines.push(`  ok      ${name} (${result.lines} lines)`);
+    let unchecked = 0;
+    for (const result of results) {
+      if ("missing" in result) {
+        broken++;
+        lines.push(`  MISSING ${result.file}: the checkpoint names it, but the file is gone`);
+      } else if ("brokenCheckpoint" in result) {
+        broken++;
+        lines.push(`  BROKEN  ${result.file}: its checkpoint is not valid`);
+      } else if (result.verdict.ok) {
+        if (!result.checkpoint) unchecked++;
+        lines.push(
+          `  ok      ${result.file} (${result.verdict.lines} lines${result.checkpoint ? ", checkpoint" : ""})`,
+        );
       } else {
         broken++;
-        lines.push(`  BROKEN  ${name}: line ${result.line}: ${result.why}`);
+        lines.push(`  BROKEN  ${result.file}: line ${result.verdict.line}: ${result.verdict.why}`);
       }
     }
-    if (broken > 0) lines.push(`${broken} file(s) were changed after Garuda wrote them.`);
-    lines.push("This check cannot see lines cut from the end of a file, or a removed file.");
+    if (broken > 0)
+      lines.push(`${broken} file(s) were changed or removed after Garuda wrote them.`);
+    if (unchecked > 0) {
+      lines.push(
+        `${unchecked} file(s) have no checkpoint: this check cannot see lines cut from their end, or a removed file. The team policy can turn on "audit": { "checkpoint": true }.`,
+      );
+    }
+    lines.push(
+      "Someone with your rights can rewrite a file and its checkpoint together; this check cannot see that.",
+    );
     renderer.info(lines.join("\n"));
     return;
   }

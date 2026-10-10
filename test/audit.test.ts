@@ -1,9 +1,16 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { Runtime } from "../src/app/runtime.js";
-import { AuditLogger, auditDirFor, verifyAuditFile } from "../src/audit/logger.js";
+import {
+  AuditLogger,
+  auditDirFor,
+  auditLineHash,
+  checkpointPath,
+  verifyAuditDir,
+  verifyAuditFile,
+} from "../src/audit/logger.js";
 import { runCommand } from "../src/cli/chat/commands.js";
 import type { Renderer } from "../src/cli/renderer.js";
 import { HookRunner } from "../src/hooks/runner.js";
@@ -11,7 +18,7 @@ import type { AgentEvent } from "../src/loop/runAgent.js";
 import { FakeModelClient, reply, text } from "../src/model/fake.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
-import type { TeamPolicy } from "../src/permissions/policy.js";
+import { parsePolicy, type TeamPolicy } from "../src/permissions/policy.js";
 import { parseSettings } from "../src/permissions/settings.js";
 import { HostExecutor } from "../src/sandbox/host.js";
 import { FileTracker } from "../src/session/fileTracker.js";
@@ -580,5 +587,103 @@ describe("Audit log: fixes from Garuda's audit review (0.14)", () => {
       ["hook:preToolUse", "hook"],
       ["hook:preToolUse", "deny_policy"],
     ]);
+  });
+});
+
+describe("Audit checkpoint (0.17, review T8)", () => {
+  async function logged(dir: string, checkpoint: boolean, count = 3): Promise<AuditLogger> {
+    const logger = new AuditLogger(dir, { checkpoint });
+    for (let i = 0; i < count; i++) {
+      await logger.log({ tool: `t${i}`, decision: "executed", allowed: true, risk: "low" });
+    }
+    return logger;
+  }
+  const cutLastLine = (file: string) => {
+    const lines = readFileSync(file, "utf8").trim().split("\n");
+    writeFileSync(file, `${lines.slice(0, -1).join("\n")}\n`);
+  };
+
+  it("finds lines cut from the end of a file", async () => {
+    // Negative control: without the checkpoint, a cut tail still verifies.
+    const plain = await logged(join(base, "cp-off"), false);
+    cutLastLine(plain.filePath);
+    const [off] = await verifyAuditDir(plain.dir);
+    expect(off).toMatchObject({ checkpoint: false, verdict: { ok: true, lines: 2 } });
+
+    const logger = await logged(join(base, "cp-on"), true);
+    expect(await verifyAuditDir(logger.dir)).toEqual([
+      { file: basename(logger.filePath), checkpoint: true, verdict: { ok: true, lines: 3 } },
+    ]);
+    cutLastLine(logger.filePath);
+    const [cut] = await verifyAuditDir(logger.dir);
+    expect(cut).toMatchObject({ checkpoint: true, verdict: { ok: false, line: 3 } });
+    expect(JSON.stringify(cut)).toContain("lines were cut from the end");
+  });
+
+  it("finds a deleted file, and a rewritten line at the checkpoint", async () => {
+    const logger = await logged(join(base, "cp-deleted"), true);
+    rmSync(logger.filePath);
+    expect(await verifyAuditDir(logger.dir)).toEqual([
+      { file: basename(logger.filePath), missing: true },
+    ]);
+
+    // The cut tail with a forged last line: a valid chain, but not the checkpoint's line.
+    const other = await logged(join(base, "cp-forged"), true, 2);
+    const lines = readFileSync(other.filePath, "utf8").trim().split("\n");
+    const second = JSON.parse(lines[1] as string);
+    const { hash: _hash, ...body } = { ...second, tool: "forged" };
+    const forged = { ...body, hash: auditLineHash(body) };
+    writeFileSync(other.filePath, `${lines[0]}\n${JSON.stringify(forged)}\n`);
+    const [result] = await verifyAuditDir(other.dir);
+    expect(result).toMatchObject({ verdict: { ok: false, line: 2 } });
+  });
+
+  it("the checkpoint holds only seq and hash, private; the policy turns it on", async () => {
+    const policy = parsePolicy({ audit: { checkpoint: true } });
+    const logger = new AuditLogger(join(base, "cp-policy"), { policy });
+    await logger.log({
+      tool: "bash",
+      target: "echo secret-target",
+      decision: "executed",
+      allowed: true,
+      risk: "low",
+    });
+    const path = checkpointPath(logger.filePath);
+    const text = readFileSync(path, "utf8");
+    expect(Object.keys(JSON.parse(text)).sort()).toEqual(["hash", "seq"]);
+    expect(text).not.toContain("secret-target");
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+  });
+
+  it("/audit verify reports a cut tail with the checkpoint", async () => {
+    const root = join(base, "cp-chat");
+    mkdirSync(root, { recursive: true });
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake",
+      model: async () => new FakeModelClient([]),
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host" }),
+      policy: { audit: { checkpoint: true } },
+      audit: { dir: join(base, "cp-chat-audit") },
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    for (const tool of ["a", "b"]) {
+      await runtime.audit.log({ tool, decision: "executed", allowed: true, risk: "low" });
+    }
+    cutLastLine(runtime.audit.filePath);
+    const renderer = new TestRenderer();
+    await runCommand("/audit verify", {
+      runtime,
+      renderer,
+      sessionPath: (id: string) => join(root, id),
+    });
+    const out = renderer.messages.join("\n");
+    expect(out).toContain("BROKEN");
+    expect(out).toContain("lines were cut from the end");
+    await runtime.close();
   });
 });

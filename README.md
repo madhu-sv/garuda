@@ -590,9 +590,12 @@ A team policy sets limits that a project cannot loosen, and an audit log records
   says whether the call ran). Without a policy a failed write
   gives one notice. It is not in the project, so the agent's own tools cannot edit it. Targets and
   reasons pass the session redactor, so known secret formats (keys, tokens, `password=…`) are removed. Each line has `seq`,
-  `prev` and `hash` (sha256): `/audit verify` shows a changed, removed or inserted line, but not lines
-  cut from the end of a file or a removed file. This makes the log tamper-evident, not tamper-proof:
-  a user who can write the file can rewrite the whole chain.
+  `prev` and `hash` (sha256): `/audit verify` shows a changed, removed or inserted line. With
+  `"audit": { "checkpoint": true }` in the policy (0.17, off by default), Garuda also keeps each
+  file's last `seq` and `hash` in `checkpoints/<file>.json`, and `/audit verify` then shows lines cut
+  from the end of a file and a deleted file. This makes the log tamper-evident, not tamper-proof: a
+  user (or a program that runs as the user) can rewrite a file and its checkpoint together.
+  Sandboxed commands cannot write `~/.garuda`.
   Each line records:
   - Every authorization decision (`allow_readonly`, `allow_sandbox`, `deny_policy`, `deny_user`, etc.).
   - Security risk classification (`low`, `medium`, `high`, `critical`).

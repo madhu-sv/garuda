@@ -87,8 +87,24 @@ Since 0.14 (Garuda's audit review):
   whatever their names.
 - `readEvents({ limit: 0 })` is empty; files are joined with a newline, so a file cut in a crash does
   not swallow the next file's first line.
-- Limit of the chain: lines cut from the end of a file, or a removed file, are not detected; that
-  needs an anchor outside the file. `/audit verify` says so.
+- Limit of the chain: without an anchor outside the file, lines cut from the end of a file, or a
+  removed file, are not detected. The checkpoint (0.17, review T8; policy `audit.checkpoint`, off by
+  default) is that anchor: after each line, `checkpoints/<file>.jsonl.json` gets the line's `seq` and
+  `hash` (atomic write, 0600; one writer per log file, so parallel processes never race).
+  `verifyAuditDir` checks each chain, each file against its checkpoint (fewer lines, or another
+  line at the checkpoint's `seq`), and each checkpoint without its file. `/audit verify` names the
+  files without a checkpoint.
+
+| Change to a log file | Without the checkpoint | With the checkpoint |
+| --- | --- | --- |
+| A line changed | Detected | Detected |
+| A line inserted or removed in the middle | Detected | Detected |
+| Lines cut from the end | Not detected | Detected, back to the last checkpoint |
+| A whole file deleted | Not detected | Detected (its checkpoint remains) |
+| The file and its checkpoint rewritten or deleted together | Not detected | Not detected |
+
+  A sandboxed command cannot write `~/.garuda`, so the agent's own commands cannot change either
+  file. The user, and any program that runs as the user, can.
 
 ### The strict profile (0.17)
 
