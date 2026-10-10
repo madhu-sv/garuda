@@ -1,0 +1,60 @@
+---
+// Comments and questions under a blog post: giscus (GitHub Discussions), loaded only when the reader
+// scrolls near it. Its theme follows the site's: the docs' choice, else the system.
+import { GISCUS, giscusReady } from "../community";
+
+const discussions = `https://github.com/${GISCUS.repo}/discussions`;
+---
+<section class="comments" aria-labelledby="comments-title">
+  <h2 id="comments-title" class="comments-title">Comments and questions</h2>
+  {giscusReady() ? (
+    <>
+      <p class="meta">
+        Sign in with GitHub to comment or reply. The threads are also on{" "}
+        <a href={discussions}>GitHub Discussions</a>.
+      </p>
+      <div
+        class="giscus"
+        data-repo={GISCUS.repo}
+        data-repo-id={GISCUS.repoId}
+        data-category={GISCUS.category}
+        data-category-id={GISCUS.categoryId}
+      ></div>
+      <script is:inline>
+        (() => {
+          const box = document.querySelector(".giscus");
+          if (!box) return;
+          const chosen = document.documentElement.dataset.theme;
+          const dark =
+            chosen === "dark" ||
+            (chosen !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          const s = document.createElement("script");
+          s.src = "https://giscus.app/client.js";
+          const attrs = {
+            "data-repo": box.dataset.repo,
+            "data-repo-id": box.dataset.repoId,
+            "data-category": box.dataset.category,
+            "data-category-id": box.dataset.categoryId,
+            "data-mapping": "pathname",
+            "data-strict": "1",
+            "data-reactions-enabled": "1",
+            "data-emit-metadata": "0",
+            "data-input-position": "top",
+            "data-theme": dark ? "dark" : "light",
+            "data-lang": "en",
+            "data-loading": "lazy",
+          };
+          for (const [k, v] of Object.entries(attrs)) s.setAttribute(k, v);
+          s.crossOrigin = "anonymous";
+          s.async = true;
+          box.appendChild(s);
+        })();
+      </script>
+    </>
+  ) : (
+    <p class="meta">
+      Questions or feedback? Open an{" "}
+      <a href={`https://github.com/${GISCUS.repo}/issues`}>issue on GitHub</a>.
+    </p>
+  )}
+</section>

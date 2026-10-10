@@ -1,5 +1,6 @@
 ---
 import { getCollection, render } from "astro:content";
+import Comments from "../../components/Comments.astro";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 
 export async function getStaticPaths() {
@@ -26,5 +27,6 @@ const day = post.data.date.toLocaleDateString("en-GB", {
     <h1>{post.data.title}</h1>
     <p class="meta">{day} · {post.data.author}</p>
     <div class="prose"><Content /></div>
+    <Comments />
   </article>
 </BaseLayout>

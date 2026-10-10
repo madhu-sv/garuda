@@ -8,6 +8,8 @@
 - Website: a share image and share tags (LinkedIn, X and chat previews) on every page, structured
   data on the landing page, and a place for the Google Search Console tag (`site/src/seo.ts`; see
   docs/release.md). More npm keywords.
+- Website: comments under blog posts (giscus: threads with replies, stored as GitHub Discussions,
+  sign-in with GitHub) and a contact page. Both use `site/src/community.ts`; empty values hide them.
 
 ## 0.16.1 (2026-10-06)
 

@@ -650,3 +650,28 @@ h2.title {
 .term {
   border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
+
+/* Blog comments (giscus) and the contact page */
+.comments {
+  margin-top: 64px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+.comments-title {
+  font-family: var(--serif);
+  font-weight: 560;
+  font-size: 26px;
+  margin: 0 0 8px;
+}
+.comments .meta a {
+  color: var(--accent);
+}
+.comments .giscus {
+  margin-top: 20px;
+}
+.contact-list {
+  padding-left: 20px;
+}
+.contact-list li {
+  margin: 10px 0;
+}

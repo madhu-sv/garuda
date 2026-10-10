@@ -115,3 +115,23 @@ Google Search Console, once:
 
 A new share image: replace `site/public/og.png` (1200×630). LinkedIn keeps a preview for a while; its
 Post Inspector (linkedin.com/post-inspector) loads the new one.
+
+## Blog comments and the contact page
+
+The settings are in `site/src/community.ts`. While a value is empty, that part stays hidden: a blog
+post then shows a link to GitHub issues instead of comments.
+
+Comments use giscus: one thread per post, stored as a GitHub Discussion, with replies and reactions.
+Readers sign in with GitHub. To turn them on, once:
+
+1. On GitHub, **Settings → General → Features**: turn on **Discussions**.
+2. In **Discussions**, create a category named `Blog comments` of the type **Announcement** (only
+   maintainers and giscus can start threads there; everyone can reply).
+3. Install the giscus app on the repo: github.com/apps/giscus → **Install** → only `madhu-sv/garuda`.
+4. On giscus.app, enter `madhu-sv/garuda`, choose the category `Blog comments` and the mapping
+   "pathname". Copy `data-repo-id` and `data-category-id` into `repoId` and `categoryId`.
+5. Merge, wait for the Pages workflow, and open a blog post.
+
+The contact page (`/contact/`) shows GitHub issues and SECURITY.md always, and LinkedIn and the email
+address when `linkedin` and `email` are set. The email address is joined in the browser, so simple
+harvesters that read the HTML miss it; use an address that can take some spam.
