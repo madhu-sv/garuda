@@ -61,8 +61,10 @@ to a hash in `~/.garuda/trust.json`, so a change asks again.
 
 Every permission decision, tool run and hook command goes to `~/.garuda/audit/`, outside the
 project. Secrets are redacted. Each line is chained to the one before by a hash, and `/audit verify`
-finds a changed, removed or inserted line. The log is tamper-evident, not tamper-proof: someone who
-can write the file can rewrite the whole chain, and lines cut from the end are not detected.
+finds a changed, removed or inserted line. With the checkpoint (`"audit": { "checkpoint": true }` in
+a policy file), it also finds lines cut from the end of a file and a deleted file. The log is
+tamper-evident, not tamper-proof: someone who can write the files can rewrite a log and its
+checkpoint together. Sandboxed commands cannot write there.
 
 ## Known limits
 

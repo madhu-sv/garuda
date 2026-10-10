@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- Audit checkpoint: with `"audit": { "checkpoint": true }` in a policy file (off by default),
+  Garuda keeps each log file's last `seq` and `hash`, and `/audit verify` finds lines cut from the end
+  of a file and a deleted file. The docs list what verify detects with and without it (review T8).
 - The strict profile: `"profile": "strict"` in a policy file or in `.garuda/settings.json` requires
   the OS sandbox. Without one, Garuda stops at startup with the reason; `"executor": "host"` is an
   error; the `bash` tool has no `outside_sandbox`. A project can turn it on, never off (review T7).

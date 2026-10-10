@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
-import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { TeamPolicy } from "../permissions/policy.js";
 import type { CallTarget } from "../permissions/types.js";
 import { Redactor } from "../session/redact.js";
@@ -14,9 +14,12 @@ import { Redactor } from "../session/redact.js";
  *
  * Each line carries `seq`, `prev` (the hash of the line before; 64 zeros for the first) and `hash`
  * (sha256 of the line without `hash`). A changed, removed or inserted line breaks the chain, and
- * `verifyAuditFile` names the first broken line. Not detected (0.14, review): lines cut from the end
- * of a file, or a whole file removed; that needs an anchor outside the file. This makes the log tamper-EVIDENT, not tamper-proof:
- * someone who can write the file can also rewrite the whole chain.
+ * `verifyAuditFile` names the first broken line. Without a checkpoint, lines cut from the end of a
+ * file, or a whole file removed, are not detected. The checkpoint (0.17, review T8; policy
+ * `audit.checkpoint`) keeps each file's last `seq` and `hash` in `checkpoints/<file>.json`, so
+ * `verifyAuditDir` finds both. This makes the log tamper-EVIDENT, not tamper-proof: someone who can
+ * write the files (the user, or a program that runs as the user) can rewrite the chain and its
+ * checkpoint together. Sandboxed commands cannot write ~/.garuda.
  *
  * Targets and reasons go through the session redactor first, so tokens and keys never reach disk.
  */
@@ -80,6 +83,8 @@ export interface AuditLoggerOptions {
    */
   mandatory?: boolean;
   onError?: (message: string) => void;
+  /** Write a checkpoint after each line (0.17). Default: the policy's `audit.checkpoint`. */
+  checkpoint?: boolean;
   /** For the redactor. Default: this process's environment and the provider keys moved out of it. */
   env?: NodeJS.ProcessEnv;
 }
@@ -102,6 +107,7 @@ export class AuditLogger {
   private readonly level: "all" | "mutations" | "denials";
   private readonly enabled: boolean;
   private readonly mandatory: boolean;
+  private readonly checkpoint: boolean;
   private readonly onError: ((message: string) => void) | undefined;
   private readonly redactor: Redactor;
   private currentSessionId: string | undefined;
@@ -120,6 +126,7 @@ export class AuditLogger {
     this.level = options.level ?? options.policy?.audit?.level ?? "all";
     this.enabled = options.enabled ?? options.policy?.audit?.enabled ?? true;
     this.mandatory = options.mandatory ?? options.policy?.audit?.enabled === true;
+    this.checkpoint = options.checkpoint ?? options.policy?.audit?.checkpoint === true;
     this.onError = options.onError;
     this.redactor = new Redactor(options.env);
   }
@@ -175,6 +182,7 @@ export class AuditLogger {
         encoding: "utf8",
         mode: 0o600,
       });
+      if (this.checkpoint) await writeCheckpoint(this.filePath, { seq: body.seq, hash });
     } catch (error) {
       // The folder may have been removed: the next write creates it again (0.14, review).
       this.dirCreated = false;
@@ -395,9 +403,123 @@ export function describeTarget(target: CallTarget): string {
 }
 
 /** Check one audit file's hash chain. `ok: false` names the first bad line (1-based). */
+/** The checkpoint of one log file (0.17): its last line's `seq` and `hash`. No event text. */
+export interface AuditCheckpoint {
+  seq: number;
+  hash: string;
+}
+
+export const CHECKPOINT_DIR = "checkpoints";
+
+/** Where the checkpoint of a log file lives: `<dir>/checkpoints/<file name>.json`. */
+export function checkpointPath(file: string): string {
+  return join(dirname(file), CHECKPOINT_DIR, `${basename(file)}.json`);
+}
+
+/** Write a checkpoint atomically (a temp file, then rename), mode 0600. One writer per log file. */
+async function writeCheckpoint(file: string, checkpoint: AuditCheckpoint): Promise<void> {
+  const path = checkpointPath(file);
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const temp = `${path}.${process.pid}.tmp`;
+  await writeFile(temp, JSON.stringify(checkpoint), { mode: 0o600 });
+  await rename(temp, path);
+}
+
+async function readCheckpoint(path: string): Promise<AuditCheckpoint | "broken" | undefined> {
+  let text: string;
+  try {
+    text = await readFile(path, "utf8");
+  } catch {
+    return undefined;
+  }
+  try {
+    const json = JSON.parse(text) as Partial<AuditCheckpoint>;
+    if (
+      Number.isInteger(json.seq) &&
+      (json.seq as number) > 0 &&
+      typeof json.hash === "string" &&
+      /^[0-9a-f]{64}$/.test(json.hash)
+    ) {
+      return { seq: json.seq as number, hash: json.hash };
+    }
+  } catch {}
+  return "broken";
+}
+
+export type AuditVerdict = { ok: true; lines: number } | { ok: false; line: number; why: string };
+
+/**
+ * Check one file's chain; with a checkpoint (0.17), also that the file still has the line that the
+ * checkpoint names: fewer lines means lines were cut from the end.
+ */
 export async function verifyAuditFile(
   file: string,
-): Promise<{ ok: true; lines: number } | { ok: false; line: number; why: string }> {
+  checkpoint?: AuditCheckpoint,
+): Promise<AuditVerdict> {
+  const chain = await verifyChain(file);
+  if (!chain.ok || checkpoint === undefined) return chain;
+  if (chain.lines < checkpoint.seq) {
+    return {
+      ok: false,
+      line: chain.lines + 1,
+      why: `the checkpoint names line ${checkpoint.seq}, but the file ends at line ${chain.lines}: lines were cut from the end`,
+    };
+  }
+  const rows = (await readFile(file, "utf8")).split("\n").filter((l) => l !== "");
+  const at = JSON.parse(rows[checkpoint.seq - 1] as string) as AuditLine;
+  if (at.hash !== checkpoint.hash) {
+    return {
+      ok: false,
+      line: checkpoint.seq,
+      why: "the line is not the one in the checkpoint",
+    };
+  }
+  return chain;
+}
+
+/** One result of verifyAuditDir: a log file, or a checkpoint whose log file is gone. */
+export type AuditDirResult =
+  | { file: string; checkpoint: boolean; verdict: AuditVerdict }
+  | { file: string; missing: true }
+  | { file: string; brokenCheckpoint: true };
+
+/**
+ * Check every log file of a project's audit folder (0.17): each chain, each file against its
+ * checkpoint, and each checkpoint without its log file (a deleted file).
+ */
+export async function verifyAuditDir(dir: string): Promise<AuditDirResult[]> {
+  let names: string[] = [];
+  let checkpoints: string[] = [];
+  try {
+    names = (await readdir(dir)).filter((f) => f.endsWith(".jsonl")).sort();
+  } catch {}
+  try {
+    checkpoints = (await readdir(join(dir, CHECKPOINT_DIR)))
+      .filter((f) => f.endsWith(".jsonl.json"))
+      .sort();
+  } catch {}
+  const results: AuditDirResult[] = [];
+  for (const name of names) {
+    const file = join(dir, name);
+    const checkpoint = await readCheckpoint(checkpointPath(file));
+    if (checkpoint === "broken") {
+      results.push({ file: name, brokenCheckpoint: true });
+      continue;
+    }
+    results.push({
+      file: name,
+      checkpoint: checkpoint !== undefined,
+      verdict: await verifyAuditFile(file, checkpoint),
+    });
+  }
+  for (const entry of checkpoints) {
+    const name = entry.slice(0, -".json".length);
+    if (!names.includes(name)) results.push({ file: name, missing: true });
+  }
+  return results;
+}
+
+async function verifyChain(file: string): Promise<AuditVerdict> {
   const rows = (await readFile(file, "utf8")).split("\n").filter((l) => l !== "");
   let prev = GENESIS;
   for (let i = 0; i < rows.length; i++) {
