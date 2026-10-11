@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- Design (second review): staged commands never fall back to direct mode and never apply an
+  incomplete change list; the shared budget keeps a reservation as spent when a request fails or is
+  cancelled with no reported usage (docs/lld/bounded-changes.md).
 - Exact claims, second pass (second review): the sandbox writes the project, temp folders and
   package caches (not "only the project"); a command outside the sandbox asks unless an allow rule
   or a session answer covers it (not "always"); `/undo` restores the files in its snapshot, not
