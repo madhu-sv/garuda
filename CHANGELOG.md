@@ -2,6 +2,11 @@
 
 ## 0.17.0 (unreleased)
 
+- Exact claims, second pass (second review): the sandbox writes the project, temp folders and
+  package caches (not "only the project"); a command outside the sandbox asks unless an allow rule
+  or a session answer covers it (not "always"); `/undo` restores the files in its snapshot, not
+  ignored files (not "what a turn changed"). The claims test now reads whole paragraphs and knows
+  these phrases.
 - Audit checkpoint fixes (second review): a failed checkpoint write no longer makes the next audit
   line repeat the sequence number and chain head (the chain was broken); a checkpoint or a folder
   that cannot be read is reported as broken, not as "no checkpoint" or "no files".

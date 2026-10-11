@@ -15,6 +15,14 @@ const OVERCLAIMS: readonly RegExp[] = [
   /coding agent that asks first/i,
   /every command runs in an OS sandbox/i,
   /an OS sandbox for every command/i,
+  // Second review: a bash allow rule (or a session answer) lets a command outside the sandbox run
+  // with no question; undo restores only its snapshot (not ignored files); the sandbox also writes
+  // temp folders and caches.
+  /outside (?:it|the sandbox)[^.;]*always asks/i,
+  /That always asks you first/i,
+  /restores what a turn changed/i,
+  /commands included/i,
+  /writes? only in (?:the|your) project(?![\w ]*,? (?:the )?temp)/i,
 ];
 
 const repo = join(import.meta.dirname, "..");
@@ -40,20 +48,38 @@ function files(path: string): string[] {
   return readdirSync(full).flatMap((name) => files(join(path, name)));
 }
 
+/** A file's paragraphs (blank-line separated), each joined to one line, with its first line number. */
+function paragraphs(text: string): { line: number; text: string }[] {
+  const out: { line: number; text: string }[] = [];
+  let start = 0;
+  let current: string[] = [];
+  text.split("\n").forEach((line, i) => {
+    if (line.trim() === "") {
+      if (current.length > 0) out.push({ line: start + 1, text: current.join(" ") });
+      current = [];
+      return;
+    }
+    if (current.length === 0) start = i;
+    current.push(line.trim());
+  });
+  if (current.length > 0) out.push({ line: start + 1, text: current.join(" ") });
+  return out;
+}
+
 describe("public safety claims", () => {
   it("no text claims that every change or command asks first", () => {
     const found: string[] = [];
     for (const file of PUBLIC.flatMap(files)) {
       if (!/\.(md|astro|ts)$/.test(file)) continue;
-      readFileSync(file, "utf8")
-        .split("\n")
-        .forEach((line, i) => {
-          // A correction note quotes the old claim on purpose.
-          if (line.startsWith("*Corrected on")) return;
-          for (const claim of OVERCLAIMS) {
-            if (claim.test(line)) found.push(`${relative(repo, file)}:${i + 1}: ${line.trim()}`);
-          }
-        });
+      // Paragraphs, so a claim that wraps across lines is found too (second review).
+      for (const { line, text } of paragraphs(readFileSync(file, "utf8"))) {
+        // A correction note quotes the old claim on purpose.
+        if (text.startsWith("*Corrected on")) continue;
+        for (const claim of OVERCLAIMS) {
+          const hit = claim.exec(text);
+          if (hit !== null) found.push(`${relative(repo, file)}:${line}: ${hit[0]}`);
+        }
+      }
     }
     expect(found).toEqual([]);
   });

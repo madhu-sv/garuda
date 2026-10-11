@@ -122,9 +122,10 @@ Tools: read_file, glob and grep run with no question.
 write_file and edit_file show a diff first. You pick: allow once, allow for this session, or deny.
 Commands (bash) run in an OS sandbox when your machine has one (see Sandbox below). There they run
 with no question: the sandbox lets them write only in the project, temp folders and package caches,
-with no network. So a command can change project files without a question; `/undo` restores what a
-turn changed, commands included. A command outside the sandbox always asks. Without a sandbox, each
-command asks first, so read each one before you allow it.
+with no network. So a command can change project files without a question; `/undo` restores the
+files in its snapshot (ignored files, such as build output, are not in it). A command outside the
+sandbox asks, unless one of your allow rules covers it; the strict profile forbids it. Without a
+sandbox, each command asks first, so read each one before you allow it.
 Garuda removes a leading `cd <working root> &&` from a command, because each command already starts there.
 When the model reads files with bash, or pipes into head or tail, the result adds a short `[Garuda: …]` note that tells it to use the file tools.
 
@@ -652,7 +653,8 @@ In the sandbox, a command:
 
 Commands in the sandbox run with no approval. Deny rules still apply. When the sandbox blocks a command
 (for example `pnpm install` needs the network), the model can ask to run it outside the sandbox.
-That always asks you first, and the prompt says "OUTSIDE the sandbox".
+That asks you first, unless one of your allow rules covers the command, and the prompt says
+"OUTSIDE the sandbox". The strict profile forbids it.
 
 Settings:
 

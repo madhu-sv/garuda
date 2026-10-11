@@ -1,6 +1,6 @@
 ---
 title: "Introducing Garuda: an open-source coding agent with an OS sandbox"
-description: "Garuda is an open-source coding agent for the terminal and for editors. Commands run in an OS sandbox that writes only in your project, edits ask first, and every decision goes to an audit log. It works with Claude, OpenRouter or local models."
+description: "Garuda is an open-source coding agent for the terminal and for editors. Commands run in an OS sandbox that writes only in your project, temp folders and caches, edits ask first, and every decision goes to an audit log. It works with Claude, OpenRouter or local models."
 date: 2026-10-08
 author: Madhusudhan Vasanth Kumar
 ---
@@ -8,7 +8,9 @@ author: Madhusudhan Vasanth Kumar
 *Corrected on 10 October 2026: an earlier version said that every change asks first. Edits do, but
 commands in the sandbox run with no question: they can change project files, within the sandbox's
 limits. The list below now says exactly what each limit does. Thanks to a reviewer who pointed it
-out.*
+out. On 11 October the same reviewer found three more details, now fixed: the sandbox also writes
+temp folders and package caches; an allow rule can let a command outside the sandbox run with no
+question; and `/undo` restores only the files in its snapshot.*
 
 A coding agent reads your code, edits files and runs commands on your machine. That is what makes it
 useful. It is also what makes it risky: one wrong command, or one instruction hidden in a file that
@@ -33,9 +35,9 @@ in VS Code and in Zed.
 - **Commands run in an OS sandbox.** Seatbelt on macOS, bubblewrap on Linux. A command can write
   only in the project, temp folders and package caches. Your SSH keys, cloud credentials and other
   home secrets stay unreadable, and there is no network unless you open it. Inside the sandbox, a
-  command runs with no question, so it can change project files; `/undo` restores what a turn
-  changed, commands included. A command outside the sandbox always asks. Without a sandbox, each
-  command asks.
+  command runs with no question, so it can change project files; `/undo` restores the files in its
+  snapshot (ignored files, such as build output, are not in it). A command outside the sandbox asks,
+  unless one of your allow rules covers it. Without a sandbox, each command asks.
 - **Edits ask first.** An edit shows its diff, and you allow it once, for the session, or not at all.
   You can also accept single hunks. Plan mode only reads.
 - **The network is closed by default.** When you open it, commands reach only the hosts that you
