@@ -37,7 +37,7 @@ in VS Code and in Zed.
   home secrets stay unreadable, and there is no network unless you open it. Inside the sandbox, a
   command runs with no question, so it can change project files; `/undo` restores the files in its
   snapshot (ignored files, such as build output, are not in it). A command outside the sandbox asks,
-  unless one of your allow rules covers it. Without a sandbox, each command asks.
+  unless one of your allow rules covers it. Without a sandbox, each command asks, unless an allow rule covers it.
 - **Edits ask first.** An edit shows its diff, and you allow it once, for the session, or not at all.
   You can also accept single hunks. Plan mode only reads.
 - **The network is closed by default.** When you open it, commands reach only the hosts that you

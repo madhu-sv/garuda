@@ -1,6 +1,6 @@
 # Bounded changes (0.17, planned)
 
-Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patch 0189). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. The
+Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patches 0189, 0190). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. The
 rest is planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
 2026-10-10). The patch plan is at the end. Each section has decisions, a threat model, a default and
 tests.
@@ -152,7 +152,7 @@ Garuda applies nothing and shows the paths. The staged change stays for one more
 - **Q2.** All or nothing first. Per-file selection can come later.
 - **Q3.** On macOS the command runs at the clone's path. Staged mode works on macOS and Linux.
 
-## T6: job write scopes (done, 0189)
+## T6: job write scopes (done, 0189, 0190)
 
 ### Behaviour
 
@@ -181,9 +181,10 @@ A job file gets one new field, `writeScope`: a list of folders in the worktree, 
 - The sandbox applies the scope after `writePaths` and before the denied paths (see
   [sandbox.md](sandbox.md)), so a root inside `/tmp` stays read-only, and a policy-denied file in a
   scope folder stays denied.
-- The job's own test command (proof of work) runs with the whole worktree writable: the user
-  approved it with the job, its output is cleaned before the turn, and the run after the turn comes
-  after the commit. A test run by the agent during the turn has the scope.
+- Second review (0190): a job never runs a command outside the sandbox (the engine denies
+  `outside_sandbox` before any rule, also an allow rule); the engine and the write tools check the
+  place that a path reaches through symbolic links, and the tools check again just before the
+  write; the job's test command has the same scope as every other command (the preview says so).
 
 ### Why folders, not globs
 
@@ -217,8 +218,8 @@ enforce the same scope. A folder list is what both can enforce, and what the use
 Strict means:
 
 1. The executor must be the OS sandbox. Without one, Garuda stops at startup with the reason and
-   the fix (install bubblewrap; or remove the strict profile). No host fallback, no "each command
-   asks" mode. `executor: "host"` is an error.
+   the fix (install bubblewrap; or remove the strict profile). No host fallback (the mode
+   where commands run on the host and ask). `executor: "host"` is an error.
 2. The `bash` tool has no `outside_sandbox` parameter, so the model does not see it. A call that
    still sends it is denied.
 3. `!command` in the chat runs in the sandbox only.
@@ -352,12 +353,13 @@ claims from T1.
 | 0186 | T8 | Checkpoint failure handling (second review). |
 | 0187 | T1 | Exact claims, second pass (second review). |
 | 0188 | T4 | This update: no fallback in T5, failures in T9, the new order. |
-| 0189 | T6 | Job write scopes. |
-| 0190 | T9 | The shared budget. |
-| 0191 | T10 | Approximate labels; the measured numbers. |
-| 0192 | T5 | Staging backends and the change list (no question yet). |
-| 0193 | T5 | The question, apply, discard, conflict check, undo. |
-| 0194 | T5 | Docs, the live tests on macOS and Linux, the measured costs. |
+| 0189 | T6 | Job write scopes. Done. |
+| 0190 | T6, T1 | Third review: scope bypasses (outside_sandbox, links, the test command); claims. |
+| 0191 | T9 | The shared budget. |
+| 0192 | T10 | Approximate labels; the measured numbers. |
+| 0193 | T5 | Staging backends and the change list (no question yet). |
+| 0194 | T5 | The question, apply, discard, conflict check, undo. |
+| 0195 | T5 | Docs, the live tests on macOS and Linux, the measured costs. |
 
 The second review asked for T6 and T9 before any wider unattended pilot, so they come next. T5
 stays opt-in, and comes last, after its apply, discard, conflict and platform tests pass.

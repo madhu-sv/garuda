@@ -64,7 +64,7 @@ The shared base class. Subclasses implement only `launch(argv, policy) → { fil
 
 | Executor | Platform | Launch |
 | --- | --- | --- |
-| `HostExecutor` | any | The program itself. Isolation `none`: every command asks for approval. |
+| `HostExecutor` | any | The program itself. Isolation `none`: every command asks for approval, unless an allow rule covers it. |
 | `SeatbeltExecutor` | macOS | `/usr/bin/sandbox-exec -p <profile> <argv>` |
 | `BwrapExecutor` | Linux | `bwrap <mounts> --die-with-parent --chdir <root> -- <argv>` |
 

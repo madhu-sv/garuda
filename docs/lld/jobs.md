@@ -98,8 +98,12 @@ checks it again (schema, id, root, rules).
    call that would ask is denied with `JOB_DENIAL` ("not in the approved list … continue without it … list
    it") and recorded. With a write scope, the OS sandbox makes the worktree read-only except the
    scope (`ExecPolicy.writeScope`), and the engine denies an edit outside it even when a rule allows
-   it (also recorded). The job's own test command runs with the whole worktree writable
-   (`execPolicy({ wholeRoot: true })`).
+   it (also recorded); the path as named and the place it reaches through links (for a new file: its
+   nearest existing parent) must both be in the scope (`scopeDenial`), and the write tools check it
+   again just before they write (`writeScopeDenial`). A job never runs a command outside the sandbox:
+   the engine denies `outside_sandbox` before it reads any rule. The job's test command has the same
+   scope; `execPolicy` creates missing scope folders again before each command (a clean after the
+   tests before the job removes empty ones).
 6. `finishJob`: with a write scope, `outsideScope` (`git status --porcelain -z --untracked-files=all`,
    without Garuda's files and the links) first; a change outside the scope fails the job with no
    commit. Then `git add -A` without `.garuda/sessions|index|evals|jobs` and the links, a commit with no

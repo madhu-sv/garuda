@@ -23,6 +23,10 @@ const OVERCLAIMS: readonly RegExp[] = [
   /restores what a turn changed/i,
   /commands included/i,
   /writes? only in (?:the|your) project(?![\w ]*,? (?:the )?temp)/i,
+  // Third review: an allow rule also covers a command on the host and an MCP call; undo restores
+  // only its snapshot.
+  /(?:each|every) (?:command|one|MCP tool call) asks(?: first| again| for approval)?(?![^.]*unless)/i,
+  /covers every change/i,
 ];
 
 const repo = join(import.meta.dirname, "..");
@@ -40,6 +44,8 @@ const PUBLIC = [
   "site/src/content/docs/docs/editors.md",
   "site/src/seo.ts",
   "src/acp/server.ts",
+  "src/sandbox/index.ts",
+  "src/cli/index.ts",
 ];
 
 function files(path: string): string[] {

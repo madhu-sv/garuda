@@ -134,7 +134,9 @@ describe("createExecutor", () => {
   it('"auto" falls back to the host with a notice when there is no sandbox', () => {
     const { executor, notice } = createExecutor("auto", none);
     expect(executor).toBeInstanceOf(HostExecutor);
-    expect(notice).toMatch(/^No OS sandbox: bwrap is not installed\. .*approval\. Install it\.$/);
+    expect(notice).toMatch(
+      /^No OS sandbox: bwrap is not installed\. .*approval, unless an allow rule covers it\. Install it\.$/,
+    );
   });
 
   it('"os" fails when there is no sandbox', () => {

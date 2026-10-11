@@ -23,7 +23,7 @@ import type {
   PermissionGate,
   PermissionRequest,
 } from "./types.js";
-import { inWriteScope, scopePaths } from "./writeScope.js";
+import { prepareWriteScope, scopeDenial, scopePaths } from "./writeScope.js";
 
 /** Environment variables that every command sees. Settings can add more. */
 export const DEFAULT_ENV_ALLOWLIST: readonly string[] = [
@@ -253,9 +253,28 @@ export class PermissionEngine implements PermissionGate {
     }
 
     if (request.readOnly) return { decision: { allowed: true, by: "read_only" } };
+    // A scheduled job (unattended, or with a write scope) never runs a command outside the OS
+    // sandbox, whatever the rules say (second review of 0.17: an allow rule let `outside_sandbox`
+    // run, with no write scope and no sandbox).
+    if (
+      target?.kind === "command" &&
+      target.outsideSandbox === true &&
+      (this.unattended !== undefined || this.settings.writeScope !== undefined)
+    ) {
+      this.unattended?.onDeny?.(tool, target);
+      return {
+        decision: {
+          allowed: false,
+          by: "rule",
+          reason:
+            "A scheduled job runs commands only in the OS sandbox: outside_sandbox is not allowed. Do not retry it; list it in your final answer as work left for the user.",
+        },
+      };
+    }
     // A job's write scope (0.17, T6): an edit outside it is denied, also when an allow rule or a
-    // session rule matches. A job reports it with its other denied calls. An edit that no rule
-    // allows gets the job's usual denial below.
+    // session rule matches. The path as named and the place it reaches through symbolic links must
+    // both be in the scope (second review). A job reports it with its other denied calls. An edit
+    // that no rule allows gets the job's usual denial below.
     const scope = this.settings.writeScope;
     const ruled =
       (allowRule !== undefined && !(target?.kind === "url" && target.alwaysAsk === true)) ||
@@ -263,17 +282,19 @@ export class PermissionEngine implements PermissionGate {
     if (
       scope !== undefined &&
       target?.kind === "path" &&
-      !inWriteScope(target.path, scope) &&
       (ruled || this.unattended === undefined)
     ) {
-      this.unattended?.onDeny?.(tool, target);
-      return {
-        decision: {
-          allowed: false,
-          by: "rule",
-          reason: `${target.path} is outside this job's write scope (${scope.join(", ")}). Do not retry it; list it in your final answer as work left for the user.`,
-        },
-      };
+      const outside = await scopeDenial(this.root, target.path, scope);
+      if (outside !== undefined) {
+        this.unattended?.onDeny?.(tool, target);
+        return {
+          decision: {
+            allowed: false,
+            by: "rule",
+            reason: `${outside}. Do not retry it; list it in your final answer as work left for the user.`,
+          },
+        };
+      }
     }
     if (target?.kind === "command" && !target.outsideSandbox && this.isolation !== "none") {
       return { decision: { allowed: true, by: "sandbox" } };
@@ -422,13 +443,7 @@ export class PermissionEngine implements PermissionGate {
     {
       sandbox = true,
       readOnlyRoot = this.mode() === "plan",
-      wholeRoot = false,
-    }: {
-      sandbox?: boolean;
-      readOnlyRoot?: boolean;
-      /** Ignore a job's write scope: only for the job's own approved test command (0.17). */
-      wholeRoot?: boolean;
-    } = {},
+    }: { sandbox?: boolean; readOnlyRoot?: boolean } = {},
   ): ExecPolicy {
     const paths = sandboxPaths(this.root, this.settings.sandbox);
     // The team policy's denied paths: no read and no write for commands either (K6).
@@ -444,10 +459,18 @@ export class PermissionEngine implements PermissionGate {
     // A job's write scope (0.17, T6): in the root, only the scope's paths are writable. Writable
     // paths outside the root (temp, caches, the job's linked folders) stay as they are.
     const scope =
-      !readOnlyRoot && !wholeRoot && sandbox && this.settings.writeScope !== undefined
+      !readOnlyRoot && sandbox && this.settings.writeScope !== undefined
         ? { root: this.root, paths: scopePaths(this.root, this.settings.writeScope) }
         : undefined;
-    if (scope !== undefined) writePaths = writePaths.filter((p) => !inRoot(p));
+    if (scope !== undefined) {
+      writePaths = writePaths.filter((p) => !inRoot(p));
+      // Folder entries must exist for bubblewrap to bind them; a clean (`git clean -fd` after the
+      // tests before the job) removes empty ones. A link or a path out of the worktree stops the
+      // command.
+      const problem = prepareWriteScope(this.root, this.settings.writeScope ?? []);
+      if (problem !== undefined)
+        throw new Error(`The job's write scope cannot be used: ${problem}.`);
+    }
     return {
       root: this.root,
       sandbox,
@@ -464,6 +487,16 @@ export class PermissionEngine implements PermissionGate {
       timeoutMs,
       maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
     };
+  }
+
+  /**
+   * Why a write to this path is outside the job's write scope, or undefined (no scope, or inside
+   * it). Write tools call it again just before they write (second review of 0.17): a link can
+   * change between the permission check and the write.
+   */
+  async writeScopeDenial(path: string): Promise<string | undefined> {
+    const scope = this.settings.writeScope;
+    return scope === undefined ? undefined : scopeDenial(this.root, path, scope);
   }
 
   /** The network allowlist (0.13): the runtime sets it when the proxy runs. */

@@ -2,6 +2,12 @@
 
 ## 0.17.0 (unreleased)
 
+- Job write scopes, third review: a job never runs a command outside the sandbox, also when an
+  allow rule matches (`outside_sandbox` dropped the scope); an edit through a symbolic link must
+  reach a path in the scope, checked by the engine and again by the write tool just before it writes;
+  the job's test command has the same scope as every other command, and the approval question says
+  so. Claims: without a sandbox, a command (or an MCP call) asks unless an allow rule covers it; undo
+  covers the files in its snapshot. The claims test knows these phrases.
 - Job write scopes (review T6): `/schedule` proposes `"writeScope"`, the paths in the worktree that
   the job may change (the plan's edit and write paths, and the build folders), and the question
   shows it. The OS sandbox makes the rest of the worktree read-only for the job's commands, the

@@ -1,5 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
-import { join, sep } from "node:path";
+import { realpath } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { realpathOfNearestExisting } from "./pathGuard.js";
 
 /**
  * The write scope of a scheduled job (0.17, review T6; docs/lld/bounded-changes.md): the paths in
@@ -107,4 +109,36 @@ export function proposeWriteScope(
     if (existsSync(join(root, marker))) for (const f of folders) entries.add(f);
   }
   return { scope: [...entries].sort() };
+}
+
+/**
+ * Why a write to this path is outside the scope, or undefined (second review of 0.17): the path as
+ * named AND the place it reaches through symbolic links (for a new file: through its nearest
+ * existing parent) must both be in the scope. `path` is root-relative or absolute.
+ */
+export async function scopeDenial(
+  root: string,
+  path: string,
+  scope: readonly string[],
+): Promise<string | undefined> {
+  const absolute = isAbsolute(path) ? path : resolve(root, path);
+  const named = relative(root, absolute).split(sep).join("/");
+  const outside = (shown: string) =>
+    `${shown} is outside this job's write scope (${scope.join(", ")})`;
+  if (named.startsWith("..") || !inWriteScope(named, scope)) return outside(named);
+  let realRoot: string;
+  let real: string;
+  try {
+    realRoot = await realpath(root);
+    real = await realpathOfNearestExisting(absolute);
+  } catch {
+    return `${named}: its real place cannot be checked`;
+  }
+  const reached = relative(realRoot, real).split(sep).join("/");
+  if (reached === "" || reached.startsWith("..") || isAbsolute(reached)) {
+    return `${named} leads outside the worktree`;
+  }
+  if (!inWriteScope(reached, scope))
+    return `${named} leads to ${reached}, which ${outside(reached).slice(reached.length + 1)}`;
+  return undefined;
 }

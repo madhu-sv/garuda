@@ -47,7 +47,7 @@ sequenceDiagram
 ```
 
 The executor choice decides much of the behaviour: with an OS sandbox, commands run with no approval;
-without one, every command asks. MCP servers and hooks start later, before the first turn, because
+without one, every command asks (unless an allow rule covers it). MCP servers and hooks start later, before the first turn, because
 their consent questions need the chat UI.
 
 ## 3. One turn

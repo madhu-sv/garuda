@@ -125,7 +125,8 @@ with no question: the sandbox lets them write only in the project, temp folders 
 with no network. So a command can change project files without a question; `/undo` restores the
 files in its snapshot (ignored files, such as build output, are not in it). A command outside the
 sandbox asks, unless one of your allow rules covers it; the strict profile forbids it. Without a
-sandbox, each command asks first, so read each one before you allow it.
+sandbox, each command asks first, unless one of your allow rules covers it, so read each one before
+you allow it.
 Garuda removes a leading `cd <working root> &&` from a command, because each command already starts there.
 When the model reads files with bash, or pipes into head or tail, the result adds a short `[Garuda: …]` note that tells it to use the file tools.
 
@@ -666,7 +667,7 @@ Settings:
 ```
 
 - `executor`: `auto` (default) uses the sandbox when it works on this machine, else runs on the host
-  with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again.
+  with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again (unless an allow rule covers it).
 - `sandbox.writePaths` and `sandbox.denyRead` add paths. `~/` is the home folder; other relative paths
   start at the root.
 - macOS sandbox probe (0.14): at startup Garuda runs `true` through `/usr/bin/sandbox-exec` once. When
@@ -828,7 +829,7 @@ Security:
 - When a configured server is not available (you said no, it failed or it stopped), Garuda tells
   the model once in a `<garuda_note>`, so the model says so instead of guessing. Server text cannot
   pose as such a note or close its `<mcp_result>` wrapper.
-- Every MCP tool call asks for approval and shows its arguments. Server hints such as
+- An MCP tool call asks for approval and shows its arguments, unless an allow rule covers it. Server hints such as
   `readOnlyHint` are shown, never trusted. Allow rules skip the question:
   `mcp__github__get_issue` or `mcp__github__*`.
 - Tool names get the prefix `mcp__<server>__`, so a server cannot replace a Garuda tool.
@@ -930,9 +931,10 @@ A plan can run later, with nobody at the keyboard: for example overnight.
   makes the rest of the worktree read-only for the job's commands, the engine denies edits outside
   it, and a change outside it fails the job with no commit. A rule with no folder (`edit_file(**/*.ts)`)
   gives no scope: the question then says that commands may write anywhere in the worktree. Jobs made
-  before 0.17 have no scope. A test that writes a file outside the scope (for example `coverage.txt`
-  in the root) fails in the job's own runs; add that path to `"writeScope"`. The job's own test command
-  (proof of work) runs with the whole worktree writable, as before.
+  before 0.17 have no scope. The scope holds for every command of the job, also its test command
+  (proof of work), and a job never runs a command outside the sandbox, whatever its rules say. A test
+  that writes a file outside the scope (for example `coverage.txt` in the root) fails; add a folder
+  for it to `"writeScope"`. An edit through a symbolic link must reach a path in the scope too.
 - A job needs git and the OS sandbox. `node_modules` and `.venv` are linked from your checkout.
 - At the end Garuda commits the changes on the job branch (no git hooks run) and writes a report:
   `.garuda/jobs/<id>.md`, also shown by `/jobs <id>`. Review with `git diff`, then `git merge

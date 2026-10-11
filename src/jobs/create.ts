@@ -144,7 +144,7 @@ export async function createJob(
     "Any other call that would ask is denied at run time; the job goes on and reports it.",
     proposed.scope === undefined
       ? `Write scope: the whole worktree (${proposed.reason}). Commands may write anywhere in it.`
-      : `Write scope: commands and edits may change only ${proposed.scope.length === 0 ? "nothing in the worktree" : proposed.scope.join(", ")} (plus temp folders, caches and the links). The OS sandbox enforces it for commands.`,
+      : `Write scope: commands (also the test command) and edits may change only ${proposed.scope.length === 0 ? "nothing in the worktree" : proposed.scope.join(", ")} (plus temp folders, caches and the links). The OS sandbox enforces it for commands; no command runs outside the sandbox. A test that writes outside the scope fails.`,
     job.network === undefined
       ? "Network: none for commands."
       : `Network: ${job.network.join(", ")}, through Garuda's proxy; other hosts are denied and reported.`,

@@ -557,7 +557,7 @@ async function start(options: Options, program: Command): Promise<number> {
     model: modelId,
     sandbox:
       runtime.executor.isolation === "none"
-        ? "none: each command asks first"
+        ? "none: each command asks first, unless a rule allows it"
         : `${runtime.executor.name} · no network`,
     root,
     extras: runtime.extras(),

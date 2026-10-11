@@ -5,8 +5,10 @@
 `/undo` takes back the last turn: the files go back to how they were before the turn, and the turn leaves
 the conversation, so the model forgets it. `/redo` brings both back. Added in 0.4.
 
-It covers every change in the project, not only `edit_file` and `write_file`: a command in the sandbox
-can write files with no approval, and undo takes those changes back too. It works in any folder, with or
+It covers the files in its snapshot, not only the changes of `edit_file` and `write_file`: a command
+in the sandbox can write files with no approval, and undo takes those changes back too. Ignored files
+(build output, `node_modules`) and the paths listed below are not in a snapshot, so undo does not
+restore them; with undo off, or after a failed snapshot, there is nothing to restore. It works in any folder, with or
 without git, and it never touches the project's own `.git`.
 
 | File | Role |

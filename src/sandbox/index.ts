@@ -12,7 +12,7 @@ export type { ExecPolicy, ExecResult, Executor, Isolation } from "./types.js";
  * Executor names that the config key `executor` accepts (N8):
  *   auto  the OS sandbox when this machine has one, else host with a notice (default)
  *   os    the OS sandbox, or an error
- *   host  no sandbox: every command asks for approval
+ *   host  no sandbox: every command asks for approval, unless an allow rule covers it
  */
 export const EXECUTOR_NAMES = ["auto", "os", "host"] as const;
 export type ExecutorName = (typeof EXECUTOR_NAMES)[number];
@@ -59,7 +59,7 @@ export function createExecutor(
   if (name === "os") throw new Error(`No OS sandbox: ${found.problem} ${found.fix}`);
   return {
     executor: new HostExecutor(),
-    notice: `No OS sandbox: ${found.problem} Commands run on your machine, and each one asks for approval. ${found.fix}`,
+    notice: `No OS sandbox: ${found.problem} Commands run on your machine, and each one asks for approval, unless an allow rule covers it. ${found.fix}`,
   };
 }
 

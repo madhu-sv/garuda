@@ -27,6 +27,9 @@ import {
 import { HostExecutor } from "../src/sandbox/host.js";
 import { findOsSandbox } from "../src/sandbox/index.js";
 import { seatbeltProfile } from "../src/sandbox/seatbelt.js";
+import { FileTracker } from "../src/session/fileTracker.js";
+import { editFileTool } from "../src/tools/editFile.js";
+import { writeFileTool } from "../src/tools/writeFile.js";
 
 /** Job write scopes (0.17, review T6; docs/lld/bounded-changes.md). */
 
@@ -189,5 +192,94 @@ describe.runIf("executor" in found)("a job's command in the OS sandbox", () => {
     expect(existsSync(join(root, "out.txt"))).toBe(false);
     expect(readFileSync(join(root, "src", "secret.txt"), "utf8")).toBe("keep");
     executor.shutdown();
+  });
+});
+
+describe("scope bypasses (third review)", () => {
+  const bashOutside: PermissionRequest = {
+    tool: "bash",
+    readOnly: false,
+    info: { target: { kind: "command", command: "touch docs/out.txt", outsideSandbox: true } },
+  };
+  function jobEngine(root: string, scope?: string[], unattended = true) {
+    const settings = parseSettings({ permissions: { allow: ["bash", "edit_file", "write_file"] } });
+    return new PermissionEngine({
+      root,
+      approver: new AutoApprover("deny"),
+      settings: scope === undefined ? settings : { ...settings, writeScope: scope },
+      isolation: "os",
+      ...(unattended ? { unattended: { reason: "job" } } : {}),
+    });
+  }
+
+  it("a job never runs a command outside the sandbox, also with a bash allow rule", async () => {
+    const root = folder();
+    // Negative control: in the chat, the allow rule lets it run.
+    expect((await jobEngine(root, undefined, false).check(bashOutside, signal)).allowed).toBe(true);
+    for (const engine of [
+      jobEngine(root, ["src/"]),
+      jobEngine(root),
+      jobEngine(root, ["src/"], false),
+    ]) {
+      const d = await engine.check(bashOutside, signal);
+      expect(d.allowed).toBe(false);
+      expect(d.allowed === false && d.reason).toContain("only in the OS sandbox");
+    }
+  });
+
+  function linked(): string {
+    const root = folder();
+    mkdirSync(join(root, "src"));
+    mkdirSync(join(root, "docs"));
+    writeFileSync(join(root, "docs", "private.txt"), "keep\n");
+    symlinkSync("../docs/private.txt", join(root, "src", "alias.txt"));
+    symlinkSync("../docs", join(root, "src", "alias"));
+    return root;
+  }
+
+  it("the engine checks the place that a link reaches", async () => {
+    const root = linked();
+    // Negative control: without a scope, both edits are allowed by the rule.
+    expect((await jobEngine(root).check(edit("src/alias.txt"), signal)).allowed).toBe(true);
+    const scoped = jobEngine(root, ["src/"]);
+    const viaFile = await scoped.check(edit("src/alias.txt"), signal);
+    expect(viaFile.allowed).toBe(false);
+    expect(viaFile.allowed === false && viaFile.reason).toContain("leads to docs/private.txt");
+    const viaFolder = await scoped.check(edit("src/alias/new.txt"), signal);
+    expect(viaFolder.allowed).toBe(false);
+    expect((await scoped.check(edit("src/real.txt"), signal)).allowed).toBe(true);
+  });
+
+  it("the write tools check again just before they write", async () => {
+    const root = linked();
+    const context = (permissions: PermissionEngine) => ({
+      root,
+      signal,
+      permissions,
+      files: new FileTracker(),
+    });
+    // The run skips the permission check, as when a link changes after it.
+    await expect(
+      writeFileTool.run(
+        { path: "src/alias/new.txt", content: "x" },
+        context(jobEngine(root, ["src/"])),
+      ),
+    ).rejects.toThrow(/Nothing was written/);
+    expect(existsSync(join(root, "docs", "new.txt"))).toBe(false);
+
+    const files = new FileTracker();
+    const before = readFileSync(join(root, "src", "alias.txt"), "utf8");
+    files.record(join(root, "src", "alias.txt"), before);
+    await expect(
+      editFileTool.run(
+        { path: "src/alias.txt", old_string: "keep", new_string: "changed" },
+        { ...context(jobEngine(root, ["src/"])), files },
+      ),
+    ).rejects.toThrow(/Nothing was written/);
+    expect(readFileSync(join(root, "docs", "private.txt"), "utf8")).toBe("keep\n");
+
+    // Negative control: without a scope, the write through the link lands in docs/.
+    await writeFileTool.run({ path: "src/alias/new.txt", content: "x" }, context(jobEngine(root)));
+    expect(existsSync(join(root, "docs", "new.txt"))).toBe(true);
   });
 });

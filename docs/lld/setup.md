@@ -69,7 +69,7 @@ from `~/.garuda/models.json` (never from the project) can name a key (0.14 rule,
 `.garuda/credentials` joins `DENY_READ_IN_HOME` (next to `.garuda/mcp-auth.json`): a command in the
 OS sandbox cannot read it, on macOS (Seatbelt) or Linux (bubblewrap). The file tools refuse it
 already: it is outside the root, and `credentials` is in the sensitive patterns. On the host
-executor (no sandbox), each command asks first, as today.
+executor (no sandbox), each command asks first unless an allow rule covers it, as today.
 
 ## `garuda setup`
 

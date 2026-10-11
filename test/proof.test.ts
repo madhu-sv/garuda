@@ -135,9 +135,12 @@ describe("proof of work: a whole job (0.11)", () => {
     mkdirSync(home, { recursive: true });
     write(root, {
       "src/math.js": "export const add = (a, b) => a - b;\n",
-      // The check writes an output file, as coverage tools do; it must not reach the commit.
+      // The check writes an output file, as coverage tools do; it must not reach the commit. It
+      // writes in coverage/, a build folder of package.json, so the job's write scope (0.17)
+      // allows it.
+      "package.json": '{ "type": "module" }\n',
       "check.mjs":
-        'import { writeFileSync } from "node:fs";\nimport { add } from "./src/math.js";\nwriteFileSync("coverage.txt", "x");\nif (add(2, 3) !== 5) { console.log("add(2, 3) is wrong"); process.exit(1); }\nconsole.log("ok");\n',
+        'import { mkdirSync, writeFileSync } from "node:fs";\nimport { add } from "./src/math.js";\nmkdirSync("coverage", { recursive: true });\nwriteFileSync("coverage/coverage.txt", "x");\nif (add(2, 3) !== 5) { console.log("add(2, 3) is wrong"); process.exit(1); }\nconsole.log("ok");\n',
       ".gitignore": ".garuda/sessions/\n",
       ".garuda/settings.json": JSON.stringify({ executor: "host" }),
     });
@@ -215,6 +218,7 @@ describe("proof of work: a whole job (0.11)", () => {
     ]);
     const tree = (await git(host, root, ["ls-tree", "-r", "--name-only", job.branch])).stdout;
     expect(tree).not.toContain("coverage.txt");
+    expect(job.writeScope).toEqual(["coverage/", "dist/", "src/math.js"]);
     const report = readFileSync(join(root, ".garuda/jobs", `${job.id}.md`), "utf8");
     expect(report).toContain("## Verdict\n\n**Ready to merge**");
     expect(report).toContain("before the job fail (exit code 1)");

@@ -52,7 +52,7 @@ export async function realRelative(root: string, path: string): Promise<string |
 }
 
 /** The real path of `path`, or of its nearest existing parent folder. */
-async function realpathOfNearestExisting(path: string): Promise<string> {
+export async function realpathOfNearestExisting(path: string): Promise<string> {
   let current = path;
   for (;;) {
     try {

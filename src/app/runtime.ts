@@ -1451,10 +1451,9 @@ export class Runtime {
    * permission engine: Garuda runs it, not the model. The output is not a note for the model.
    */
   async runCheck(command: string, timeoutMs: number, signal: AbortSignal): Promise<TestRun> {
-    // A job's test command (0.11) runs with the whole worktree writable, as before its write scope
-    // (0.17): the user approved it with the job, its output is cleaned before the turn, and the
-    // run after the turn comes after the commit.
-    const policy = this.permissions.execPolicy(timeoutMs, { wholeRoot: true });
+    // A job's test command (0.11) runs with the job's write scope, as the agent's commands do
+    // (second review of 0.17: the agent can change the code that the test runs).
+    const policy = this.permissions.execPolicy(timeoutMs);
     const result = await this.executor.run(command, policy, { signal });
     return {
       exitCode: result.exitCode,

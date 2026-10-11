@@ -74,6 +74,9 @@ export const editFileTool: Tool<Input> = {
       );
       note = ` The user accepted ${accepted.length} of ${total} hunk(s) and rejected hunk(s) ${rejected.map((i) => i + 1).join(", ")}: only the accepted ones were written, so the file differs from your edit. Read it before you change it again.`;
     }
+    // A job's write scope (0.17): checked again just before the write (a link may have changed).
+    const outside = await context.permissions.writeScopeDenial(edit.absolute);
+    if (outside !== undefined) throw new Error(`${outside}. Nothing was written.`);
     await writeFileAtomic(edit.absolute, text, { createOnly: false });
     context.files.record(edit.absolute, text);
     return afterWrite(`Edited ${edit.shown}.${note}`, context, {
