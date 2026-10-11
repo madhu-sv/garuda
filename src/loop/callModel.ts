@@ -1,7 +1,7 @@
 import { errorReason, isTransientModelError } from "../model/errors.js";
 import { totalTokens } from "../model/pricing.js";
-import type { ModelClient, ModelRequest, ModelResponse } from "../model/types.js";
-import { type Budget, BudgetExhausted } from "./budget.js";
+import type { AttemptMeter, ModelClient, ModelRequest, ModelResponse } from "../model/types.js";
+import { type Budget, BudgetExhausted, CallMeter } from "./budget.js";
 import type { AgentEvent } from "./events.js";
 
 /** Waits before the retries of a broken model stream (2 retries). */
@@ -26,16 +26,18 @@ export async function callModelWithRetry(
   delays: readonly number[],
   metered?: Metered,
 ): Promise<ModelResponse> {
+  // The shared budget (0.17, T9): every provider request reserves first, also the provider's own
+  // retries (they call meter.retry()); a request with no reported usage keeps its reservation.
+  const meter = metered === undefined ? undefined : new CallMeter(metered.budget, metered.tokens);
   for (let attempt = 0; ; attempt++) {
-    // The shared budget (0.17, T9): each attempt reserves; a failed attempt keeps its reservation.
-    const hold = metered?.budget.reserve(metered.tokens);
-    if (metered !== undefined && hold === undefined) throw new BudgetExhausted();
+    meter?.start();
     try {
-      const response = await callModel(model, request, signal, emit);
-      if (hold !== undefined) metered?.budget.settle(hold, totalTokens(response.usage));
+      const response = await callModel(model, request, signal, emit, meter);
+      meter?.done(totalTokens(response.usage));
       return response;
     } catch (error) {
-      if (hold !== undefined) metered?.budget.settle(hold);
+      meter?.failed();
+      if (error instanceof BudgetExhausted) throw error;
       if (signal.aborted || attempt >= delays.length || !isTransientModelError(error)) throw error;
       const delayMs = delays[attempt] ?? 1_000;
       emit({
@@ -55,9 +57,13 @@ export async function callModel(
   request: ModelRequest,
   signal: AbortSignal,
   emit: (event: AgentEvent) => void,
+  meter?: AttemptMeter,
 ): Promise<ModelResponse> {
   let response: ModelResponse | undefined;
-  for await (const event of model.stream(request, { signal })) {
+  for await (const event of model.stream(request, {
+    signal,
+    ...(meter === undefined ? {} : { meter }),
+  })) {
     if (event.type === "text_delta" || event.type === "thinking_delta") emit(event);
     else response = event.response;
   }

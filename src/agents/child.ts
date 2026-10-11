@@ -1,15 +1,17 @@
 import type { KnowledgeIndex } from "../knowledge/index.js";
-import { approxTokens } from "../loop/budget.js";
+import { BudgetExhausted, requestTokens, TokenBudget } from "../loop/budget.js";
+import { callModelWithRetry } from "../loop/callModel.js";
 import {
   type AgentEvent,
   type AgentStopReason,
   runAgent,
   usableServerTools,
 } from "../loop/runAgent.js";
-import { type Price, responseCost, totalTokens } from "../model/pricing.js";
+import { type Price, responseCost } from "../model/pricing.js";
 import { serverCallText } from "../model/serverTools.js";
 import type {
   ModelClient,
+  ModelRequest,
   ModelResponse,
   ServerToolSpec,
   TextBlock,
@@ -18,8 +20,15 @@ import type {
 import type { PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
 import type { SubagentReport } from "../session/records.js";
-import { addAssistantResponse, addUserMessage, createSession } from "../session/session.js";
+import {
+  addAssistantResponse,
+  addUnreported,
+  addUserMessage,
+  budgetSpent,
+  createSession,
+} from "../session/session.js";
 import type { Journal } from "../session/store.js";
+import { LIMITS } from "../tools/limits.js";
 import {
   SubagentFailure,
   type ToolContext,
@@ -161,45 +170,54 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
     let end: string = result.stopReason;
     // G06: the wrap-up call is one more request, so it must fit in the budget that is left. It
     // costs at least the context of the last response plus its output limit. No room: no call.
-    // The wrap-up request holds the whole conversation plus WRAP_UP: reserve for that.
-    const reserve =
-      Math.max(
-        session.contextTokens,
-        approxTokens(JSON.stringify(session.messages)) + approxTokens(WRAP_UP),
-      ) + run.maxTokens;
-    const hold =
-      stoppedEarly(result.stopReason) && budget !== undefined ? budget.reserve(reserve) : undefined;
-    const wrapUpFits =
-      totalTokens(session.usage) + reserve <= limits.tokenBudget &&
-      (budget === undefined || hold !== undefined);
-    if (stoppedEarly(result.stopReason) && !wrapUpFits) {
-      if (hold !== undefined) budget?.settle(hold, 0);
-      answer = answer || NO_ROOM;
-      end = "no_wrap_up";
-    } else if (stoppedEarly(result.stopReason)) {
-      // One more call with no tool use, so the run still gives an answer.
-      context.progress?.("writing the answer");
-      addUserMessage(session, WRAP_UP);
-      let response: ModelResponse;
-      try {
-        response = await callOnce(model, run, session.messages, context.signal);
-      } catch (error) {
-        // No usage known: the whole reservation stays spent.
-        if (hold !== undefined) budget?.settle(hold);
-        throw error;
+    if (stoppedEarly(result.stopReason)) {
+      // The wrap-up request is built first, and reserved like a main call (third review of 0.17):
+      // the system prompt, the tool list, the conversation and the wrap-up note, plus maxTokens.
+      const request = wrapUpRequest(model, run, [
+        ...session.messages,
+        { role: "user", content: [{ type: "text", text: WRAP_UP }] },
+      ]);
+      const reserve = requestTokens(session, request) + run.maxTokens;
+      const fits = budgetSpent(session) + reserve <= limits.tokenBudget;
+      let response: ModelResponse | undefined;
+      if (fits) {
+        try {
+          // A view of the shared budget, or (no parent budget) the child's own: either way the
+          // request reserves first, and with no reported usage its reservation stays spent.
+          response = await callModelWithRetry(model, request, context.signal, () => {}, [], {
+            budget:
+              budget ??
+              new TokenBudget(
+                Math.max(0, limits.tokenBudget - budgetSpent(session)),
+                undefined,
+                (tokens) => addUnreported(session, tokens),
+              ),
+            tokens: reserve,
+          });
+        } catch (error) {
+          if (!(error instanceof BudgetExhausted)) throw error;
+        }
       }
-      if (hold !== undefined) budget?.settle(hold, totalTokens(response.usage));
-      steps++;
-      const price = run.model.price;
-      addAssistantResponse(
-        session,
-        response,
-        steps,
-        price === undefined ? undefined : responseCost(response, price),
-      );
-      answer = textOf(response.content) || answer;
-      end = "wrap_up";
+      if (response === undefined) {
+        answer = answer || NO_ROOM;
+        end = "no_wrap_up";
+      } else {
+        context.progress?.("writing the answer");
+        addUserMessage(session, WRAP_UP);
+        steps++;
+        const price = run.model.price;
+        addAssistantResponse(
+          session,
+          response,
+          steps,
+          price === undefined ? undefined : responseCost(response, price),
+        );
+        answer = textOf(response.content) || answer;
+        end = "wrap_up";
+      }
     }
+    // A subagent's answer has a bound (0.17, T9): the parent's budget keeps room for it.
+    answer = capAnswer(answer);
     journal?.write({ type: "end", stopReason: end, steps });
     return { answer: answer.trim(), calls, report: report(result.stopReason, steps) };
   } catch (error) {
@@ -239,29 +257,28 @@ function textOf(content: readonly { type: string }[]): string {
 }
 
 /** One model call; tool calls in the response are ignored. */
-async function callOnce(
+/** The wrap-up request: the same system prompt and tool list as before (the API needs the tools
+ * when the history holds tool calls; N2 too). */
+function wrapUpRequest(
   model: ModelClient,
   run: ChildRun,
-  messages: Parameters<ModelClient["stream"]>[0]["messages"],
-  signal: AbortSignal,
-): Promise<ModelResponse> {
-  let response: ModelResponse | undefined;
-  // The same tool list as before: the API needs it when the history holds tool calls (N2 too).
+  messages: ModelRequest["messages"],
+): ModelRequest {
   const serverTools = usableServerTools(model, run.serverTools);
-  for await (const event of model.stream(
-    {
-      system: run.system,
-      messages,
-      tools: run.tools.specs().filter((t) => !serverTools.some((s) => s.type === t.name)),
-      ...(serverTools.length === 0 ? {} : { serverTools }),
-      maxTokens: run.maxTokens,
-    },
-    { signal },
-  )) {
-    if (event.type === "response") response = event.response;
-  }
-  if (response === undefined) throw new Error("Model stream ended without a response.");
-  return response;
+  return {
+    system: run.system,
+    messages,
+    tools: run.tools.specs().filter((t) => !serverTools.some((s) => s.type === t.name)),
+    ...(serverTools.length === 0 ? {} : { serverTools }),
+    maxTokens: run.maxTokens,
+  };
+}
+
+/** Cut a subagent's answer to LIMITS.childAnswerChars, with a note. */
+export function capAnswer(answer: string): string {
+  const max = LIMITS.childAnswerChars;
+  if (answer.length <= max) return answer;
+  return `${answer.slice(0, max - 120)}\n[… the answer was cut: a subagent's answer is at most ${max} characters]`;
 }
 
 /** A short line for one child call: `grep /Coupon/ in src`. */

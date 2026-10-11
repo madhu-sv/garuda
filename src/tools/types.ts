@@ -159,6 +159,8 @@ export interface ToolRunner {
   specs(): ToolSpec[];
   isReadOnly(name: string): boolean;
   runsCommands(name: string): boolean;
+  /** The tool runs a subagent, whose answer is capped at LIMITS.childAnswerChars (0.17). */
+  runsSubagent?(name: string): boolean;
   execute(call: ToolUseBlock, context: ToolContext): Promise<ToolOutcome>;
 }
 

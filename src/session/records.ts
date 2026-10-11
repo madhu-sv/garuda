@@ -126,6 +126,16 @@ export interface ContinueRecord extends Base {
   maxTokens: number;
 }
 
+/**
+ * Tokens charged to the session's budget with no reported usage (0.17, review T9): a model request
+ * that failed or was cancelled keeps its whole reservation. Kept apart from the usage (which is
+ * what the provider reported), and read again on resume.
+ */
+export interface UnreportedRecord extends Base {
+  type: "unreported";
+  tokens: number;
+}
+
 export interface EndRecord extends Base {
   type: "end";
   stopReason: string;
@@ -144,6 +154,7 @@ export type SessionRecord =
   | TitleRecord
   | ThinkingRecord
   | ContinueRecord
+  | UnreportedRecord
   | EndRecord;
 
 /** A record before the journal adds the time. */

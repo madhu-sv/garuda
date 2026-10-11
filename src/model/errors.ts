@@ -27,7 +27,7 @@ const TRANSIENT_CODES = new Set([
 
 const TRANSIENT_STATUS = new Set([500, 502, 503, 504, 529]);
 
-const TRANSIENT_TYPES = new Set(["overloaded_error", "api_error"]);
+const TRANSIENT_TYPES = new Set(["overloaded_error", "api_error", "rate_limit_error"]);
 
 const TRANSIENT_MESSAGE =
   /^terminated$|socket hang up|other side closed|premature close|connection (?:error|reset|closed)|stream ended without a response|overloaded/i;
@@ -50,6 +50,9 @@ function check(error: unknown, depth: number): boolean {
   };
   // A user abort is never retried.
   if (e.name === "AbortError") return false;
+  // A rate limit is transient (0.17): the loop retries it, since under the token budget the SDK
+  // does not.
+  if (e.status === 429) return true;
   if (typeof e.status === "number" && e.status >= 400 && e.status < 500) return false;
   if (typeof e.name === "string" && TRANSIENT_NAMES.has(e.name)) return true;
   if (typeof e.code === "string" && TRANSIENT_CODES.has(e.code)) return true;

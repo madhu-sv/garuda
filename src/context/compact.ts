@@ -1,4 +1,4 @@
-import type { Budget } from "../loop/budget.js";
+import { approxTokens, type Budget } from "../loop/budget.js";
 import { callModelWithRetry, type Metered, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
 import { hasServerBlocks, serverPairText, withoutServerBlocks } from "../model/serverTools.js";
 import type {
@@ -106,7 +106,13 @@ export async function compactIfNeeded(
 export async function compactNow(
   session: Session,
   model: ModelClient,
-  options: { keepSteps?: number; focus?: string; costOf?: CompactionOptions["costOf"] },
+  options: {
+    keepSteps?: number;
+    focus?: string;
+    costOf?: CompactionOptions["costOf"];
+    /** The session's token budget (0.17, T9): /compact reserves in it too. */
+    budget?: Budget;
+  },
   signal: AbortSignal,
 ): Promise<CompactionResult | undefined> {
   const keepSteps = options.keepSteps ?? COMPACTION_DEFAULTS.keepSteps;
@@ -122,6 +128,8 @@ export async function compactNow(
     options.costOf,
     signal,
     options.focus,
+    undefined,
+    options.budget,
   );
 }
 
@@ -139,9 +147,7 @@ async function summaryStage(
 ): Promise<CompactionResult> {
   const older = trimmed.slice(0, split);
   const recent = trimmed.slice(split);
-  const metered =
-    budget === undefined ? undefined : { budget, tokens: before + SUMMARY_MAX_TOKENS };
-  const summary = await summarise(model, older, signal, focus, delays, metered);
+  const summary = await summarise(model, older, signal, focus, delays, budget, before);
   const summaryText = summary.content
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -252,7 +258,8 @@ async function summarise(
   signal: AbortSignal,
   focus: string | undefined,
   delays: readonly number[],
-  metered?: Metered,
+  budget?: Budget,
+  before = 0,
 ): Promise<ModelResponse> {
   const ask =
     focus === undefined || focus.trim() === ""
@@ -276,6 +283,16 @@ async function summarise(
   };
   // The summary request is the largest of the session, so a dropped connection is most likely
   // here: retry it like a main call (0.14.1, review). Its text is not shown, so no events.
+  // The token budget (0.17, T9): the summary request reserves its own size (the transcript, at
+  // least the context before compaction) plus its output limit; also for /compact.
+  const metered =
+    budget === undefined
+      ? undefined
+      : {
+          budget,
+          tokens:
+            Math.max(before, approxTokens(JSON.stringify(request.messages))) + SUMMARY_MAX_TOKENS,
+        };
   return callModelWithRetry(model, request, signal, () => {}, delays, metered);
 }
 

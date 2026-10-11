@@ -163,6 +163,16 @@ export type ModelEvent =
 
 export interface StreamOptions {
   signal?: AbortSignal;
+  /**
+   * The token budget's meter for this call (0.17, T9). A client that sends the request again on its
+   * own (an HTTP retry, a batch job's switch to the normal API) calls `retry()` first: it reserves
+   * for the new request, or throws when the budget has no room.
+   */
+  meter?: AttemptMeter;
+}
+
+export interface AttemptMeter {
+  retry(): void;
 }
 
 /**

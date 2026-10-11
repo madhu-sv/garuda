@@ -53,6 +53,8 @@ export class TokenBudget implements Budget {
   constructor(
     private readonly total: number,
     private readonly parent?: TokenBudget,
+    /** At the root: tokens charged with no reported usage, for the session's record (review). */
+    private readonly onUnreported?: (tokens: number) => void,
   ) {}
 
   get left(): number {
@@ -71,7 +73,8 @@ export class TokenBudget implements Budget {
     const record = hold as HoldRecord;
     if (record.settled) return;
     record.settled = true;
-    this.give(record.tokens, used === undefined ? record.tokens : Math.max(0, used));
+    if (used === undefined) this.give(record.tokens, record.tokens, record.tokens);
+    else this.give(record.tokens, Math.max(0, used), 0);
   }
 
   child(cap: number): Budget {
@@ -95,10 +98,49 @@ export class TokenBudget implements Budget {
     return true;
   }
 
-  private give(held: number, spent: number): void {
+  private give(held: number, spent: number, unreported: number): void {
     this.heldTokens -= held;
     this.spentTokens += spent;
-    this.parent?.give(held, spent);
+    if (this.parent !== undefined) this.parent.give(held, spent, unreported);
+    else if (unreported > 0) this.onUnreported?.(unreported);
+  }
+}
+
+/**
+ * The reservations of one model call (third review of 0.17): every provider request reserves, also
+ * the provider's own retries and a batch job's switch to the normal API. A request that ends with no
+ * reported usage keeps its whole reservation before the next one starts.
+ */
+export class CallMeter {
+  private open: Hold | undefined;
+
+  constructor(
+    private readonly budget: Budget,
+    private readonly tokens: number,
+  ) {}
+
+  /** Reserve for one more request; a request still open (no usage) stays spent. */
+  start(): void {
+    if (this.open !== undefined) this.budget.settle(this.open);
+    this.open = this.budget.reserve(this.tokens);
+    if (this.open === undefined) throw new BudgetExhausted();
+  }
+
+  /** The provider sends the same request again: same as `start`. */
+  retry(): void {
+    this.start();
+  }
+
+  /** The call ended with this reported usage. */
+  done(used: number): void {
+    if (this.open !== undefined) this.budget.settle(this.open, used);
+    this.open = undefined;
+  }
+
+  /** The call failed with no reported usage: the open reservation stays spent. */
+  failed(): void {
+    if (this.open !== undefined) this.budget.settle(this.open);
+    this.open = undefined;
   }
 }
 

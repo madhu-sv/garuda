@@ -57,7 +57,7 @@ in 0.16.1:
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Token budget: a call's reservation is an estimate (about 4 characters per token, plus the output
   limit), so a provider that counts more input tokens than the estimate can pass the cap by that
-  difference. A failed call with no reported usage counts as fully spent.
+  difference.
 - Audit log: without the checkpoint (`"audit": { "checkpoint": true }`, off by default), lines cut
   from the end of a file, or a removed file, are not detected.
 - On macOS, secret-named variables other than the provider API keys stay in Garuda's own environment.
@@ -627,7 +627,10 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   3 times in a row. Garuda says why. The budget holds for the whole turn (0.17): each model call
   reserves its request and its output limit first, and stops when they do not fit; subagents,
   compaction and retries reserve in the same budget, and a subagent never takes the room that the
-  parent needs for its final answer. A failed call with no reported usage counts as fully spent.
+  parent needs for its final answer. Every request to the provider reserves, also its own retries
+  and a batch job's switch to the normal API. A failed call with no reported usage counts as fully
+  spent, also in later turns and after a resume. `/compact` counts too. A tool result is at most
+  100 000 characters, and a subagent's answer at most 20 000.
 - When the connection to the model breaks while a response streams, Garuda sends the request again (up
   to 2 times) and says so. The session keeps only the complete response.
 - At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,

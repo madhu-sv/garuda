@@ -216,7 +216,9 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
   `stop` → end_turn.
 - Usage: `prompt_tokens` minus `cached_tokens` is input, `cached_tokens` is cache read. A server that
   sends no usage gets an estimate (4 characters per token), so context tracking and compaction still work.
-- Errors: two retries for 408, 409, 429 and 5xx (with `Retry-After` up to 30 s) and for network errors;
+- Errors: two retries for 408, 409, 429 and 5xx (with `Retry-After` up to 30 s) and for network errors
+  (0.17: each retry first calls `options.meter.retry()`, which reserves in the token budget, or stops
+  the call when there is no room);
   "Cannot reach <provider> at <url>. Is the server running?" for a refused connection; a context-length
   error adds a hint to set `contextWindow`. Ctrl-C aborts the request.
 - No cache breakpoints: the API has none. The system prompt and tool list keep the same bytes, so servers
@@ -257,3 +259,16 @@ mapping, a local fake Chat Completions server: split chunks, tool calls, tool ca
 held text, `lines` mode set in `models.json`, usage, retries, errors, and a whole Garuda turn),
 `test/textToolCalls.test.ts` (the accepted forms in each mode, every rule that keeps text as text, and
 `StreamHold`).
+
+## The token budget at the provider (0.17, review T9)
+
+`StreamOptions.meter` (an `AttemptMeter`) comes from the loop's `CallMeter`. Every provider request
+of a call reserves in the turn's budget, and a request that ends with no reported usage keeps its
+whole reservation:
+
+- `OpenAICompatibleClient`: each HTTP retry calls `meter.retry()` first.
+- `DeadlineClient`: the switch from a batch request to the normal API calls `meter.retry()`; the
+  cancelled batch request stays spent.
+- `AnthropicClient`: with a meter, the SDK gets `maxRetries: 0`, so it never sends the request again
+  on its own; the loop retries, and each attempt reserves. A rate limit (429, `rate_limit_error`) is
+  now a transient error for the loop.

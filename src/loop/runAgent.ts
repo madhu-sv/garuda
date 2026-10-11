@@ -22,9 +22,12 @@ import {
   addContinuation,
   addCost,
   addToolResults,
+  addUnreported,
+  budgetSpent,
   closeOpenToolCalls,
   type Session,
 } from "../session/session.js";
+import { LIMITS } from "../tools/limits.js";
 import type {
   DiagnosticsSource,
   FormatSource,
@@ -142,7 +145,10 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   const tools = deps.tools.specs().filter((t) => !serverTools.some((s) => s.type === t.name));
   // One budget for this run and its children (0.17, T9): every model call reserves in it first.
   const shared: Budget =
-    deps.budget ?? new TokenBudget(Math.max(0, budget - totalTokens(session.usage)));
+    deps.budget ??
+    new TokenBudget(Math.max(0, budget - budgetSpent(session)), undefined, (tokens) =>
+      addUnreported(session, tokens),
+    );
   const recent: string[] = [];
   let usage = ZERO_USAGE;
   let steps = 0;
@@ -177,7 +183,7 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   async function loop(): Promise<AgentResult> {
     while (steps < maxSteps) {
       signal.throwIfAborted();
-      if (totalTokens(session.usage) >= budget) return finish("token_budget");
+      if (budgetSpent(session) >= budget) return finish("token_budget");
 
       if (deps.contextWindow !== undefined) {
         const result = await compactIfNeeded(
@@ -275,7 +281,12 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       };
       // Children (subagents) reserve in the same budget, but leave this run room for one more call
       // of the same size: its final answer.
-      shared.setFloor(reserve);
+      // The floor (third review): the next request holds this one, this response, and the results
+      // of these calls (each bounded: LIMITS.resultChars, a subagent's answer childAnswerChars),
+      // and it needs its own output limit.
+      shared.setFloor(
+        reserve + outputLimit + calls.reduce((sum, call) => sum + resultBound(deps.tools, call), 0),
+      );
       const { results, meta } = await runTools(calls, deps, context, emit).finally(() =>
         shared.setFloor(0),
       );
@@ -292,4 +303,10 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
 
     return finish("max_steps");
   }
+}
+
+/** The most tokens that one call's result can add to the next request (0.17, T9). */
+function resultBound(tools: ToolRunner, call: ToolUseBlock): number {
+  const subagent = tools.runsSubagent?.(call.name) === true;
+  return Math.ceil((subagent ? LIMITS.childAnswerChars : LIMITS.resultChars) / 4);
 }

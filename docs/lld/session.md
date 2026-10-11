@@ -43,6 +43,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `title` | title (0.8, `/sessions rename`; the last one wins; resume ignores it) |
 | `thinking` | choice (0.9, `/thinking`; the last one wins; a resume brings it back) |
 | `continue` | message, maxTokens (0.12: the note after a response cut off at the output limit; a resume adds the message; not a turn in `/sessions`) |
+| `unreported` | tokens (0.17, T9: a failed or cancelled model request with no reported usage keeps its whole reservation; the session's budget counts these with the usage, and a resume adds them up in `unreportedTokens`) |
 | `end` | stopReason, steps |
 
 ## Store (`store.ts`)

@@ -1,6 +1,7 @@
 import { withoutServerBlocks } from "./serverTools.js";
 import { extractTextToolCalls, StreamHold, type TextToolCallMode } from "./textToolCalls.js";
 import type {
+  AttemptMeter,
   ContentBlock,
   Message,
   ModelClient,
@@ -57,7 +58,11 @@ export class OpenAICompatibleClient implements ModelClient {
   }
 
   async *stream(request: ModelRequest, options?: StreamOptions): AsyncIterable<ModelEvent> {
-    const http = await this.post(toWireBody(this.options.model, request), options?.signal);
+    const http = await this.post(
+      toWireBody(this.options.model, request),
+      options?.signal,
+      options?.meter,
+    );
     const mode = request.tools.length === 0 ? "off" : (this.options.textToolCalls ?? "whole");
     const state = newStreamState();
     // Holds back text while it can still be a tool call written as text.
@@ -88,7 +93,11 @@ export class OpenAICompatibleClient implements ModelClient {
     yield { type: "response", response };
   }
 
-  private async post(body: unknown, signal: AbortSignal | undefined): Promise<Response> {
+  private async post(
+    body: unknown,
+    signal: AbortSignal | undefined,
+    meter: AttemptMeter | undefined,
+  ): Promise<Response> {
     const url = `${this.options.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     const headers: Record<string, string> = {
       "content-type": "application/json",
@@ -109,6 +118,8 @@ export class OpenAICompatibleClient implements ModelClient {
         const cause = causeCode(error);
         if (attempt < this.delays.length && cause !== "ECONNREFUSED") {
           await sleep(this.delays[attempt] ?? 1_000, signal);
+          // The token budget (0.17): the failed request keeps its reservation; the retry reserves.
+          meter?.retry();
           continue;
         }
         throw new Error(
@@ -126,6 +137,7 @@ export class OpenAICompatibleClient implements ModelClient {
             ? Math.min(retryAfter, MAX_RETRY_AFTER_MS)
             : (this.delays[attempt] ?? 1_000);
         await sleep(wait, signal);
+        meter?.retry();
         continue;
       }
       throw new Error(

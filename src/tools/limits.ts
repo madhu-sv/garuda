@@ -2,6 +2,13 @@
 export const LIMITS = {
   /** Maximum characters in one tool result. */
   outputChars: 50_000,
+  /**
+   * Hard cap of one tool result, enforced by the registry (0.17, T9): the token budget keeps room
+   * for the parent's final answer, so a result must have a known bound.
+   */
+  resultChars: 100_000,
+  /** Cap of a subagent's answer (0.17, T9). */
+  childAnswerChars: 20_000,
   /** read_file: default and maximum lines per call. */
   readLines: 2_000,
   /** read_file and grep: longer lines are cut. */

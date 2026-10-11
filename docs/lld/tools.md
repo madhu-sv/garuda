@@ -46,7 +46,10 @@ treats it as read-only.
   5. `permissions.check()` → "Permission denied: …", with `denied: true` on the outcome (0.5: the JSON
      output lists these calls in `permission_denials`). The request carries `callId` (0.15).
   6. `run()`, `toText()`, `isError()`. The tool's context has `callId` too, so a check inside the
-     tool (a `web_fetch` redirect to a new host) names the same call (0.15).
+     tool (a `web_fetch` redirect to a new host) names the same call (0.15). `capResult` (0.17, T9)
+     cuts the middle of a result over `LIMITS.resultChars` (100 000): the token budget needs a known
+     bound for each result. `runsSubagent(name)` tells the loop which tools run a subagent (their
+     answer is at most `LIMITS.childAnswerChars`, 20 000).
   7. `hooks.after()` may append feedback.
   8. `report()`, when the tool has it, adds the subagent report to the outcome.
   Any exception becomes `Error: <tool> failed: <message>`.

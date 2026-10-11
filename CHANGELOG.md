@@ -2,6 +2,12 @@
 
 ## 0.17.0 (unreleased)
 
+- Token budget, review of 31aab17: a subagent's wrap-up request is reserved in full (system prompt
+  and tools too); every provider request reserves, also an HTTP retry and a batch job's switch to
+  the normal API (the Anthropic SDK no longer retries on its own under the budget; the loop retries,
+  also a rate limit); the parent's room for its final answer covers the results of its calls (a
+  tool result is at most 100 000 characters, a subagent's answer at most 20 000); charges for
+  failed requests stay with the session, also after a resume; `/compact` counts against the budget.
 - One token budget for the turn and its agent tree (review T9): each model call reserves its request
   and output limit first, and the run stops with `token_budget` when they do not fit; subagents,
   compaction and retries reserve in the same budget; parallel subagents cannot pass the parent's cap,

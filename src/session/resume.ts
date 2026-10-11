@@ -22,6 +22,7 @@ export interface RebuiltState {
   usage: typeof ZERO_USAGE;
   costUsd: number | undefined;
   contextTokens: number;
+  unreportedTokens: number;
   /** The last start or resume record: model, root and limits in use. */
   start: StartRecord | undefined;
   /** Undo points and redo entries (0.4). */
@@ -37,6 +38,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
     usage: { ...ZERO_USAGE },
     costUsd: 0,
     contextTokens: 0,
+    unreportedTokens: 0,
     start: undefined,
     undo: emptyUndoState(),
   };
@@ -105,6 +107,10 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
       case "thinking":
         state.thinking = record.choice;
         break;
+      case "unreported":
+        // Failed or cancelled requests still count for the session's budget (0.17, T9).
+        state.unreportedTokens += record.tokens;
+        break;
       case "end":
       case "title":
         break;
@@ -152,6 +158,7 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
   session.usage = state.usage;
   session.costUsd = state.costUsd;
   session.contextTokens = state.contextTokens;
+  session.unreportedTokens = state.unreportedTokens;
   session.undo = state.undo;
   if (state.thinking !== undefined) session.thinking = state.thinking;
   journal.write({ type: "resume", sessionId: id, ...options.start });

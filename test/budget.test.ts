@@ -173,3 +173,233 @@ describe("parallel children share one budget", () => {
     expect(parent.reserve(300)).toBeDefined();
   });
 });
+
+describe("budget gaps from the review of 31aab17", () => {
+  function childRun(
+    model: FakeModelClient,
+    system: string,
+    tokenBudget: number,
+    tools = new ToolRegistry(),
+  ) {
+    return {
+      id: "kid",
+      system,
+      prompt: "look",
+      tools,
+      model: { spec: "fake", contextWindow: 1_000_000, client: async () => model },
+      permissions: allowAll(base),
+      limits: { maxSteps: 1, tokenBudget },
+      maxTokens: 20,
+    };
+  }
+
+  it("P1: a child's wrap-up reserves the whole request, also with zero completed steps", async () => {
+    const shared = new TokenBudget(1_000);
+    const model = new FakeModelClient([
+      reply([text("first")], undefined, usage(2_000, 10)),
+      reply([text("wrap-up")], undefined, usage(2_000, 10)),
+    ]);
+    const result = await runChild(
+      childRun(model, "x".repeat(8_000), 1_000),
+      toolContext(base, { budget: shared }),
+    );
+    expect(model.requests).toHaveLength(0);
+    expect(result.answer).toMatch(/no room in its token budget/);
+    expect(shared.spent).toBe(0);
+  });
+
+  it("P1: a child's wrap-up after a large tool result does not fit, and does not start", async () => {
+    const shared = new TokenBudget(1_500);
+    const model = new FakeModelClient([
+      reply([toolUse("upper", { text: "a".repeat(4_000) })], undefined, usage(300, 20)),
+      reply([text("wrap-up")], undefined, usage(300, 20)),
+    ]);
+    const result = await runChild(
+      childRun(model, "s", 1_500, new ToolRegistry([upperTool()])),
+      toolContext(base, { budget: shared }),
+    );
+    expect(model.requests).toHaveLength(1);
+    expect(result.answer).toMatch(/no room in its token budget/);
+    expect(shared.spent).toBeLessThanOrEqual(1_500);
+  });
+
+  it("P1: an OpenAI-compatible HTTP retry reserves again; no room, no second request", async () => {
+    const { OpenAICompatibleClient } = await import("../src/model/openaiCompatible.js");
+    let posts = 0;
+    const client = new OpenAICompatibleClient({
+      provider: "box",
+      baseUrl: "http://127.0.0.1:9/v1",
+      model: "m",
+      retryDelaysMs: [0, 0],
+      fetch: (async () => {
+        posts++;
+        return new Response("busy", { status: 503 });
+      }) as typeof fetch,
+    });
+    const budget = new TokenBudget(300);
+    const request: ModelRequest = { system: "s", messages: [], tools: [], maxTokens: 10 };
+    await expect(
+      callModelWithRetry(client, request, signal, () => {}, [], { budget, tokens: 300 }),
+    ).rejects.toThrow(BudgetExhausted);
+    expect(posts).toBe(1);
+    expect(budget.spent).toBe(300);
+  });
+
+  it("P1: a batch job's switch to the normal API reserves again; the cancelled request stays spent", async () => {
+    const { DeadlineClient } = await import("../src/model/deadline.js");
+    const waiting: ModelClient = {
+      async *stream(_request, options) {
+        await new Promise((_resolve, reject) =>
+          options?.signal?.addEventListener("abort", () => reject(options.signal?.reason)),
+        );
+        yield* [];
+      },
+    };
+    const request: ModelRequest = { system: "s", messages: [], tools: [], maxTokens: 10 };
+    for (const [total, fallbackRequests, spent] of [
+      [300, 0, 300],
+      [700, 1, 340],
+    ] as const) {
+      const fallback = new FakeModelClient([reply([text("ok")], undefined, usage(30, 10))]);
+      const client = new DeadlineClient(waiting, async () => fallback, new Date(Date.now() + 20));
+      const budget = new TokenBudget(total);
+      const call = callModelWithRetry(client, request, signal, () => {}, [], {
+        budget,
+        tokens: 300,
+      });
+      if (fallbackRequests === 0) await expect(call).rejects.toThrow(BudgetExhausted);
+      else await call;
+      expect(fallback.requests).toHaveLength(fallbackRequests);
+      expect(budget.spent).toBe(spent);
+    }
+  });
+
+  it("P2: the parent keeps room for its final answer after a child with a long answer", async () => {
+    const childModel = new FakeModelClient(
+      Array.from({ length: 200 }, (_, i) =>
+        reply(
+          [text("x".repeat(2_000)), toolUse("upper", { text: `t${i}` })],
+          undefined,
+          usage(200, 50),
+        ),
+      ),
+    );
+    const kid = {
+      name: "kid",
+      description: "a subagent",
+      inputSchema: (await import("zod")).z.object({}),
+      readOnly: true,
+      async run(_input: unknown, context: import("../src/tools/types.js").ToolContext) {
+        return runChild(
+          {
+            ...childRun(childModel, "s", 1_000_000, new ToolRegistry([upperTool()])),
+            limits: { maxSteps: 200, tokenBudget: 1_000_000 },
+            maxTokens: 100,
+          },
+          context,
+        );
+      },
+      toText: (output: { answer: string }) => output.answer,
+      report: (output: { report: import("../src/session/records.js").SubagentReport }) =>
+        output.report,
+    };
+    const parentModel = new FakeModelClient([
+      reply([toolUse("kid", {})], undefined, usage(100, 20)),
+      reply([text("final answer")], undefined, usage(900, 20)),
+    ]);
+    const session = createSession(base, "p", undefined);
+    addUserMessage(session, "go");
+    const result = await runAgent(session, {
+      model: parentModel,
+      tools: new ToolRegistry([kid as never]),
+      system: "s",
+      permissions: allowAll(base),
+      maxTokens: 200,
+      tokenBudget: 15_000,
+    });
+    expect(parentModel.requests).toHaveLength(2);
+    expect(result.stopReason).toBe("done");
+    expect(totalTokens(session.usage)).toBeLessThanOrEqual(15_000);
+  });
+
+  it("P2: charges with no reported usage stay with the session, also on resume", async () => {
+    const { MemoryJournal } = await import("../src/session/store.js");
+    const { rebuildState } = await import("../src/session/resume.js");
+    const journal = new MemoryJournal();
+    const session = createSession(base, "f", journal);
+    addUserMessage(session, "go");
+    const broken: ModelClient = {
+      // biome-ignore lint/correctness/useYield: the stream fails before its first event.
+      async *stream() {
+        throw Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
+      },
+    };
+    const first = await runAgent(session, {
+      model: broken,
+      tools: new ToolRegistry(),
+      system: "s",
+      permissions: allowAll(base),
+      maxTokens: 300,
+      tokenBudget: 1_000,
+      retryDelaysMs: [0, 0, 0],
+    });
+    expect(first.stopReason).toBe("token_budget");
+    expect(session.unreportedTokens).toBeGreaterThan(600);
+    // The next turn of the same session gets no new allowance.
+    const next = new FakeModelClient([reply([text("hi")])]);
+    addUserMessage(session, "again");
+    const second = await runAgent(session, {
+      model: next,
+      tools: new ToolRegistry(),
+      system: "s",
+      permissions: allowAll(base),
+      maxTokens: 300,
+      tokenBudget: 1_000,
+    });
+    expect(second.stopReason).toBe("token_budget");
+    expect(next.requests).toHaveLength(0);
+    expect(rebuildState(journal.records).unreportedTokens).toBe(session.unreportedTokens);
+  });
+
+  it("P2: /compact reserves its summary request", async () => {
+    const { compactNow } = await import("../src/context/compact.js");
+    const session = createSession(base, "c2", undefined);
+    for (let i = 0; i < 8; i++) {
+      addUserMessage(session, `turn ${i}`);
+      session.messages.push({ role: "assistant", content: [text(`answer ${i}`)] });
+    }
+    const model = new FakeModelClient([reply([text("summary")])]);
+    await expect(
+      compactNow(session, model, { budget: new TokenBudget(10) }, signal),
+    ).rejects.toThrow(BudgetExhausted);
+    expect(model.requests).toHaveLength(0);
+    // Negative control: with room, the summary request runs.
+    await compactNow(session, model, { budget: new TokenBudget(100_000) }, signal);
+    expect(model.requests).toHaveLength(1);
+  });
+});
+
+describe("no hidden SDK retries under the budget", () => {
+  it("the Anthropic client asks the SDK for no retries of its own when a meter is set", async () => {
+    const { AnthropicClient } = await import("../src/model/anthropic.js");
+    const seen: unknown[] = [];
+    const sdk = {
+      messages: {
+        stream: (_params: unknown, options: unknown) => {
+          seen.push(options);
+          throw new Error("stop here");
+        },
+      },
+    };
+    const client = new AnthropicClient({ model: "claude-x", client: sdk as never });
+    const request: ModelRequest = { system: "s", messages: [], tools: [], maxTokens: 10 };
+    const drain = async (options: Parameters<ModelClient["stream"]>[1]) => {
+      for await (const _ of client.stream(request, options)) {
+      }
+    };
+    await expect(drain({ signal, meter: { retry: () => {} } })).rejects.toThrow("stop here");
+    await expect(drain({ signal })).rejects.toThrow("stop here");
+    expect(seen[0]).toMatchObject({ maxRetries: 0 });
+    expect(seen[1]).not.toHaveProperty("maxRetries");
+  });
+});

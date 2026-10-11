@@ -35,6 +35,7 @@ import {
   profileAccess,
   profileNotes,
 } from "../lang/profiles.js";
+import { BudgetExhausted, TokenBudget } from "../loop/budget.js";
 import {
   type AgentEvent,
   type AgentResult,
@@ -89,7 +90,9 @@ import type { SessionSummary } from "../session/list.js";
 import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
 import {
+  addUnreported,
   addUserMessage,
+  budgetSpent,
   closeOpenToolCalls,
   createSession,
   type Session,
@@ -2131,18 +2134,34 @@ export class Runtime {
     const model = await this.client();
     const price = this.price;
     let costUsd: number | undefined;
-    const result = await compactNow(
-      session,
-      model,
-      {
-        ...(focus === undefined || focus === "" ? {} : { focus }),
-        costOf: (response) => {
-          costUsd = price === undefined ? undefined : responseCost(response, price);
-          return costUsd;
-        },
-      },
-      signal,
+    // /compact counts against the session's token budget, as automatic compaction does (third
+    // review of 0.17): its summary request reserves first, and a failed one stays spent.
+    const budget = new TokenBudget(
+      Math.max(0, this.limits.tokenBudget - budgetSpent(session)),
+      undefined,
+      (tokens) => addUnreported(session, tokens),
     );
+    let result: CompactionResult | undefined;
+    try {
+      result = await compactNow(
+        session,
+        model,
+        {
+          ...(focus === undefined || focus === "" ? {} : { focus }),
+          costOf: (response) => {
+            costUsd = price === undefined ? undefined : responseCost(response, price);
+            return costUsd;
+          },
+          budget,
+        },
+        signal,
+      );
+    } catch (error) {
+      if (!(error instanceof BudgetExhausted)) throw error;
+      throw new Error(
+        "The session's token budget has no room for the summary request. Start a new session (/new) or raise limits.tokenBudget.",
+      );
+    }
     if (result === undefined) return undefined;
     return costUsd === undefined ? result : { ...result, costUsd };
   }

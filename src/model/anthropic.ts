@@ -42,10 +42,12 @@ export class AnthropicClient implements ModelClient {
   }
 
   async *stream(request: ModelRequest, options?: StreamOptions): AsyncIterable<ModelEvent> {
-    const stream = this.client.messages.stream(
-      toWireParams(this.model, request),
-      options?.signal === undefined ? {} : { signal: options.signal },
-    );
+    const stream = this.client.messages.stream(toWireParams(this.model, request), {
+      ...(options?.signal === undefined ? {} : { signal: options.signal }),
+      // Under the token budget (0.17) the SDK must not send the request again on its own: the loop
+      // retries, and each of its attempts reserves first.
+      ...(options?.meter === undefined ? {} : { maxRetries: 0 }),
+    });
     for await (const event of stream) {
       if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
         yield { type: "text_delta", text: event.delta.text };

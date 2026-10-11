@@ -1,6 +1,6 @@
 # Bounded changes (0.17, planned)
 
-Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patches 0189, 0190); T9, the shared budget (patch 0191). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. The
+Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patches 0189, 0190); T9, the shared budget (patches 0191, 0192). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. The
 rest is planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
 2026-10-10). The patch plan is at the end. Each section has decisions, a threat model, a default and
 tests.
@@ -279,7 +279,7 @@ With `"audit": { "checkpoint": true }` (policy files only):
 - Delete a file; verify reports the missing file.
 - The checkpoint file holds no target or reason text.
 
-## T9: one token budget for the agent tree (done, 0191)
+## T9: one token budget for the agent tree (done, 0191, 0192)
 
 ### Today
 
@@ -326,6 +326,22 @@ A `Budget` object, made per turn and shared by the parent and all its children:
 - Behaviour change: a small `tokenBudget` now stops a run before a call that may not fit, not after
   the call that passed it.
 
+### Review of 31aab17 (0192)
+
+Five gaps, each with a regression test in `test/budget.test.ts`:
+
+- The child's wrap-up request is built first and reserved like a main call (system prompt and tool
+  list included), also with zero completed steps.
+- Every provider request reserves: `CallMeter` and `StreamOptions.meter`; the OpenAI-compatible
+  client's HTTP retries and the batch-to-normal switch call `meter.retry()`; the Anthropic SDK gets
+  `maxRetries: 0` under a meter (the loop retries, also a 429).
+- The floor for the final answer is the bound of the next request: the last reservation, the
+  output limit, and a bound per tool result (results are capped at 100 000 characters, a
+  subagent's answer at 20 000).
+- `tokenBudget` stays a session limit: charges with no reported usage are kept in the session
+  (`unreported` records) and count in later turns and after a resume.
+- `/compact` reserves its summary request in the session's budget.
+
 ## T10: approximate code-intelligence results
 
 ### Behaviour
@@ -368,10 +384,11 @@ claims from T1.
 | 0189 | T6 | Job write scopes. Done. |
 | 0190 | T6, T1 | Third review: scope bypasses (outside_sandbox, links, the test command); claims. |
 | 0191 | T9 | The shared budget. |
-| 0192 | T10 | Approximate labels; the measured numbers. |
-| 0193 | T5 | Staging backends and the change list (no question yet). |
-| 0194 | T5 | The question, apply, discard, conflict check, undo. |
-| 0195 | T5 | Docs, the live tests on macOS and Linux, the measured costs. |
+| 0192 | T9 | Review of 31aab17: wrap-up request, provider retries, the floor, session charges, /compact. |
+| 0193 | T10 | Approximate labels; the measured numbers. |
+| 0194 | T5 | Staging backends and the change list (no question yet). |
+| 0195 | T5 | The question, apply, discard, conflict check, undo. |
+| 0196 | T5 | Docs, the live tests on macOS and Linux, the measured costs. |
 
 The second review asked for T6 and T9 before any wider unattended pilot, so they come next. T5
 stays opt-in, and comes last, after its apply, discard, conflict and platform tests pass.

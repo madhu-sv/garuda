@@ -1,4 +1,4 @@
-import { contextSize } from "../model/pricing.js";
+import { contextSize, totalTokens } from "../model/pricing.js";
 import type { ThinkingChoice } from "../model/thinking.js";
 import {
   addUsage,
@@ -37,6 +37,11 @@ export interface Session {
   costUsd: number | undefined;
   /** Context size after the last response, in tokens. Compaction (F23) reads it. */
   contextTokens: number;
+  /**
+   * Tokens charged to the budget with no reported usage (0.17, T9): failed or cancelled requests.
+   * The session's token budget counts them with the usage.
+   */
+  unreportedTokens: number;
   /** What the agent has read, for the edit_file freshness check (F11). */
   files: FileTracker;
   /** Where records go. Absent in tests that do not need a record. */
@@ -59,6 +64,7 @@ export function createSession(
     usage: { ...ZERO_USAGE },
     costUsd: 0,
     contextTokens: 0,
+    unreportedTokens: 0,
     files: new FileTracker(),
     undo: emptyUndoState(),
   };
@@ -200,4 +206,16 @@ export function closeOpenToolCalls(session: Session): number {
     true,
   );
   return open.length;
+}
+
+/** Charge tokens with no reported usage to the session (0.17, T9), and record them. */
+export function addUnreported(session: Session, tokens: number): void {
+  if (tokens <= 0) return;
+  session.unreportedTokens += tokens;
+  session.journal?.write({ type: "unreported", tokens });
+}
+
+/** What the session's token budget has spent: the reported usage and the unreported charges. */
+export function budgetSpent(session: Session): number {
+  return totalTokens(session.usage) + session.unreportedTokens;
 }

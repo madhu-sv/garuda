@@ -64,12 +64,16 @@ describe("transient model errors (0.3)", () => {
     for (const error of transient) expect(isTransientModelError(error), String(error)).toBe(true);
   });
 
+  it("retries a rate limit (0.17): under the token budget the SDK no longer retries it", () => {
+    expect(isTransientModelError({ status: 429, message: "rate limited" })).toBe(true);
+    expect(isTransientModelError({ error: { type: "rate_limit_error" } })).toBe(true);
+  });
+
   it("does not retry what a retry cannot fix", () => {
     const final = [
       Object.assign(new Error("The operation was aborted"), { name: "AbortError" }),
       { status: 400, message: "prompt is too long" },
       { status: 401, message: "invalid x-api-key" },
-      { status: 429, message: "rate limited", error: { type: "overloaded_error" } },
       new Error("Cannot reach ollama at http://localhost:11434/v1. Is the server running?"),
       new Error("ollama answered 404: model not found"),
       null,

@@ -199,8 +199,16 @@ In 0.14, the core agent loop and runtime coordinators were decomposed into cohes
     throws `BudgetExhausted`, and the run stops with `token_budget` (a refused call is not a step).
     A reported usage settles the reservation; a failure or a cancel with no usage keeps all of it
     as spent. The compaction summary reserves in the same budget. Before the tools run, the loop
-    sets a floor (its last reservation): a child's reservation must leave it, so the parent keeps
-    room for its final answer.
+    sets a floor: a child's reservation must leave it, so the parent keeps room for its final
+    answer.
+  - Third review (0192): every provider request reserves (`CallMeter`: the loop's attempts, an
+    HTTP client's own retries, a batch job's switch to the normal API), and a request with no
+    usage keeps its reservation before the next one starts. The floor is the next request's
+    bound: the last reservation, plus the output limit, plus each call's result bound
+    (`LIMITS.resultChars`, or `LIMITS.childAnswerChars` for a subagent). The budget is a session
+    limit: charges with no reported usage go to `session.unreportedTokens` (an `unreported`
+    record, read again on resume), and the next turn starts from `usage + unreportedTokens`.
+    `/compact` (`Runtime.compact`) reserves its summary request in the same session budget.
   - `loopDetector.ts`: Repeated tool call detection preventing infinite loops.
   - `toolRunner.ts`: Tool execution pipeline, read-only call parallelization, progress tracking, and execution metadata capture.
 

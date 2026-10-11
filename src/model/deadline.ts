@@ -50,6 +50,7 @@ export class DeadlineClient implements ModelClient {
       const events: ModelEvent[] = [];
       for await (const event of this.primary.stream(request, {
         signal: AbortSignal.any(signals),
+        ...(options?.meter === undefined ? {} : { meter: options.meter }),
       })) {
         events.push(event);
       }
@@ -57,6 +58,9 @@ export class DeadlineClient implements ModelClient {
       yield* events;
     } catch (error) {
       if (options?.signal?.aborted === true || !timer.signal.aborted) throw error;
+      // The token budget (0.17): the cancelled batch request keeps its reservation (it may still
+      // be charged); the request to the normal API reserves again.
+      options?.meter?.retry();
       if (stepOnly) {
         // Only this request: the next one tries the primary again.
         this.calls.slow++;
