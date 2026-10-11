@@ -924,6 +924,15 @@ A plan can run later, with nobody at the keyboard: for example overnight.
 - The job asks nothing. Reads, commands in the sandbox and the calls in its list are allowed; any other call
   is denied, and the job goes on and reports it. You can edit the list (`"allow"`) in
   `.garuda/jobs/<id>.json` before the run.
+- The write scope (0.17): `/schedule` also proposes `"writeScope"`, the paths in the worktree that the
+  job may change: the folders and files of the plan's `edit_file` and `write_file` rules, and the
+  build folders of the project (`target/`, `build/`, `dist/` …). The question shows it. The OS sandbox
+  makes the rest of the worktree read-only for the job's commands, the engine denies edits outside
+  it, and a change outside it fails the job with no commit. A rule with no folder (`edit_file(**/*.ts)`)
+  gives no scope: the question then says that commands may write anywhere in the worktree. Jobs made
+  before 0.17 have no scope. A test that writes a file outside the scope (for example `coverage.txt`
+  in the root) fails in the job's own runs; add that path to `"writeScope"`. The job's own test command
+  (proof of work) runs with the whole worktree writable, as before.
 - A job needs git and the OS sandbox. `node_modules` and `.venv` are linked from your checkout.
 - At the end Garuda commits the changes on the job branch (no git hooks run) and writes a report:
   `.garuda/jobs/<id>.md`, also shown by `/jobs <id>`. Review with `git diff`, then `git merge

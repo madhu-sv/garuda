@@ -175,6 +175,11 @@ export interface Settings {
   deny: Rule[];
   /** Extra environment variables that commands may see. */
   envAllow: string[];
+  /**
+   * A scheduled job's write scope (0.17, review T6; see writeScope.ts). Set by `garuda run`, never
+   * read from a settings file. Absent: the whole root, as before.
+   */
+  writeScope?: readonly string[];
   /** The network allowlist (0.13): presets and hosts that sandboxed commands may reach. */
   network?: { allow: string[] };
   sandbox?: SandboxSettings;

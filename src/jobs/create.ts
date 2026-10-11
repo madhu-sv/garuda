@@ -1,4 +1,5 @@
 import type { Approver } from "../permissions/types.js";
+import { proposeWriteScope } from "../permissions/writeScope.js";
 import type { Executor } from "../sandbox/types.js";
 import { JobGitError } from "./git.js";
 import {
@@ -97,6 +98,7 @@ export async function createJob(
     throw error;
   }
   const { rules, problems } = planPermissions(options.plan.plan);
+  const proposed = proposeWriteScope(rules, options.root);
   const id = newJobId(options.now);
   const links = linkCandidates(options.root);
   const job: Job = {
@@ -112,6 +114,7 @@ export async function createJob(
     planSession: options.plan.sessionId,
     model: options.modelId,
     allow: rules,
+    ...(proposed.scope === undefined ? {} : { writeScope: proposed.scope }),
     onUnapproved: "deny-and-continue",
     ...(options.at === undefined ? {} : { at: options.at }),
     maxSteps: options.maxSteps ?? DEFAULT_JOB_MAX_STEPS,
@@ -139,6 +142,9 @@ export async function createJob(
       : ["", "Not rules, left out:", ...problems.map((p) => `  ${p}`)]),
     "",
     "Any other call that would ask is denied at run time; the job goes on and reports it.",
+    proposed.scope === undefined
+      ? `Write scope: the whole worktree (${proposed.reason}). Commands may write anywhere in it.`
+      : `Write scope: commands and edits may change only ${proposed.scope.length === 0 ? "nothing in the worktree" : proposed.scope.join(", ")} (plus temp folders, caches and the links). The OS sandbox enforces it for commands.`,
     job.network === undefined
       ? "Network: none for commands."
       : `Network: ${job.network.join(", ")}, through Garuda's proxy; other hosts are denied and reported.`,
@@ -189,7 +195,7 @@ export async function createJob(
   await saveJob(job);
   const lines = [
     `Created job ${id}: ${jobPath(options.root, id)}`,
-    'You can edit its approval list ("allow") in that file before the run.',
+    'You can edit its approval list ("allow") and its write scope ("writeScope") in that file before the run.',
   ];
   const platform = options.launchd?.platform ?? process.platform;
   if (options.launchd !== undefined && options.at !== undefined && platform === "darwin") {

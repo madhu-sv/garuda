@@ -2,6 +2,11 @@
 
 ## 0.17.0 (unreleased)
 
+- Job write scopes (review T6): `/schedule` proposes `"writeScope"`, the paths in the worktree that
+  the job may change (the plan's edit and write paths, and the build folders), and the question
+  shows it. The OS sandbox makes the rest of the worktree read-only for the job's commands, the
+  engine denies edits outside it, and a change outside it fails the job with no commit. Jobs without
+  a scope say "Commands may write anywhere in the worktree."
 - Design (second review): staged commands never fall back to direct mode and never apply an
   incomplete change list; the shared budget keeps a reservation as spent when a request fails or is
   cancelled with no reported usage (docs/lld/bounded-changes.md).

@@ -3,6 +3,7 @@ import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { mkdir, symlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { inWriteScope } from "../permissions/writeScope.js";
 import type { Executor } from "../sandbox/types.js";
 import { type GitResult, git, JobGitError } from "./git.js";
 import type { Job, JobResult } from "./job.js";
@@ -136,6 +137,32 @@ export async function commitJob(
   if (staged.exitCode === 0) return undefined;
   await git(executor, job.worktree, ["commit", "--no-verify", "-q", "-m", message]);
   return (await git(executor, job.worktree, ["rev-parse", "HEAD"])).stdout.trim();
+}
+
+/**
+ * The changed paths in the job's worktree that are outside its write scope (0.17, review T6),
+ * before the commit. Garuda's own files and the links are left out, as in the commit. Ignored files
+ * are not in a commit, so they do not count.
+ */
+export async function outsideScope(executor: Executor, job: Job): Promise<string[]> {
+  if (job.writeScope === undefined) return [];
+  const exclude = [...NEVER_COMMIT, ...job.links].map((p) => `:(exclude)${p}`);
+  const status = await git(executor, job.worktree, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all",
+    "--no-renames",
+    "--",
+    ".",
+    ...exclude,
+  ]);
+  const scope = job.writeScope;
+  return status.stdout
+    .split("\0")
+    .filter((entry) => entry.length > 3)
+    .map((entry) => entry.slice(3))
+    .filter((path) => !inWriteScope(path, scope));
 }
 
 /** The files the job branch changed since its base, with line counts. */

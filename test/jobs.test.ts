@@ -294,10 +294,13 @@ describe("scheduled jobs: create, run, report (0.7)", () => {
     });
     if (!created.ok) throw new Error(created.text);
     const id = created.job.id;
+    // The write scope (0.17, T6): the plan's paths, plus the build folders of package.json.
+    expect(created.job.writeScope).toEqual(expect.arrayContaining(["src/math.js", "test/"]));
 
     const prepared = await prepareJob(root, id, undefined, quiet, host);
     if (typeof prepared === "number") throw new Error(`exit ${prepared}`);
     expect(prepared.root).toBe(created.job.worktree);
+    expect(prepared.settings.writeScope).toEqual(created.job.writeScope);
     expect(existsSync(join(prepared.root, "node_modules/dep/index.js"))).toBe(true);
     expect((await loadJob(root, id)).status).toBe("running");
 

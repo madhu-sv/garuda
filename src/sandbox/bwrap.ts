@@ -44,6 +44,13 @@ export function bwrapArgv(
   // Later mounts cover earlier ones: writable paths, then read-only holes, then hidden paths.
   for (const path of policy.writePaths)
     if (kind(path) !== undefined) args.push("--bind", path, path);
+  if (policy.writeScope !== undefined) {
+    // A job's write scope (0.17): the root read-only, then its scope paths writable; the holes
+    // and hidden paths below come after, so they still cover paths in a scope folder.
+    args.push("--ro-bind", policy.writeScope.root, policy.writeScope.root);
+    for (const path of policy.writeScope.paths)
+      if (kind(path) !== undefined) args.push("--bind", path, path);
+  }
   for (const path of policy.denyWritePaths) {
     if (kind(path) !== undefined) args.push("--ro-bind", path, path);
   }

@@ -4,6 +4,7 @@ import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { parseRule } from "../permissions/rules.js";
+import { scopeEntryProblem } from "../permissions/writeScope.js";
 
 /**
  * Scheduled jobs (0.7): a plan that runs later with nobody at the keyboard. A job is one JSON file
@@ -90,6 +91,18 @@ const jobSchema = z.object({
   model: z.string().optional(),
   /** Permission rules for this job only, in the settings format ("edit_file(src/**)"). */
   allow: z.array(z.string()),
+  /**
+   * The write scope (0.17, review T6): the paths in the worktree that the job's commands and edits
+   * may change ("src/" is a folder, "README.md" one file). The OS sandbox enforces it for commands.
+   * Absent (a job made before 0.17, or a plan whose rules name no folder): the whole worktree.
+   */
+  writeScope: z
+    .array(
+      z.string().refine((entry) => scopeEntryProblem(entry) === undefined, {
+        message: 'a scope entry is a path in the worktree, such as "src/" or "README.md"',
+      }),
+    )
+    .optional(),
   onUnapproved: z.literal("deny-and-continue"),
   /** "01:00" (local time) for `garuda run --at`, when the user gave one. */
   at: z
@@ -144,6 +157,11 @@ const jobSchema = z.object({
 });
 
 export type Job = z.infer<typeof jobSchema>;
+
+/** Check a job file's content (throws on a bad file). */
+export function parseJob(json: unknown): Job {
+  return jobSchema.parse(json);
+}
 export type JobResult = z.infer<typeof resultSchema>;
 
 /** A job id that sorts by time: 20260927-2300-a1b2. */

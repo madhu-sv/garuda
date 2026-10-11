@@ -27,6 +27,14 @@ export function seatbeltProfile(policy: ExecPolicy): string {
     "(deny file-write*)",
     `(allow file-write* ${paths(policy.writePaths)} (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper") (regex #"^/dev/tty") (regex #"^/dev/fd/"))`,
   ];
+  if (policy.writeScope !== undefined) {
+    // A job's write scope (0.17): the root read-only, then its scope paths writable. The last
+    // matching rule wins, so the denied paths below stay denied inside a scope folder.
+    lines.push(`(deny file-write* ${paths([policy.writeScope.root])})`);
+    if (policy.writeScope.paths.length > 0) {
+      lines.push(`(allow file-write* ${paths(policy.writeScope.paths)})`);
+    }
+  }
   if (policy.denyWritePaths.length > 0) {
     lines.push(`(deny file-write* ${paths(policy.denyWritePaths)})`);
   }

@@ -23,6 +23,7 @@ import type {
   PermissionGate,
   PermissionRequest,
 } from "./types.js";
+import { inWriteScope, scopePaths } from "./writeScope.js";
 
 /** Environment variables that every command sees. Settings can add more. */
 export const DEFAULT_ENV_ALLOWLIST: readonly string[] = [
@@ -252,6 +253,28 @@ export class PermissionEngine implements PermissionGate {
     }
 
     if (request.readOnly) return { decision: { allowed: true, by: "read_only" } };
+    // A job's write scope (0.17, T6): an edit outside it is denied, also when an allow rule or a
+    // session rule matches. A job reports it with its other denied calls. An edit that no rule
+    // allows gets the job's usual denial below.
+    const scope = this.settings.writeScope;
+    const ruled =
+      (allowRule !== undefined && !(target?.kind === "url" && target.alwaysAsk === true)) ||
+      this.sessionRules.some((r) => ruleMatches(r, tool, target, "allow"));
+    if (
+      scope !== undefined &&
+      target?.kind === "path" &&
+      !inWriteScope(target.path, scope) &&
+      (ruled || this.unattended === undefined)
+    ) {
+      this.unattended?.onDeny?.(tool, target);
+      return {
+        decision: {
+          allowed: false,
+          by: "rule",
+          reason: `${target.path} is outside this job's write scope (${scope.join(", ")}). Do not retry it; list it in your final answer as work left for the user.`,
+        },
+      };
+    }
     if (target?.kind === "command" && !target.outsideSandbox && this.isolation !== "none") {
       return { decision: { allowed: true, by: "sandbox" } };
     }
@@ -399,25 +422,39 @@ export class PermissionEngine implements PermissionGate {
     {
       sandbox = true,
       readOnlyRoot = this.mode() === "plan",
-    }: { sandbox?: boolean; readOnlyRoot?: boolean } = {},
+      wholeRoot = false,
+    }: {
+      sandbox?: boolean;
+      readOnlyRoot?: boolean;
+      /** Ignore a job's write scope: only for the job's own approved test command (0.17). */
+      wholeRoot?: boolean;
+    } = {},
   ): ExecPolicy {
     const paths = sandboxPaths(this.root, this.settings.sandbox);
     // The team policy's denied paths: no read and no write for commands either (K6).
     const denied = policyDeniedPaths(this.root, this.policy?.denyPaths ?? []);
     let writePaths = [...new Set([...paths.writePaths, ...this.access.writePaths])];
     let denyWritePaths = [...paths.denyWritePaths, ...denied];
+    const inRoot = (p: string) => p === this.root || p.startsWith(`${this.root}${sep}`);
     if (readOnlyRoot) {
       // The root is also a read-only hole, for a project inside a writable folder (a temp dir).
-      const inRoot = (p: string) => p === this.root || p.startsWith(`${this.root}${sep}`);
       writePaths = writePaths.filter((p) => !inRoot(p));
       denyWritePaths = [this.root, ...denyWritePaths];
     }
+    // A job's write scope (0.17, T6): in the root, only the scope's paths are writable. Writable
+    // paths outside the root (temp, caches, the job's linked folders) stay as they are.
+    const scope =
+      !readOnlyRoot && !wholeRoot && sandbox && this.settings.writeScope !== undefined
+        ? { root: this.root, paths: scopePaths(this.root, this.settings.writeScope) }
+        : undefined;
+    if (scope !== undefined) writePaths = writePaths.filter((p) => !inRoot(p));
     return {
       root: this.root,
       sandbox,
       ...paths,
       denyReadPaths: [...paths.denyReadPaths, ...denied],
       writePaths,
+      ...(scope === undefined ? {} : { writeScope: scope }),
       denyWritePaths,
       network: !sandbox,
       ...(sandbox && this.network !== undefined ? { proxy: this.network.policy } : {}),

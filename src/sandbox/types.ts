@@ -26,6 +26,13 @@ export interface ExecPolicy {
   denyWritePaths: string[];
   /** Absolute paths the command may not read, for example ~/.ssh. */
   denyReadPaths: string[];
+  /**
+   * A scheduled job's write scope (0.17, review T6): `root` is read-only, except `paths` in it.
+   * Applied after `writePaths` (so a writable parent such as /tmp does not open the root) and
+   * before `denyWritePaths` and `denyReadPaths` (so protected and denied paths in a scope folder
+   * stay protected).
+   */
+  writeScope?: { root: string; paths: string[] };
   network: boolean;
   /**
    * The network allowlist (0.13): with `sandbox` and no `network`, the command reaches the internet

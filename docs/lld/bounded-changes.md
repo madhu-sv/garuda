@@ -1,6 +1,6 @@
 # Bounded changes (0.17, planned)
 
-Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. The
+Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patch 0189). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. The
 rest is planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
 2026-10-10). The patch plan is at the end. Each section has decisions, a threat model, a default and
 tests.
@@ -152,7 +152,7 @@ Garuda applies nothing and shows the paths. The staged change stays for one more
 - **Q2.** All or nothing first. Per-file selection can come later.
 - **Q3.** On macOS the command runs at the clone's path. Staged mode works on macOS and Linux.
 
-## T6: job write scopes
+## T6: job write scopes (done, 0189)
 
 ### Behaviour
 
@@ -169,6 +169,21 @@ A job file gets one new field, `writeScope`: a list of folders in the worktree, 
   such file marks the job as failed with "changes outside the approved scope"; no commit.
 - A job file without `writeScope` (created before 0.17) runs as today, and the run's first line says
   "Commands may write anywhere in the worktree."
+
+### As built (0189)
+
+- Entries are folders (`src/`) or single files (`README.md`), not only folders: Garuda's own edits
+  run in Garuda's process, so the engine can check a file; for commands, bubblewrap binds an
+  existing file as well as a folder. A new file in the root cannot be made by a command (bubblewrap
+  binds only existing paths); an edit can make it when the scope names it.
+- The engine denies an edit outside the scope only when a rule or a session answer would allow it;
+  an edit that no rule allows gets the usual job denial. Both are in the report's denied calls.
+- The sandbox applies the scope after `writePaths` and before the denied paths (see
+  [sandbox.md](sandbox.md)), so a root inside `/tmp` stays read-only, and a policy-denied file in a
+  scope folder stays denied.
+- The job's own test command (proof of work) runs with the whole worktree writable: the user
+  approved it with the job, its output is cleaned before the turn, and the run after the turn comes
+  after the commit. A test run by the agent during the turn has the scope.
 
 ### Why folders, not globs
 

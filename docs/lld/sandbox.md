@@ -21,6 +21,7 @@ interface ExecPolicy {
   writePaths: string[];     // absolute
   denyWritePaths: string[]; // read-only holes inside writePaths
   denyReadPaths: string[];
+  writeScope?: { root: string; paths: string[] }; // a job's write scope (0.17), see below
   network: boolean;
   envAllowlist: string[];
   timeoutMs: number;
@@ -36,6 +37,13 @@ interface Executor {
   shutdown(): void;         // kill everything now; runs in the "exit" handler
 }
 ```
+
+`writeScope` (0.17, review T6): a scheduled job's write scope. The root is read-only, except
+`paths`. The executors apply it after `writePaths` (so a writable parent such as `/tmp` does not
+open the root) and before `denyWritePaths` and `denyReadPaths` (so protected and denied paths in a
+scope folder stay protected). Seatbelt: `(deny file-write* root)`, then `(allow file-write* paths)`;
+the last matching rule wins. bubblewrap: `--ro-bind root`, then `--bind` for each existing path;
+later mounts cover earlier ones. See [jobs.md](jobs.md) and [bounded-changes.md](bounded-changes.md).
 
 `ExecResult`: exit code, signal, stdout and stderr (`text`, `truncated`, `totalBytes`), `timedOut`,
 `aborted`, `durationMs`.
