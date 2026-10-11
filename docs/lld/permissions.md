@@ -94,6 +94,13 @@ Since 0.14 (Garuda's audit review):
   `verifyAuditDir` checks each chain, each file against its checkpoint (fewer lines, or another
   line at the checkpoint's `seq`), and each checkpoint without its file. `/audit verify` names the
   files without a checkpoint.
+- Failures (review of 0.17): the chain moves on as soon as the line is on disk, so a failed
+  checkpoint write never makes the next line repeat its `seq` and `prev`. A failed checkpoint write
+  gives one notice, or (mandatory audit) fails the call with "the line was written, but its
+  checkpoint could not be written"; the next successful write catches up. In verify, only a missing
+  checkpoint (`ENOENT`) counts as "no checkpoint"; one that cannot be read or parsed is reported as
+  broken. An audit folder (or its `checkpoints` folder) that exists but cannot be listed is an error
+  (`AuditDirError`), not an empty folder; a log file that cannot be read is a broken file.
 
 | Change to a log file | Without the checkpoint | With the checkpoint |
 | --- | --- | --- |

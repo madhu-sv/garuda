@@ -1,6 +1,6 @@
 import { SPECIALIST_SPECS } from "../../agents/moe.js";
 import { modelFacts, type Runtime } from "../../app/runtime.js";
-import { verifyAuditDir } from "../../audit/logger.js";
+import { AuditDirError, verifyAuditDir } from "../../audit/logger.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { totalTokens, WEB_SEARCH_USD } from "../../model/pricing.js";
 import {
@@ -664,8 +664,16 @@ async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): 
     // Check each file's hash chain (merge gate): a changed, removed or inserted line shows here.
     // With the checkpoint (0.17, policy audit.checkpoint), also lines cut from the end of a file
     // and a deleted file.
-    const results = await verifyAuditDir(runtime.audit.dir);
     lines.push("", `Audit files: ${runtime.audit.dir}`);
+    let results: Awaited<ReturnType<typeof verifyAuditDir>>;
+    try {
+      results = await verifyAuditDir(runtime.audit.dir);
+    } catch (error) {
+      if (!(error instanceof AuditDirError)) throw error;
+      lines.push(`  BROKEN  the audit folder: ${error.message}`);
+      renderer.info(lines.join("\n"));
+      return;
+    }
     if (results.length === 0) lines.push("  none yet");
     let broken = 0;
     let unchecked = 0;
@@ -675,7 +683,7 @@ async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): 
         lines.push(`  MISSING ${result.file}: the checkpoint names it, but the file is gone`);
       } else if ("brokenCheckpoint" in result) {
         broken++;
-        lines.push(`  BROKEN  ${result.file}: its checkpoint is not valid`);
+        lines.push(`  BROKEN  ${result.file}: its checkpoint: ${result.brokenCheckpoint}`);
       } else if (result.verdict.ok) {
         if (!result.checkpoint) unchecked++;
         lines.push(

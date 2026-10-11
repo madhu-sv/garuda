@@ -115,6 +115,7 @@ export class AuditLogger {
   private seq = 0;
   private prev = GENESIS;
   private failed = false;
+  private checkpointFailed = false;
   /** Writes run one after another, so `seq` and `prev` follow the file order. */
   private queue: Promise<void> = Promise.resolve();
 
@@ -182,7 +183,6 @@ export class AuditLogger {
         encoding: "utf8",
         mode: 0o600,
       });
-      if (this.checkpoint) await writeCheckpoint(this.filePath, { seq: body.seq, hash });
     } catch (error) {
       // The folder may have been removed: the next write creates it again (0.14, review).
       this.dirCreated = false;
@@ -194,8 +194,22 @@ export class AuditLogger {
       }
       return;
     }
+    // The line is on disk: the chain moves on now, whatever happens to the checkpoint (review of
+    // 0.17: a failed checkpoint left seq and prev behind, and the next line repeated them).
     this.seq = body.seq;
     this.prev = hash;
+    if (!this.checkpoint) return;
+    try {
+      await writeCheckpoint(this.filePath, { seq: body.seq, hash });
+    } catch (error) {
+      // The next successful write names the newest line, so the checkpoint catches up.
+      const message = `The audit line was written, but its checkpoint could not be written (${checkpointPath(this.filePath)}): ${(error as Error).message}`;
+      if (this.mandatory) throw new AuditWriteError(message);
+      if (!this.checkpointFailed) {
+        this.checkpointFailed = true;
+        this.onError?.(`${message}. Garuda goes on without it.`);
+      }
+    }
   }
 
   /** The audit files of this project, oldest first. */
@@ -425,12 +439,20 @@ async function writeCheckpoint(file: string, checkpoint: AuditCheckpoint): Promi
   await rename(temp, path);
 }
 
-async function readCheckpoint(path: string): Promise<AuditCheckpoint | "broken" | undefined> {
+/**
+ * A checkpoint, `undefined` when there is none (ENOENT only), or why it is broken: any other read
+ * error (a folder in its place, no permission) is not "no checkpoint" (review of 0.17).
+ */
+async function readCheckpoint(
+  path: string,
+): Promise<AuditCheckpoint | { broken: string } | undefined> {
   let text: string;
   try {
     text = await readFile(path, "utf8");
-  } catch {
-    return undefined;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return undefined;
+    return { broken: `it cannot be read (${code ?? (error as Error).message})` };
   }
   try {
     const json = JSON.parse(text) as Partial<AuditCheckpoint>;
@@ -443,7 +465,7 @@ async function readCheckpoint(path: string): Promise<AuditCheckpoint | "broken" 
       return { seq: json.seq as number, hash: json.hash };
     }
   } catch {}
-  return "broken";
+  return { broken: "it is not a valid checkpoint" };
 }
 
 export type AuditVerdict = { ok: true; lines: number } | { ok: false; line: number; why: string };
@@ -481,29 +503,38 @@ export async function verifyAuditFile(
 export type AuditDirResult =
   | { file: string; checkpoint: boolean; verdict: AuditVerdict }
   | { file: string; missing: true }
-  | { file: string; brokenCheckpoint: true };
+  | { file: string; brokenCheckpoint: string };
+
+/** The audit folder (or its checkpoints folder) exists but cannot be listed. */
+export class AuditDirError extends Error {}
+
+/** The names in a folder; [] when it does not exist. Any other error is an AuditDirError. */
+async function listNames(dir: string): Promise<string[]> {
+  try {
+    return await readdir(dir);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return [];
+    throw new AuditDirError(`${dir} cannot be listed (${code ?? (error as Error).message}).`);
+  }
+}
 
 /**
  * Check every log file of a project's audit folder (0.17): each chain, each file against its
- * checkpoint, and each checkpoint without its log file (a deleted file).
+ * checkpoint, and each checkpoint without its log file (a deleted file). A folder that exists but
+ * cannot be listed throws AuditDirError: it is not an empty folder.
  */
 export async function verifyAuditDir(dir: string): Promise<AuditDirResult[]> {
-  let names: string[] = [];
-  let checkpoints: string[] = [];
-  try {
-    names = (await readdir(dir)).filter((f) => f.endsWith(".jsonl")).sort();
-  } catch {}
-  try {
-    checkpoints = (await readdir(join(dir, CHECKPOINT_DIR)))
-      .filter((f) => f.endsWith(".jsonl.json"))
-      .sort();
-  } catch {}
+  const names = (await listNames(dir)).filter((f) => f.endsWith(".jsonl")).sort();
+  const checkpoints = (await listNames(join(dir, CHECKPOINT_DIR)))
+    .filter((f) => f.endsWith(".jsonl.json"))
+    .sort();
   const results: AuditDirResult[] = [];
   for (const name of names) {
     const file = join(dir, name);
     const checkpoint = await readCheckpoint(checkpointPath(file));
-    if (checkpoint === "broken") {
-      results.push({ file: name, brokenCheckpoint: true });
+    if (checkpoint !== undefined && "broken" in checkpoint) {
+      results.push({ file: name, brokenCheckpoint: checkpoint.broken });
       continue;
     }
     results.push({
@@ -520,7 +551,18 @@ export async function verifyAuditDir(dir: string): Promise<AuditDirResult[]> {
 }
 
 async function verifyChain(file: string): Promise<AuditVerdict> {
-  const rows = (await readFile(file, "utf8")).split("\n").filter((l) => l !== "");
+  let text: string;
+  try {
+    text = await readFile(file, "utf8");
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return {
+      ok: false,
+      line: 0,
+      why: `the file cannot be read (${code ?? (error as Error).message})`,
+    };
+  }
+  const rows = text.split("\n").filter((l) => l !== "");
   let prev = GENESIS;
   for (let i = 0; i < rows.length; i++) {
     let line: AuditLine;

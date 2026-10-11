@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- Audit checkpoint fixes (second review): a failed checkpoint write no longer makes the next audit
+  line repeat the sequence number and chain head (the chain was broken); a checkpoint or a folder
+  that cannot be read is reported as broken, not as "no checkpoint" or "no files".
 - Audit checkpoint: with `"audit": { "checkpoint": true }` in a policy file (off by default),
   Garuda keeps each log file's last `seq` and `hash`, and `/audit verify` finds lines cut from the end
   of a file and a deleted file. The docs list what verify detects with and without it (review T8).
