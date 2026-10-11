@@ -1,4 +1,5 @@
 import type { KnowledgeIndex } from "../knowledge/index.js";
+import { approxTokens } from "../loop/budget.js";
 import {
   type AgentEvent,
   type AgentStopReason,
@@ -125,9 +126,13 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
       ...(costUsd === undefined ? {} : { costUsd }),
     };
   };
+  // The child reserves in the turn's shared budget (0.17, T9): its own cap, inside what the parent
+  // has left, never into the parent's room for its final answer.
+  const budget = context.budget?.child(limits.tokenBudget);
   try {
     const result = await runAgent(session, {
       model,
+      ...(budget === undefined ? {} : { budget }),
       tools: run.tools,
       system: run.system,
       permissions: run.permissions,
@@ -156,16 +161,34 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
     let end: string = result.stopReason;
     // G06: the wrap-up call is one more request, so it must fit in the budget that is left. It
     // costs at least the context of the last response plus its output limit. No room: no call.
-    const reserve = session.contextTokens + run.maxTokens;
-    const wrapUpFits = totalTokens(session.usage) + reserve <= limits.tokenBudget;
+    // The wrap-up request holds the whole conversation plus WRAP_UP: reserve for that.
+    const reserve =
+      Math.max(
+        session.contextTokens,
+        approxTokens(JSON.stringify(session.messages)) + approxTokens(WRAP_UP),
+      ) + run.maxTokens;
+    const hold =
+      stoppedEarly(result.stopReason) && budget !== undefined ? budget.reserve(reserve) : undefined;
+    const wrapUpFits =
+      totalTokens(session.usage) + reserve <= limits.tokenBudget &&
+      (budget === undefined || hold !== undefined);
     if (stoppedEarly(result.stopReason) && !wrapUpFits) {
+      if (hold !== undefined) budget?.settle(hold, 0);
       answer = answer || NO_ROOM;
       end = "no_wrap_up";
     } else if (stoppedEarly(result.stopReason)) {
       // One more call with no tool use, so the run still gives an answer.
       context.progress?.("writing the answer");
       addUserMessage(session, WRAP_UP);
-      const response = await callOnce(model, run, session.messages, context.signal);
+      let response: ModelResponse;
+      try {
+        response = await callOnce(model, run, session.messages, context.signal);
+      } catch (error) {
+        // No usage known: the whole reservation stays spent.
+        if (hold !== undefined) budget?.settle(hold);
+        throw error;
+      }
+      if (hold !== undefined) budget?.settle(hold, totalTokens(response.usage));
       steps++;
       const price = run.model.price;
       addAssistantResponse(

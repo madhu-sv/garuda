@@ -8,7 +8,7 @@ author: Madhusudhan Vasanth Kumar
 *Corrected on 10 October 2026: an earlier version said that every change asks first. Edits do, but
 commands in the sandbox run with no question: they can change project files, within the sandbox's
 limits. The list below now says exactly what each limit does. Thanks to a reviewer who pointed it
-out. On 11 October the same reviewer found three more details, now fixed: the sandbox also writes
+out. On 11 October my own review found three more details, now fixed: the sandbox also writes
 temp folders and package caches; an allow rule can let a command outside the sandbox run with no
 question; and `/undo` restores only the files in its snapshot.*
 

@@ -1,6 +1,6 @@
 # Bounded changes (0.17, planned)
 
-Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patches 0189, 0190). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. The
+Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patches 0189, 0190); T9, the shared budget (patch 0191). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. The
 rest is planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
 2026-10-10). The patch plan is at the end. Each section has decisions, a threat model, a default and
 tests.
@@ -279,7 +279,7 @@ With `"audit": { "checkpoint": true }` (policy files only):
 - Delete a file; verify reports the missing file.
 - The checkpoint file holds no target or reason text.
 
-## T9: one token budget for the agent tree
+## T9: one token budget for the agent tree (done, 0191)
 
 ### Today
 
@@ -313,6 +313,18 @@ A `Budget` object, made per turn and shared by the parent and all its children:
 - The parent still gets its final answer when the children used the rest.
 - A request that fails with no usage keeps its reservation; one with a usage settles to it.
 - A cancelled child keeps its open reservation as spent.
+
+### As built (0191)
+
+- `src/loop/budget.ts`: `TokenBudget` (reserve, settle, child, setFloor) and `requestTokens`.
+- The estimate of a request is the last known context size plus about 4 characters per token for
+  what came after it (on the first call: the whole request, tool list included), plus the output
+  limit. A provider that counts more input tokens than the estimate can pass the cap by that
+  difference; the README lists it as a limit.
+- A refused call is not a step. A child's wrap-up call reserves the whole conversation plus the
+  wrap-up note.
+- Behaviour change: a small `tokenBudget` now stops a run before a call that may not fit, not after
+  the call that passed it.
 
 ## T10: approximate code-intelligence results
 

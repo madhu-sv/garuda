@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { AuditLogger } from "../audit/logger.js";
 import type { KnowledgeIndex } from "../knowledge/index.js";
+import type { Budget } from "../loop/budget.js";
 import type { ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { CallInfo, PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
@@ -24,6 +25,8 @@ export interface ToolContext {
   hooks?: ToolHooks;
   /** The id of the current call (the loop sets it per call). */
   callId?: string;
+  /** The turn's shared token budget (0.17, T9): a subagent run reserves in it. */
+  budget?: Budget;
   /** A one-line status while a long call runs, for the live view (the loop sets it per call). */
   progress?: (text: string) => void;
   /** Language server errors for a file that a tool just wrote (0.4). Absent when LSP is off. */

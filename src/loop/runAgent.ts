@@ -32,6 +32,7 @@ import type {
   ToolHooks,
   ToolRunner,
 } from "../tools/types.js";
+import { type Budget, BudgetExhausted, requestTokens, TokenBudget } from "./budget.js";
 import { callModelWithRetry, MODEL_RETRY_DELAYS_MS } from "./callModel.js";
 import type { AgentEvent } from "./events.js";
 import {
@@ -87,6 +88,11 @@ export interface AgentDeps {
   maxSteps?: number;
   /** Stop when the session has used this many tokens in total (F6). */
   tokenBudget?: number;
+  /**
+   * The shared budget of the agent tree (0.17, T9). A child run gets a view of its parent's. Absent:
+   * the run makes its own, with what is left of `tokenBudget` in the session.
+   */
+  budget?: Budget;
   /** Context window of the model. Compaction starts at 80% of it (F23). */
   contextWindow?: number;
   /** Model price. Without it, cost stays unknown. */
@@ -134,6 +140,9 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   const serverTools = usableServerTools(deps.model, deps.serverTools);
   // A server tool replaces a client tool of the same name (0.6: Claude's web_search over Tavily's).
   const tools = deps.tools.specs().filter((t) => !serverTools.some((s) => s.type === t.name));
+  // One budget for this run and its children (0.17, T9): every model call reserves in it first.
+  const shared: Budget =
+    deps.budget ?? new TokenBudget(Math.max(0, budget - totalTokens(session.usage)));
   const recent: string[] = [];
   let usage = ZERO_USAGE;
   let steps = 0;
@@ -155,109 +164,132 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
 
   closeOpenToolCalls(session);
 
-  while (steps < maxSteps) {
-    signal.throwIfAborted();
-    if (totalTokens(session.usage) >= budget) return finish("token_budget");
-
-    if (deps.contextWindow !== undefined) {
-      const result = await compactIfNeeded(
-        session,
-        deps.model,
-        {
-          contextWindow: deps.contextWindow,
-          costOf: cost,
-          ...(deps.retryDelaysMs === undefined ? {} : { retryDelaysMs: deps.retryDelaysMs }),
-        },
-        signal,
-      );
-      if (result !== undefined) emit({ type: "compaction", result });
-    }
-
-    steps++;
-    const request: ModelRequest = {
-      system: deps.system,
-      messages: session.messages,
-      tools,
-      ...(serverTools.length === 0 ? {} : { serverTools }),
-      maxTokens: outputLimit,
-      ...(deps.thinking === undefined ? {} : { thinking: deps.thinking }),
-    };
-    const started = performance.now();
-    const received = await callModelWithRetry(
-      deps.model,
-      request,
-      signal,
-      emit,
-      deps.retryDelaysMs ?? MODEL_RETRY_DELAYS_MS,
-    ).finally(() => {
-      apiMs += performance.now() - started;
-    });
-    const kept =
-      deps.keepThinking === false
-        ? { ...received, content: received.content.filter((b) => b.type !== "thinking") }
-        : received;
-    // Output limit (0.12): a cut-off response keeps its text only; the model is asked to go on
-    // with more room.
-    const cutOff = kept.stopReason === "max_tokens" && recoveries < MAX_OUTPUT_RECOVERIES;
-    const response = cutOff
-      ? {
-          ...kept,
-          content: kept.content.filter((b) => b.type === "text" && b.text.trim() !== ""),
-        }
-      : kept;
-    modelStopReason = response.stopReason;
-    usage = addUsage(usage, response.usage);
-    addAssistantResponse(session, response, steps, cost(response));
-    emit({ type: "step_end", step: steps, usage: response.usage, response });
-    for (const call of response.content) {
-      if (call.type !== "server_tool_use") continue;
-      const result = response.content.find(
-        (b): b is ServerToolResultBlock =>
-          b.type === "server_tool_result" && b.toolUseId === call.id,
-      );
-      emit({ type: "server_tool", call, ...(result === undefined ? {} : { result }) });
-    }
-
-    if (cutOff) {
-      recoveries++;
-      const limit = outputLimit;
-      outputLimit = Math.max(outputLimit, RECOVERY_MAX_TOKENS);
-      const dropped = kept.content.some((b) => b.type === "tool_use");
-      addContinuation(session, continuationNote(limit, dropped), outputLimit);
-      emit({
-        type: "notice",
-        text: `The response hit the output limit (${limit} tokens); Garuda asks the model to go on with ${outputLimit}.`,
-      });
-      continue;
-    }
-
-    const calls = response.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
-    if (calls.length === 0 && response.stopReason === "pause_turn") continue;
-    if (calls.length === 0) return finish(finalReason(response));
-
-    const context: ToolContext = {
-      root: session.root,
-      signal,
-      permissions: deps.permissions,
-      files: session.files,
-      ...(deps.executor === undefined ? {} : { executor: deps.executor }),
-      ...(deps.knowledge === undefined ? {} : { knowledge: deps.knowledge }),
-      ...(deps.hooks === undefined ? {} : { hooks: deps.hooks }),
-      ...(deps.diagnostics === undefined ? {} : { diagnostics: deps.diagnostics }),
-      ...(deps.format === undefined ? {} : { format: deps.format }),
-      ...(deps.audit === undefined ? {} : { audit: deps.audit }),
-    };
-    const { results, meta } = await runTools(calls, deps, context, emit);
-    addToolResults(session, results, meta);
-    for (const { subagent } of meta) {
-      if (subagent === undefined) continue;
-      addCost(session, subagent.usage, subagent.costUsd);
-      usage = addUsage(usage, subagent.usage);
-    }
-
-    for (const call of calls) recent.push(signature(call));
-    if (repeated(recent)) return finish("repeated_calls");
+  // True while a main model call waits for its reservation: a refused call is not a step.
+  let calling = false;
+  try {
+    return await loop();
+  } catch (error) {
+    if (!(error instanceof BudgetExhausted)) throw error;
+    if (calling) steps--;
+    return finish("token_budget");
   }
 
-  return finish("max_steps");
+  async function loop(): Promise<AgentResult> {
+    while (steps < maxSteps) {
+      signal.throwIfAborted();
+      if (totalTokens(session.usage) >= budget) return finish("token_budget");
+
+      if (deps.contextWindow !== undefined) {
+        const result = await compactIfNeeded(
+          session,
+          deps.model,
+          {
+            contextWindow: deps.contextWindow,
+            costOf: cost,
+            ...(deps.retryDelaysMs === undefined ? {} : { retryDelaysMs: deps.retryDelaysMs }),
+            budget: shared,
+          },
+          signal,
+        );
+        if (result !== undefined) emit({ type: "compaction", result });
+      }
+
+      steps++;
+      const request: ModelRequest = {
+        system: deps.system,
+        messages: session.messages,
+        tools,
+        ...(serverTools.length === 0 ? {} : { serverTools }),
+        maxTokens: outputLimit,
+        ...(deps.thinking === undefined ? {} : { thinking: deps.thinking }),
+      };
+      const started = performance.now();
+      const reserve = requestTokens(session, request) + outputLimit;
+      calling = true;
+      const received = await callModelWithRetry(
+        deps.model,
+        request,
+        signal,
+        emit,
+        deps.retryDelaysMs ?? MODEL_RETRY_DELAYS_MS,
+        { budget: shared, tokens: reserve },
+      ).finally(() => {
+        apiMs += performance.now() - started;
+      });
+      calling = false;
+      const kept =
+        deps.keepThinking === false
+          ? { ...received, content: received.content.filter((b) => b.type !== "thinking") }
+          : received;
+      // Output limit (0.12): a cut-off response keeps its text only; the model is asked to go on
+      // with more room.
+      const cutOff = kept.stopReason === "max_tokens" && recoveries < MAX_OUTPUT_RECOVERIES;
+      const response = cutOff
+        ? {
+            ...kept,
+            content: kept.content.filter((b) => b.type === "text" && b.text.trim() !== ""),
+          }
+        : kept;
+      modelStopReason = response.stopReason;
+      usage = addUsage(usage, response.usage);
+      addAssistantResponse(session, response, steps, cost(response));
+      emit({ type: "step_end", step: steps, usage: response.usage, response });
+      for (const call of response.content) {
+        if (call.type !== "server_tool_use") continue;
+        const result = response.content.find(
+          (b): b is ServerToolResultBlock =>
+            b.type === "server_tool_result" && b.toolUseId === call.id,
+        );
+        emit({ type: "server_tool", call, ...(result === undefined ? {} : { result }) });
+      }
+
+      if (cutOff) {
+        recoveries++;
+        const limit = outputLimit;
+        outputLimit = Math.max(outputLimit, RECOVERY_MAX_TOKENS);
+        const dropped = kept.content.some((b) => b.type === "tool_use");
+        addContinuation(session, continuationNote(limit, dropped), outputLimit);
+        emit({
+          type: "notice",
+          text: `The response hit the output limit (${limit} tokens); Garuda asks the model to go on with ${outputLimit}.`,
+        });
+        continue;
+      }
+
+      const calls = response.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
+      if (calls.length === 0 && response.stopReason === "pause_turn") continue;
+      if (calls.length === 0) return finish(finalReason(response));
+
+      const context: ToolContext = {
+        root: session.root,
+        signal,
+        permissions: deps.permissions,
+        files: session.files,
+        ...(deps.executor === undefined ? {} : { executor: deps.executor }),
+        ...(deps.knowledge === undefined ? {} : { knowledge: deps.knowledge }),
+        ...(deps.hooks === undefined ? {} : { hooks: deps.hooks }),
+        ...(deps.diagnostics === undefined ? {} : { diagnostics: deps.diagnostics }),
+        ...(deps.format === undefined ? {} : { format: deps.format }),
+        ...(deps.audit === undefined ? {} : { audit: deps.audit }),
+        budget: shared,
+      };
+      // Children (subagents) reserve in the same budget, but leave this run room for one more call
+      // of the same size: its final answer.
+      shared.setFloor(reserve);
+      const { results, meta } = await runTools(calls, deps, context, emit).finally(() =>
+        shared.setFloor(0),
+      );
+      addToolResults(session, results, meta);
+      for (const { subagent } of meta) {
+        if (subagent === undefined) continue;
+        addCost(session, subagent.usage, subagent.costUsd);
+        usage = addUsage(usage, subagent.usage);
+      }
+
+      for (const call of calls) recent.push(signature(call));
+      if (repeated(recent)) return finish("repeated_calls");
+    }
+
+    return finish("max_steps");
+  }
 }

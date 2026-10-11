@@ -1,0 +1,125 @@
+import type { ModelRequest } from "../model/types.js";
+import type { Session } from "../session/session.js";
+
+/**
+ * One token budget for a turn and its whole agent tree (0.17, review T9;
+ * docs/lld/bounded-changes.md). Each model call reserves tokens before it starts and settles after
+ * it ends:
+ *
+ * - With a reported usage, the call costs that usage; the rest of the reservation returns.
+ * - With no reported usage (an error, a timeout, a cancelled stream), the whole reservation stays
+ *   spent: the provider may have charged for it. Releasing it would understate the spend.
+ *
+ * A child (a subagent) gets a view with its own cap: a reservation must fit in the child's cap and
+ * in what the parent has left. The parent keeps a floor for its own final answer: a child cannot
+ * reserve into it. JavaScript runs one reservation at a time, so parallel children cannot both
+ * take the same tokens.
+ */
+
+/** No model call: the budget has no room for it. The run stops with `token_budget`. */
+export class BudgetExhausted extends Error {
+  override readonly name = "BudgetExhausted";
+}
+
+/** A reservation. Settle it once. */
+export interface Hold {
+  readonly tokens: number;
+}
+
+export interface Budget {
+  /** Tokens still free (not spent, not reserved). */
+  readonly left: number;
+  /** Tokens spent so far (settled usage, and whole reservations of failed calls). */
+  readonly spent: number;
+  /** Reserve tokens for one model call, or undefined when they do not fit. */
+  reserve(tokens: number): Hold | undefined;
+  /** Settle a reservation: with the call's usage, or (no usage) keep all of it as spent. */
+  settle(hold: Hold, used?: number): void;
+  /** A view for a child run: its own cap, inside what this budget has left. */
+  child(cap: number): Budget;
+  /** The tokens that children must leave for this run's final answer. */
+  setFloor(tokens: number): void;
+}
+
+interface HoldRecord extends Hold {
+  settled: boolean;
+}
+
+export class TokenBudget implements Budget {
+  private spentTokens = 0;
+  private heldTokens = 0;
+  private floor = 0;
+
+  constructor(
+    private readonly total: number,
+    private readonly parent?: TokenBudget,
+  ) {}
+
+  get left(): number {
+    return Math.max(0, this.total - this.spentTokens - this.heldTokens);
+  }
+
+  get spent(): number {
+    return this.spentTokens;
+  }
+
+  reserve(tokens: number): Hold | undefined {
+    return this.take(Math.max(0, Math.ceil(tokens)), false) ? this.record(tokens) : undefined;
+  }
+
+  settle(hold: Hold, used?: number): void {
+    const record = hold as HoldRecord;
+    if (record.settled) return;
+    record.settled = true;
+    this.give(record.tokens, used === undefined ? record.tokens : Math.max(0, used));
+  }
+
+  child(cap: number): Budget {
+    return new TokenBudget(Math.max(0, cap), this);
+  }
+
+  setFloor(tokens: number): void {
+    this.floor = Math.max(0, tokens);
+  }
+
+  private record(tokens: number): HoldRecord {
+    return { tokens: Math.max(0, Math.ceil(tokens)), settled: false };
+  }
+
+  /** Reserve here and in every parent; `forChild` keeps this budget's floor free. */
+  private take(tokens: number, forChild: boolean): boolean {
+    const free = this.total - this.spentTokens - this.heldTokens - (forChild ? this.floor : 0);
+    if (tokens > free) return false;
+    if (this.parent !== undefined && !this.parent.take(tokens, true)) return false;
+    this.heldTokens += tokens;
+    return true;
+  }
+
+  private give(held: number, spent: number): void {
+    this.heldTokens -= held;
+    this.spentTokens += spent;
+    this.parent?.give(held, spent);
+  }
+}
+
+/** A rough size of a text for the model: about 4 characters per token. */
+export function approxTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * The tokens to reserve for a request's input (0.17, T9): the last known context size plus a
+ * rough size of what came after the last response; on the first call, a rough size of it all.
+ */
+export function requestTokens(session: Session, request: ModelRequest): number {
+  const lastAssistant = request.messages.map((m) => m.role).lastIndexOf("assistant");
+  if (session.contextTokens > 0 && lastAssistant >= 0) {
+    return (
+      session.contextTokens +
+      approxTokens(JSON.stringify(request.messages.slice(lastAssistant + 1)))
+    );
+  }
+  return approxTokens(
+    JSON.stringify({ system: request.system, messages: request.messages, tools: request.tools }),
+  );
+}

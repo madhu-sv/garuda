@@ -2,6 +2,12 @@
 
 ## 0.17.0 (unreleased)
 
+- One token budget for the turn and its agent tree (review T9): each model call reserves its request
+  and output limit first, and the run stops with `token_budget` when they do not fit; subagents,
+  compaction and retries reserve in the same budget; parallel subagents cannot pass the parent's cap,
+  and they leave the parent room for its final answer. A failed or cancelled call with no reported
+  usage counts as fully spent. A small `tokenBudget` now stops a run before the call that would pass
+  it, not after.
 - Job write scopes, third review: a job never runs a command outside the sandbox, also when an
   allow rule matches (`outside_sandbox` dropped the scope); an edit through a symbolic link must
   reach a path in the scope, checked by the engine and again by the write tool just before it writes;

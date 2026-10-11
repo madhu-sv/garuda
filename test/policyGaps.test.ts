@@ -148,7 +148,9 @@ describe("G06: a child's wrap-up request must fit in its token budget", () => {
   }
 
   it("no room: no second request, and the answer says why", async () => {
-    const { result, requests } = await child(30);
+    // The first call (its request plus maxTokens 20) fits in 80; the wrap-up request (the whole
+    // conversation plus the wrap-up note, plus 20) does not (0.17: requests are reserved).
+    const { result, requests } = await child(80);
     expect(requests).toBe(1);
     expect(result.answer).toMatch(/no room in its token budget/);
   });

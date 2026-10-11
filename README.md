@@ -55,10 +55,11 @@ areas and fixes the open findings of all nine areas (see [CHANGELOG.md](CHANGELO
 in 0.16.1:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
-- Subagents: each child has its own step and token budget (capped by the team policy); it does not
-  take what the parent has left, and parallel `explore` calls each get one.
-- Audit log: lines cut from the end of a file, or a removed file, are not detected (no anchor outside
-  the file).
+- Token budget: a call's reservation is an estimate (about 4 characters per token, plus the output
+  limit), so a provider that counts more input tokens than the estimate can pass the cap by that
+  difference. A failed call with no reported usage counts as fully spent.
+- Audit log: without the checkpoint (`"audit": { "checkpoint": true }`, off by default), lines cut
+  from the end of a file, or a removed file, are not detected.
 - On macOS, secret-named variables other than the provider API keys stay in Garuda's own environment.
 - Build tool caches that the sandbox may write (`~/.gradle/wrapper`, `jdks`, `native`, `caches`,
   `~/.m2/wrapper`) hold programs that a build runs later outside the sandbox. They stay writable, because
@@ -623,7 +624,10 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
 
 - After each turn Garuda prints steps, tokens (with cache reads), cost, context use and the session total.
 - A run stops at 50 steps, at the session token budget (20M tokens), or after the same tool call
-  3 times in a row. Garuda says why.
+  3 times in a row. Garuda says why. The budget holds for the whole turn (0.17): each model call
+  reserves its request and its output limit first, and stops when they do not fit; subagents,
+  compaction and retries reserve in the same budget, and a subagent never takes the room that the
+  parent needs for its final answer. A failed call with no reported usage counts as fully spent.
 - When the connection to the model breaks while a response streams, Garuda sends the request again (up
   to 2 times) and says so. The session keeps only the complete response.
 - At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,

@@ -1,5 +1,7 @@
 import { errorReason, isTransientModelError } from "../model/errors.js";
+import { totalTokens } from "../model/pricing.js";
 import type { ModelClient, ModelRequest, ModelResponse } from "../model/types.js";
+import { type Budget, BudgetExhausted } from "./budget.js";
 import type { AgentEvent } from "./events.js";
 
 /** Waits before the retries of a broken model stream (2 retries). */
@@ -10,17 +12,30 @@ export const MODEL_RETRY_DELAYS_MS: readonly number[] = [1_000, 4_000];
  * in the stream) is sent again, up to `delays.length` times. The session gets only a complete
  * response, so a retry never leaves half a message in the record.
  */
+/** A model call under the shared budget (0.17): the budget and the tokens to reserve per attempt. */
+export interface Metered {
+  budget: Budget;
+  tokens: number;
+}
+
 export async function callModelWithRetry(
   model: ModelClient,
   request: ModelRequest,
   signal: AbortSignal,
   emit: (event: AgentEvent) => void,
   delays: readonly number[],
+  metered?: Metered,
 ): Promise<ModelResponse> {
   for (let attempt = 0; ; attempt++) {
+    // The shared budget (0.17, T9): each attempt reserves; a failed attempt keeps its reservation.
+    const hold = metered?.budget.reserve(metered.tokens);
+    if (metered !== undefined && hold === undefined) throw new BudgetExhausted();
     try {
-      return await callModel(model, request, signal, emit);
+      const response = await callModel(model, request, signal, emit);
+      if (hold !== undefined) metered?.budget.settle(hold, totalTokens(response.usage));
+      return response;
     } catch (error) {
+      if (hold !== undefined) metered?.budget.settle(hold);
       if (signal.aborted || attempt >= delays.length || !isTransientModelError(error)) throw error;
       const delayMs = delays[attempt] ?? 1_000;
       emit({

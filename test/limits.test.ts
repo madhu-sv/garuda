@@ -45,16 +45,19 @@ describe("step limit and token budget (F6)", () => {
     });
   });
 
-  it("stops before the next model call when the session passes the token budget", async () => {
+  it("stops before a model call that does not fit in the token budget (0.17, T9)", async () => {
     const steps = Array.from({ length: 10 }, (_, i) =>
       reply([toolUse("upper", { text: `t${i}` })], undefined, usage(400, 100)),
     );
     const { session } = setup();
     const model = new FakeModelClient(steps);
-    const result = await runAgent(session, { ...deps(model), tokenBudget: 1_200 });
-    // 500 tokens per step: after 3 steps the session has 1 500 ≥ 1 200.
-    expect(result).toMatchObject({ stopReason: "token_budget", steps: 3 });
-    expect(model.requests).toHaveLength(3);
+    const result = await runAgent(session, { ...deps(model), tokenBudget: 1_200, maxTokens: 100 });
+    // 500 tokens per step. Each call reserves its context (500 after the first) plus maxTokens
+    // first: the third call does not fit in the 200 left, so the session stays inside the budget.
+    // Before 0.17 the loop checked only after a call: 3 steps, 1 500 tokens.
+    expect(result).toMatchObject({ stopReason: "token_budget", steps: 2 });
+    expect(model.requests).toHaveLength(2);
+    expect(session.usage.inputTokens + session.usage.outputTokens).toBeLessThanOrEqual(1_200);
   });
 
   it("the budget counts earlier runs of the same session", async () => {

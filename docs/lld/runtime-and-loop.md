@@ -192,6 +192,15 @@ In 0.14, the core agent loop and runtime coordinators were decomposed into cohes
   - `callModel.ts`: Model invocation, response streaming, server tools resolution, and transient error backoff retries.
   - `events.ts`: Structured agent lifecycle event dispatcher.
   - `limits.ts`: Step limit and token budget checks, context window exhaustion detection, and output-limit recovery.
+  - `budget.ts` (0.17, review T9): `TokenBudget`, one budget for a turn and its agent tree.
+    `runAgent` makes it from what is left of `tokenBudget` in the session (or gets a child view in
+    `deps.budget`) and puts it in the tool context. Each model attempt reserves
+    `requestTokens(session, request) + maxTokens` first (`callModelWithRetry`'s `metered`); no room
+    throws `BudgetExhausted`, and the run stops with `token_budget` (a refused call is not a step).
+    A reported usage settles the reservation; a failure or a cancel with no usage keeps all of it
+    as spent. The compaction summary reserves in the same budget. Before the tools run, the loop
+    sets a floor (its last reservation): a child's reservation must leave it, so the parent keeps
+    room for its final answer.
   - `loopDetector.ts`: Repeated tool call detection preventing infinite loops.
   - `toolRunner.ts`: Tool execution pipeline, read-only call parallelization, progress tracking, and execution metadata capture.
 

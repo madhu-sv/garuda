@@ -1,4 +1,5 @@
-import { callModelWithRetry, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
+import type { Budget } from "../loop/budget.js";
+import { callModelWithRetry, type Metered, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
 import { hasServerBlocks, serverPairText, withoutServerBlocks } from "../model/serverTools.js";
 import type {
   ContentBlock,
@@ -18,6 +19,9 @@ import { compacted } from "../session/undo.js";
  * The most recent `keepSteps` assistant turns always stay in full.
  */
 
+/** The output limit of the summary request. */
+const SUMMARY_MAX_TOKENS = 4096;
+
 export interface CompactionOptions {
   contextWindow: number;
   /** Start compaction above this share of the window. */
@@ -29,6 +33,8 @@ export interface CompactionOptions {
   costOf?: (response: ModelResponse) => number | undefined;
   /** Waits before the retries of a broken summary stream (default: as the main loop). */
   retryDelaysMs?: readonly number[];
+  /** The turn's shared budget (0.17, T9): the summary call reserves in it. */
+  budget?: Budget;
 }
 
 export interface CompactionResult {
@@ -88,6 +94,7 @@ export async function compactIfNeeded(
     signal,
     undefined,
     options.retryDelaysMs,
+    options.budget,
   );
 }
 
@@ -128,10 +135,13 @@ async function summaryStage(
   signal: AbortSignal,
   focus?: string,
   delays: readonly number[] = MODEL_RETRY_DELAYS_MS,
+  budget?: Budget,
 ): Promise<CompactionResult> {
   const older = trimmed.slice(0, split);
   const recent = trimmed.slice(split);
-  const summary = await summarise(model, older, signal, focus, delays);
+  const metered =
+    budget === undefined ? undefined : { budget, tokens: before + SUMMARY_MAX_TOKENS };
+  const summary = await summarise(model, older, signal, focus, delays, metered);
   const summaryText = summary.content
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -242,6 +252,7 @@ async function summarise(
   signal: AbortSignal,
   focus: string | undefined,
   delays: readonly number[],
+  metered?: Metered,
 ): Promise<ModelResponse> {
   const ask =
     focus === undefined || focus.trim() === ""
@@ -261,11 +272,11 @@ async function summarise(
       },
     ],
     tools: [],
-    maxTokens: 4096,
+    maxTokens: SUMMARY_MAX_TOKENS,
   };
   // The summary request is the largest of the session, so a dropped connection is most likely
   // here: retry it like a main call (0.14.1, review). Its text is not shown, so no events.
-  return callModelWithRetry(model, request, signal, () => {}, delays);
+  return callModelWithRetry(model, request, signal, () => {}, delays, metered);
 }
 
 /** The older turns as plain text for the summary request. Long tool outputs are cut. */
