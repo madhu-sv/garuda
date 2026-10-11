@@ -1,7 +1,7 @@
 import type { AuditLogger } from "../audit/logger.js";
 import { compactIfNeeded } from "../context/compact.js";
 import type { KnowledgeIndex } from "../knowledge/index.js";
-import { type Price, responseCost, totalTokens } from "../model/pricing.js";
+import { type Price, responseCost } from "../model/pricing.js";
 import {
   addUsage,
   type ModelClient,

@@ -1,5 +1,5 @@
 import { approxTokens, type Budget } from "../loop/budget.js";
-import { callModelWithRetry, type Metered, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
+import { callModelWithRetry, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
 import { hasServerBlocks, serverPairText, withoutServerBlocks } from "../model/serverTools.js";
 import type {
   ContentBlock,
