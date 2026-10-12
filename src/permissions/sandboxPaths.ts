@@ -102,11 +102,29 @@ function unique(paths: string[]): string[] {
 export const MAX_POLICY_DENIED_PATHS = 1_000;
 
 /**
+ * The policy's `denyPaths` match more paths than one sandbox profile can hold (Codex review of
+ * 1370184): Garuda cannot enforce them all, so the command does not run. Before, the list was cut
+ * at the limit and the paths after it had no rule.
+ */
+export class PolicyPathsOverflow extends Error {
+  override readonly name = "PolicyPathsOverflow";
+  constructor(found: number) {
+    super(
+      `The team policy's denyPaths match ${found} paths in this project, more paths than the OS sandbox can protect (at most ${MAX_POLICY_DENIED_PATHS}). The command does not run. Narrow the patterns, or deny a folder instead of its files.`,
+    );
+  }
+}
+
+/** Folders that the search skips for speed, unless a pattern names them. */
+const SKIPPED_FOLDERS = ["node_modules", ".git"] as const;
+
+/**
  * The files and folders in the root that the team policy's `denyPaths` names, as absolute paths
  * for the OS sandbox (K6, review): file tools refused them, but `cat secret/x` in `bash` read them.
  * The sandbox needs real paths, so the patterns are matched against the disk when a command
  * starts: a file created later is covered from the next command on. node_modules and .git are
- * not searched.
+ * searched only when a pattern names them. More matches than MAX_POLICY_DENIED_PATHS throw
+ * PolicyPathsOverflow: never a shorter list.
  */
 export function policyDeniedPaths(
   root: string,
@@ -114,6 +132,10 @@ export function policyDeniedPaths(
   ignoreCase: boolean = CASE_INSENSITIVE_FS,
 ): string[] {
   if (patterns.length === 0) return [];
+  const named = (folder: string) =>
+    patterns.some((p) =>
+      p.split("/").some((part) => (ignoreCase ? part.toLowerCase() : part) === folder),
+    );
   const found = globbySync(patterns.map(fullGlob), {
     cwd: root,
     absolute: true,
@@ -122,7 +144,8 @@ export function policyDeniedPaths(
     followSymbolicLinks: false,
     gitignore: false,
     caseSensitiveMatch: !ignoreCase,
-    ignore: ["**/node_modules/**", "**/.git/**"],
+    ignore: SKIPPED_FOLDERS.filter((folder) => !named(folder)).map((folder) => `**/${folder}/**`),
   });
-  return found.slice(0, MAX_POLICY_DENIED_PATHS);
+  if (found.length > MAX_POLICY_DENIED_PATHS) throw new PolicyPathsOverflow(found.length);
+  return found;
 }

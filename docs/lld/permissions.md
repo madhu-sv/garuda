@@ -273,8 +273,11 @@ grep never searches them; the code index never indexes them.
 
 The team policy's `denyPaths` (0130, K6): `execPolicy` adds `policyDeniedPaths(root, denyPaths)` to
 both `denyReadPaths` and `denyWritePaths`. The patterns are matched against the disk when a command
-starts (globby, no .gitignore, not in `node_modules` or `.git`, at most 1,000 paths), because the
-OS sandboxes need real paths.
+starts (globby, no .gitignore), because the OS sandboxes need real paths. `node_modules` and `.git`
+are searched only when a pattern names them. More than 1,000 matches throw `PolicyPathsOverflow`
+(Codex review of 1370184): the command does not run, because Garuda cannot enforce the rest. Before,
+the list was cut at 1,000 and the other paths had no rule. The same holds for hooks, MCP servers,
+language servers and job tests, which use the same `execPolicy`.
 
 ## Tests
 

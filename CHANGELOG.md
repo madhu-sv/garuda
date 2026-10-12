@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- Team policy `denyPaths` in the OS sandbox (Codex review of 1370184): when the patterns match more
+  than 1,000 paths, commands stop with a message instead of running with only the first 1,000
+  protected; a pattern that names `node_modules` or `.git` now finds files there.
 - Code intelligence (T10): Java/Python reference results carry `approximate: true`, propagated to
   callers and impact, including empty results. Model tool output starts with a warning; chat adds
   `≈`. Impact risk is labelled heuristic. Matching algorithms are unchanged. A frozen 30-Java/
