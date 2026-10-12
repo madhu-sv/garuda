@@ -301,6 +301,8 @@ describe("proof of work: a whole job (0.11)", () => {
     expect(job.result?.proof?.after?.exitCode).toBe(0);
     expect(job.result?.proof?.reviewError).toContain("the review request failed");
     expect(job.result?.proof?.verdict).toBe("needs-look");
+    // The failed attempt kept its reservation: the review cost is a minimum (review of 3a9f51b).
+    expect(job.result?.proof?.reviewCostIncomplete).toBe(true);
     await runtime.close();
   });
 

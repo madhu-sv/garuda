@@ -71,6 +71,11 @@ const resultSchema = z.object({
         })
         .optional(),
       reviewError: z.string().optional(),
+      /**
+       * The review spent tokens with no reported usage (a failed attempt, an estimate): its cost is
+       * a minimum or unrecorded (review of 3a9f51b).
+       */
+      reviewCostIncomplete: z.boolean().optional(),
     })
     .optional(),
 });

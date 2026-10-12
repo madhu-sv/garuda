@@ -5,6 +5,7 @@ import { shellWord } from "./git.js";
 import { JOBS_DIR, type Job, listJobs } from "./job.js";
 import type { AgentEnv } from "./launchd.js";
 import { testSummary } from "./proof.js";
+import { formatCost, jobCost, sumCosts } from "./text.js";
 
 /**
  * The night shift (0.11, W1): one queue of jobs per project. `/schedule` puts each new job in the
@@ -100,14 +101,17 @@ export async function runQueue(
 /** The morning digest (Markdown): one row per job, then what to do. */
 export function nightDigest(jobs: readonly Job[], started: Date, ended: Date): string {
   const ready = jobs.filter((j) => j.result?.proof?.verdict === "ready");
-  const cost = jobs.reduce(
-    (sum, j) => sum + (j.result?.costUsd ?? 0) + (j.result?.proof?.review?.costUsd ?? 0),
-    0,
+  // Uncertainty survives the sum (review of 3a9f51b): an unknown part makes the total unknown, a
+  // minimum makes it a minimum. A job that started but has no result spent an unknown amount.
+  const cost = sumCosts(
+    jobs.map((j) =>
+      j.result !== undefined ? jobCost(j.result) : { usd: 0, incomplete: j.status !== "scheduled" },
+    ),
   );
   const lines = [
     `# Garuda night shift: ${local(started)}`,
     "",
-    `${jobs.length} job(s): ${ready.length} ready to merge, ${jobs.length - ready.length} need a look. Time ${Math.round((ended.getTime() - started.getTime()) / 60_000)} min · cost $${cost.toFixed(4)}.`,
+    `${jobs.length} job(s): ${ready.length} ready to merge, ${jobs.length - ready.length} need a look. Time ${Math.round((ended.getTime() - started.getTime()) / 60_000)} min · cost ${formatCost(cost)}.`,
     "",
     "| Job | Verdict | Tests after | Files | Cost | Branch |",
     "| --- | --- | --- | --- | --- | --- |",
@@ -120,10 +124,9 @@ export function nightDigest(jobs: readonly Job[], started: Date, ended: Date): s
         : r.proof.verdict === "ready"
           ? "ready to merge"
           : "needs a look";
-    const jobCost =
-      r === undefined ? "–" : `$${((r.costUsd ?? 0) + (r.proof?.review?.costUsd ?? 0)).toFixed(4)}`;
+    const costText = r === undefined ? "–" : formatCost(jobCost(r));
     lines.push(
-      `| ${j.id}: ${cell(j.title)} | ${verdict} | ${j.test === undefined ? "no tests" : testSummary(r?.proof?.after)} | ${r?.files.length ?? 0} | ${jobCost} | ${j.branch} |`,
+      `| ${j.id}: ${cell(j.title)} | ${verdict} | ${j.test === undefined ? "no tests" : testSummary(r?.proof?.after)} | ${r?.files.length ?? 0} | ${costText} | ${j.branch} |`,
     );
   }
   const looks = jobs.filter((j) => j.result?.proof?.verdict !== "ready");

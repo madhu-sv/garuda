@@ -1518,7 +1518,14 @@ export class Runtime {
       .join("")
       .trim();
     const price = this.price;
-    const costUsd = price === undefined ? undefined : responseCost(response, price);
+    // An estimate (no reported usage) has no known cost: 0 as a minimum. Its reservation is in the
+    // session as unreported, which marks the cost incomplete (review of 3a9f51b).
+    const costUsd =
+      price === undefined
+        ? undefined
+        : response.usageReported === false
+          ? 0
+          : responseCost(response, price);
     if (session !== undefined) addSideUsage(session, "review", response, costUsd);
     return costUsd === undefined ? { text: answer } : { text: answer, costUsd };
   }

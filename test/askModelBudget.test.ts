@@ -69,4 +69,21 @@ describe("askModel (the job review) and the token budget", () => {
     await r.close();
     expect(totalTokens(rebuildState(await store.read(id)).usage)).toBe(before + 540);
   });
+
+  // Review of 3a9f51b (P2): an estimate (no reported usage) was priced as if it were exact.
+  it("an estimate has no exact cost: 0 as a minimum, and the session cost is incomplete", async () => {
+    const model = new FakeModelClient([
+      reply([text("hi")], undefined, usage(100)),
+      { ...reply([text("VERDICT: ready")], undefined, usage(500_000, 40)), usageReported: false },
+    ]);
+    const { r } = await runtime(model, 10_000_000);
+    await r.runTurn("hi", signal());
+    Object.defineProperty(r, "price", {
+      get: () => ({ input: 1, output: 1, cacheRead: 1, cacheWrite: 1 }),
+    });
+    const answer = await r.askModel("review", "the diff", signal());
+    expect(answer.costUsd).toBe(0);
+    expect(r.session?.costIncomplete).toBe(true);
+    await r.close();
+  });
 });

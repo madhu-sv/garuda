@@ -114,6 +114,7 @@ async function proveJob(
   };
   if (job.review !== false && result.commit !== undefined) {
     renderer.info("Reviewing the diff (a principal engineer's review)…");
+    const unreportedBefore = runtime.session?.unreportedTokens ?? 0;
     try {
       const diff = (
         await gitCommand(git, job.root, ["diff", "--no-renames", job.base, job.branch], {
@@ -141,6 +142,9 @@ async function proveJob(
     } catch (error) {
       proof.reviewError = (error as Error).message;
     }
+    // Review attempts with no reported usage (review of 3a9f51b): the review cost is a minimum.
+    if ((runtime.session?.unreportedTokens ?? 0) > unreportedBefore)
+      proof.reviewCostIncomplete = true;
   }
   proof.verdict = jobVerdict(flags, proof.review?.verdict, proof.reviewError !== undefined);
   return proof;

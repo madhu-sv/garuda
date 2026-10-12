@@ -191,7 +191,11 @@ response: batch responses at half the token price.
   come along, output appended to `.garuda/jobs/<id>.log`, 24 h at most). The worktrees keep the jobs
   apart; each job still does its own proof of work and report, and does not notify.
 - At the end the command reloads the job files and writes one digest, `.garuda/jobs/night-<date>.md`
-  (`nightDigest`): a row per job (verdict, tests after, files, cost with the review, branch), then the
+  (`nightDigest`): a row per job (verdict, tests after, files, cost with the review, branch). Costs keep
+  their uncertainty (review of 3a9f51b; `jobCost`, `sumCosts`, `formatCost` in `jobs/text.ts`): an
+  unknown part makes the cost "unknown", never $0.0000; a minimum part (the run's `costIncomplete`,
+  or `proof.reviewCostIncomplete` when a review attempt had no reported usage) makes it
+  "≥ $X (incomplete)"; a job that started but has no result makes the total a minimum. Then the
   jobs that need a look with their flags and the review's summary. It sends one notification
   ("N job(s), M ready to merge") when stdout is a terminal.
 - `/jobs delete <id>` (`jobs/remove.ts`, `Runtime.deleteJob`): refuses a running job; `jobLeftovers`
