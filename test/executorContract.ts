@@ -87,12 +87,15 @@ export function executorContract(name: string, make: () => Executor): void {
 
     it("shutdown() kills every running command at once", async () => {
       const marker = uniqueSleep();
-      const run = executor.run(`sleep ${marker} & wait`, policy({ timeoutMs: 20_000 }));
+      // Bare `wait` returns zero even for a killed child. Wait for this child's status so
+      // the shell cannot report success if the child receives SIGKILL before the shell does.
+      const run = executor.run(`sleep ${marker} & wait "$!"`, policy({ timeoutMs: 20_000 }));
       await waitUntil(() => sleeping(marker, root));
       executor.shutdown();
       const r = await run;
-      expect(r.exitCode).not.toBe(0);
       await waitUntil(async () => !(await sleeping(marker, root)));
+      expect(r.exitCode).not.toBe(0);
+      expect(r.timedOut).toBe(false);
     });
 
     it("returns when a background child keeps the output open (0.14, review)", async () => {
