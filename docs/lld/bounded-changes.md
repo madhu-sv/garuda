@@ -183,8 +183,13 @@ plain copy, 0.09 s.
   command again). Otherwise `read-tree -m -u` moves the project from its tree now to that tree plus
   the command's changes (modes, links in the root and deletions included). The turn's undo snapshot
   covers it.
-- **Not yet:** the question does not name ignored sensitive files or count ignored files per folder
-  (they are never applied); the overlay backend (0214).
+- **Not applied, shown (0213).** Before the command, a marker file in the store; after it, `find
+  -newer` in the copy lists files written outside the tracked changes (ignored files and `.git`, at
+  most 100 000 names). The question shows them as a count per top folder ("build/: 212 files"), and
+  sensitive ones by name. Deletions of ignored files are not shown.
+- **System prompt (0213).** In staged mode the model learns that the user applies or discards a
+  command's changes, and that a discard leaves the project unchanged.
+- **Not yet:** the overlay backend (0214).
 
 ### Decisions of the user (2026-10-10)
 

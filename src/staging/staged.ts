@@ -93,6 +93,36 @@ export class StagedCommands {
     }
   }
 
+  /** A time mark before a command, for `writtenSince` (a file in the store). */
+  async mark(): Promise<string> {
+    const marker = join(this.store, "marker");
+    await writeFile(marker, "");
+    return marker;
+  }
+
+  /**
+   * Files in the copy written since `marker`, outside the listed changes: files that git ignores,
+   * and `.git`. They are never applied (Q1); the question summarizes them. At most 100 000 names.
+   */
+  async writtenSince(
+    marker: string,
+    listed: readonly StagedChange[],
+    signal?: AbortSignal,
+  ): Promise<string[]> {
+    const out = await this.run(
+      this.copy.path,
+      `find . -type f -newer ${shellQuote(marker)} -print | head -n 100000`,
+      signal,
+      undefined,
+    ).catch(() => "");
+    const skip = new Set(listed.map((c) => c.path));
+    return out
+      .split("\n")
+      .filter((line) => line.startsWith("./"))
+      .map((line) => line.slice(2))
+      .filter((path) => !skip.has(path));
+  }
+
   /** The unified diff pre → post, as the question shows it. */
   async patch(pre: string, post: string, signal?: AbortSignal): Promise<string> {
     return this.git(
@@ -233,15 +263,6 @@ export class StagedCommands {
     signal?: AbortSignal,
     index?: string,
   ): Promise<string> {
-    return this.run(workTree, args, signal, index);
-  }
-
-  private async run(
-    workTree: string,
-    args: string,
-    signal: AbortSignal | undefined,
-    index: string | undefined,
-  ): Promise<string> {
     const config = [
       "core.hooksPath=/dev/null",
       "core.fsmonitor=false",
@@ -254,6 +275,16 @@ export class StagedCommands {
     ]
       .map((c) => `-c ${c}`)
       .join(" ");
+    return this.run(workTree, `git ${config} ${args}`, signal, index);
+  }
+
+  /** A host command with the store's git environment (git, or find for writtenSince). */
+  private async run(
+    workTree: string,
+    command: string,
+    signal: AbortSignal | undefined,
+    index: string | undefined,
+  ): Promise<string> {
     const policy: ExecPolicy = {
       root: workTree,
       sandbox: false,
@@ -265,7 +296,6 @@ export class StagedCommands {
       timeoutMs: GIT_TIMEOUT_MS,
       maxOutputBytes: 20_000_000,
     };
-    const command = `git ${config} ${args}`;
     const tag = workTree === this.root ? "project" : "copy";
     const result = await this.executor.run(command, policy, {
       ...(signal === undefined ? {} : { signal }),
@@ -282,7 +312,9 @@ export class StagedCommands {
     if (result.exitCode !== 0) {
       const why = (result.stderr.text || result.stdout.text).trim().split("\n").slice(-3).join(" ");
       throw new StagingError(
-        result.timedOut ? `git took longer than ${GIT_TIMEOUT_MS / 1000} s.` : `git failed: ${why}`,
+        result.timedOut
+          ? `${command.split(" ")[0]} took longer than ${GIT_TIMEOUT_MS / 1000} s.`
+          : `${command.split(" ")[0]} failed: ${why}`,
       );
     }
     return result.stdout.text;

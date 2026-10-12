@@ -2,12 +2,13 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { buildSystemPrompt } from "../src/context/instructions.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { bwrapArgs } from "../src/sandbox/bwrap.js";
 import { HostExecutor } from "../src/sandbox/host.js";
 import { seatbeltProfile } from "../src/sandbox/seatbelt.js";
 import type { ExecPolicy } from "../src/sandbox/types.js";
-import { StagingExecutor, stagedPolicy } from "../src/staging/executor.js";
+import { othersText, StagingExecutor, stagedPolicy } from "../src/staging/executor.js";
 import { StagedCommands } from "../src/staging/staged.js";
 
 /** The staged-mode executor (0.17, review T5), on any platform: "move" placement on the host. */
@@ -114,5 +115,37 @@ describe("StagingExecutor", () => {
     expect(readFileSync(join(root, "src/a.ts"), "utf8")).toBe("a\n");
     expect(readFileSync(join(staged.copy.path, "src/a.ts"), "utf8")).toBe("a\n");
     await staged.remove();
+  });
+
+  it("the question names what is never applied: ignored files per folder, sensitive ones by name", async () => {
+    const { root, staged, host } = await setup();
+    writeFileSync(join(root, ".gitignore"), "build/\n.env\n");
+    const approver = new AutoApprover("deny");
+    const executor = new StagingExecutor(host, staged, (r) => approver.ask(r), "move");
+    await executor.run(
+      "mkdir -p build && echo 1 > build/a && echo 2 > build/b && echo K=v > .env && echo n > src/a.ts",
+      policy(root),
+    );
+    const preview = approver.requests.at(-1)?.preview ?? "";
+    expect(preview).toContain("modified src/a.ts");
+    expect(preview).toContain("build/: 2 files");
+    expect(preview).toContain("sensitive: .env");
+    await staged.remove();
+  });
+});
+
+describe("othersText", () => {
+  it("is empty with no files; groups by top folder", () => {
+    expect(othersText([])).toBe("");
+    expect(othersText(["x/1", "x/2", "y"])).toContain("  x/: 2 files\n  y: 1 file");
+  });
+});
+
+describe("the system prompt in staged mode", () => {
+  it("tells the model that a discard leaves the project unchanged; only in staged mode", () => {
+    const on = buildSystemPrompt("/p", undefined, undefined, { sandboxed: true, staged: true });
+    const off = buildSystemPrompt("/p", undefined, undefined, { sandboxed: true });
+    expect(on).toContain("Staged mode: commands run in a copy of the project.");
+    expect(off).not.toContain("Staged mode");
   });
 });

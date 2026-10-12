@@ -1,4 +1,5 @@
 import { sep } from "node:path";
+import { isSensitive } from "../permissions/sensitive.js";
 import type { ApprovalChoice, ApprovalRequest } from "../permissions/types.js";
 import type {
   ExecOptions,
@@ -80,6 +81,7 @@ export class StagingExecutor implements Executor {
   ): Promise<ExecResult> {
     const signal = options.signal ?? new AbortController().signal;
     const pre = await this.staged.prepare(signal);
+    const marker = await this.staged.mark();
     const result = await this.inner.run(
       command,
       stagedPolicy(policy, this.staged.copy.path, this.placement),
@@ -87,7 +89,12 @@ export class StagingExecutor implements Executor {
     );
     const collected = await this.staged.collect(pre, signal);
     if (collected.complete && collected.changes.length === 0) return result;
-    const note = await this.review(command, pre, collected, signal);
+    const others = await this.staged.writtenSince(
+      marker,
+      collected.complete ? collected.changes : [],
+      signal,
+    );
+    const note = await this.review(command, pre, collected, others, signal);
     return { ...result, staged: { note } };
   }
 
@@ -96,11 +103,12 @@ export class StagingExecutor implements Executor {
     command: string,
     pre: string,
     collected: Collected,
+    others: readonly string[],
     signal: AbortSignal,
   ): Promise<string> {
     let choice: ApprovalChoice = "deny";
     try {
-      choice = await this.ask(await this.question(command, pre, collected, signal), signal);
+      choice = await this.ask(await this.question(command, pre, collected, others, signal), signal);
     } catch {
       choice = "deny";
     }
@@ -122,8 +130,10 @@ export class StagingExecutor implements Executor {
     command: string,
     pre: string,
     collected: Collected,
+    others: readonly string[],
     signal: AbortSignal,
   ): Promise<ApprovalRequest> {
+    const notApplied = othersText(others);
     const base = {
       tool: "bash",
       target: { kind: "command" as const, command },
@@ -133,7 +143,7 @@ export class StagingExecutor implements Executor {
     if (!collected.complete) {
       return {
         ...base,
-        preview: `$ ${command}\n\nGaruda could not list all changes: ${collected.reason}\nAn incomplete list cannot be applied.`,
+        preview: `$ ${command}\n\nGaruda could not list all changes: ${collected.reason}\nAn incomplete list cannot be applied.${notApplied}`,
         question: "Discard the changes?",
         choices: ["deny"],
         labels: { deny: "Discard" },
@@ -146,7 +156,7 @@ export class StagingExecutor implements Executor {
     }
     return {
       ...base,
-      preview: `$ ${command}\n\n${count(collected.changes.length)}:\n${list}\n\n${diff}`,
+      preview: `$ ${command}\n\n${count(collected.changes.length)}:\n${list}${notApplied}\n\n${diff}`,
       question: "Apply these changes to the project?",
       choices: ["once", "deny"],
       labels: { once: "Apply", deny: "Discard" },
@@ -180,6 +190,33 @@ export function stagedPolicy(
     ],
     denyReadPaths: [...new Set([...policy.denyReadPaths, ...policy.denyReadPaths.map(moved)])],
   };
+}
+
+/**
+ * Files that the command wrote but that are never applied: those that git ignores, and `.git`.
+ * Sensitive ones by name (they may hold secrets the command wrote); the rest as a count per top
+ * folder ("build/: 212 files").
+ */
+export function othersText(paths: readonly string[]): string {
+  if (paths.length === 0) return "";
+  const sensitive = paths.filter((p) => isSensitive(p));
+  const folders = new Map<string, number>();
+  for (const p of paths) {
+    if (sensitive.includes(p)) continue;
+    const slash = p.indexOf("/");
+    const top = slash < 0 ? p : `${p.slice(0, slash)}/`;
+    folders.set(top, (folders.get(top) ?? 0) + 1);
+  }
+  const lines = [
+    "",
+    "",
+    "Not applied (git ignores them, or .git); they stay in the staging copy:",
+    ...[...folders]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([top, n]) => `  ${top}: ${count(n)}`),
+    ...sensitive.map((p) => `  sensitive: ${p}`),
+  ];
+  return lines.join("\n");
 }
 
 const count = (n: number) => `${n} file${n === 1 ? "" : "s"}`;

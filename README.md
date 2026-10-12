@@ -726,7 +726,8 @@ change your project without your answer:
   question shows the files and the diff, and you apply or discard. Apply copies the files into the
   project (all or nothing; `/undo` takes them back). The model gets a note with your answer.
 - Files that `.gitignore` covers (build output, `node_modules`) stay in the copy for the next commands
-  and are never applied. Changes in `.git` are not applied either.
+  and are never applied. Changes in `.git` are not applied either. The question counts them per
+  folder and names sensitive ones (for example `.env`).
 - A file that you changed in the project during the command is a conflict: nothing is applied. A link
   that points out of the project is refused. A list that is not complete (more than 50,000 files) can
   only be discarded.

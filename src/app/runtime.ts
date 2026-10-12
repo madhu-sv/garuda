@@ -768,6 +768,7 @@ export class Runtime {
         codeIndex: settings.codeIndex ?? DEFAULT_CODE_INDEX_MODE,
         sandboxed: choice.executor.isolation !== "none",
         strict: isStrict(policy),
+        staged: staged !== undefined,
         mcp: mcpServers.some((s) => s.def.enabled),
         web: settings.web?.enabled ?? true,
         search:
