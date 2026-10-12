@@ -1,0 +1,2310 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "shopkit-java-python-lsp-v1",
+  "corpusSha256": "342aefb254f32070cf7aee7137ab5a58b58f5be18b74d14e336298cd6ccea913",
+  "capturedAt": "2026-10-12T14:36:50.110Z",
+  "toolchain": {
+    "jdtls": {
+      "version": "1.61.0",
+      "coreJar": "org.eclipse.jdt.ls.core_1.61.0.202609031315.jar",
+      "coreJarSha256": "b382afc38a89e41959a56aee532ae567c7f804c3e4d4f13444114468789ec032"
+    },
+    "pyright": {
+      "version": "1.1.406"
+    },
+    "java": "21.0.12.1",
+    "node": "v24.19.0",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "projects": [
+    {
+      "language": "java",
+      "server": {
+        "name": "JDT Language Server (Standard)",
+        "version": "1.61.0-SNAPSHOT"
+      },
+      "stablePasses": 2,
+      "cases": [
+        {
+          "id": "java-01",
+          "expected": ["src/shopkit/case00/Use00.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case00/Target00.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case00/Use00.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 41
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-02",
+          "expected": ["src/shopkit/case01/Use01.java:4"],
+          "locations": [
+            {
+              "path": "src/shopkit/case01/Target01.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 23
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case01/Use01.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 21
+                },
+                "end": {
+                  "line": 3,
+                  "character": 27
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-03",
+          "expected": ["src/shopkit/case02/Use02.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case02/Target02.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case02/Use02.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 41
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-04",
+          "expected": ["src/shopkit/case03/Use03.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case03/Target03.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case03/Use03.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 41
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-05",
+          "expected": ["src/shopkit/case04/Use04.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case04/Target04.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case04/Use04.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 40
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-06",
+          "expected": ["src/shopkit/case05/Use05.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case05/Target05.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case05/Use05.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 59
+                },
+                "end": {
+                  "line": 2,
+                  "character": 68
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-07",
+          "expected": ["src/shopkit/case06/Use06.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case06/Target06.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 13
+                },
+                "end": {
+                  "line": 2,
+                  "character": 18
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case06/Use06.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 33
+                },
+                "end": {
+                  "line": 2,
+                  "character": 41
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-08",
+          "expected": ["src/shopkit/case07/Use07.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case07/Target07.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case07/Use07.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 40
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-09",
+          "expected": ["src/shopkit/case08/Use08.java:4", "src/shopkit/case08/Use08.java:5"],
+          "locations": [
+            {
+              "path": "src/shopkit/case08/Target08.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case08/Use08.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 30
+                },
+                "end": {
+                  "line": 3,
+                  "character": 40
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case08/Use08.java",
+              "range": {
+                "start": {
+                  "line": 4,
+                  "character": 40
+                },
+                "end": {
+                  "line": 4,
+                  "character": 47
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-10",
+          "expected": ["src/shopkit/case09/Use09.java:3", "src/shopkit/case09/Use09.java:4"],
+          "locations": [
+            {
+              "path": "src/shopkit/case09/Target09.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case09/Use09.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 41
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case09/Use09.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 33
+                },
+                "end": {
+                  "line": 3,
+                  "character": 63
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case09/Use09.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 51
+                },
+                "end": {
+                  "line": 3,
+                  "character": 62
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-11",
+          "expected": ["src/shopkit/case10/Use10.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case10/Target10.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case10/Use10.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 39
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-12",
+          "expected": ["src/shopkit/case11/Use11.java:4"],
+          "locations": [
+            {
+              "path": "src/shopkit/case11/Target11.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 25
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case11/Use11.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 21
+                },
+                "end": {
+                  "line": 3,
+                  "character": 29
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-13",
+          "expected": ["src/shopkit/case12/Use12.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case12/Target12.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case12/Use12.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 40
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-14",
+          "expected": ["src/shopkit/case13/Use13.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case13/Target13.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case13/Use13.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 40
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-15",
+          "expected": ["src/shopkit/case14/Use14.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case14/Target14.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case14/Use14.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 39
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-16",
+          "expected": ["src/shopkit/case15/Use15.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case15/Target15.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case15/Use15.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 59
+                },
+                "end": {
+                  "line": 2,
+                  "character": 69
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-17",
+          "expected": ["src/shopkit/case16/Use16.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case16/Target16.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 13
+                },
+                "end": {
+                  "line": 2,
+                  "character": 18
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case16/Use16.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 33
+                },
+                "end": {
+                  "line": 2,
+                  "character": 41
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-18",
+          "expected": ["src/shopkit/case17/Use17.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case17/Target17.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case17/Use17.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 41
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-19",
+          "expected": ["src/shopkit/case18/Use18.java:4", "src/shopkit/case18/Use18.java:5"],
+          "locations": [
+            {
+              "path": "src/shopkit/case18/Target18.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case18/Use18.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 30
+                },
+                "end": {
+                  "line": 3,
+                  "character": 41
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case18/Use18.java",
+              "range": {
+                "start": {
+                  "line": 4,
+                  "character": 40
+                },
+                "end": {
+                  "line": 4,
+                  "character": 48
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-20",
+          "expected": ["src/shopkit/case19/Use19.java:3", "src/shopkit/case19/Use19.java:4"],
+          "locations": [
+            {
+              "path": "src/shopkit/case19/Target19.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case19/Use19.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 40
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case19/Use19.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 33
+                },
+                "end": {
+                  "line": 3,
+                  "character": 61
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case19/Use19.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 50
+                },
+                "end": {
+                  "line": 3,
+                  "character": 60
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-21",
+          "expected": ["src/shopkit/case20/Use20.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case20/Target20.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case20/Use20.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 39
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-22",
+          "expected": ["src/shopkit/case21/Use21.java:4"],
+          "locations": [
+            {
+              "path": "src/shopkit/case21/Target21.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 30
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case21/Use21.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 21
+                },
+                "end": {
+                  "line": 3,
+                  "character": 34
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-23",
+          "expected": ["src/shopkit/case22/Use22.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case22/Target22.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case22/Use22.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 41
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-24",
+          "expected": ["src/shopkit/case23/Use23.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case23/Target23.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case23/Use23.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 40
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-25",
+          "expected": ["src/shopkit/case24/Use24.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case24/Target24.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case24/Use24.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 39
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-26",
+          "expected": ["src/shopkit/case25/Use25.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case25/Target25.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 29
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case25/Use25.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 59
+                },
+                "end": {
+                  "line": 2,
+                  "character": 71
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-27",
+          "expected": ["src/shopkit/case26/Use26.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case26/Target26.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 13
+                },
+                "end": {
+                  "line": 2,
+                  "character": 21
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case26/Use26.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 33
+                },
+                "end": {
+                  "line": 2,
+                  "character": 44
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-28",
+          "expected": ["src/shopkit/case27/Use27.java:3"],
+          "locations": [
+            {
+              "path": "src/shopkit/case27/Target27.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case27/Use27.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 41
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-29",
+          "expected": ["src/shopkit/case28/Use28.java:4", "src/shopkit/case28/Use28.java:5"],
+          "locations": [
+            {
+              "path": "src/shopkit/case28/Target28.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case28/Use28.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 30
+                },
+                "end": {
+                  "line": 3,
+                  "character": 39
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case28/Use28.java",
+              "range": {
+                "start": {
+                  "line": 4,
+                  "character": 40
+                },
+                "end": {
+                  "line": 4,
+                  "character": 46
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "java-30",
+          "expected": ["src/shopkit/case29/Use29.java:3", "src/shopkit/case29/Use29.java:4"],
+          "locations": [
+            {
+              "path": "src/shopkit/case29/Target29.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 25
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case29/Use29.java",
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 30
+                },
+                "end": {
+                  "line": 2,
+                  "character": 38
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case29/Use29.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 33
+                },
+                "end": {
+                  "line": 3,
+                  "character": 57
+                }
+              }
+            },
+            {
+              "path": "src/shopkit/case29/Use29.java",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 48
+                },
+                "end": {
+                  "line": 3,
+                  "character": 56
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "language": "python",
+      "server": null,
+      "stablePasses": 2,
+      "cases": [
+        {
+          "id": "python-01",
+          "expected": ["case00/use.py:1", "case00/use.py:4"],
+          "locations": [
+            {
+              "path": "case00/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 12
+                }
+              }
+            },
+            {
+              "path": "case00/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "case00/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 19
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-02",
+          "expected": ["case01/use.py:1"],
+          "locations": [
+            {
+              "path": "case01/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 7
+                }
+              }
+            },
+            {
+              "path": "case01/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 23
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-03",
+          "expected": ["case02/use.py:4"],
+          "locations": [
+            {
+              "path": "case02/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 12
+                }
+              }
+            },
+            {
+              "path": "case02/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 18
+                },
+                "end": {
+                  "line": 3,
+                  "character": 26
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-04",
+          "expected": ["case03/use.py:4"],
+          "locations": [
+            {
+              "path": "case03/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 12
+                }
+              }
+            },
+            {
+              "path": "case03/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 19
+                },
+                "end": {
+                  "line": 3,
+                  "character": 27
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-05",
+          "expected": ["case04/use.py:1", "case04/use.py:4"],
+          "locations": [
+            {
+              "path": "case04/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 11
+                }
+              }
+            },
+            {
+              "path": "case04/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "case04/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 18
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-06",
+          "expected": ["case05/use.py:1", "case05/use.py:4"],
+          "locations": [
+            {
+              "path": "case05/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 10
+                }
+              }
+            },
+            {
+              "path": "case05/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "case05/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 17
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-07",
+          "expected": ["case06/use.py:1", "case06/use.py:4"],
+          "locations": [
+            {
+              "path": "case06/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 9
+                }
+              }
+            },
+            {
+              "path": "case06/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 25
+                }
+              }
+            },
+            {
+              "path": "case06/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 16
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-08",
+          "expected": ["case07/use.py:1", "case07/use.py:4"],
+          "locations": [
+            {
+              "path": "case07/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 11
+                }
+              }
+            },
+            {
+              "path": "case07/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "case07/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 28
+                },
+                "end": {
+                  "line": 3,
+                  "character": 35
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-09",
+          "expected": ["case08/api.py:1"],
+          "locations": [
+            {
+              "path": "case08/api.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "case08/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 11
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-10",
+          "expected": ["case09/use.py:1", "case09/use.py:2"],
+          "locations": [
+            {
+              "path": "case09/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 12
+                }
+              }
+            },
+            {
+              "path": "case09/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "case09/use.py",
+              "range": {
+                "start": {
+                  "line": 1,
+                  "character": 11
+                },
+                "end": {
+                  "line": 1,
+                  "character": 19
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-11",
+          "expected": ["case10/use.py:1", "case10/use.py:4"],
+          "locations": [
+            {
+              "path": "case10/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 10
+                }
+              }
+            },
+            {
+              "path": "case10/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "case10/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 17
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-12",
+          "expected": ["case11/use.py:1"],
+          "locations": [
+            {
+              "path": "case11/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 9
+                }
+              }
+            },
+            {
+              "path": "case11/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 25
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-13",
+          "expected": ["case12/use.py:4"],
+          "locations": [
+            {
+              "path": "case12/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 11
+                }
+              }
+            },
+            {
+              "path": "case12/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 18
+                },
+                "end": {
+                  "line": 3,
+                  "character": 25
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-14",
+          "expected": ["case13/use.py:4"],
+          "locations": [
+            {
+              "path": "case13/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 11
+                }
+              }
+            },
+            {
+              "path": "case13/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 19
+                },
+                "end": {
+                  "line": 3,
+                  "character": 26
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-15",
+          "expected": ["case14/use.py:1", "case14/use.py:4"],
+          "locations": [
+            {
+              "path": "case14/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 10
+                }
+              }
+            },
+            {
+              "path": "case14/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "case14/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 17
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-16",
+          "expected": ["case15/use.py:1", "case15/use.py:4"],
+          "locations": [
+            {
+              "path": "case15/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 11
+                }
+              }
+            },
+            {
+              "path": "case15/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "case15/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 18
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-17",
+          "expected": ["case16/use.py:1", "case16/use.py:4"],
+          "locations": [
+            {
+              "path": "case16/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 9
+                }
+              }
+            },
+            {
+              "path": "case16/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 25
+                }
+              }
+            },
+            {
+              "path": "case16/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 16
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-18",
+          "expected": ["case17/use.py:1", "case17/use.py:4"],
+          "locations": [
+            {
+              "path": "case17/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 12
+                }
+              }
+            },
+            {
+              "path": "case17/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "case17/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 28
+                },
+                "end": {
+                  "line": 3,
+                  "character": 36
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-19",
+          "expected": ["case18/api.py:1"],
+          "locations": [
+            {
+              "path": "case18/api.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "case18/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 12
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-20",
+          "expected": ["case19/use.py:1", "case19/use.py:2"],
+          "locations": [
+            {
+              "path": "case19/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 11
+                }
+              }
+            },
+            {
+              "path": "case19/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 27
+                }
+              }
+            },
+            {
+              "path": "case19/use.py",
+              "range": {
+                "start": {
+                  "line": 1,
+                  "character": 11
+                },
+                "end": {
+                  "line": 1,
+                  "character": 18
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-21",
+          "expected": ["case20/use.py:1", "case20/use.py:4"],
+          "locations": [
+            {
+              "path": "case20/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 10
+                }
+              }
+            },
+            {
+              "path": "case20/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "case20/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 17
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-22",
+          "expected": ["case21/use.py:1"],
+          "locations": [
+            {
+              "path": "case21/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 14
+                }
+              }
+            },
+            {
+              "path": "case21/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 30
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-23",
+          "expected": ["case22/use.py:4"],
+          "locations": [
+            {
+              "path": "case22/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 12
+                }
+              }
+            },
+            {
+              "path": "case22/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 18
+                },
+                "end": {
+                  "line": 3,
+                  "character": 26
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-24",
+          "expected": ["case23/use.py:4"],
+          "locations": [
+            {
+              "path": "case23/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 11
+                }
+              }
+            },
+            {
+              "path": "case23/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 19
+                },
+                "end": {
+                  "line": 3,
+                  "character": 26
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-25",
+          "expected": ["case24/use.py:1", "case24/use.py:4"],
+          "locations": [
+            {
+              "path": "case24/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 10
+                }
+              }
+            },
+            {
+              "path": "case24/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "case24/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 17
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-26",
+          "expected": ["case25/use.py:1", "case25/use.py:4"],
+          "locations": [
+            {
+              "path": "case25/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 13
+                }
+              }
+            },
+            {
+              "path": "case25/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 29
+                }
+              }
+            },
+            {
+              "path": "case25/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 20
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-27",
+          "expected": ["case26/use.py:1", "case26/use.py:4"],
+          "locations": [
+            {
+              "path": "case26/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 12
+                }
+              }
+            },
+            {
+              "path": "case26/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "case26/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 11
+                },
+                "end": {
+                  "line": 3,
+                  "character": 19
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-28",
+          "expected": ["case27/use.py:1", "case27/use.py:4"],
+          "locations": [
+            {
+              "path": "case27/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 12
+                }
+              }
+            },
+            {
+              "path": "case27/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 28
+                }
+              }
+            },
+            {
+              "path": "case27/use.py",
+              "range": {
+                "start": {
+                  "line": 3,
+                  "character": 28
+                },
+                "end": {
+                  "line": 3,
+                  "character": 36
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-29",
+          "expected": ["case28/api.py:1"],
+          "locations": [
+            {
+              "path": "case28/api.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 26
+                }
+              }
+            },
+            {
+              "path": "case28/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 10
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "python-30",
+          "expected": ["case29/use.py:1", "case29/use.py:2"],
+          "locations": [
+            {
+              "path": "case29/target.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 4
+                },
+                "end": {
+                  "line": 0,
+                  "character": 9
+                }
+              }
+            },
+            {
+              "path": "case29/use.py",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 25
+                }
+              }
+            },
+            {
+              "path": "case29/use.py",
+              "range": {
+                "start": {
+                  "line": 1,
+                  "character": 11
+                },
+                "end": {
+                  "line": 1,
+                  "character": 16
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

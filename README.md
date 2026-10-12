@@ -33,7 +33,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.12: benchmark your repo (eval tasks from the repo's own git history), output-limit recovery | Done |
 | 0.13: network allowlist for commands (W6): presets or hosts, through Garuda's proxy, off by default | Done |
 | 0.14: sandbox launch probe, core modularization, background daemons (opt-in), interactive patch staging (W4) | Done (0.14.0) |
-| 0.15: multi-language AST code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done (0.14.0) |
+| 0.15: multi-language code intelligence (Python, Java, TS/JS, caller candidates, impact, /callers, /defs, /impact, ast_query) | Done (0.14.0) |
 | 0.16: language plugins (Go and Rust built in, user plugins in ~/.garuda/languages, /languages; project plugins not loaded) | Done (0.14.0) |
 | 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | Done (0.14.0) |
 | Editors over the Agent Client Protocol (`garuda acp`: VS Code with an extension, Zed, JetBrains, Neovim, Emacs) | Done (0.15.0) |
@@ -537,10 +537,17 @@ It answers code questions on this machine, with zero native C++ compilation depe
   - Tests and evals load the built-in experts only.
 - Tools for the agent (read-only, no approval), chosen with `"codeIndex"` in `.garuda/settings.json`:
   `"off"` (default), `"lookup"` (`find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`) or `"all"` (also `repo_map`).
-  `find_callers` traces structural invocation hierarchies across languages; `impact_analysis` computes blast radius, dependents, and discovers affected test suites (including Go `*_test.go` and Rust `*_test.rs`); `ast_query` filters symbols by kind, container, and wildcards.
+  `find_callers` groups indexed reference sites by their enclosing symbol; `impact_analysis` estimates dependents, blast radius and affected tests (including Go `*_test.go` and Rust `*_test.rs`); `ast_query` filters symbols by kind, container, and wildcards.
+  Java/Python references use identifier matching. Their references, callers and impact results are
+  marked **Approximate**, including empty results: matching can include unrelated symbols and miss
+  aliases or dynamic uses. Check with a compiler or language server before a rename. These tools do
+  not run jdtls or pyright. The [fixed 60-query measurement](docs/quality-baseline/code-intelligence-baseline.md)
+  records Java precision/recall **61.1%/91.7%**, Python **71.4%/93.8%**, against frozen language-server
+  reference results. This synthetic sample does not establish accuracy on your repository.
 - Chat commands for you: `/where X` (or `/defs X`), `/refs X`, `/callers X`, `/impact X`, `/map [folder]`, and `/languages` (lists active language plugins, indexed file counts, and standby status).
 - The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
-  Pure AST parsers run in-process and preserve single-binary distribution.
+  Experts run in-process and preserve single-binary distribution; Java/Python declaration extraction
+  and reference matching use heuristics.
 - Files follow `.gitignore`. Sensitive files are never indexed.
 
 ## Mixture-of-Experts (MoE) subagent dispatch and /experts (0.17)

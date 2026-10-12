@@ -162,3 +162,22 @@ run on macOS against 0.16.0 from npm) failed with "No authMethods in response": 
 Terminal Auth only as `_meta["terminal-auth"]`. 0174 accepts that form. `pnpm check` on Linux (Node
 v22.22.2): 86 test files, 901 tests: 894 passed, 1 expected failure (G09) and 6 skipped. Over stdio
 with the checker's capabilities, `initialize` returned the `garuda-setup` method.
+
+## T10 reference evidence (12 October 2026)
+
+On `aefac70` plus the T10 patch, 30 Java and 30 Python frozen queries were captured with real
+jdtls 1.61.0 and pyright 1.1.406 on Linux x64 (JDK 21.0.12.1, Node 24.19.0). Two fresh captures
+agree on every location. Java: 33 TP, 21 FP, 3 FN, precision 61.1% and recall 91.7%. Python:
+45 TP, 18 FP, 3 FN, precision 71.4% and recall 93.8%. The unit is a unique `path:line` outside the
+selected declaration. This measures synthetic binding/reference cases, not production task
+success, caller/impact accuracy or complete alias/dynamic dispatch coverage.
+
+[The T10 evidence record](code-intelligence-baseline.md) links the raw oracle, per-query errors,
+source/corpus fingerprints, the separate 16-query manual sample and reproduction commands.
+Java/Python references and derived results now carry an approximate warning to the model and
+user; matching algorithms are unchanged.
+
+Validation: `pnpm check` passes (97 files; 952 ordinary passes, one expected failure, 45 skips;
+998 tests total), including typecheck and Biome. CLI and site builds pass. The original matcher
+has identical measured sites; label regressions fail on the original base. This patch's local
+execution is Linux-only; macOS validation is still pending.

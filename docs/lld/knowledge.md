@@ -16,10 +16,11 @@ Version 0.16 introduces a **dynamic language plugin architecture** with:
 interface LanguageExpert {
   readonly id: string;
   readonly extensions: readonly string[];
+  readonly referencesApproximate?: true;                   // built-in Java/Python
   summarise(path, content): FileNode;                         // exports + imports, cheap, cached
   findSymbols(files, query, exact, limit): SymbolHit[];
   findReferences(files, name, inFile, limit):
-    { definition?: SymbolHit; references: ReferenceHit[]; candidates: SymbolHit[] };
+    { definition?: SymbolHit; references: ReferenceHit[]; candidates: SymbolHit[]; approximate?: true };
 }
 
 interface LanguagePlugin {
@@ -41,8 +42,9 @@ interface LanguageStatus {
 interface SymbolHit { name; kind; path; line; container?; exported }
 interface ReferenceHit { path; line; text; isDefinition }
 interface CallerHit { callerName; callerKind; path; line; callLine; callText }
-interface CallerResult { definition?; callers: CallerHit[]; candidates: SymbolHit[] }
+interface CallerResult { definition?; callers: CallerHit[]; candidates: SymbolHit[]; approximate?: true }
 interface ImpactResult {
+  approximate?: true;
   target: string;
   targetKind: "file" | "symbol";
   resolvedPath?: string;
@@ -82,6 +84,19 @@ interface FileNode { path; exports: ExportEntry[]; imports: string[] }
   `.garuda/index/code-graph.json` (versioned). The cache is rewritten after each map.
 - Experts load lazily on first use, so the index costs nothing at startup.
 
+## Reference accuracy (T10)
+
+Java/Python reference matching is approximate. The optional result-level `approximate: true` flag
+is propagated to callers and impact, including empty/missing results. A built-in expert also
+advertises `referencesApproximate` so missing results can be labelled. Tool output warns before
+any hits; chat prefixes the warning with `≈`; derived impact risk is heuristic. Strings,
+shadowing, overloads and aliases can produce false positives or negatives. Use a compiler or
+language server before a rename. Production lookup does not invoke those servers.
+
+Absence of the optional flag does not certify perfect accuracy. Existing user plugins remain
+compatible. The [60-query reference evidence](../quality-baseline/code-intelligence-baseline.md)
+uses frozen jdtls/pyright locations; its scope and separate manual alias sample are documented.
+
 ## Built-in Language Plugins
 
 ### TypeScript / JavaScript (`typescript.ts`)
@@ -90,13 +105,13 @@ interface FileNode { path; exports: ExportEntry[]; imports: string[] }
 - Follows imports, re-exports, and renames across files.
 
 ### Python (`python.ts`)
-- Pure AST parser for Python source code.
+- Heuristic declaration extraction and identifier matching; not a Python compiler or AST parser.
 - Extensions: `.py`.
 - Extracts imports, functions, async functions, classes, methods, constructors, variables, and constants.
 - Respects `__all__` export manifests and private naming conventions (`_foo`).
 
 ### Java (`java.ts`)
-- Pure AST parser for Java source code.
+- Heuristic declaration extraction and identifier matching; not a Java compiler or AST parser.
 - Extensions: `.java`.
 - Extracts packages, imports, classes, interfaces, records, enums, methods, constructors, and fields.
 - Tracks brace nesting depth for container resolution.

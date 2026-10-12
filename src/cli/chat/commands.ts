@@ -39,7 +39,7 @@ export const HELP = [
   "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel|delete <id>; /jobs cancel night",
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /defs X    alias of /where X (definitions of X)",
-  "  /refs X    every use of symbol X (code index, no model call)",
+  "  /refs X    indexed uses of symbol X (Java/Python approximate, no model call)",
   "  /callers X who calls symbol X (code index, no model call)",
   "  /impact X  blast radius and affected tests for file or symbol X",
   "  /map [dir] what each code file exports and imports",
@@ -571,7 +571,7 @@ async function lookup(
     } else {
       text = repoMapText(await repoMapTool.run({ path: arg }, context));
     }
-    renderer.info(text);
+    renderer.info(text.startsWith("Approximate:") ? `≈ ${text}` : text);
   } catch (error) {
     renderer.error((error as Error).message);
   }

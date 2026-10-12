@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 1,
+  "id": "java-python-references-v1",
+  "limit": 200,
+  "unit": "unique path:line reference sites, excluding the selected definition",
+  "groundTruth": "Manually specified direct references to the selected declaration, including import aliases and re-exports; strings, comments, shadowed names and different overloads are excluded.",
+  "cases": [
+    {
+      "id": "py-direct",
+      "language": "python",
+      "feature": "direct import and call",
+      "files": {
+        "defs.py": "def total(value):\n    return value\n",
+        "use.py": "from defs import total\n\ndef run():\n    return total(1)\n# total in a comment is not a use\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:4"]
+    },
+    {
+      "id": "py-homonym",
+      "language": "python",
+      "feature": "same-name function in another module",
+      "files": {
+        "defs.py": "def total(value):\n    return value\n",
+        "other.py": "def total(value):\n    return value + 1\n",
+        "use.py": "import defs\nimport other\n\ndef run():\n    left = defs.total(1)\n    return other.total(left)\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:5"]
+    },
+    {
+      "id": "py-import-alias",
+      "language": "python",
+      "feature": "renamed import",
+      "files": {
+        "defs.py": "def total(value):\n    return value\n",
+        "use.py": "from defs import total as price\n\ndef run():\n    return price(1)\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:4"]
+    },
+    {
+      "id": "py-shadow",
+      "language": "python",
+      "feature": "parameter shadows the import",
+      "files": {
+        "defs.py": "def total(value):\n    return value\n",
+        "use.py": "from defs import total\n\ndef run(total):\n    return total(1)\n\nanswer = total(2)\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:6"]
+    },
+    {
+      "id": "py-string",
+      "language": "python",
+      "feature": "identifier in a string and a comment",
+      "files": {
+        "defs.py": "def total(value):\n    return value\n",
+        "use.py": "from defs import total\n\nmessage = \"total\"\n\ndef run():\n    return total(len(message))\n# total in a comment\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:6"]
+    },
+    {
+      "id": "py-comment-marker",
+      "language": "python",
+      "feature": "comment marker inside a string before a real call",
+      "files": {
+        "defs.py": "def total(value):\n    return value\n",
+        "use.py": "from defs import total\n\ndef run():\n    marker = \"#\"; return total(len(marker))\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:4"]
+    },
+    {
+      "id": "py-module-alias",
+      "language": "python",
+      "feature": "module alias with a qualified call",
+      "files": {
+        "defs.py": "def total(value):\n    return value\n",
+        "use.py": "import defs as catalog\n\ndef run():\n    return catalog.total(1)\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:4"]
+    },
+    {
+      "id": "py-reexport-alias",
+      "language": "python",
+      "feature": "import alias re-exported by another module",
+      "files": {
+        "defs.py": "def total(value):\n    return value\n",
+        "facade.py": "from defs import total as exposed\n",
+        "use.py": "from facade import exposed\n\ndef run():\n    return exposed(1)\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["facade.py:1", "use.py:1", "use.py:4"]
+    },
+    {
+      "id": "java-direct",
+      "language": "java",
+      "feature": "qualified call and a comment",
+      "files": {
+        "Target.java": "package p;\npublic class Target {\n    public static int total(int value) {\n        return value;\n    }\n}\n",
+        "Use.java": "package p;\npublic class Use {\n    public int run() {\n        return Target.total(1);\n    }\n    // total in a comment\n}\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"]
+    },
+    {
+      "id": "java-homonym",
+      "language": "java",
+      "feature": "same-name method on another receiver",
+      "files": {
+        "Target.java": "package p;\npublic class Target {\n    public static int total(int value) {\n        return value;\n    }\n}\n",
+        "Other.java": "package p;\npublic class Other {\n    public int total(int value) {\n        return value + 1;\n    }\n}\n",
+        "Use.java": "package p;\npublic class Use {\n    public int run() {\n        int left = Target.total(1);\n        return new Other().total(left);\n    }\n}\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"]
+    },
+    {
+      "id": "java-shadow",
+      "language": "java",
+      "feature": "parameter uses the method name",
+      "files": {
+        "Target.java": "package p;\npublic class Target {\n    public static int total(int value) {\n        return value;\n    }\n}\n",
+        "Use.java": "package p;\npublic class Use {\n    public int run(int total) {\n        return total;\n    }\n\n    public int direct() {\n        return Target.total(1);\n    }\n}\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:8"]
+    },
+    {
+      "id": "java-string",
+      "language": "java",
+      "feature": "identifier in a string",
+      "files": {
+        "Target.java": "package p;\npublic class Target {\n    public static int total(int value) {\n        return value;\n    }\n}\n",
+        "Use.java": "package p;\npublic class Use {\n    public int run() {\n        String message = \"total\";\n        return Target.total(message.length());\n    }\n}\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:5"]
+    },
+    {
+      "id": "java-comment-marker",
+      "language": "java",
+      "feature": "comment marker inside a string before a real call",
+      "files": {
+        "Target.java": "package p;\npublic class Target {\n    public static int total(int value) {\n        return value;\n    }\n}\n",
+        "Use.java": "package p;\npublic class Use {\n    public int run() {\n        String marker = \"//\"; return Target.total(marker.length());\n    }\n}\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"]
+    },
+    {
+      "id": "java-static-import",
+      "language": "java",
+      "feature": "static import and an unqualified call",
+      "files": {
+        "Target.java": "package p;\npublic class Target {\n    public static int total(int value) {\n        return value;\n    }\n}\n",
+        "Use.java": "package p;\nimport static p.Target.total;\npublic class Use {\n    public int run() {\n        return total(1);\n    }\n}\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:2", "Use.java:5"]
+    },
+    {
+      "id": "java-inherited",
+      "language": "java",
+      "feature": "inherited method without an override",
+      "files": {
+        "Target.java": "package p;\npublic class Target {\n    public int total(int value) {\n        return value;\n    }\n}\n",
+        "Child.java": "package p;\npublic class Child extends Target {\n}\n",
+        "Use.java": "package p;\npublic class Use {\n    public int run() {\n        return new Child().total(1);\n    }\n}\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"]
+    },
+    {
+      "id": "java-overload",
+      "language": "java",
+      "feature": "a different overload is not the selected int method",
+      "files": {
+        "Target.java": "package p;\npublic class Target {\n    public static int total(int value) {\n        return value;\n    }\n\n    public static int total(String text) {\n        return text.length();\n    }\n}\n",
+        "Use.java": "package p;\npublic class Use {\n    public int run() {\n        int left = Target.total(1);\n        return left + Target.total(\"one\");\n    }\n}\n"
+      },
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"]
+    }
+  ]
+}

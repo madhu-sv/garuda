@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { referenceWarning } from "../knowledge/accuracy.js";
 import type { CallerResult, FileNode, ReferenceHit, SymbolHit } from "../knowledge/index.js";
 import { joinWithinLimit } from "./limits.js";
 import type { Tool, ToolContext } from "./types.js";
 
 /**
  * Code tools backed by the local code index (JS/TS, Python, Java). They run on this machine,
- * need no approval, and understand imports, symbols and references across languages.
+ * need no approval. Reference accuracy depends on the language expert.
  */
 
 function index(context: ToolContext) {
@@ -36,7 +37,7 @@ export const findSymbolTool: Tool<z.infer<typeof findSymbolInput>, SymbolHit[]> 
   name: "find_symbol",
   description: [
     "Find where a function, class, method, variable or type is defined (JS/TS, Python, Java).",
-    "Returns path:line, kind and whether it is exported. Faster and more exact than grep for definitions.",
+    "Returns path:line, kind and whether it is exported. Java/Python declarations are extracted with heuristics.",
   ].join("\n"),
   inputSchema: findSymbolInput,
   readOnly: true,
@@ -58,9 +59,11 @@ type ReferencesOutput = Awaited<
   ReturnType<NonNullable<ToolContext["knowledge"]>["findReferences"]>
 >;
 
-export function referencesText({ definition, references, candidates }: ReferencesOutput): string {
+export function referencesText(result: ReferencesOutput): string {
+  const { definition, references, candidates } = result;
+  const warning = referenceWarning(result);
   if (definition === undefined)
-    return "No definition with this name. Check the name with find_symbol.";
+    return `${warning}No definition with this name. Check the name with find_symbol.`;
   const files = new Set(references.map((r) => r.path));
   const lines = references.map(
     (r: ReferenceHit) => `${r.path}:${r.line}  ${r.text}${r.isDefinition ? "  [definition]" : ""}`,
@@ -73,14 +76,14 @@ export function referencesText({ definition, references, candidates }: Reference
           .map((c) => `${c.path}:${c.line}`)
           .join(", ")}]`
       : "";
-  return `${head}\n${joinWithinLimit(lines).text}${others}`;
+  return `${warning}${head}\n${joinWithinLimit(lines).text}${others}`;
 }
 
 export const findReferencesTool: Tool<z.infer<typeof findReferencesInput>, ReferencesOutput> = {
   name: "find_references",
   description: [
-    "Find every use of a symbol: its definition, imports, calls and re-exports (JS/TS, Python, Java).",
-    "It follows imports and aliases, so it does not match other symbols with the same text.",
+    "Find indexed references to a symbol (JS/TS, Python, Java).",
+    "JS/TS uses language-service bindings. Java/Python identifier matching is approximate: it can include unrelated names and miss aliases or dynamic uses.",
     "Use it to see who calls a function, to plan a rename, or to find unused code.",
   ].join("\n"),
   inputSchema: findReferencesInput,
@@ -110,12 +113,14 @@ const findCallersInput = z.object({
     .describe("Maximum number of callers to return (default: 50)."),
 });
 
-export function callersText({ definition, callers, candidates }: CallerResult): string {
+export function callersText(result: CallerResult): string {
+  const { definition, callers, candidates } = result;
+  const warning = referenceWarning(result);
   if (definition === undefined) {
-    return "No definition with this name. Check the name with find_symbol.";
+    return `${warning}No definition with this name. Check the name with find_symbol.`;
   }
   if (callers.length === 0) {
-    return `${definition.name} (${definition.path}:${definition.line}) has no callers found in the codebase.`;
+    return `${warning}${definition.name} (${definition.path}:${definition.line}) has no callers found in indexed code.`;
   }
   const lines = callers.map(
     (c) =>
@@ -129,14 +134,14 @@ export function callersText({ definition, callers, candidates }: CallerResult): 
           .map((c) => `${c.path}:${c.line}`)
           .join(", ")}]`
       : "";
-  return `${head}\n${joinWithinLimit(lines).text}${others}`;
+  return `${warning}${head}\n${joinWithinLimit(lines).text}${others}`;
 }
 
 export const findCallersTool: Tool<z.infer<typeof findCallersInput>, CallerResult> = {
   name: "find_callers",
   description: [
-    "Find all functions, methods, classes, or modules that invoke/call a given symbol (JS/TS, Python, Java).",
-    "Traces call sites and resolves enclosing caller scope. Faster and more structural than grep for call hierarchies.",
+    "Find indexed caller candidates and their enclosing scopes (JS/TS, Python, Java).",
+    "Java/Python results are approximate identifier matches, including matches that may not be calls. Validate before planning changes.",
   ].join("\n"),
   inputSchema: findCallersInput,
   readOnly: true,

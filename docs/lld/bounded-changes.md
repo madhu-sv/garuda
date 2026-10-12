@@ -1,7 +1,6 @@
 # Bounded changes (0.17, planned)
 
-Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patches 0189, 0190); T9, the shared budget (patches 0191, 0192). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. The
-rest is planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
+Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patches 0189, 0190); T9, the shared budget (patches 0191, 0192). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. T10 is implemented by this patch (labels and the 60-query LSP measurement); T5 remains planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
 2026-10-10). The patch plan is at the end. Each section has decisions, a threat model, a default and
 tests.
 
@@ -370,25 +369,33 @@ Tests and local validation are recorded in
 
 ## T10: approximate code-intelligence results
 
-### Behaviour
+### Behaviour (implemented)
 
-- `ReferenceHit` gets `exact: boolean`. TypeScript references (from the compiler) are exact. Java and
-  Python references (identifier matches) are not.
-- `find_references`, `find_callers` and `impact_analysis` start their output with one line when any
-  hit is approximate: "Approximate: these are name matches, not resolved symbols. Check each one."
-- The chat shows `≈` before approximate results.
+Java/Python experts return `approximate: true` on the result envelope. The index propagates it
+through references, callers and impact, including empty results and unresolved symbols. Model
+output starts with an approximate warning; chat adds `≈`. Impact risk is labelled heuristic.
 
-### Measurement
+Implementation refinement: this replaces the proposed per-hit `exact` field. A result envelope
+also warns on zero hits and derived results, without asserting `exact: true` for every TypeScript
+lookup or breaking existing plugins. Absence of the flag is not a perfect-accuracy claim.
 
-A fixed sample: 30 symbols in the generated shopkit Java project and 30 in a Python sample. The
-ground truth comes from a language server (jdtls, pyright), recorded once as a JSON fixture. Garuda
-publishes precision and recall per language in the validation record. A test fails when the numbers
-drop below the recorded values.
+### Measurement (implemented)
+
+Thirty symbols in a generated shopkit Java project and thirty in Python are frozen in JSON, with
+reference locations captured from jdtls 1.61.0 and pyright 1.1.406. Tests score unique `path:line`
+sites, excluding the selected declaration, and reject a lower precision/recall or stale evidence.
+Two fresh captures agree. The supplementary manual alias sample is separate.
+
+See [the evidence record](../quality-baseline/code-intelligence-baseline.md) for denominators,
+limits, toolchain and reproduction. Java precision/recall: 61.1%/91.7%; Python: 71.4%/93.8%.
+These synthetic, template-based measurements do not establish real-repository accuracy.
 
 ### Tests
 
-- Java and Python hits carry `exact: false`; TypeScript hits carry `exact: true`.
-- The tool output has the approximate line only when needed.
+- Java/Python metadata reaches model tools and chat, including missing/empty results.
+- TypeScript results in TS-only and mixed projects do not inherit the warning.
+- Truncation keeps the warning; malformed/stale/incomplete oracle evidence fails validation.
+- All 60 queries reproduce the recorded report; the scorer handles duplicates and empty predictions.
 
 ## Docs to change with each patch
 
@@ -411,7 +418,7 @@ claims from T1.
 | 0190 | T6, T1 | Third review: scope bypasses (outside_sandbox, links, the test command); claims. |
 | 0191 | T9 | The shared budget. |
 | 0192 | T9 | Review of 31aab17: wrap-up request, provider retries, the floor, session charges, /compact. |
-| 0193 | T10 | Approximate labels; the measured numbers. |
+| 0193 | T10 | Approximate labels; frozen 60-query LSP oracle and measured precision/recall. Implemented; validation in the evidence record. |
 | 0194 | T5 | Staging backends and the change list (no question yet). |
 | 0195 | T5 | The question, apply, discard, conflict check, undo. |
 | 0196 | T5 | Docs, the live tests on macOS and Linux, the measured costs. |

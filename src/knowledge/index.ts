@@ -21,6 +21,7 @@ import type {
   LanguagePlugin,
   LanguageStatus,
   ReferenceHit,
+  ReferenceResult,
   SymbolHit,
 } from "./types.js";
 import { createTypeScriptExpert } from "./typescript.js";
@@ -35,6 +36,7 @@ export type {
   LanguagePlugin,
   LanguageStatus,
   ReferenceHit,
+  ReferenceResult,
   SymbolHit,
 } from "./types.js";
 
@@ -124,37 +126,47 @@ export class KnowledgeIndex {
     return hits.slice(0, limit);
   }
 
-  async findReferences(
-    name: string,
-    inFile?: string,
-    limit = 200,
-  ): Promise<{ definition?: SymbolHit; references: ReferenceHit[]; candidates: SymbolHit[] }> {
+  async findReferences(name: string, inFile?: string, limit = 200): Promise<ReferenceResult> {
+    let approximate = false;
     for (const { expert, files } of await this.byExpert()) {
       const result = expert.findReferences(files, name, inFile, limit);
+      const warned = result.approximate === true || expert.referencesApproximate === true;
+      if (
+        warned &&
+        files.length > 0 &&
+        (inFile === undefined || expert.extensions.some((ext) => inFile.endsWith(ext)))
+      )
+        approximate = true;
       if (result.definition !== undefined) {
         return {
           definition: result.definition,
           references: result.references,
           candidates: result.candidates,
+          ...(warned ? { approximate: true as const } : {}),
         };
       }
     }
-    return { references: [], candidates: [] };
+    return {
+      references: [],
+      candidates: [],
+      ...(approximate ? { approximate: true as const } : {}),
+    };
   }
 
   async findCallers(name: string, inFile?: string, limit = 50): Promise<CallerResult> {
-    const { definition, references, candidates } = await this.findReferences(
+    const { definition, references, candidates, approximate } = await this.findReferences(
       name,
       inFile,
       limit * 4,
     );
+    const accuracy = approximate ? { approximate: true as const } : {};
     if (definition === undefined) {
-      return { callers: [], candidates };
+      return { callers: [], candidates, ...accuracy };
     }
 
     const callSites = references.filter((r) => !r.isDefinition);
     if (callSites.length === 0) {
-      return { definition, callers: [], candidates };
+      return { definition, callers: [], candidates, ...accuracy };
     }
 
     const sitesByFile = new Map<string, ReferenceHit[]>();
@@ -208,7 +220,7 @@ export class KnowledgeIndex {
       if (callers.length >= limit) break;
     }
 
-    return { definition, callers, candidates };
+    return { definition, callers, candidates, ...accuracy };
   }
 
   async impactAnalysis(target: string): Promise<ImpactResult> {
@@ -251,11 +263,18 @@ export class KnowledgeIndex {
         dependentFiles: [],
         callers: [],
         affectedTests: [],
+        ...(byExpert.some(({ expert, files }) => files.length > 0 && expert.referencesApproximate)
+          ? { approximate: true as const }
+          : {}),
         // Not "low" (G08): nothing is known, so nothing is safe to change.
         riskLevel: "unknown",
         summary: `Target "${target}" was not found in the indexed codebase: the risk is unknown.`,
       };
     }
+
+    let approximate = byExpert.some(
+      ({ expert, files }) => files.includes(resolvedPath) && expert.referencesApproximate,
+    );
 
     // 2. Definitions
     let definitions: SymbolHit[] = [];
@@ -274,13 +293,16 @@ export class KnowledgeIndex {
     const callers: CallerHit[] = [];
 
     if (targetKind === "symbol") {
-      const { references } = await this.findReferences(cleanTarget, resolvedPath, 200);
+      const refs = await this.findReferences(cleanTarget, resolvedPath, 200);
+      approximate ||= refs.approximate === true;
+      const { references } = refs;
       for (const ref of references) {
         if (!ref.isDefinition && ref.path !== resolvedPath) {
           dependentFilesSet.add(ref.path);
         }
       }
       const callerRes = await this.findCallers(cleanTarget, resolvedPath, 50);
+      approximate ||= callerRes.approximate === true;
       callers.push(...callerRes.callers);
     } else if (resolvedPath !== undefined) {
       const targetFilePath = resolvedPath;
@@ -299,7 +321,9 @@ export class KnowledgeIndex {
       // Check references to exported symbols of this file
       const exportedSymbols = definitions.filter((s) => s.exported);
       for (const sym of exportedSymbols.slice(0, 10)) {
-        const { references } = await this.findReferences(sym.name, targetFilePath, 100);
+        const refs = await this.findReferences(sym.name, targetFilePath, 100);
+        approximate ||= refs.approximate === true;
+        const { references } = refs;
         for (const ref of references) {
           if (!ref.isDefinition && ref.path !== targetFilePath) {
             dependentFilesSet.add(ref.path);
@@ -307,6 +331,7 @@ export class KnowledgeIndex {
         }
         if (sym.kind === "function" || sym.kind === "method" || sym.kind === "class") {
           const symCallers = await this.findCallers(sym.name, targetFilePath, 10);
+          approximate ||= symCallers.approximate === true;
           for (const c of symCallers.callers) {
             if (
               !callers.some(
@@ -364,9 +389,11 @@ export class KnowledgeIndex {
           : "low";
 
     const summaryParts: string[] = [
-      `Target "${target}" (${targetKind}${resolvedPath ? `: ${resolvedPath}` : ""}) has ${riskLevel.toUpperCase()} blast radius.`,
-      `Direct dependents: ${dependentFiles.length} file(s). Known caller sites: ${callers.length}.`,
+      `Target "${target}" (${targetKind}${resolvedPath ? `: ${resolvedPath}` : ""}) has ${riskLevel.toUpperCase()}${approximate ? " estimated" : ""} blast radius.`,
+      `Direct dependents: ${dependentFiles.length} file(s). ${approximate ? "Candidate" : "Known"} caller sites: ${callers.length}.`,
     ];
+    if (approximate)
+      summaryParts.push("References and callers are approximate; verify before planning changes.");
     if (affectedTests.length > 0) {
       summaryParts.push(`Recommended test suite: ${affectedTests.join(", ")}`);
     } else {
@@ -382,6 +409,7 @@ export class KnowledgeIndex {
       callers,
       affectedTests,
       riskLevel,
+      ...(approximate ? { approximate: true as const } : {}),
       summary: summaryParts.join("\n"),
     };
   }

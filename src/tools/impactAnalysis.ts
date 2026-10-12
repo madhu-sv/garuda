@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { referenceWarning } from "../knowledge/accuracy.js";
 import type { ImpactResult, SymbolHit } from "../knowledge/index.js";
 import { joinWithinLimit } from "./limits.js";
 import type { Tool, ToolContext } from "./types.js";
 
 /**
- * Semantic code intelligence tools: impact analysis and structural AST querying
+ * Local code index tools: impact analysis and declaration querying
  * across JS/TS, Python, and Java.
  */
 
@@ -28,12 +29,16 @@ const impactAnalysisInput = z.object({
 
 export function impactAnalysisText(result: ImpactResult): string {
   const lines: string[] = [];
+  const warning = referenceWarning(result);
+  if (warning) lines.push(warning.trimEnd());
   const targetLabel = result.resolvedPath
     ? `${result.target} (${result.targetKind}: ${result.resolvedPath})`
     : `${result.target} (${result.targetKind})`;
 
   lines.push(`Impact Analysis for ${targetLabel}`);
-  lines.push(`Risk Level: [${result.riskLevel.toUpperCase()}]`);
+  lines.push(
+    `Risk Level: [${result.riskLevel.toUpperCase()}]${result.approximate ? " (heuristic; references are approximate)" : ""}`,
+  );
   lines.push("");
 
   if (result.definitions.length > 0) {
@@ -49,7 +54,7 @@ export function impactAnalysisText(result: ImpactResult): string {
 
   lines.push(`Direct Dependents (${result.dependentFiles.length} file(s)):`);
   if (result.dependentFiles.length === 0) {
-    lines.push("  None detected (leaf module or unreferenced symbol).");
+    lines.push("  None detected in indexed code.");
   } else {
     for (const file of result.dependentFiles.slice(0, 20)) {
       lines.push(`  - ${file}`);
@@ -94,6 +99,7 @@ export const impactAnalysisTool: Tool<z.infer<typeof impactAnalysisInput>, Impac
   description: [
     "Perform blast radius & dependency impact analysis for a file or symbol (JS/TS, Python, Java).",
     "Discovers direct dependents, caller hierarchies, risk assessment, and recommended test suites to run.",
+    "Java/Python references and callers are approximate name matches; the risk score is heuristic. Verify before changing code.",
   ].join("\n"),
   inputSchema: impactAnalysisInput,
   readOnly: true,
@@ -143,7 +149,7 @@ export function astQueryText(hits: SymbolHit[]): string {
 export const astQueryTool: Tool<z.infer<typeof astQueryInput>, SymbolHit[]> = {
   name: "ast_query",
   description: [
-    "Perform structural AST queries across the codebase (JS/TS, Python, Java).",
+    "Filter parsed symbol declarations across the codebase (JS/TS, Python, Java). Java/Python extraction uses heuristics.",
     "Filter by symbol kind, exported visibility, enclosing class/container, and wildcard patterns.",
   ].join("\n"),
   inputSchema: astQueryInput,

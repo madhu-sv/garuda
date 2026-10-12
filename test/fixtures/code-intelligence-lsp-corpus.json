@@ -1,0 +1,670 @@
+{
+  "schemaVersion": 1,
+  "id": "shopkit-java-python-lsp-v1",
+  "limit": 1000,
+  "unit": "unique project-relative path:line, excluding the selected declaration",
+  "selection": "30 symbols per language, frozen before LSP capture; ten feature templates, three retail names per template; synthetic, not a representative real-repository estimate",
+  "projects": [
+    {
+      "language": "java",
+      "files": {
+        "src/shopkit/case00/Target00.java": "package shopkit.case00;\npublic class Target00 {\n  public static int subtotal(int value) { return value; }\n}\n",
+        "src/shopkit/case00/Use00.java": "package shopkit.case00;\npublic class Use00 {\n  int run() { return Target00.subtotal(1); }\n}\n",
+        "src/shopkit/case01/Target01.java": "package shopkit.case01;\npublic class Target01 {\n  public static int tax(int value) { return value; }\n}\n",
+        "src/shopkit/case01/Use01.java": "package shopkit.case01;\nimport static shopkit.case01.Target01.tax;\npublic class Use01 {\n  int run() { return tax(1); }\n}\n",
+        "src/shopkit/case02/Target02.java": "package shopkit.case02;\npublic class Target02 {\n  public static int shipping(int value) { return value; }\n}\n",
+        "src/shopkit/case02/Other02.java": "package shopkit.case02;\npublic class Other02 { public static int shipping(int v) { return v; } }\n",
+        "src/shopkit/case02/Use02.java": "package shopkit.case02;\npublic class Use02 {\n  int run() { return Target02.shipping(1); }\n  int unrelated() { return Other02.shipping(2); }\n}\n",
+        "src/shopkit/case03/Target03.java": "package shopkit.case03;\npublic class Target03 {\n  public static int discount(int value) { return value; }\n}\n",
+        "src/shopkit/case03/Use03.java": "package shopkit.case03;\npublic class Use03 {\n  int run() { return Target03.discount(1); }\n  int shadow(int discount) { return discount; }\n}\n",
+        "src/shopkit/case04/Target04.java": "package shopkit.case04;\npublic class Target04 {\n  public static int invoice(int value) { return value; }\n}\n",
+        "src/shopkit/case04/Use04.java": "package shopkit.case04;\npublic class Use04 {\n  int run() { return Target04.invoice(1); }\n  String text = \"invoice\"; // invoice\n}\n",
+        "src/shopkit/case05/Target05.java": "package shopkit.case05;\npublic class Target05 {\n  public static int refund(int value) { return value; }\n}\n",
+        "src/shopkit/case05/Use05.java": "package shopkit.case05;\npublic class Use05 {\n  int run() { String text = \"http://shop\"; return Target05.refund(1); }\n}\n",
+        "src/shopkit/case06/Target06.java": "package shopkit.case06;\npublic class Target06 {\n  public int stock(int value) { return value; }\n}\n",
+        "src/shopkit/case06/Sub06.java": "package shopkit.case06;\npublic class Sub06 extends Target06 {}\n",
+        "src/shopkit/case06/Use06.java": "package shopkit.case06;\npublic class Use06 {\n  int run() { return new Sub06().stock(1); }\n}\n",
+        "src/shopkit/case07/Target07.java": "package shopkit.case07;\npublic class Target07 {\n  public static int reorder(int value) { return value; }\n  public static int reorder(String value) { return value.length(); }\n}\n",
+        "src/shopkit/case07/Use07.java": "package shopkit.case07;\npublic class Use07 {\n  int run() { return Target07.reorder(1); }\n  int overload() { return Target07.reorder(\"x\"); }\n}\n",
+        "src/shopkit/case08/Target08.java": "package shopkit.case08;\npublic class Target08 {\n  public static int reserve(int value) { return value; }\n}\n",
+        "src/shopkit/case08/Use08.java": "package shopkit.case08;\nimport java.util.function.IntUnaryOperator;\npublic class Use08 {\n  int run() { return Target08.reserve(1); }\n  IntUnaryOperator callback = Target08::reserve;\n}\n",
+        "src/shopkit/case09/Target09.java": "package shopkit.case09;\npublic class Target09 {\n  public static int checkout(int value) { return value; }\n}\n",
+        "src/shopkit/case09/Use09.java": "package shopkit.case09;\npublic class Use09 {\n  int run() { return Target09.checkout(1); }\n  int nested() { return Target09.checkout(Target09.checkout(2)); }\n}\n",
+        "src/shopkit/case10/Target10.java": "package shopkit.case10;\npublic class Target10 {\n  public static int credit(int value) { return value; }\n}\n",
+        "src/shopkit/case10/Use10.java": "package shopkit.case10;\npublic class Use10 {\n  int run() { return Target10.credit(1); }\n}\n",
+        "src/shopkit/case11/Target11.java": "package shopkit.case11;\npublic class Target11 {\n  public static int debit(int value) { return value; }\n}\n",
+        "src/shopkit/case11/Use11.java": "package shopkit.case11;\nimport static shopkit.case11.Target11.debit;\npublic class Use11 {\n  int run() { return debit(1); }\n}\n",
+        "src/shopkit/case12/Target12.java": "package shopkit.case12;\npublic class Target12 {\n  public static int balance(int value) { return value; }\n}\n",
+        "src/shopkit/case12/Other12.java": "package shopkit.case12;\npublic class Other12 { public static int balance(int v) { return v; } }\n",
+        "src/shopkit/case12/Use12.java": "package shopkit.case12;\npublic class Use12 {\n  int run() { return Target12.balance(1); }\n  int unrelated() { return Other12.balance(2); }\n}\n",
+        "src/shopkit/case13/Target13.java": "package shopkit.case13;\npublic class Target13 {\n  public static int receipt(int value) { return value; }\n}\n",
+        "src/shopkit/case13/Use13.java": "package shopkit.case13;\npublic class Use13 {\n  int run() { return Target13.receipt(1); }\n  int shadow(int receipt) { return receipt; }\n}\n",
+        "src/shopkit/case14/Target14.java": "package shopkit.case14;\npublic class Target14 {\n  public static int coupon(int value) { return value; }\n}\n",
+        "src/shopkit/case14/Use14.java": "package shopkit.case14;\npublic class Use14 {\n  int run() { return Target14.coupon(1); }\n  String text = \"coupon\"; // coupon\n}\n",
+        "src/shopkit/case15/Target15.java": "package shopkit.case15;\npublic class Target15 {\n  public static int catalog(int value) { return value; }\n}\n",
+        "src/shopkit/case15/Use15.java": "package shopkit.case15;\npublic class Use15 {\n  int run() { String text = \"http://shop\"; return Target15.catalog(1); }\n}\n",
+        "src/shopkit/case16/Target16.java": "package shopkit.case16;\npublic class Target16 {\n  public int price(int value) { return value; }\n}\n",
+        "src/shopkit/case16/Sub16.java": "package shopkit.case16;\npublic class Sub16 extends Target16 {}\n",
+        "src/shopkit/case16/Use16.java": "package shopkit.case16;\npublic class Use16 {\n  int run() { return new Sub16().price(1); }\n}\n",
+        "src/shopkit/case17/Target17.java": "package shopkit.case17;\npublic class Target17 {\n  public static int quantity(int value) { return value; }\n  public static int quantity(String value) { return value.length(); }\n}\n",
+        "src/shopkit/case17/Use17.java": "package shopkit.case17;\npublic class Use17 {\n  int run() { return Target17.quantity(1); }\n  int overload() { return Target17.quantity(\"x\"); }\n}\n",
+        "src/shopkit/case18/Target18.java": "package shopkit.case18;\npublic class Target18 {\n  public static int delivery(int value) { return value; }\n}\n",
+        "src/shopkit/case18/Use18.java": "package shopkit.case18;\nimport java.util.function.IntUnaryOperator;\npublic class Use18 {\n  int run() { return Target18.delivery(1); }\n  IntUnaryOperator callback = Target18::delivery;\n}\n",
+        "src/shopkit/case19/Target19.java": "package shopkit.case19;\npublic class Target19 {\n  public static int payment(int value) { return value; }\n}\n",
+        "src/shopkit/case19/Use19.java": "package shopkit.case19;\npublic class Use19 {\n  int run() { return Target19.payment(1); }\n  int nested() { return Target19.payment(Target19.payment(2)); }\n}\n",
+        "src/shopkit/case20/Target20.java": "package shopkit.case20;\npublic class Target20 {\n  public static int cancel(int value) { return value; }\n}\n",
+        "src/shopkit/case20/Use20.java": "package shopkit.case20;\npublic class Use20 {\n  int run() { return Target20.cancel(1); }\n}\n",
+        "src/shopkit/case21/Target21.java": "package shopkit.case21;\npublic class Target21 {\n  public static int returnItem(int value) { return value; }\n}\n",
+        "src/shopkit/case21/Use21.java": "package shopkit.case21;\nimport static shopkit.case21.Target21.returnItem;\npublic class Use21 {\n  int run() { return returnItem(1); }\n}\n",
+        "src/shopkit/case22/Target22.java": "package shopkit.case22;\npublic class Target22 {\n  public static int exchange(int value) { return value; }\n}\n",
+        "src/shopkit/case22/Other22.java": "package shopkit.case22;\npublic class Other22 { public static int exchange(int v) { return v; } }\n",
+        "src/shopkit/case22/Use22.java": "package shopkit.case22;\npublic class Use22 {\n  int run() { return Target22.exchange(1); }\n  int unrelated() { return Other22.exchange(2); }\n}\n",
+        "src/shopkit/case23/Target23.java": "package shopkit.case23;\npublic class Target23 {\n  public static int loyalty(int value) { return value; }\n}\n",
+        "src/shopkit/case23/Use23.java": "package shopkit.case23;\npublic class Use23 {\n  int run() { return Target23.loyalty(1); }\n  int shadow(int loyalty) { return loyalty; }\n}\n",
+        "src/shopkit/case24/Target24.java": "package shopkit.case24;\npublic class Target24 {\n  public static int reward(int value) { return value; }\n}\n",
+        "src/shopkit/case24/Use24.java": "package shopkit.case24;\npublic class Use24 {\n  int run() { return Target24.reward(1); }\n  String text = \"reward\"; // reward\n}\n",
+        "src/shopkit/case25/Target25.java": "package shopkit.case25;\npublic class Target25 {\n  public static int warehouse(int value) { return value; }\n}\n",
+        "src/shopkit/case25/Use25.java": "package shopkit.case25;\npublic class Use25 {\n  int run() { String text = \"http://shop\"; return Target25.warehouse(1); }\n}\n",
+        "src/shopkit/case26/Target26.java": "package shopkit.case26;\npublic class Target26 {\n  public int supplier(int value) { return value; }\n}\n",
+        "src/shopkit/case26/Sub26.java": "package shopkit.case26;\npublic class Sub26 extends Target26 {}\n",
+        "src/shopkit/case26/Use26.java": "package shopkit.case26;\npublic class Use26 {\n  int run() { return new Sub26().supplier(1); }\n}\n",
+        "src/shopkit/case27/Target27.java": "package shopkit.case27;\npublic class Target27 {\n  public static int customer(int value) { return value; }\n  public static int customer(String value) { return value.length(); }\n}\n",
+        "src/shopkit/case27/Use27.java": "package shopkit.case27;\npublic class Use27 {\n  int run() { return Target27.customer(1); }\n  int overload() { return Target27.customer(\"x\"); }\n}\n",
+        "src/shopkit/case28/Target28.java": "package shopkit.case28;\npublic class Target28 {\n  public static int basket(int value) { return value; }\n}\n",
+        "src/shopkit/case28/Use28.java": "package shopkit.case28;\nimport java.util.function.IntUnaryOperator;\npublic class Use28 {\n  int run() { return Target28.basket(1); }\n  IntUnaryOperator callback = Target28::basket;\n}\n",
+        "src/shopkit/case29/Target29.java": "package shopkit.case29;\npublic class Target29 {\n  public static int order(int value) { return value; }\n}\n",
+        "src/shopkit/case29/Use29.java": "package shopkit.case29;\npublic class Use29 {\n  int run() { return Target29.order(1); }\n  int nested() { return Target29.order(Target29.order(2)); }\n}\n",
+        ".project": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<projectDescription><name>shopkit-reference-sample</name><comment/><projects/><buildSpec><buildCommand><name>org.eclipse.jdt.core.javabuilder</name><arguments/></buildCommand></buildSpec><natures><nature>org.eclipse.jdt.core.javanature</nature></natures></projectDescription>\n",
+        ".classpath": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<classpath><classpathentry kind=\"src\" path=\"src\"/><classpathentry kind=\"con\" path=\"org.eclipse.jdt.launching.JRE_CONTAINER\"/><classpathentry kind=\"output\" path=\"bin\"/></classpath>\n"
+      },
+      "queries": [
+        {
+          "id": "java-01",
+          "feature": "qualified call",
+          "name": "subtotal",
+          "path": "src/shopkit/case00/Target00.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-02",
+          "feature": "static import",
+          "name": "tax",
+          "path": "src/shopkit/case01/Target01.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-03",
+          "feature": "receiver homonym",
+          "name": "shipping",
+          "path": "src/shopkit/case02/Target02.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-04",
+          "feature": "parameter shadow",
+          "name": "discount",
+          "path": "src/shopkit/case03/Target03.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-05",
+          "feature": "string and comment",
+          "name": "invoice",
+          "path": "src/shopkit/case04/Target04.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-06",
+          "feature": "slash inside string before call",
+          "name": "refund",
+          "path": "src/shopkit/case05/Target05.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-07",
+          "feature": "inherited method",
+          "name": "stock",
+          "path": "src/shopkit/case06/Target06.java",
+          "definitionLine": 3,
+          "character": 13
+        },
+        {
+          "id": "java-08",
+          "feature": "overload selection",
+          "name": "reorder",
+          "path": "src/shopkit/case07/Target07.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-09",
+          "feature": "method reference",
+          "name": "reserve",
+          "path": "src/shopkit/case08/Target08.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-10",
+          "feature": "multiple uses on one line",
+          "name": "checkout",
+          "path": "src/shopkit/case09/Target09.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-11",
+          "feature": "qualified call",
+          "name": "credit",
+          "path": "src/shopkit/case10/Target10.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-12",
+          "feature": "static import",
+          "name": "debit",
+          "path": "src/shopkit/case11/Target11.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-13",
+          "feature": "receiver homonym",
+          "name": "balance",
+          "path": "src/shopkit/case12/Target12.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-14",
+          "feature": "parameter shadow",
+          "name": "receipt",
+          "path": "src/shopkit/case13/Target13.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-15",
+          "feature": "string and comment",
+          "name": "coupon",
+          "path": "src/shopkit/case14/Target14.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-16",
+          "feature": "slash inside string before call",
+          "name": "catalog",
+          "path": "src/shopkit/case15/Target15.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-17",
+          "feature": "inherited method",
+          "name": "price",
+          "path": "src/shopkit/case16/Target16.java",
+          "definitionLine": 3,
+          "character": 13
+        },
+        {
+          "id": "java-18",
+          "feature": "overload selection",
+          "name": "quantity",
+          "path": "src/shopkit/case17/Target17.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-19",
+          "feature": "method reference",
+          "name": "delivery",
+          "path": "src/shopkit/case18/Target18.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-20",
+          "feature": "multiple uses on one line",
+          "name": "payment",
+          "path": "src/shopkit/case19/Target19.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-21",
+          "feature": "qualified call",
+          "name": "cancel",
+          "path": "src/shopkit/case20/Target20.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-22",
+          "feature": "static import",
+          "name": "returnItem",
+          "path": "src/shopkit/case21/Target21.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-23",
+          "feature": "receiver homonym",
+          "name": "exchange",
+          "path": "src/shopkit/case22/Target22.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-24",
+          "feature": "parameter shadow",
+          "name": "loyalty",
+          "path": "src/shopkit/case23/Target23.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-25",
+          "feature": "string and comment",
+          "name": "reward",
+          "path": "src/shopkit/case24/Target24.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-26",
+          "feature": "slash inside string before call",
+          "name": "warehouse",
+          "path": "src/shopkit/case25/Target25.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-27",
+          "feature": "inherited method",
+          "name": "supplier",
+          "path": "src/shopkit/case26/Target26.java",
+          "definitionLine": 3,
+          "character": 13
+        },
+        {
+          "id": "java-28",
+          "feature": "overload selection",
+          "name": "customer",
+          "path": "src/shopkit/case27/Target27.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-29",
+          "feature": "method reference",
+          "name": "basket",
+          "path": "src/shopkit/case28/Target28.java",
+          "definitionLine": 3,
+          "character": 20
+        },
+        {
+          "id": "java-30",
+          "feature": "multiple uses on one line",
+          "name": "order",
+          "path": "src/shopkit/case29/Target29.java",
+          "definitionLine": 3,
+          "character": 20
+        }
+      ]
+    },
+    {
+      "language": "python",
+      "files": {
+        "case00/__init__.py": "",
+        "case00/target.py": "def subtotal(value: int) -> int:\n    return value\n",
+        "case00/use.py": "from .target import subtotal\n\ndef run():\n    return subtotal(1)\n",
+        "case01/__init__.py": "",
+        "case01/target.py": "def tax(value: int) -> int:\n    return value\n",
+        "case01/use.py": "from .target import tax as calculate\n\ndef run():\n    return calculate(1)\n",
+        "case02/__init__.py": "",
+        "case02/target.py": "def shipping(value: int) -> int:\n    return value\n",
+        "case02/use.py": "from . import target\n\ndef run():\n    return target.shipping(1)\n",
+        "case03/__init__.py": "",
+        "case03/target.py": "def discount(value: int) -> int:\n    return value\n",
+        "case03/use.py": "from . import target as pricing\n\ndef run():\n    return pricing.discount(1)\n",
+        "case04/__init__.py": "",
+        "case04/target.py": "def invoice(value: int) -> int:\n    return value\n",
+        "case04/use.py": "from .target import invoice\n\ndef run():\n    return invoice(1)\n\ndef shadow(invoice):\n    return invoice(2)\n",
+        "case05/__init__.py": "",
+        "case05/target.py": "def refund(value: int) -> int:\n    return value\n",
+        "case05/other.py": "def refund(value: int) -> int:\n    return value\n",
+        "case05/unrelated.py": "from .other import refund\nresult = refund(2)\n",
+        "case05/use.py": "from .target import refund\n\ndef run():\n    return refund(1)\n",
+        "case06/__init__.py": "",
+        "case06/target.py": "def stock(value: int) -> int:\n    return value\n",
+        "case06/use.py": "from .target import stock\n\ndef run():\n    return stock(1)\n\ntext = \"stock\"\n# stock\n",
+        "case07/__init__.py": "",
+        "case07/target.py": "def reorder(value: int) -> int:\n    return value\n",
+        "case07/use.py": "from .target import reorder\n\ndef run():\n    text = \"# shop\"; return reorder(1)\n",
+        "case08/__init__.py": "",
+        "case08/target.py": "def reserve(value: int) -> int:\n    return value\n",
+        "case08/api.py": "from .target import reserve as calculate\n",
+        "case08/use.py": "from .api import calculate\n\ndef run():\n    return calculate(1)\n",
+        "case09/__init__.py": "",
+        "case09/target.py": "def checkout(value: int) -> int:\n    return value\n",
+        "case09/use.py": "from .target import checkout\ncallback = checkout\nresult = callback(1)\n",
+        "case10/__init__.py": "",
+        "case10/target.py": "def credit(value: int) -> int:\n    return value\n",
+        "case10/use.py": "from .target import credit\n\ndef run():\n    return credit(1)\n",
+        "case11/__init__.py": "",
+        "case11/target.py": "def debit(value: int) -> int:\n    return value\n",
+        "case11/use.py": "from .target import debit as calculate\n\ndef run():\n    return calculate(1)\n",
+        "case12/__init__.py": "",
+        "case12/target.py": "def balance(value: int) -> int:\n    return value\n",
+        "case12/use.py": "from . import target\n\ndef run():\n    return target.balance(1)\n",
+        "case13/__init__.py": "",
+        "case13/target.py": "def receipt(value: int) -> int:\n    return value\n",
+        "case13/use.py": "from . import target as pricing\n\ndef run():\n    return pricing.receipt(1)\n",
+        "case14/__init__.py": "",
+        "case14/target.py": "def coupon(value: int) -> int:\n    return value\n",
+        "case14/use.py": "from .target import coupon\n\ndef run():\n    return coupon(1)\n\ndef shadow(coupon):\n    return coupon(2)\n",
+        "case15/__init__.py": "",
+        "case15/target.py": "def catalog(value: int) -> int:\n    return value\n",
+        "case15/other.py": "def catalog(value: int) -> int:\n    return value\n",
+        "case15/unrelated.py": "from .other import catalog\nresult = catalog(2)\n",
+        "case15/use.py": "from .target import catalog\n\ndef run():\n    return catalog(1)\n",
+        "case16/__init__.py": "",
+        "case16/target.py": "def price(value: int) -> int:\n    return value\n",
+        "case16/use.py": "from .target import price\n\ndef run():\n    return price(1)\n\ntext = \"price\"\n# price\n",
+        "case17/__init__.py": "",
+        "case17/target.py": "def quantity(value: int) -> int:\n    return value\n",
+        "case17/use.py": "from .target import quantity\n\ndef run():\n    text = \"# shop\"; return quantity(1)\n",
+        "case18/__init__.py": "",
+        "case18/target.py": "def delivery(value: int) -> int:\n    return value\n",
+        "case18/api.py": "from .target import delivery as calculate\n",
+        "case18/use.py": "from .api import calculate\n\ndef run():\n    return calculate(1)\n",
+        "case19/__init__.py": "",
+        "case19/target.py": "def payment(value: int) -> int:\n    return value\n",
+        "case19/use.py": "from .target import payment\ncallback = payment\nresult = callback(1)\n",
+        "case20/__init__.py": "",
+        "case20/target.py": "def cancel(value: int) -> int:\n    return value\n",
+        "case20/use.py": "from .target import cancel\n\ndef run():\n    return cancel(1)\n",
+        "case21/__init__.py": "",
+        "case21/target.py": "def returnItem(value: int) -> int:\n    return value\n",
+        "case21/use.py": "from .target import returnItem as calculate\n\ndef run():\n    return calculate(1)\n",
+        "case22/__init__.py": "",
+        "case22/target.py": "def exchange(value: int) -> int:\n    return value\n",
+        "case22/use.py": "from . import target\n\ndef run():\n    return target.exchange(1)\n",
+        "case23/__init__.py": "",
+        "case23/target.py": "def loyalty(value: int) -> int:\n    return value\n",
+        "case23/use.py": "from . import target as pricing\n\ndef run():\n    return pricing.loyalty(1)\n",
+        "case24/__init__.py": "",
+        "case24/target.py": "def reward(value: int) -> int:\n    return value\n",
+        "case24/use.py": "from .target import reward\n\ndef run():\n    return reward(1)\n\ndef shadow(reward):\n    return reward(2)\n",
+        "case25/__init__.py": "",
+        "case25/target.py": "def warehouse(value: int) -> int:\n    return value\n",
+        "case25/other.py": "def warehouse(value: int) -> int:\n    return value\n",
+        "case25/unrelated.py": "from .other import warehouse\nresult = warehouse(2)\n",
+        "case25/use.py": "from .target import warehouse\n\ndef run():\n    return warehouse(1)\n",
+        "case26/__init__.py": "",
+        "case26/target.py": "def supplier(value: int) -> int:\n    return value\n",
+        "case26/use.py": "from .target import supplier\n\ndef run():\n    return supplier(1)\n\ntext = \"supplier\"\n# supplier\n",
+        "case27/__init__.py": "",
+        "case27/target.py": "def customer(value: int) -> int:\n    return value\n",
+        "case27/use.py": "from .target import customer\n\ndef run():\n    text = \"# shop\"; return customer(1)\n",
+        "case28/__init__.py": "",
+        "case28/target.py": "def basket(value: int) -> int:\n    return value\n",
+        "case28/api.py": "from .target import basket as calculate\n",
+        "case28/use.py": "from .api import calculate\n\ndef run():\n    return calculate(1)\n",
+        "case29/__init__.py": "",
+        "case29/target.py": "def order(value: int) -> int:\n    return value\n",
+        "case29/use.py": "from .target import order\ncallback = order\nresult = callback(1)\n"
+      },
+      "queries": [
+        {
+          "id": "python-01",
+          "feature": "direct import",
+          "name": "subtotal",
+          "path": "case00/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-02",
+          "feature": "renamed import",
+          "name": "tax",
+          "path": "case01/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-03",
+          "feature": "module qualified call",
+          "name": "shipping",
+          "path": "case02/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-04",
+          "feature": "module alias",
+          "name": "discount",
+          "path": "case03/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-05",
+          "feature": "parameter shadow",
+          "name": "invoice",
+          "path": "case04/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-06",
+          "feature": "module homonym",
+          "name": "refund",
+          "path": "case05/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-07",
+          "feature": "string and comment",
+          "name": "stock",
+          "path": "case06/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-08",
+          "feature": "hash inside string before call",
+          "name": "reorder",
+          "path": "case07/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-09",
+          "feature": "reexport alias",
+          "name": "reserve",
+          "path": "case08/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-10",
+          "feature": "assigned callable",
+          "name": "checkout",
+          "path": "case09/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-11",
+          "feature": "direct import",
+          "name": "credit",
+          "path": "case10/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-12",
+          "feature": "renamed import",
+          "name": "debit",
+          "path": "case11/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-13",
+          "feature": "module qualified call",
+          "name": "balance",
+          "path": "case12/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-14",
+          "feature": "module alias",
+          "name": "receipt",
+          "path": "case13/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-15",
+          "feature": "parameter shadow",
+          "name": "coupon",
+          "path": "case14/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-16",
+          "feature": "module homonym",
+          "name": "catalog",
+          "path": "case15/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-17",
+          "feature": "string and comment",
+          "name": "price",
+          "path": "case16/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-18",
+          "feature": "hash inside string before call",
+          "name": "quantity",
+          "path": "case17/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-19",
+          "feature": "reexport alias",
+          "name": "delivery",
+          "path": "case18/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-20",
+          "feature": "assigned callable",
+          "name": "payment",
+          "path": "case19/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-21",
+          "feature": "direct import",
+          "name": "cancel",
+          "path": "case20/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-22",
+          "feature": "renamed import",
+          "name": "returnItem",
+          "path": "case21/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-23",
+          "feature": "module qualified call",
+          "name": "exchange",
+          "path": "case22/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-24",
+          "feature": "module alias",
+          "name": "loyalty",
+          "path": "case23/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-25",
+          "feature": "parameter shadow",
+          "name": "reward",
+          "path": "case24/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-26",
+          "feature": "module homonym",
+          "name": "warehouse",
+          "path": "case25/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-27",
+          "feature": "string and comment",
+          "name": "supplier",
+          "path": "case26/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-28",
+          "feature": "hash inside string before call",
+          "name": "customer",
+          "path": "case27/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-29",
+          "feature": "reexport alias",
+          "name": "basket",
+          "path": "case28/target.py",
+          "definitionLine": 1,
+          "character": 4
+        },
+        {
+          "id": "python-30",
+          "feature": "assigned callable",
+          "name": "order",
+          "path": "case29/target.py",
+          "definitionLine": 1,
+          "character": 4
+        }
+      ]
+    }
+  ]
+}

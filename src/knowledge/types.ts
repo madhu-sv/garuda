@@ -24,6 +24,17 @@ export interface ReferenceHit {
   isDefinition: boolean;
 }
 
+/** Present when reference matches do not resolve symbol bindings. Absence makes no accuracy claim. */
+export interface ReferenceAccuracy {
+  approximate?: true;
+}
+
+export interface ReferenceResult extends ReferenceAccuracy {
+  definition?: SymbolHit | undefined;
+  references: ReferenceHit[];
+  candidates: SymbolHit[];
+}
+
 export interface CallerHit {
   callerName: string;
   callerKind: string;
@@ -33,13 +44,13 @@ export interface CallerHit {
   callText: string;
 }
 
-export interface CallerResult {
+export interface CallerResult extends ReferenceAccuracy {
   definition?: SymbolHit | undefined;
   callers: CallerHit[];
   candidates: SymbolHit[];
 }
 
-export interface ImpactResult {
+export interface ImpactResult extends ReferenceAccuracy {
   target: string;
   targetKind: "file" | "symbol";
   resolvedPath?: string | undefined;
@@ -85,6 +96,8 @@ export interface FileNode {
 export interface LanguageExpert {
   readonly id: string;
   readonly extensions: readonly string[];
+  /** Identifier matching rather than resolved references; consumers must preserve its warning. */
+  readonly referencesApproximate?: true;
   /** Parse one file: exports and imports. Cheap; the index caches it by content hash. */
   summarise(path: string, content: string): FileNode;
   /** Definitions whose name matches `query`. */
@@ -95,11 +108,7 @@ export interface LanguageExpert {
     name: string,
     inFile: string | undefined,
     limit: number,
-  ): {
-    definition: SymbolHit | undefined;
-    references: ReferenceHit[];
-    candidates: SymbolHit[];
-  };
+  ): ReferenceResult;
 }
 
 export type ExpertFactory = (root: string) => Promise<LanguageExpert> | LanguageExpert;

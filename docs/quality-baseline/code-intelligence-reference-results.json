@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "java-python-references-v1",
+  "corpusSha256": "d38dfe06aee88fa1ce4f4d47fc9d1b0128aba00e07410e8591cca9260f2e039d",
+  "measuredSources": [
+    {
+      "path": "src/knowledge/index.ts",
+      "sha256": "4c16b3e7bc7f85eb970a6c9f7598985fe0902b252a4423e796a675f73691ea2d"
+    },
+    {
+      "path": "src/knowledge/java.ts",
+      "sha256": "8c2d8f65e6a80a3f9cb333e500f95aacccdc7918c10e9fe9a9dde01ea58f26e9"
+    },
+    {
+      "path": "src/knowledge/python.ts",
+      "sha256": "0c7265c88d1208c28dbb816b35ce0e60601623dc4a432a58b631af35a8e06349"
+    }
+  ],
+  "unit": "unique path:line reference sites, excluding the selected definition",
+  "groundTruth": "Manually specified direct references to the selected declaration, including import aliases and re-exports; strings, comments, shadowed names and different overloads are excluded.",
+  "limit": 200,
+  "languages": {
+    "java": {
+      "queries": 8,
+      "truePositives": 8,
+      "falsePositives": 7,
+      "falseNegatives": 1,
+      "precision": 0.5333333333333333,
+      "recall": 0.8888888888888888
+    },
+    "python": {
+      "queries": 8,
+      "truePositives": 11,
+      "falsePositives": 5,
+      "falseNegatives": 4,
+      "precision": 0.6875,
+      "recall": 0.7333333333333333
+    }
+  },
+  "combined": {
+    "queries": 16,
+    "truePositives": 19,
+    "falsePositives": 12,
+    "falseNegatives": 5,
+    "precision": 0.6129032258064516,
+    "recall": 0.7916666666666666
+  },
+  "cases": [
+    {
+      "id": "py-direct",
+      "language": "python",
+      "feature": "direct import and call",
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:4"],
+      "actual": ["use.py:1", "use.py:4"],
+      "truePositives": ["use.py:1", "use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "py-homonym",
+      "language": "python",
+      "feature": "same-name function in another module",
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:5"],
+      "actual": ["other.py:1", "use.py:5", "use.py:6"],
+      "truePositives": ["use.py:5"],
+      "falsePositives": ["other.py:1", "use.py:6"],
+      "falseNegatives": []
+    },
+    {
+      "id": "py-import-alias",
+      "language": "python",
+      "feature": "renamed import",
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:4"],
+      "actual": ["use.py:1"],
+      "truePositives": ["use.py:1"],
+      "falsePositives": [],
+      "falseNegatives": ["use.py:4"]
+    },
+    {
+      "id": "py-shadow",
+      "language": "python",
+      "feature": "parameter shadows the import",
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:6"],
+      "actual": ["use.py:1", "use.py:3", "use.py:4", "use.py:6"],
+      "truePositives": ["use.py:1", "use.py:6"],
+      "falsePositives": ["use.py:3", "use.py:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "py-string",
+      "language": "python",
+      "feature": "identifier in a string and a comment",
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:6"],
+      "actual": ["use.py:1", "use.py:3", "use.py:6"],
+      "truePositives": ["use.py:1", "use.py:6"],
+      "falsePositives": ["use.py:3"],
+      "falseNegatives": []
+    },
+    {
+      "id": "py-comment-marker",
+      "language": "python",
+      "feature": "comment marker inside a string before a real call",
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:1", "use.py:4"],
+      "actual": ["use.py:1"],
+      "truePositives": ["use.py:1"],
+      "falsePositives": [],
+      "falseNegatives": ["use.py:4"]
+    },
+    {
+      "id": "py-module-alias",
+      "language": "python",
+      "feature": "module alias with a qualified call",
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["use.py:4"],
+      "actual": ["use.py:4"],
+      "truePositives": ["use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "py-reexport-alias",
+      "language": "python",
+      "feature": "import alias re-exported by another module",
+      "query": {
+        "name": "total",
+        "path": "defs.py",
+        "definitionLine": 1
+      },
+      "expected": ["facade.py:1", "use.py:1", "use.py:4"],
+      "actual": ["facade.py:1"],
+      "truePositives": ["facade.py:1"],
+      "falsePositives": [],
+      "falseNegatives": ["use.py:1", "use.py:4"]
+    },
+    {
+      "id": "java-direct",
+      "language": "java",
+      "feature": "qualified call and a comment",
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"],
+      "actual": ["Use.java:4"],
+      "truePositives": ["Use.java:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-homonym",
+      "language": "java",
+      "feature": "same-name method on another receiver",
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"],
+      "actual": ["Other.java:3", "Use.java:4", "Use.java:5"],
+      "truePositives": ["Use.java:4"],
+      "falsePositives": ["Other.java:3", "Use.java:5"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-shadow",
+      "language": "java",
+      "feature": "parameter uses the method name",
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:8"],
+      "actual": ["Use.java:3", "Use.java:4", "Use.java:8"],
+      "truePositives": ["Use.java:8"],
+      "falsePositives": ["Use.java:3", "Use.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-string",
+      "language": "java",
+      "feature": "identifier in a string",
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:5"],
+      "actual": ["Use.java:4", "Use.java:5"],
+      "truePositives": ["Use.java:5"],
+      "falsePositives": ["Use.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-comment-marker",
+      "language": "java",
+      "feature": "comment marker inside a string before a real call",
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"],
+      "actual": [],
+      "truePositives": [],
+      "falsePositives": [],
+      "falseNegatives": ["Use.java:4"]
+    },
+    {
+      "id": "java-static-import",
+      "language": "java",
+      "feature": "static import and an unqualified call",
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:2", "Use.java:5"],
+      "actual": ["Use.java:2", "Use.java:5"],
+      "truePositives": ["Use.java:2", "Use.java:5"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-inherited",
+      "language": "java",
+      "feature": "inherited method without an override",
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"],
+      "actual": ["Use.java:4"],
+      "truePositives": ["Use.java:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-overload",
+      "language": "java",
+      "feature": "a different overload is not the selected int method",
+      "query": {
+        "name": "total",
+        "path": "Target.java",
+        "definitionLine": 3
+      },
+      "expected": ["Use.java:4"],
+      "actual": ["Target.java:7", "Use.java:4", "Use.java:5"],
+      "truePositives": ["Use.java:4"],
+      "falsePositives": ["Target.java:7", "Use.java:5"],
+      "falseNegatives": []
+    }
+  ]
+}

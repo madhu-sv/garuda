@@ -2,6 +2,12 @@
 
 ## 0.17.0 (unreleased)
 
+- Code intelligence (T10): Java/Python reference results carry `approximate: true`, propagated to
+  callers and impact, including empty results. Model tool output starts with a warning; chat adds
+  `≈`. Impact risk is labelled heuristic. Matching algorithms are unchanged. A frozen 30-Java/
+  30-Python corpus, captured with jdtls 1.61.0 and pyright 1.1.406, records precision and recall;
+  offline regression checks verify the oracle, source fingerprints and published results. A
+  supplementary manually labelled edge-case sample records stricter alias semantics separately.
 - Token budget, review of b2bf1c2: successful OpenAI-compatible responses with missing, partial
   or invalid usage keep their full reservation charged. Estimates remain labelled on responses
   for context sizing, but do not enter reported session or child totals, avoiding a double charge.
