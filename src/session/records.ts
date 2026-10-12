@@ -60,8 +60,11 @@ export interface SubagentReport {
   model: string;
   steps: number;
   stopReason: string;
+  /** Provider-reported usage only; unknown reservations are charged through the shared budget. */
   usage: Usage;
   costUsd?: number;
+  /** The child's cost leaves out some spending: `costUsd` is a minimum (review of 1370184). */
+  costIncomplete?: boolean;
 }
 
 export interface ToolResultsRecord extends Base {
@@ -126,6 +129,34 @@ export interface ContinueRecord extends Base {
   maxTokens: number;
 }
 
+/**
+ * Tokens charged to the session's budget with no reported usage (0.17, review T9): a model request
+ * without complete usage keeps its whole reservation, even on success. Kept apart from the usage (which is
+ * what the provider reported), and read again on resume.
+ */
+export interface UnreportedRecord extends Base {
+  type: "unreported";
+  tokens: number;
+}
+
+/** Reported child expenditure, saved before its tool report is available. */
+export interface ChildDebitRecord extends Base {
+  type: "child_debit";
+  childSessionId: string;
+  tokens: number;
+}
+
+/**
+ * A model request outside the conversation (Codex review of 1370184): the job review. Its usage
+ * counts for the session's budget and cost; resume adds it.
+ */
+export interface SideUsageRecord extends Base {
+  type: "side_usage";
+  purpose: "review";
+  usage: Usage;
+  costUsd?: number;
+}
+
 export interface EndRecord extends Base {
   type: "end";
   stopReason: string;
@@ -144,6 +175,9 @@ export type SessionRecord =
   | TitleRecord
   | ThinkingRecord
   | ContinueRecord
+  | UnreportedRecord
+  | ChildDebitRecord
+  | SideUsageRecord
   | EndRecord;
 
 /** A record before the journal adds the time. */

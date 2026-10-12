@@ -94,6 +94,13 @@ Since 0.14 (Garuda's audit review):
   `verifyAuditDir` checks each chain, each file against its checkpoint (fewer lines, or another
   line at the checkpoint's `seq`), and each checkpoint without its file. `/audit verify` names the
   files without a checkpoint.
+- Failures (review of 0.17): the chain moves on as soon as the line is on disk, so a failed
+  checkpoint write never makes the next line repeat its `seq` and `prev`. A failed checkpoint write
+  gives one notice, or (mandatory audit) fails the call with "the line was written, but its
+  checkpoint could not be written"; the next successful write catches up. In verify, only a missing
+  checkpoint (`ENOENT`) counts as "no checkpoint"; one that cannot be read or parsed is reported as
+  broken. An audit folder (or its `checkpoints` folder) that exists but cannot be listed is an error
+  (`AuditDirError`), not an empty folder; a log file that cannot be read is a broken file.
 
 | Change to a log file | Without the checkpoint | With the checkpoint |
 | --- | --- | --- |
@@ -266,8 +273,15 @@ grep never searches them; the code index never indexes them.
 
 The team policy's `denyPaths` (0130, K6): `execPolicy` adds `policyDeniedPaths(root, denyPaths)` to
 both `denyReadPaths` and `denyWritePaths`. The patterns are matched against the disk when a command
-starts (globby, no .gitignore, not in `node_modules` or `.git`, at most 1,000 paths), because the
-OS sandboxes need real paths.
+starts (globby, no .gitignore), because the OS sandboxes need real paths. Every folder is searched,
+also `node_modules` and `.git` (review of 3a9f51b: before, a wildcard such as `**/private.txt` was
+refused by the file tools in `node_modules` but had no sandbox rule there). Links are not followed;
+a package link resolves to its real path, which the search finds. Cost: one search of the whole
+tree per command, only when the policy has `denyPaths` (about 0.1 s warm, 3 s cold, for 14,000
+entries). More than 1,000 matches throw `PolicyPathsOverflow`
+(Codex review of 1370184): the command does not run, because Garuda cannot enforce the rest. Before,
+the list was cut at 1,000 and the other paths had no rule. The same holds for hooks, MCP servers,
+language servers and job tests, which use the same `execPolicy`.
 
 ## Tests
 

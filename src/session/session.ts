@@ -1,15 +1,16 @@
-import { contextSize } from "../model/pricing.js";
+import { contextSize, totalTokens } from "../model/pricing.js";
 import type { ThinkingChoice } from "../model/thinking.js";
 import {
   addUsage,
   type Message,
   type ModelResponse,
+  reportedUsage,
   type ToolResultBlock,
   type Usage,
   ZERO_USAGE,
 } from "../model/types.js";
 import { FileTracker } from "./fileTracker.js";
-import type { ToolCallMeta } from "./records.js";
+import type { SubagentReport, ToolCallMeta } from "./records.js";
 import { type Journal, newSessionId } from "./store.js";
 import {
   emptyUndoState,
@@ -31,12 +32,24 @@ export interface Session {
   /** Absolute path of the working root. */
   root: string;
   messages: Message[];
-  /** Token use for the whole session, including earlier runs and resumes. */
+  /** Provider-reported token use for the session; estimates remain on individual responses. */
   usage: Usage;
-  /** Cost for the whole session. Undefined when the model price is unknown. */
+  /** Session cost. Undefined when a price or a request's usage is unknown. */
   costUsd: number | undefined;
+  /**
+   * The cost leaves out some spending (review of 1370184): a request with no reported usage, or a
+   * subagent's cost that was incomplete. `costUsd` is then a known minimum, never "unknown".
+   */
+  costIncomplete: boolean;
   /** Context size after the last response, in tokens. Compaction (F23) reads it. */
   contextTokens: number;
+  /**
+   * Tokens charged to the budget with no reported usage (0.17, T9), even on a successful response.
+   * The session's token budget counts them with the usage.
+   */
+  unreportedTokens: number;
+  /** Reported child tokens not yet represented by an aggregated child report. */
+  childDebits: Map<string, number>;
   /** What the agent has read, for the edit_file freshness check (F11). */
   files: FileTracker;
   /** Where records go. Absent in tests that do not need a record. */
@@ -58,7 +71,10 @@ export function createSession(
     messages: [],
     usage: { ...ZERO_USAGE },
     costUsd: 0,
+    costIncomplete: false,
     contextTokens: 0,
+    unreportedTokens: 0,
+    childDebits: new Map(),
     files: new FileTracker(),
     undo: emptyUndoState(),
   };
@@ -133,7 +149,12 @@ export function addAssistantResponse(
   step: number,
   costUsd: number | undefined,
 ): void {
-  addCost(session, response.usage, costUsd);
+  // An estimate (no reported usage): its cost is not known, but the rest stays a known minimum.
+  if (response.usageReported === false) {
+    session.costIncomplete = true;
+    costUsd = undefined;
+    addCost(session, reportedUsage(response), session.costUsd === undefined ? undefined : 0);
+  } else addCost(session, reportedUsage(response), costUsd);
   session.contextTokens = contextSize(response.usage);
   if (response.content.length > 0) {
     session.messages.push({ role: "assistant", content: response.content });
@@ -200,4 +221,78 @@ export function closeOpenToolCalls(session: Session): number {
     true,
   );
   return open.length;
+}
+
+/** Charge tokens with no reported usage to the session (0.17, T9), and record them. */
+export function addUnreported(session: Session, tokens: number): void {
+  if (tokens <= 0) return;
+  session.unreportedTokens += tokens;
+  // The provider may have billed the reservation: the cost is now a minimum (review of 1370184:
+  // before, it became unknown for the rest of the session).
+  session.costIncomplete = true;
+  session.journal?.write({ type: "unreported", tokens });
+}
+
+/** Session expenditure: usage, unknown reservations and known child charges awaiting a report. */
+export function budgetSpent(session: Session): number {
+  return totalTokens(session.usage) + session.unreportedTokens + pendingChildTokens(session);
+}
+
+/** Child tokens charged to the budget with no child report yet (a cancelled or lost subagent). */
+export function pendingChildTokens(session: Pick<Session, "childDebits">): number {
+  let tokens = 0;
+  for (const value of session.childDebits.values()) tokens += value;
+  return tokens;
+}
+
+/**
+ * The session's cost leaves out some spending (Codex review of 1370184): its own flag, or child
+ * spend with no report, whose USD cost is not known. `costUsd` is then a minimum.
+ */
+export function isCostIncomplete(
+  session: Pick<Session, "costIncomplete" | "childDebits">,
+): boolean {
+  return session.costIncomplete || pendingChildTokens(session) > 0;
+}
+
+/** Persist known child spend immediately; a cancelled batch may never return a report. */
+export function addChildDebit(session: Session, childSessionId: string, tokens: number): void {
+  if (tokens <= 0) return;
+  session.childDebits.set(childSessionId, (session.childDebits.get(childSessionId) ?? 0) + tokens);
+  session.journal?.write({ type: "child_debit", childSessionId, tokens });
+}
+
+/** Replace a child's pending debits with its full usage report, without counting it twice. */
+export function addChildReport(session: Session, report: SubagentReport): void {
+  addCost(session, report.usage, report.costUsd);
+  if (report.costIncomplete === true) session.costIncomplete = true;
+  settleChildDebits(session.childDebits, report);
+}
+
+/** A partial report must not erase reported descendant expenditure it does not include. */
+export function settleChildDebits(debits: Map<string, number>, report: SubagentReport): void {
+  const rest = Math.max(0, (debits.get(report.sessionId) ?? 0) - totalTokens(report.usage));
+  if (rest === 0) debits.delete(report.sessionId);
+  else debits.set(report.sessionId, rest);
+}
+
+/**
+ * The usage of a model request outside the conversation (the job review): into the session's
+ * usage and cost, and its journal (Codex review of 1370184). An estimate (no reported usage) adds
+ * nothing: the budget meter kept the whole reservation as unreported.
+ */
+export function addSideUsage(
+  session: Session,
+  purpose: "review",
+  response: ModelResponse,
+  costUsd: number | undefined,
+): void {
+  if (response.usageReported === false) return;
+  addCost(session, response.usage, costUsd);
+  session.journal?.write({
+    type: "side_usage",
+    purpose,
+    usage: response.usage,
+    ...(costUsd === undefined ? {} : { costUsd }),
+  });
 }

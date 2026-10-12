@@ -46,7 +46,7 @@ export const rememberTool: Tool<z.infer<typeof input>> = {
     return { target: { kind: "path", path: MEMORY_FILE }, preview: `+ - ${clean(fact)}` };
   },
 
-  async run({ fact }, { root }) {
+  async run({ fact }, { root, permissions }) {
     // Resolve inside the root (review): .garuda or memory.md could be a symbolic link to a file
     // outside the project (~/.bashrc, ~/.ssh), and the plain join + write followed it. A link that
     // leaves the root throws here.
@@ -62,6 +62,8 @@ export const rememberTool: Tool<z.infer<typeof input>> = {
         `The project memory is full (${MEMORY_MAX_CHARS} characters). Ask the user to clean up ${MEMORY_FILE}.`,
       );
     }
+    const outside = await permissions.writeScopeDenial(path);
+    if (outside !== undefined) throw new Error(`${outside}. Nothing was written.`);
     await mkdir(dirname(path), { recursive: true });
     await writeFileAtomic(path, next, { createOnly: current === "" });
     return `Saved to ${MEMORY_FILE}. It loads in the next session.`;

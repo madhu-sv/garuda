@@ -38,6 +38,9 @@ export const writeFileTool: Tool<z.infer<typeof input>> = {
     const { root, files } = context;
     const absolute = await resolveInRoot(root, path);
     const shown = displayPath(root, absolute);
+    // A job's write scope (0.17): checked again just before the write (a link may have changed).
+    const outside = await context.permissions.writeScopeDenial(absolute);
+    if (outside !== undefined) throw new Error(`${outside}. Nothing was written.`);
     await mkdir(dirname(absolute), { recursive: true });
     try {
       // Create-only and atomic: it fails if the file exists, and never leaves half a file.

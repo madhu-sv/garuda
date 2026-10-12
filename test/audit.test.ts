@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { Runtime } from "../src/app/runtime.js";
 import {
+  AuditDirError,
   AuditLogger,
   auditDirFor,
   auditLineHash,
@@ -685,5 +686,70 @@ describe("Audit checkpoint (0.17, review T8)", () => {
     expect(out).toContain("BROKEN");
     expect(out).toContain("lines were cut from the end");
     await runtime.close();
+  });
+});
+
+describe("Audit checkpoint failures (review of 0.17)", () => {
+  const seqs = (file: string) =>
+    readFileSync(file, "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l).seq);
+  const log = (logger: AuditLogger, tool: string) =>
+    logger.log({ tool, decision: "executed", allowed: true, risk: "low" });
+
+  for (const mandatory of [false, true]) {
+    it(`a failed checkpoint write does not break the chain (mandatory: ${mandatory})`, async () => {
+      const dir = join(base, `cp-fail-${mandatory}`);
+      mkdirSync(dir, { recursive: true });
+      // A regular file where the checkpoints folder belongs: the checkpoint write fails.
+      writeFileSync(join(dir, "checkpoints"), "");
+      const notices: string[] = [];
+      const logger = new AuditLogger(dir, {
+        checkpoint: true,
+        mandatory,
+        onError: (m) => notices.push(m),
+      });
+      if (mandatory) {
+        await expect(log(logger, "first")).rejects.toThrow(
+          /line was written, but its checkpoint could not be written/,
+        );
+      } else {
+        await log(logger, "first");
+      }
+      rmSync(join(dir, "checkpoints"));
+      await log(logger, "second");
+      expect(seqs(logger.filePath)).toEqual([1, 2]);
+      if (!mandatory) expect(notices.join("\n")).toContain("checkpoint could not be written");
+      expect(await verifyAuditDir(dir)).toEqual([
+        { file: basename(logger.filePath), checkpoint: true, verdict: { ok: true, lines: 2 } },
+      ]);
+    });
+  }
+
+  it("a checkpoint that cannot be read is broken, not absent", async () => {
+    const dir = join(base, "cp-unreadable");
+    const logger = new AuditLogger(dir, { checkpoint: true });
+    await log(logger, "one");
+    const path = checkpointPath(logger.filePath);
+    rmSync(path);
+    mkdirSync(path);
+    const [result] = await verifyAuditDir(dir);
+    expect(result).toMatchObject({ file: basename(logger.filePath) });
+    expect(result).toHaveProperty("brokenCheckpoint");
+    expect(JSON.stringify(result)).toMatch(/cannot be read \(EISDIR\)/);
+  });
+
+  it("an audit folder that cannot be listed is an error, not an empty folder", async () => {
+    const asFile = join(base, "cp-dir-is-file");
+    writeFileSync(asFile, "");
+    await expect(verifyAuditDir(asFile)).rejects.toThrow(AuditDirError);
+    expect(await verifyAuditDir(join(base, "cp-no-such-dir"))).toEqual([]);
+
+    const dir = join(base, "cp-checkpoints-is-file");
+    const logger = new AuditLogger(dir);
+    await log(logger, "one");
+    writeFileSync(join(dir, "checkpoints"), "");
+    await expect(verifyAuditDir(dir)).rejects.toThrow(AuditDirError);
   });
 });

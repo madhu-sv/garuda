@@ -1,8 +1,9 @@
 import { SPECIALIST_SPECS } from "../../agents/moe.js";
 import { modelFacts, type Runtime } from "../../app/runtime.js";
-import { verifyAuditDir } from "../../audit/logger.js";
+import { AuditDirError, verifyAuditDir } from "../../audit/logger.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { totalTokens, WEB_SEARCH_USD } from "../../model/pricing.js";
+import { isCostIncomplete } from "../../session/session.js";
 import {
   callersText,
   findCallersTool,
@@ -17,7 +18,7 @@ import { impactAnalysisText, impactAnalysisTool } from "../../tools/impactAnalys
 import type { ToolContext } from "../../tools/types.js";
 import { colorDiff } from "../approver.js";
 import type { Renderer } from "../renderer.js";
-import { formatTokens } from "../report.js";
+import { budgetNote, formatTokens } from "../report.js";
 import type { PaletteEntry } from "./palette.js";
 import { modeText } from "./plan.js";
 
@@ -38,7 +39,7 @@ export const HELP = [
   "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel|delete <id>; /jobs cancel night",
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /defs X    alias of /where X (definitions of X)",
-  "  /refs X    every use of symbol X (code index, no model call)",
+  "  /refs X    indexed uses of symbol X (approximate except JS/TS, no model call)",
   "  /callers X who calls symbol X (code index, no model call)",
   "  /impact X  blast radius and affected tests for file or symbol X",
   "  /map [dir] what each code file exports and imports",
@@ -274,7 +275,9 @@ async function sessionsCommand(
     const facts = [
       s.id,
       `${s.turns} turn${s.turns === 1 ? "" : "s"}`,
-      ...(s.costUsd === undefined || s.costUsd === 0 ? [] : [`$${s.costUsd.toFixed(2)}`]),
+      ...(s.costUsd === undefined || (s.costUsd === 0 && !s.costIncomplete)
+        ? []
+        : [`${s.costIncomplete ? "≥ " : ""}$${s.costUsd.toFixed(2)}`]),
       ...(s.model === undefined ? [] : [s.model]),
     ].join(" · ");
     return [
@@ -570,7 +573,7 @@ async function lookup(
     } else {
       text = repoMapText(await repoMapTool.run({ path: arg }, context));
     }
-    renderer.info(text);
+    renderer.info(text.startsWith("Approximate:") ? `≈ ${text}` : text);
   } catch (error) {
     renderer.error((error as Error).message);
   }
@@ -664,8 +667,16 @@ async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): 
     // Check each file's hash chain (merge gate): a changed, removed or inserted line shows here.
     // With the checkpoint (0.17, policy audit.checkpoint), also lines cut from the end of a file
     // and a deleted file.
-    const results = await verifyAuditDir(runtime.audit.dir);
     lines.push("", `Audit files: ${runtime.audit.dir}`);
+    let results: Awaited<ReturnType<typeof verifyAuditDir>>;
+    try {
+      results = await verifyAuditDir(runtime.audit.dir);
+    } catch (error) {
+      if (!(error instanceof AuditDirError)) throw error;
+      lines.push(`  BROKEN  the audit folder: ${error.message}`);
+      renderer.info(lines.join("\n"));
+      return;
+    }
     if (results.length === 0) lines.push("  none yet");
     let broken = 0;
     let unchecked = 0;
@@ -675,7 +686,7 @@ async function auditCommand(runtime: Runtime, renderer: Renderer, arg: string): 
         lines.push(`  MISSING ${result.file}: the checkpoint names it, but the file is gone`);
       } else if ("brokenCheckpoint" in result) {
         broken++;
-        lines.push(`  BROKEN  ${result.file}: its checkpoint is not valid`);
+        lines.push(`  BROKEN  ${result.file}: its checkpoint: ${result.brokenCheckpoint}`);
       } else if (result.verdict.ok) {
         if (!result.checkpoint) unchecked++;
         lines.push(
@@ -755,11 +766,17 @@ export function usageSummary(runtime: Runtime): string {
   const session = runtime.session;
   if (session === undefined) return "No session yet.";
   const u = session.usage;
-  const cost = session.costUsd === undefined ? "cost unknown" : `$${session.costUsd.toFixed(4)}`;
+  const cost =
+    session.costUsd === undefined
+      ? "cost unknown"
+      : isCostIncomplete(session)
+        ? `≥ $${session.costUsd.toFixed(4)} (incomplete)`
+        : `$${session.costUsd.toFixed(4)}`;
   return [
-    `Session ${session.id}: ${formatTokens(totalTokens(u))} tokens, ${cost}`,
+    `Session ${session.id}: ${formatTokens(totalTokens(u))}${budgetNote(session) !== undefined ? " reported" : ""} tokens, ${cost}`,
     `  input ${formatTokens(u.inputTokens)}, cache read ${formatTokens(u.cacheReadTokens)}, cache write ${formatTokens(u.cacheWriteTokens)}, output ${formatTokens(u.outputTokens)}`,
     `  context ${formatTokens(session.contextTokens)} of ${formatTokens(runtime.limits.contextWindow)}`,
+    ...(budgetNote(session) === undefined ? [] : [`  ${budgetNote(session)}`]),
     ...(u.webSearches === undefined
       ? []
       : [

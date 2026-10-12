@@ -34,7 +34,7 @@ garuda          # from a source build: node ~/garuda/dist/cli/index.js
 
 Ask for a task, for example "Fix the failing test in src/cart.ts". Garuda reads files with no
 question. It shows the diff of each edit and asks first. Commands run in the sandbox with no
-question; a command outside the sandbox always asks.
+question; a command outside the sandbox asks, unless one of your allow rules covers it.
 
 Useful in the chat:
 

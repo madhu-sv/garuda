@@ -35,6 +35,8 @@ import {
   profileAccess,
   profileNotes,
 } from "../lang/profiles.js";
+import { approxTokens, BudgetExhausted, TokenBudget } from "../loop/budget.js";
+import { callModelWithRetry, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
 import {
   type AgentEvent,
   type AgentResult,
@@ -63,6 +65,7 @@ import { fitThinking } from "../model/thinking.js";
 import type {
   Message,
   ModelClient,
+  ModelRequest,
   ModelResponse,
   ServerToolSpec,
   ThinkingRequest,
@@ -89,7 +92,10 @@ import type { SessionSummary } from "../session/list.js";
 import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
 import {
+  addSideUsage,
+  addUnreported,
   addUserMessage,
+  budgetSpent,
   closeOpenToolCalls,
   createSession,
   type Session,
@@ -124,6 +130,9 @@ const FORMAT_TIMEOUT_MS = 20_000;
  * The note that starts each plan-mode turn (0.4). The system prompt stays the same in both modes
  * (N2); the permission engine and the sandbox enforce the mode, this note explains it.
  */
+/** The output limit of a request outside the conversation (the job review, 0.11). */
+const ASK_MODEL_MAX_TOKENS = 8_192;
+
 export const PLAN_NOTE =
   "Plan mode is on. Investigate and write a plan; do not change anything. File edits, file writes and remember are blocked, and bash runs in a sandbox that cannot write the project (temp folders only), so read-only commands and tests that write nothing in the project still work. End with a numbered plan: the files to change, the change in each, and how to test it. Then add a ```permissions block with one rule per line for the calls the build needs beyond the sandbox: edit_file(path) and write_file(path) for each file to change or create (globs such as src/** are fine), bash(command) for commands that need the network, and web_fetch(host) for pages. Commands that stay in the project (tests, builds) need no line.";
 
@@ -1451,9 +1460,10 @@ export class Runtime {
    * permission engine: Garuda runs it, not the model. The output is not a note for the model.
    */
   async runCheck(command: string, timeoutMs: number, signal: AbortSignal): Promise<TestRun> {
-    const result = await this.executor.run(command, this.permissions.execPolicy(timeoutMs), {
-      signal,
-    });
+    // A job's test command (0.11) runs with the job's write scope, as the agent's commands do
+    // (second review of 0.17: the agent can change the code that the test runs).
+    const policy = this.permissions.execPolicy(timeoutMs);
+    const result = await this.executor.run(command, policy, { signal });
     return {
       exitCode: result.exitCode,
       timedOut: result.timedOut,
@@ -1472,27 +1482,52 @@ export class Runtime {
     signal: AbortSignal,
   ): Promise<{ text: string; costUsd?: number }> {
     const model = await this.client();
-    let response: ModelResponse | undefined;
-    for await (const event of model.stream(
-      {
-        system,
-        messages: [{ role: "user", content: [{ type: "text", text }] }],
-        tools: [],
-        maxTokens: 8_192,
+    const request: ModelRequest = {
+      system,
+      messages: [{ role: "user", content: [{ type: "text", text }] }],
+      tools: [],
+      maxTokens: ASK_MODEL_MAX_TOKENS,
+    };
+    // The session's token budget (Codex review of 1370184): the review request reserves its whole
+    // size first, every attempt (also a retry) is metered, and its usage goes into the session.
+    const session = this.current;
+    const budget = new TokenBudget(
+      Math.max(0, this.limits.tokenBudget - (session === undefined ? 0 : budgetSpent(session))),
+      undefined,
+      (tokens) => {
+        if (session !== undefined) addUnreported(session, tokens);
       },
-      { signal },
-    )) {
-      if (event.type === "response") response = event.response;
+    );
+    const tokens =
+      approxTokens(JSON.stringify({ system, messages: request.messages, tools: [] })) +
+      ASK_MODEL_MAX_TOKENS;
+    let response: ModelResponse;
+    try {
+      response = await callModelWithRetry(model, request, signal, () => {}, MODEL_RETRY_DELAYS_MS, {
+        budget,
+        tokens,
+      });
+    } catch (error) {
+      if (!(error instanceof BudgetExhausted)) throw error;
+      throw new Error(
+        "The session's token budget has no room for the review request. Raise limits.tokenBudget, or review the diff yourself.",
+      );
     }
-    if (response === undefined) throw new Error("The model gave no answer.");
     const answer = response.content
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
       .trim();
     const price = this.price;
-    return price === undefined
-      ? { text: answer }
-      : { text: answer, costUsd: responseCost(response, price) };
+    // An estimate (no reported usage) has no known cost: 0 as a minimum. Its reservation is in the
+    // session as unreported, which marks the cost incomplete (review of 3a9f51b).
+    const costUsd =
+      price === undefined
+        ? undefined
+        : response.usageReported === false
+          ? 0
+          : responseCost(response, price);
+    if (session !== undefined) addSideUsage(session, "review", response, costUsd);
+    return costUsd === undefined ? { text: answer } : { text: answer, costUsd };
   }
 
   /**
@@ -2130,18 +2165,34 @@ export class Runtime {
     const model = await this.client();
     const price = this.price;
     let costUsd: number | undefined;
-    const result = await compactNow(
-      session,
-      model,
-      {
-        ...(focus === undefined || focus === "" ? {} : { focus }),
-        costOf: (response) => {
-          costUsd = price === undefined ? undefined : responseCost(response, price);
-          return costUsd;
-        },
-      },
-      signal,
+    // /compact counts against the session's token budget, as automatic compaction does (third
+    // review of 0.17): its summary request reserves first, and a failed one stays spent.
+    const budget = new TokenBudget(
+      Math.max(0, this.limits.tokenBudget - budgetSpent(session)),
+      undefined,
+      (tokens) => addUnreported(session, tokens),
     );
+    let result: CompactionResult | undefined;
+    try {
+      result = await compactNow(
+        session,
+        model,
+        {
+          ...(focus === undefined || focus === "" ? {} : { focus }),
+          costOf: (response) => {
+            costUsd = price === undefined ? undefined : responseCost(response, price);
+            return costUsd;
+          },
+          budget,
+        },
+        signal,
+      );
+    } catch (error) {
+      if (!(error instanceof BudgetExhausted)) throw error;
+      throw new Error(
+        "The session's token budget has no room for the summary request. Start a new session (/new) or raise limits.tokenBudget.",
+      );
+    }
     if (result === undefined) return undefined;
     return costUsd === undefined ? result : { ...result, costUsd };
   }

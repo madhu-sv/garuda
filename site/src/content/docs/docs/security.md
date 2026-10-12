@@ -19,8 +19,9 @@ Every tool call goes through one check before it runs:
 4. **Deny rules** always win over allow rules.
 5. **Read-only tools** run with no question. **Commands in the OS sandbox** run with no question.
 6. **Allow rules and earlier answers** for this session let a call run.
-7. **Otherwise Garuda asks you**, and shows the diff or the command. A command outside the sandbox
-   always asks, and the question says so.
+7. **Otherwise Garuda asks you**, and shows the diff or the command. So a command outside the
+   sandbox asks (and the question says so), unless an allow rule or an earlier answer for this
+   session covers it. The strict profile forbids commands outside the sandbox.
 
 ## The OS sandbox
 

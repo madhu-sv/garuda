@@ -21,6 +21,7 @@ interface ExecPolicy {
   writePaths: string[];     // absolute
   denyWritePaths: string[]; // read-only holes inside writePaths
   denyReadPaths: string[];
+  writeScope?: { root: string; paths: string[] }; // a job's write scope (0.17), see below
   network: boolean;
   envAllowlist: string[];
   timeoutMs: number;
@@ -36,6 +37,13 @@ interface Executor {
   shutdown(): void;         // kill everything now; runs in the "exit" handler
 }
 ```
+
+`writeScope` (0.17, review T6): a scheduled job's write scope. The root is read-only, except
+`paths`. The executors apply it after `writePaths` (so a writable parent such as `/tmp` does not
+open the root) and before `denyWritePaths` and `denyReadPaths` (so protected and denied paths in a
+scope folder stay protected). Seatbelt: `(deny file-write* root)`, then `(allow file-write* paths)`;
+the last matching rule wins. bubblewrap: `--ro-bind root`, then `--bind` for each existing path;
+later mounts cover earlier ones. See [jobs.md](jobs.md) and [bounded-changes.md](bounded-changes.md).
 
 `ExecResult`: exit code, signal, stdout and stderr (`text`, `truncated`, `totalBytes`), `timedOut`,
 `aborted`, `durationMs`.
@@ -56,7 +64,7 @@ The shared base class. Subclasses implement only `launch(argv, policy) → { fil
 
 | Executor | Platform | Launch |
 | --- | --- | --- |
-| `HostExecutor` | any | The program itself. Isolation `none`: every command asks for approval. |
+| `HostExecutor` | any | The program itself. Isolation `none`: every command asks for approval, unless an allow rule covers it. |
 | `SeatbeltExecutor` | macOS | `/usr/bin/sandbox-exec -p <profile> <argv>` |
 | `BwrapExecutor` | Linux | `bwrap <mounts> --die-with-parent --chdir <root> -- <argv>` |
 
@@ -185,7 +193,8 @@ Only with `daemons.enabled: true` (off by default). Then `bash` accepts `is_daem
 ## Tests
 
 `test/executorContract.ts` is one suite that every executor must pass: output, exit code, working folder,
-environment allowlist, output cap, timeout, `shutdown()`, process-tree kill on abort, and (0.14, review)
+environment allowlist, output cap, timeout, `shutdown()` (the child, and since the Codex review of
+1370184 also the shell and any sandbox wrapper: `shellRunning`), process-tree kill on abort, and (0.14, review)
 a command that returns although a background child keeps its output open: after the command's own
 process exits, `run()` waits at most `EXIT_DRAIN_MS` (2 s) for the pipes, then kills the group, closes
 the pipes and returns; the timeout and Ctrl-C now signal the group even after bash has exited. Since

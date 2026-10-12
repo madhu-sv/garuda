@@ -1,4 +1,4 @@
-import type { Job } from "./job.js";
+import type { Job, JobResult } from "./job.js";
 import { passed, testSummary } from "./proof.js";
 
 /** The task of a job: the user's request, the plan, and the rules of an unattended run (0.7). */
@@ -20,7 +20,41 @@ export function jobPrompt(request: string, plan: string): string {
   ].join("\n");
 }
 
-const cost = (usd: number | undefined) => (usd === undefined ? "unknown" : `$${usd.toFixed(4)}`);
+const cost = (usd: number | undefined, incomplete = false) => formatCost({ usd, incomplete });
+
+/** A cost that keeps its uncertainty (review of 3a9f51b): unknown, a minimum, or exact. */
+export interface Cost {
+  /** Undefined: unknown (no price). */
+  usd: number | undefined;
+  /** `usd` is a minimum: some spending has no known cost. */
+  incomplete: boolean;
+}
+
+export function formatCost(c: Cost): string {
+  if (c.usd === undefined) return "unknown";
+  return c.incomplete ? `≥ $${c.usd.toFixed(4)} (incomplete)` : `$${c.usd.toFixed(4)}`;
+}
+
+/** The sum: unknown when one part is unknown, a minimum when one part is a minimum. */
+export function sumCosts(costs: readonly Cost[]): Cost {
+  let usd: number | undefined = 0;
+  let incomplete = false;
+  for (const c of costs) {
+    usd = usd === undefined || c.usd === undefined ? undefined : usd + c.usd;
+    incomplete ||= c.incomplete;
+  }
+  return { usd, incomplete };
+}
+
+/** A job's whole cost: the run, and the review (recorded after the run's cost). */
+export function jobCost(r: JobResult): Cost {
+  const run: Cost = { usd: r.costUsd, incomplete: r.costIncomplete === true };
+  const proof = r.proof;
+  const review = proof?.review;
+  const reviewIncomplete = proof?.reviewCostIncomplete === true;
+  if (review === undefined) return sumCosts([run, { usd: 0, incomplete: reviewIncomplete }]);
+  return sumCosts([run, { usd: review.costUsd, incomplete: reviewIncomplete }]);
+}
 
 /** The job report (Markdown): for the terminal, the report file and /jobs <id>. */
 export function jobReport(job: Job): string {
@@ -40,7 +74,7 @@ export function jobReport(job: Job): string {
   if (job.startedAt !== undefined) lines.push(`- Started: ${job.startedAt}`);
   if (r === undefined) return lines.join("\n");
   lines.push(
-    `- Steps: ${r.steps} · tokens: ${Math.round(r.tokens / 100) / 10}k · cost: ${cost(r.costUsd)} · time: ${Math.round(r.durationMs / 1000)} s`,
+    `- Steps: ${r.steps} · tokens: ${Math.round(r.tokens / 100) / 10}k · cost: ${cost(r.costUsd, r.costIncomplete === true)} · time: ${Math.round(r.durationMs / 1000)} s`,
   );
   if (r.sessionId !== undefined) lines.push(`- Session: ${r.sessionId}`);
   if (r.modelCalls !== undefined) {
@@ -105,7 +139,9 @@ function proofLines(job: Job, proof: NonNullable<NonNullable<Job["result"]>["pro
   for (const f of proof.flags) out.push(`- ${f.level === "stop" ? "STOP" : "look"}: ${f.text}`);
   if (proof.review !== undefined) {
     const cost =
-      proof.review.costUsd === undefined ? "" : ` (${`$${proof.review.costUsd.toFixed(4)}`})`;
+      proof.review.costUsd === undefined
+        ? ""
+        : ` (${formatCost({ usd: proof.review.costUsd, incomplete: proof.reviewCostIncomplete === true })})`;
     out.push("", `## Review by a principal engineer${cost}`, "", proof.review.text);
   } else if (proof.reviewError !== undefined) {
     out.push("", "## Review", "", `The review failed: ${proof.reviewError}`);

@@ -106,6 +106,11 @@ export interface PermissionGate {
    * deniedByPolicy.
    */
   commandPolicyDenial(command: string, outsideSandbox: boolean): string | undefined;
+  /**
+   * Why a write to this path (absolute or root-relative) is outside a job's write scope, or
+   * undefined (0.17). Write tools call it just before they write. Required, like deniedByPolicy.
+   */
+  writeScopeDenial(path: string): Promise<string | undefined>;
   /** The network allowlist (0.13): hosts that the proxy blocked since the last call. */
   takeNetworkBlocks?(): { host: string; port: number; reason: string }[];
 }

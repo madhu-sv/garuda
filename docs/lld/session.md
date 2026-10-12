@@ -12,6 +12,7 @@ interface Session {
   id; root;
   messages: Message[];
   usage: Usage; costUsd?: number; contextTokens: number;
+  childDebits: Map<string, number>; // reported child tokens not yet included in a tool report
   files: FileTracker;
   journal?: Journal;
 }
@@ -43,6 +44,9 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `title` | title (0.8, `/sessions rename`; the last one wins; resume ignores it) |
 | `thinking` | choice (0.9, `/thinking`; the last one wins; a resume brings it back) |
 | `continue` | message, maxTokens (0.12: the note after a response cut off at the output limit; a resume adds the message; not a turn in `/sessions`) |
+| `unreported` | tokens (0.17, T9: any model request without complete reported usage keeps its whole reservation, also on success; the session's budget counts these with reported usage, and a resume adds them up in `unreportedTokens`) |
+| `child_debit` | childSessionId, tokens (reported child spend, written immediately at settlement; a later tool report replaces only the amount it includes, so cancellation and partial reports cannot erase expenditure or double-charge it) |
+| `side_usage` | purpose (`review`), usage, costUsd (Codex review of 1370184: a model request outside the conversation, the job review; its usage counts for the session's budget and cost, and resume adds it) |
 | `end` | stopReason, steps |
 
 ## Store (`store.ts`)
@@ -96,6 +100,25 @@ on disk (a tool result with a secret), every thinking block from that message on
 A resume with another model than the session's last one leaves all thinking out.
 
 ## Resume (`resume.ts`)
+
+The session allowance counts reported usage, unreported reservations and pending child debits.
+Responses marked `usageReported: false` keep their estimates for context sizing but contribute no
+reported tokens or exact USD cost. The full reservation is already in `unreportedTokens`, so live
+accounting and replay never add the estimates again. The same rule applies to summary responses.
+Any unknown reservation marks the session cost incomplete (`costIncomplete`), including after
+replay; `costUsd` stays a known minimum, shown as "≥ $X (incomplete)" (review of 1370184: before,
+one failed attempt made the cost unknown for the rest of the session). Only a missing price makes
+the cost unknown. A subagent report carries `costIncomplete` to its parent. Existing journals
+without the source flag retain their historical totals: their old estimates cannot be distinguished
+from reports retroactively. No migration is performed; the corrected policy applies to new calls.
+`rebuildState` restores the same pending-debit map. Journals without `child_debit` records keep
+their original totals, with an empty map; no on-disk migration is needed. Returned child reports
+still provide usage and USD-cost breakdowns. Pending debits protect the token allowance; they do
+not invent a USD charge for an interrupted child whose report did not reach the parent. Since the
+Codex review of 1370184 a pending debit makes the cost a minimum (`isCostIncomplete`: the flag, or
+any `pendingChildTokens`), in the turn line, `/usage`, `/sessions`, JSON, jobs and evals; and the
+budget line (`budgetNote`) shows when either unreported reservations or pending child tokens make
+the budget larger than the reported usage. Before, only unreported reservations showed it.
 
 `rebuildState(records)` replays the records into messages, usage, cost and context size (compaction
 records replace the messages; subagent reports in `tool_results` add their usage and cost; `snapshot`,

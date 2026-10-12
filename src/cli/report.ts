@@ -1,6 +1,11 @@
 import type { AgentResult, AgentStopReason } from "../loop/runAgent.js";
 import { totalTokens } from "../model/pricing.js";
-import type { Session } from "../session/session.js";
+import {
+  budgetSpent,
+  isCostIncomplete,
+  pendingChildTokens,
+  type Session,
+} from "../session/session.js";
 
 /** Short token counts: 950, 12.3k, 4.5M. */
 export function formatTokens(n: number): string {
@@ -9,9 +14,26 @@ export function formatTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
-function formatUsd(usd: number | undefined): string {
+/** A cost: "cost unknown" (no price), or a known amount; "≥ … (incomplete)" for a minimum. */
+export function formatUsd(usd: number | undefined, incomplete = false): string {
   if (usd === undefined) return "cost unknown";
-  return usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
+  const amount = usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
+  return incomplete ? `≥ ${amount} (incomplete)` : amount;
+}
+
+/**
+ * "budget N tokens (…)" when the budget counts more than reported usage: reservations with no
+ * reported usage, or child spend with no report (Codex review of 1370184: before, only the first).
+ */
+export function budgetNote(session: Session): string | undefined {
+  const unreported = session.unreportedTokens;
+  const children = pendingChildTokens(session);
+  if (unreported <= 0 && children <= 0) return undefined;
+  const parts = [
+    ...(unreported > 0 ? [`${formatTokens(unreported)} reserved without reported usage`] : []),
+    ...(children > 0 ? [`${formatTokens(children)} from subagents with no report`] : []),
+  ];
+  return `budget ${formatTokens(budgetSpent(session))} tokens (${parts.join(", ")})`;
 }
 
 /** The line that Garuda prints after each turn (F22). */
@@ -20,16 +42,19 @@ export function usageLine(
   session: Session,
   runCostUsd: number | undefined,
   contextWindow: number,
+  /** The run had spending with no known cost (review of 1370184): the run cost is a minimum. */
+  runCostIncomplete = false,
 ): string {
   const u = result.usage;
   const input = u.inputTokens + u.cacheReadTokens + u.cacheWriteTokens;
   const percent = Math.round((session.contextTokens / contextWindow) * 100);
   return [
     `${result.stopReason} · ${result.steps} step(s)`,
-    `${formatTokens(input)} in (${formatTokens(u.cacheReadTokens)} cached) / ${formatTokens(u.outputTokens)} out`,
-    formatUsd(runCostUsd),
+    `${budgetNote(session) !== undefined ? "reported " : ""}${formatTokens(input)} in (${formatTokens(u.cacheReadTokens)} cached) / ${formatTokens(u.outputTokens)} out`,
+    formatUsd(runCostUsd, runCostIncomplete),
     `context ${percent}% of ${formatTokens(contextWindow)}`,
-    `session ${formatTokens(totalTokens(session.usage))} tokens, ${formatUsd(session.costUsd)}`,
+    `session ${formatTokens(totalTokens(session.usage))} tokens, ${formatUsd(session.costUsd, isCostIncomplete(session))}`,
+    ...(budgetNote(session) === undefined ? [] : [budgetNote(session)]),
   ].join(" · ");
 }
 

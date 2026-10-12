@@ -1,7 +1,6 @@
 # Bounded changes (0.17, planned)
 
-Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185). The
-rest is planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
+Status: the user approved this design (2026-10-10). Done: T7, the strict profile (patch 0184); T8, the audit checkpoint (patch 0185, with its failure fixes in 0186); T6, job write scopes (patches 0189, 0190); T9, the shared budget (patches 0191, 0192). Second review (2026-10-11): T5 never falls back to direct mode and never applies an incomplete change list; T9 keeps a reservation as spent when a request fails with no reported usage. T10 is implemented by this patch (labels and the 60-query LSP measurement); T5 remains planned. This is the design for review tasks T5–T10 (external review of 0.16.1,
 2026-10-10). The patch plan is at the end. Each section has decisions, a threat model, a default and
 tests.
 
@@ -54,8 +53,17 @@ With `"commands": { "mode": "staged" }`:
 7. The model gets the command's output and one line: "The user applied the changes" or "The user
    discarded the changes: the project did not change".
 
-`outside_sandbox: true` is not staged: it asks first, as today. In `"mode": "direct"` (the default)
-nothing changes.
+`outside_sandbox: true` is not staged: it asks first unless an allow rule or a session answer
+covers it, as today. In `"mode": "direct"` (the default) nothing changes.
+
+**No silent fallback (second review).** When the user selects staged mode, Garuda sets up the
+staging copy at the session start, or stops with the reason (as the strict profile does). It never
+runs commands in direct mode instead. A staging copy that fails later (disk full, a lost overlay)
+stops each command with an error until the session ends; it does not switch to direct mode.
+
+**An incomplete scan never applies (second review).** When the list of changes is incomplete (the
+50 000-file limit, a file that cannot be read, a walk that fails), the question says so and offers
+only "discard". Apply needs a complete list.
 
 ```mermaid
 sequenceDiagram
@@ -117,7 +125,7 @@ Garuda applies nothing and shows the paths. The staged change stays for one more
 
 - A clone or copy at the session start: measured before release on Garuda's own repository and on a
   20 000-file Java repository. Target: less than 2 s on APFS and with reflink. A plain copy over
-  2 GB stops with a message and keeps `"mode": "direct"`.
+  2 GB stops the session start with a message (no fallback to direct mode).
 - The list of changes uses the snapshot walk of `/undo` (`src/undo/snapshots.ts`): the same
   excludes and the 50 000-file limit.
 
@@ -131,7 +139,10 @@ Garuda applies nothing and shows the paths. The staged change stays for one more
 - A command that changes nothing: no question.
 - An ignored build output stays in staging and the next command sees it; the project has none.
 - A conflict: the user changes the file during the command; apply refuses.
-- `outside_sandbox` still asks first and is not staged.
+- `outside_sandbox` still asks first (without an allow rule) and is not staged.
+- Staging cannot be set up (a fake backend that fails): the session does not start; no command runs
+  in direct mode (negative control: a direct-mode session starts).
+- An incomplete change list (a fake walk at the file limit): the question offers only discard.
 - Live test on macOS (clone) and Linux (overlay, and copy with an older bwrap).
 
 ### Decisions of the user (2026-10-10)
@@ -140,7 +151,7 @@ Garuda applies nothing and shows the paths. The staged change stays for one more
 - **Q2.** All or nothing first. Per-file selection can come later.
 - **Q3.** On macOS the command runs at the clone's path. Staged mode works on macOS and Linux.
 
-## T6: job write scopes
+## T6: job write scopes (done, 0189, 0190)
 
 ### Behaviour
 
@@ -157,6 +168,22 @@ A job file gets one new field, `writeScope`: a list of folders in the worktree, 
   such file marks the job as failed with "changes outside the approved scope"; no commit.
 - A job file without `writeScope` (created before 0.17) runs as today, and the run's first line says
   "Commands may write anywhere in the worktree."
+
+### As built (0189)
+
+- Entries are folders (`src/`) or single files (`README.md`), not only folders: Garuda's own edits
+  run in Garuda's process, so the engine can check a file; for commands, bubblewrap binds an
+  existing file as well as a folder. A new file in the root cannot be made by a command (bubblewrap
+  binds only existing paths); an edit can make it when the scope names it.
+- The engine denies an edit outside the scope only when a rule or a session answer would allow it;
+  an edit that no rule allows gets the usual job denial. Both are in the report's denied calls.
+- The sandbox applies the scope after `writePaths` and before the denied paths (see
+  [sandbox.md](sandbox.md)), so a root inside `/tmp` stays read-only, and a policy-denied file in a
+  scope folder stays denied.
+- Second review (0190): a job never runs a command outside the sandbox (the engine denies
+  `outside_sandbox` before any rule, also an allow rule); the engine and the write tools check the
+  place that a path reaches through symbolic links, and the tools check again just before the
+  write; the job's test command has the same scope as every other command (the preview says so).
 
 ### Why folders, not globs
 
@@ -190,8 +217,8 @@ enforce the same scope. A folder list is what both can enforce, and what the use
 Strict means:
 
 1. The executor must be the OS sandbox. Without one, Garuda stops at startup with the reason and
-   the fix (install bubblewrap; or remove the strict profile). No host fallback, no "each command
-   asks" mode. `executor: "host"` is an error.
+   the fix (install bubblewrap; or remove the strict profile). No host fallback (the mode
+   where commands run on the host and ask). `executor: "host"` is an error.
 2. The `bash` tool has no `outside_sandbox` parameter, so the model does not see it. A call that
    still sends it is denied.
 3. `!command` in the chat runs in the sandbox only.
@@ -217,7 +244,7 @@ Strict does not change the network rules or the edit questions.
 - The bash tool schema has no `outside_sandbox` in strict mode.
 - A project file with `"profile": "default"` does not turn off a policy's strict.
 
-## T8: audit threat model and checkpoint (done, 0185)
+## T8: audit threat model and checkpoint (done, 0185, 0186)
 
 ### What `/audit verify` detects (docs, always)
 
@@ -251,7 +278,7 @@ With `"audit": { "checkpoint": true }` (policy files only):
 - Delete a file; verify reports the missing file.
 - The checkpoint file holds no target or reason text.
 
-## T9: one token budget for the agent tree
+## T9: one token budget for the agent tree (done, 0191, 0192)
 
 ### Today
 
@@ -265,7 +292,15 @@ A `Budget` object, made per turn and shared by the parent and all its children:
 
 - `reserve(tokens)` before each model call: context tokens plus `maxTokens`. Not enough left: no
   call, and the run stops with `token_budget`.
-- `settle(reservation, used)` after the call returns the unused part.
+- `settle(reservation, used)` after the call returns the unused part, but only when the provider
+  reported the usage of that request.
+- This applies to successful responses too. Missing, partial or invalid OpenAI-compatible usage
+  is marked `usageReported: false`; the full reservation stays charged. Context estimates are not
+  added to reported session totals or to that charge. The existing `unreported` records persist it.
+- **Failures and cancellation (second review).** A request that fails, times out or is cancelled
+  with no reported usage keeps its whole reservation as spent: the provider may have charged for
+  it. A request with a reported usage (also a cut-off stream) settles to that usage. Releasing a
+  reservation only because a request failed would understate the spend.
 - A child gets `min(its own limit, what is left)`. JavaScript runs one reservation at a time, so
   parallel children cannot both take the same tokens.
 - Retries, compaction and the child's wrap-up call reserve in the same way.
@@ -278,28 +313,93 @@ A `Budget` object, made per turn and shared by the parent and all its children:
   control: today the sum goes over).
 - A child stops early and its unused tokens return to the parent.
 - The parent still gets its final answer when the children used the rest.
+- A request that fails with no usage keeps its reservation; one with a usage settles to it.
+- A cancelled child keeps its open reservation as spent.
+
+### As built (0191)
+
+- `src/loop/budget.ts`: `TokenBudget` (reserve, settle, child, setFloor) and `requestTokens`.
+- The input estimate is the larger of the whole current request (system prompt, conversation,
+  client and server tool definitions, thinking settings) and the last measured context plus new
+  messages. Both character estimates use about 4 characters per token; the caller adds the output
+  limit. This covers changed instructions and tools on resume without discarding a larger measured
+  allowance. It needs no journal migration. A provider that counts more input tokens than the
+  estimate can pass the cap by that difference; the README lists it as a limit.
+- A refused call is not a step. A child's wrap-up call reserves the whole conversation plus the
+  wrap-up note.
+- Behaviour change: a small `tokenBudget` now stops a run before a call that may not fit, not after
+  the call that passed it.
+
+### Review of 31aab17 (0192)
+
+Five gaps, each with a regression test in `test/budget.test.ts`:
+
+- The child's wrap-up request is built first and reserved like a main call (system prompt and tool
+  list included), also with zero completed steps.
+- Every provider request reserves: `CallMeter` and `StreamOptions.meter`; the OpenAI-compatible
+  client's HTTP retries and the batch-to-normal switch call `meter.retry()`; the Anthropic SDK gets
+  `maxRetries: 0` under a meter (the loop retries, also a 429).
+- The floor for the final answer is the bound of the next request: the last reservation, the
+  output limit, and a bound per tool result (results are capped at 100 000 characters, a
+  subagent's answer at 20 000).
+- `tokenBudget` stays a session limit: charges with no reported usage are kept in the session
+  (`unreported` records) and count in later turns and after a resume.
+- `/compact` reserves its summary request in the session's budget.
+
+### T9 repair following review of 6c9f929
+
+- Metered Anthropic batch creation sets `maxRetries: 0`, just like streaming. Garuda's loop
+  reserves each resubmission; status polling and cancellation are not generation submissions.
+- Known child charges are saved at settlement as `child_debit` records, attributed to the direct
+  child's report id. Reports replace only the amount they cover. Pending charges remain counted
+  after cancellation, failed parallel batches and resume; old journals start with an empty map.
+  This protects the allowance without double-counting nested reports or discarding partial ones.
+- Read-only parallel batches await all started calls before leaving the turn, keeping settlement
+  tracking active even when one child fails. No new request starts after an abort.
+- Results are capped after formatting and hooks, on every result path, and at the loop boundary
+  for custom/replay runners. Subagent metadata fits inside its 20 000-character result cap.
+- The parent floor uses the current request estimate, the exact empty-result message structure,
+  worst-case JSON escaping (six characters per string character), and the output limit; plus the
+  summary request when a compaction is due before the next request (Codex review of 1370184). This
+  conservatism can refuse child work earlier at small budgets; the parent can still answer.
+- Compaction reserves `max(previous context, full summary input estimate) + 4096`, including its
+  system prompt. The approximate provider-token-count limitation is unchanged.
+
+Tests and local validation are recorded in
+[the budget review record](../quality-baseline/budget-review-baseline.md).
 
 ## T10: approximate code-intelligence results
 
-### Behaviour
+### Behaviour (implemented)
 
-- `ReferenceHit` gets `exact: boolean`. TypeScript references (from the compiler) are exact. Java and
-  Python references (identifier matches) are not.
-- `find_references`, `find_callers` and `impact_analysis` start their output with one line when any
-  hit is approximate: "Approximate: these are name matches, not resolved symbols. Check each one."
-- The chat shows `≈` before approximate results.
+Java/Python experts return `approximate: true` on the result envelope (Go, Rust and plugin experts
+are marked too, since the Codex review of 1370184). The index propagates it
+through references, callers and impact, including empty results and unresolved symbols. Model
+output starts with an approximate warning; chat adds `≈`. Impact risk is labelled heuristic.
 
-### Measurement
+Implementation refinement: this replaces the proposed per-hit `exact` field. A result envelope
+also warns on zero hits and derived results, without asserting `exact: true` for every TypeScript
+lookup or breaking existing plugins. Absence of the flag is not a perfect-accuracy claim.
 
-A fixed sample: 30 symbols in the generated shopkit Java project and 30 in a Python sample. The
-ground truth comes from a language server (jdtls, pyright), recorded once as a JSON fixture. Garuda
-publishes precision and recall per language in the validation record. A test fails when the numbers
-drop below the recorded values.
+### Measurement (implemented)
+
+Thirty symbols in a generated shopkit Java project and thirty in Python are frozen in JSON, with
+reference locations captured from jdtls 1.61.0 and pyright 1.1.406. Tests score unique `path:line`
+sites, excluding the selected declaration, and reject a lower precision/recall or stale evidence.
+Fixed floors in the test code (the T10 values) apply on every run, also during a refresh, and a
+refresh variable set in CI fails (Codex review of 1370184). Only one capture is stored (a second, not stored, agreed at the time). The supplementary manual alias sample is separate.
+
+See [the evidence record](../quality-baseline/code-intelligence-baseline.md) for denominators,
+limits, toolchain and reproduction. Java precision/recall: 61.1%/91.7%; Python: 71.4%/93.8%.
+These synthetic, template-based measurements do not establish real-repository accuracy.
 
 ### Tests
 
-- Java and Python hits carry `exact: false`; TypeScript hits carry `exact: true`.
-- The tool output has the approximate line only when needed.
+- Java/Python metadata reaches model tools and chat, including missing/empty results.
+- TypeScript results in TS-only and mixed projects do not inherit the warning.
+- Truncation keeps the warning; malformed/stale/incomplete oracle evidence fails validation.
+- All 60 queries reproduce the recorded report; the scorer handles duplicates and empty predictions.
+- A report under a fixed floor fails, whatever the published file says; a refresh in CI fails.
 
 ## Docs to change with each patch
 
@@ -312,14 +412,20 @@ claims from T1.
 
 | Patch | Task | Content |
 | --- | --- | --- |
-| 0183 | T4 | This design, the architecture and HLD rows (planned). |
-| 0184 | T7 | Strict profile. |
-| 0185 | T8 | Audit docs and the checkpoint. |
-| 0186 | T10 | Approximate labels; the measured numbers. |
-| 0187 | T9 | The shared budget. |
-| 0188 | T6 | Job write scopes. |
-| 0189 | T5 | Staging backends and the change list (no question yet). |
-| 0190 | T5 | The question, apply, discard, conflict check, undo. |
-| 0191 | T5 | Docs, the live tests on macOS and Linux, the measured costs. |
+| 0183 | T4 | This design, the architecture and HLD rows (planned). Done. |
+| 0184 | T7 | Strict profile. Done. |
+| 0185 | T8 | Audit docs and the checkpoint. Done. |
+| 0186 | T8 | Checkpoint failure handling (second review). |
+| 0187 | T1 | Exact claims, second pass (second review). |
+| 0188 | T4 | This update: no fallback in T5, failures in T9, the new order. |
+| 0189 | T6 | Job write scopes. Done. |
+| 0190 | T6, T1 | Third review: scope bypasses (outside_sandbox, links, the test command); claims. |
+| 0191 | T9 | The shared budget. |
+| 0192 | T9 | Review of 31aab17: wrap-up request, provider retries, the floor, session charges, /compact. |
+| 0193 | T10 | Approximate labels; frozen 60-query LSP oracle and measured precision/recall. Implemented; validation in the evidence record. |
+| 0194 | T5 | Staging backends and the change list (no question yet). |
+| 0195 | T5 | The question, apply, discard, conflict check, undo. |
+| 0196 | T5 | Docs, the live tests on macOS and Linux, the measured costs. |
 
-The order puts the small, independent changes first. T5 comes last.
+The second review asked for T6 and T9 before any wider unattended pilot, so they come next. T5
+stays opt-in, and comes last, after its apply, discard, conflict and platform tests pass.

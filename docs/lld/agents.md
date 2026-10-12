@@ -7,7 +7,7 @@ Subagents in Garuda keep the primary orchestrator agent's context window lean, f
 Garuda implements a three-tier subagent architecture:
 
 1. **Explore Subagent (`explore.ts`, 0.3)**: A read-only reconnaissance agent that executes broad search queries across the repository using `glob`, `grep`, `read_file`, and code index tools.
-2. **Mixture-of-Experts (MoE) Language Specialists (`moe.ts`, 0.17)**: Autonomous specialist subagents for **Go**, **Rust**, **Python**, **Java**, and **TypeScript** equipped with language-specific AST tools, test runners (`cargo test`, `go test ./...`, etc.), and idiomatic prompt guidelines.
+2. **Mixture-of-Experts (MoE) Language Specialists (`moe.ts`, 0.17)**: Autonomous specialist subagents for **Go**, **Rust**, **Python**, **Java**, and **TypeScript** equipped with the code index tools (approximate outside JS/TS), test runners (`cargo test`, `go test ./...`, etc.), and idiomatic prompt guidelines.
 3. **Custom Agents (`custom.ts`, `agentTool.ts`, 0.5)**: User and project Markdown agents configured in Claude Code subagent format (`.garuda/agents/*.md`, `.claude/agents/*.md`).
 
 All subagent types share a common child execution engine (`child.ts`) that enforces security boundaries, session journaling, token budgets, and step limits.
@@ -258,11 +258,14 @@ You are an expert application security auditor...
 1. **Session Isolation**: Spawns a dedicated child session ID (e.g. `moe-rust-1`, `explore-2`, `agent-reviewer-1`) stored at `.garuda/sessions/<parent-id>/<child-id>.jsonl`.
 2. **Limit Guardrails**:
    - `maxSteps`: Model turns limit (default 20, max 200).
-   - `tokenBudget`: Input, output, and cache tokens cap (default 150,000).
+   - `tokenBudget`: Input, output, and cache tokens cap (default 150,000). Since 0.17 (review T9) the
+     child reserves in the parent's turn budget (`ToolContext.budget`): its own cap, inside what the
+     parent has left, and never into the parent's floor for its final answer. Parallel children
+     share it, so together they cannot pass the parent's cap.
    - The team policy's `limits` cap both, for explore, custom agents and MoE (`withPolicyLimits`, 0.14,
-     review). Limit: each child has its own budget; it does not take what the parent has left.
-3. **Wrap-Up Recovery**: When a child hits its step limit, its token limit or repeats a call, `runChild` adds a wrap-up prompt (`WRAP_UP`) and makes one more model call (tool calls in it are ignored), so the subagent can say what it found and what is still open. The call runs only when it fits in the budget that is left (G06): the tokens used so far, plus the context of the last response, plus the output limit, must not pass `tokenBudget`. With no room there is no call; the answer is the child's last text, or a note that says the budget ran out.
-4. **Usage Accounting**: Emits a `SubagentReport` attached to the tool's `ToolOutcome`. The primary orchestrator adds child token usage and cost to the parent session totals. The report's usage is the child session's whole usage: its responses, its compaction summaries and the wrap-up call (0.14.1, review). A run that fails after it used the model throws `SubagentFailure`, which carries the report; the registry adds it to the error outcome, so the tokens still count (on Ctrl-C they are not counted).
+     review). The child's cap is also constrained by the shared parent allowance.
+3. **Wrap-Up Recovery**: When a child hits its step limit, its token limit or repeats a call, `runChild` adds a wrap-up prompt (`WRAP_UP`) and makes one more model call (tool calls in it are ignored), so the subagent can say what it found and what is still open. The call runs only when it fits in the budget that is left (G06): the tokens used so far, plus the size of the wrap-up request (the larger of the last context and an estimate of the whole conversation with the wrap-up note), plus the output limit, must not pass `tokenBudget`, and (0.17) the reservation must fit in the shared budget. Since the third review the wrap-up request is built first (system prompt, tool list, conversation, wrap-up note) and reserved like a main call, also when the child made no step; the answer is cut to `LIMITS.childAnswerChars`. With no room there is no call; the answer is the child's last text, or a note that says the budget ran out.
+4. **Usage Accounting**: Emits a `SubagentReport` attached to the tool's `ToolOutcome`. The report's usage covers the child's responses, compaction summaries and wrap-up call. Each reported child charge is also saved immediately in the parent's `child_debit` records (review of 6c9f929). Returned reports add usage and cost and replace only the debits they cover. Cancellation retains pending charges even when no report returns; partial reports cannot erase descendant spend they omit. USD-cost breakdowns still depend on returned reports; pending debits protect the token allowance. Started parallel calls settle before the parent turn ends.
 5. **One end record**: `runAgent` runs with `endRecord: false`, and `runChild` writes the single `end` record of the child journal: the loop's stop reason, `wrap_up`, `no_wrap_up`, `error` or `interrupted`, with the final step count (0.14.1, review: there were two).
 6. **What the parent has**: a child's edits get the parent's diagnostics and formatters (`context.diagnostics`, `context.format`), and MoE specialists get Claude's web search when the runtime offers it (0.14.1, review). A model client that fails to start is not kept, so the next call tries again.
 

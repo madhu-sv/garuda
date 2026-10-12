@@ -1,3 +1,4 @@
+import { type Budget, fullRequestTokens } from "../loop/budget.js";
 import { callModelWithRetry, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
 import { hasServerBlocks, serverPairText, withoutServerBlocks } from "../model/serverTools.js";
 import type {
@@ -7,6 +8,7 @@ import type {
   ModelResponse,
   ToolResultBlock,
 } from "../model/types.js";
+import { reportedUsage } from "../model/types.js";
 import type { Session } from "../session/session.js";
 import { addCost } from "../session/session.js";
 import { compacted } from "../session/undo.js";
@@ -17,6 +19,9 @@ import { compacted } from "../session/undo.js";
  *   2. summary: if the estimate is still above `target`, the model summarises the older turns.
  * The most recent `keepSteps` assistant turns always stay in full.
  */
+
+/** The output limit of the summary request. */
+export const SUMMARY_MAX_TOKENS = 4096;
 
 export interface CompactionOptions {
   contextWindow: number;
@@ -29,6 +34,8 @@ export interface CompactionOptions {
   costOf?: (response: ModelResponse) => number | undefined;
   /** Waits before the retries of a broken summary stream (default: as the main loop). */
   retryDelaysMs?: readonly number[];
+  /** The turn's shared budget (0.17, T9): the summary call reserves in it. */
+  budget?: Budget;
 }
 
 export interface CompactionResult {
@@ -55,6 +62,15 @@ export const SUMMARY_SYSTEM = [
   "Write short plain sentences and lists. Do not invent facts.",
 ].join("\n");
 
+/** The next step starts with a compaction (the same test as `compactIfNeeded`, before the split). */
+export function compactionDue(
+  session: Session,
+  contextWindow: number,
+  threshold: number = COMPACTION_DEFAULTS.threshold,
+): boolean {
+  return session.contextTokens > contextWindow * threshold;
+}
+
 export async function compactIfNeeded(
   session: Session,
   model: ModelClient,
@@ -65,7 +81,7 @@ export async function compactIfNeeded(
   const target = options.target ?? COMPACTION_DEFAULTS.target;
   const keepSteps = options.keepSteps ?? COMPACTION_DEFAULTS.keepSteps;
   const before = session.contextTokens;
-  if (before <= options.contextWindow * threshold) return undefined;
+  if (!compactionDue(session, options.contextWindow, threshold)) return undefined;
 
   const split = splitIndex(session.messages, keepSteps);
   if (split <= 0) return undefined;
@@ -88,6 +104,7 @@ export async function compactIfNeeded(
     signal,
     undefined,
     options.retryDelaysMs,
+    options.budget,
   );
 }
 
@@ -99,7 +116,13 @@ export async function compactIfNeeded(
 export async function compactNow(
   session: Session,
   model: ModelClient,
-  options: { keepSteps?: number; focus?: string; costOf?: CompactionOptions["costOf"] },
+  options: {
+    keepSteps?: number;
+    focus?: string;
+    costOf?: CompactionOptions["costOf"];
+    /** The session's token budget (0.17, T9): /compact reserves in it too. */
+    budget?: Budget;
+  },
   signal: AbortSignal,
 ): Promise<CompactionResult | undefined> {
   const keepSteps = options.keepSteps ?? COMPACTION_DEFAULTS.keepSteps;
@@ -115,6 +138,8 @@ export async function compactNow(
     options.costOf,
     signal,
     options.focus,
+    undefined,
+    options.budget,
   );
 }
 
@@ -128,10 +153,11 @@ async function summaryStage(
   signal: AbortSignal,
   focus?: string,
   delays: readonly number[] = MODEL_RETRY_DELAYS_MS,
+  budget?: Budget,
 ): Promise<CompactionResult> {
   const older = trimmed.slice(0, split);
   const recent = trimmed.slice(split);
-  const summary = await summarise(model, older, signal, focus, delays);
+  const summary = await summarise(model, older, signal, focus, delays, budget, before);
   const summaryText = summary.content
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -153,8 +179,12 @@ async function summaryStage(
     ],
   };
   const messages = [opening, ...recent];
-  const costUsd = costOf?.(summary);
-  addCost(session, summary.usage, costUsd);
+  const costUsd = summary.usageReported === false ? undefined : costOf?.(summary);
+  if (summary.usageReported === false) {
+    // An estimate: the cost stays a known minimum, marked incomplete (review of 1370184).
+    session.costIncomplete = true;
+    addCost(session, reportedUsage(summary), session.costUsd === undefined ? undefined : 0);
+  } else addCost(session, reportedUsage(summary), costUsd);
   // The context also holds the system prompt and the tool list, which do not change: take off only
   // what the messages lost (0.8; before, the estimate counted the messages alone).
   const savedChars = Math.max(0, charCount(session.messages) - charCount(messages));
@@ -242,6 +272,8 @@ async function summarise(
   signal: AbortSignal,
   focus: string | undefined,
   delays: readonly number[],
+  budget?: Budget,
+  before = 0,
 ): Promise<ModelResponse> {
   const ask =
     focus === undefined || focus.trim() === ""
@@ -261,11 +293,20 @@ async function summarise(
       },
     ],
     tools: [],
-    maxTokens: 4096,
+    maxTokens: SUMMARY_MAX_TOKENS,
   };
   // The summary request is the largest of the session, so a dropped connection is most likely
   // here: retry it like a main call (0.14.1, review). Its text is not shown, so no events.
-  return callModelWithRetry(model, request, signal, () => {}, delays);
+  // The token budget (0.17, T9): the summary request reserves its own size (the transcript, at
+  // least the context before compaction) plus its output limit; also for /compact.
+  const metered =
+    budget === undefined
+      ? undefined
+      : {
+          budget,
+          tokens: Math.max(before, fullRequestTokens(request)) + SUMMARY_MAX_TOKENS,
+        };
+  return callModelWithRetry(model, request, signal, () => {}, delays, metered);
 }
 
 /** The older turns as plain text for the summary request. Long tool outputs are cut. */

@@ -2,6 +2,13 @@
 export const LIMITS = {
   /** Maximum characters in one tool result. */
   outputChars: 50_000,
+  /**
+   * Hard cap of one tool result, enforced by the registry (0.17, T9): the token budget keeps room
+   * for the parent's final answer, so a result must have a known bound.
+   */
+  resultChars: 100_000,
+  /** Cap of a subagent's answer and complete tool result, including hooks and metadata. */
+  childAnswerChars: 20_000,
   /** read_file: default and maximum lines per call. */
   readLines: 2_000,
   /** read_file and grep: longer lines are cut. */
@@ -16,6 +23,17 @@ export const LIMITS = {
   grepResults: 100,
   grepResultsMax: 500,
 } as const;
+
+/** Bound the complete result, keeping its beginning, end and truncation note inside the cap. */
+export function capResult(content: string, max: number = LIMITS.resultChars): string {
+  if (content.length <= max) return content;
+  const note = `\n[… result cut to ${max} characters]\n`;
+  if (max <= note.length) return note.slice(0, max);
+  const keep = max - note.length;
+  const head = Math.ceil(keep / 2);
+  const tail = Math.floor(keep / 2);
+  return `${content.slice(0, head)}${note}${tail === 0 ? "" : content.slice(-tail)}`;
+}
 
 export function cutLine(line: string, max: number = LIMITS.lineChars): string {
   return line.length <= max ? line : `${line.slice(0, max)}… [line cut at ${max} characters]`;

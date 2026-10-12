@@ -1,5 +1,6 @@
 import type { SessionRecord } from "./records.js";
 import { rebuildState } from "./resume.js";
+import { isCostIncomplete } from "./session.js";
 
 /** One row of /sessions (0.6). */
 export interface SessionSummary {
@@ -15,6 +16,8 @@ export interface SessionSummary {
   /** The model of the last start, resume or /models record. */
   model: string | undefined;
   costUsd: number | undefined;
+  /** `costUsd` is a minimum (review of 1370184). */
+  costIncomplete: boolean;
 }
 
 const TITLE_CHARS = 60;
@@ -39,6 +42,8 @@ export function summariseSession(
     turns: prompts.length,
     model: state.start?.model,
     costUsd: state.costUsd,
+    // A child debit with no report: its USD cost is not known (Codex review of 1370184).
+    costIncomplete: isCostIncomplete(state),
   };
 }
 

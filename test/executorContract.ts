@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import type { ExecPolicy, Executor } from "../src/sandbox/types.js";
-import { sleeping, uniqueSleep, waitUntil } from "./helpers.js";
+import { shellRunning, sleeping, uniqueSleep, waitUntil } from "./helpers.js";
 
 /**
  * The executor contract (N8). Every executor must pass this suite:
@@ -87,12 +87,19 @@ export function executorContract(name: string, make: () => Executor): void {
 
     it("shutdown() kills every running command at once", async () => {
       const marker = uniqueSleep();
-      const run = executor.run(`sleep ${marker} & wait`, policy({ timeoutMs: 20_000 }));
+      // Bare `wait` returns zero even for a killed child. Wait for this child's status so
+      // the shell cannot report success if the child receives SIGKILL before the shell does.
+      const run = executor.run(`sleep ${marker} & wait "$!"`, policy({ timeoutMs: 20_000 }));
       await waitUntil(() => sleeping(marker, root));
+      // The check sees the shell while it runs, so "gone" below is a real result.
+      expect(await shellRunning(marker, root)).toBe(true);
       executor.shutdown();
       const r = await run;
-      expect(r.exitCode).not.toBe(0);
       await waitUntil(async () => !(await sleeping(marker, root)));
+      // The shell (and any sandbox wrapper) is gone too, not only its child (Codex review of 1370184).
+      await waitUntil(async () => !(await shellRunning(marker, root)));
+      expect(r.exitCode).not.toBe(0);
+      expect(r.timedOut).toBe(false);
     });
 
     it("returns when a background child keeps the output open (0.14, review)", async () => {

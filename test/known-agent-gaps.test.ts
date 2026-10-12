@@ -292,7 +292,8 @@ describe("Known agent gaps: policy, execution, audit, indexing and plugin trust"
         tools: new ToolRegistry(defaultTools()),
         model: { spec: modelId, contextWindow: 100_000, client: async () => model },
         permissions,
-        limits: { maxSteps: 3, tokenBudget: 1000 },
+        // The tool list alone is more than 1 000 tokens, and each call reserves its request (0.17).
+        limits: { maxSteps: 3, tokenBudget: 100_000 },
         maxTokens: 20,
       },
       toolContext(root, { permissions, audit }),

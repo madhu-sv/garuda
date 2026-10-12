@@ -2,10 +2,10 @@ import { contextSize } from "../model/pricing.js";
 import { hasServerBlocks, withoutServerBlocks } from "../model/serverTools.js";
 import { type ThinkingChoice, withoutThinking } from "../model/thinking.js";
 import type { Message } from "../model/types.js";
-import { addUsage, ZERO_USAGE } from "../model/types.js";
+import { addUsage, reportedUsage, ZERO_USAGE } from "../model/types.js";
 import type { SessionRecord, StartRecord } from "./records.js";
 import { REDACTED } from "./redact.js";
-import { closeOpenToolCalls, createSession, type Session } from "./session.js";
+import { closeOpenToolCalls, createSession, type Session, settleChildDebits } from "./session.js";
 import type { SessionStore } from "./store.js";
 import {
   compacted,
@@ -21,7 +21,10 @@ export interface RebuiltState {
   messages: Message[];
   usage: typeof ZERO_USAGE;
   costUsd: number | undefined;
+  costIncomplete: boolean;
   contextTokens: number;
+  unreportedTokens: number;
+  childDebits: Map<string, number>;
   /** The last start or resume record: model, root and limits in use. */
   start: StartRecord | undefined;
   /** Undo points and redo entries (0.4). */
@@ -36,7 +39,10 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
     messages: [],
     usage: { ...ZERO_USAGE },
     costUsd: 0,
+    costIncomplete: false,
     contextTokens: 0,
+    unreportedTokens: 0,
+    childDebits: new Map(),
     start: undefined,
     undo: emptyUndoState(),
   };
@@ -82,12 +88,17 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         for (const call of record.calls) {
           if (call.subagent === undefined) continue;
           state.usage = addUsage(state.usage, call.subagent.usage);
+          settleChildDebits(state.childDebits, call.subagent);
+          if (call.subagent.costIncomplete === true) state.costIncomplete = true;
           addCost(call.subagent.costUsd);
         }
         break;
       case "assistant":
-        state.usage = addUsage(state.usage, record.response.usage);
-        addCost(record.costUsd);
+        state.usage = addUsage(state.usage, reportedUsage(record.response));
+        if (record.response.usageReported === false) {
+          state.costIncomplete = true;
+          addCost(state.costUsd === undefined ? undefined : 0);
+        } else addCost(record.costUsd);
         state.contextTokens = contextSize(record.response.usage);
         if (record.response.content.length > 0) {
           state.messages.push({ role: "assistant", content: record.response.content });
@@ -98,12 +109,31 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         compacted(state.undo);
         state.contextTokens = record.afterTokens;
         if (record.summary !== undefined) {
-          state.usage = addUsage(state.usage, record.summary.usage);
-          addCost(record.costUsd);
+          state.usage = addUsage(state.usage, reportedUsage(record.summary));
+          if (record.summary.usageReported === false) {
+            state.costIncomplete = true;
+            addCost(state.costUsd === undefined ? undefined : 0);
+          } else addCost(record.costUsd);
         }
         break;
       case "thinking":
         state.thinking = record.choice;
+        break;
+      case "unreported":
+        // Any request without reported usage keeps its reservation, including a successful one.
+        state.unreportedTokens += record.tokens;
+        state.costIncomplete = true;
+        break;
+      case "child_debit":
+        state.childDebits.set(
+          record.childSessionId,
+          (state.childDebits.get(record.childSessionId) ?? 0) + record.tokens,
+        );
+        break;
+      case "side_usage":
+        // A request outside the conversation, such as the job review (Codex review of 1370184).
+        state.usage = addUsage(state.usage, record.usage);
+        addCost(record.costUsd);
         break;
       case "end":
       case "title":
@@ -151,7 +181,10 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
       : messages;
   session.usage = state.usage;
   session.costUsd = state.costUsd;
+  session.costIncomplete = state.costIncomplete;
   session.contextTokens = state.contextTokens;
+  session.unreportedTokens = state.unreportedTokens;
+  session.childDebits = state.childDebits;
   session.undo = state.undo;
   if (state.thinking !== undefined) session.thinking = state.thinking;
   journal.write({ type: "resume", sessionId: id, ...options.start });

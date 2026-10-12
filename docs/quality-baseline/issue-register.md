@@ -155,6 +155,11 @@ dependents, Python strings, Go groups and generics, Java phantom symbols, ast_qu
 read-only cache and the plugin factory. Not covered yet: the five-language corpus above; the regex
 parsers remain heuristics.
 
+T10 follow-up (0.17): Java/Python references and derived callers/impact are labelled approximate,
+including empty results. A [60-query LSP reference corpus](code-intelligence-baseline.md) measures
+precision and recall, with separate manual alias cases. This partially addresses the evidence gap;
+it does not complete the five-language corpus or establish caller/impact accuracy.
+
 ## G09 Plugin dependency trust
 
 Priority P1, milestone M4, owner plugin/security maintainer. Source: `src/knowledge/plugins.ts`.

@@ -42,10 +42,12 @@ export class AnthropicClient implements ModelClient {
   }
 
   async *stream(request: ModelRequest, options?: StreamOptions): AsyncIterable<ModelEvent> {
-    const stream = this.client.messages.stream(
-      toWireParams(this.model, request),
-      options?.signal === undefined ? {} : { signal: options.signal },
-    );
+    const stream = this.client.messages.stream(toWireParams(this.model, request), {
+      ...(options?.signal === undefined ? {} : { signal: options.signal }),
+      // Under the token budget (0.17) the SDK must not send the request again on its own: the loop
+      // retries, and each of its attempts reserves first.
+      ...(options?.meter === undefined ? {} : { maxRetries: 0 }),
+    });
     for await (const event of stream) {
       if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
         yield { type: "text_delta", text: event.delta.text };
@@ -348,7 +350,11 @@ export class AnthropicBatchClient implements ModelClient {
     ) as Anthropic.Messages.MessageCreateParamsNonStreaming;
     const batch = await this.client.messages.batches.create(
       { requests: [{ custom_id: "garuda", params }] },
-      signal === undefined ? {} : { signal },
+      {
+        ...(signal === undefined ? {} : { signal }),
+        // Batch submission is a generation attempt too. The loop, not the SDK, owns retries.
+        ...(options?.meter === undefined ? {} : { maxRetries: 0 }),
+      },
     );
     const started = Date.now();
     this.onWait?.({ batchId: batch.id, waitedMs: 0, status: "created" });

@@ -15,15 +15,23 @@ import {
   testSummary,
 } from "../jobs/proof.js";
 import { jobReport } from "../jobs/text.js";
-import { cleanArgs, commitJob, jobChanges, prepareWorktree } from "../jobs/worktree.js";
+import {
+  cleanArgs,
+  commitJob,
+  jobChanges,
+  outsideScope,
+  prepareWorktree,
+} from "../jobs/worktree.js";
 import { TrustStore } from "../mcp/trust.js";
 import type { DeadlineClient } from "../model/deadline.js";
 import { totalTokens } from "../model/pricing.js";
 import { gateProjectSettings } from "../permissions/projectSettings.js";
 import { parseRule } from "../permissions/rules.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
+import { prepareWriteScope } from "../permissions/writeScope.js";
 import { createExecutor } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
+import { isCostIncomplete } from "../session/session.js";
 import { notificationBytes, pickChannel } from "./notify.js";
 import type { Renderer } from "./renderer.js";
 import type { TurnOutcome } from "./turn.js";
@@ -106,6 +114,7 @@ async function proveJob(
   };
   if (job.review !== false && result.commit !== undefined) {
     renderer.info("Reviewing the diff (a principal engineer's review)…");
+    const unreportedBefore = runtime.session?.unreportedTokens ?? 0;
     try {
       const diff = (
         await gitCommand(git, job.root, ["diff", "--no-renames", job.base, job.branch], {
@@ -133,8 +142,11 @@ async function proveJob(
     } catch (error) {
       proof.reviewError = (error as Error).message;
     }
+    // Review attempts with no reported usage (review of 3a9f51b): the review cost is a minimum.
+    if ((runtime.session?.unreportedTokens ?? 0) > unreportedBefore)
+      proof.reviewCostIncomplete = true;
   }
-  proof.verdict = jobVerdict(flags, proof.review?.verdict);
+  proof.verdict = jobVerdict(flags, proof.review?.verdict, proof.reviewError !== undefined);
   return proof;
 }
 
@@ -200,6 +212,16 @@ async function prepare(
     renderer.error(`The job's worktree failed: ${error.message}`);
     return 1;
   }
+  // The write scope (0.17, T6): no links out of the worktree; folders exist for the sandbox.
+  if (job.writeScope !== undefined) {
+    const problem = prepareWriteScope(job.worktree, job.writeScope);
+    if (problem !== undefined) {
+      renderer.error(
+        `The job's write scope cannot be used: ${problem}. Fix "writeScope" in ${JOBS_DIR}/${id}.json.`,
+      );
+      return 1;
+    }
+  }
   // The project's settings that loosen safety apply only when the user approved them (pinned for
   // the main checkout). A job has nobody to ask. Before, a job also took the project's allow rules
   // unchecked, with nobody there to see a question (review finding).
@@ -217,6 +239,7 @@ async function prepare(
     ...projectRest,
     ...(job.network === undefined ? {} : { network: { allow: job.network } }),
     allow: [...project.allow, ...job.allow.map((rule) => parseRule(rule))],
+    ...(job.writeScope === undefined ? {} : { writeScope: job.writeScope }),
     maxSteps: job.maxSteps,
     sandbox: {
       ...project.sandbox,
@@ -228,7 +251,11 @@ async function prepare(
   job.startedAt = new Date().toISOString();
   await saveJob(job);
   renderer.info(
-    `Job ${job.id}: ${job.title}\nBranch ${job.branch} · worktree ${job.worktree}\nApproved: ${job.allow.length === 0 ? "nothing beyond the sandbox" : job.allow.join(", ")}`,
+    `Job ${job.id}: ${job.title}\nBranch ${job.branch} · worktree ${job.worktree}\nApproved: ${job.allow.length === 0 ? "nothing beyond the sandbox" : job.allow.join(", ")}\n${
+      job.writeScope === undefined
+        ? "Write scope: none. Commands may write anywhere in the worktree."
+        : `Write scope: ${job.writeScope.length === 0 ? "nothing in the worktree" : job.writeScope.join(", ")} (the OS sandbox enforces it for commands).`
+    }`,
   );
   return { job, root: job.worktree, settings, denied: [], startedAt: Date.now() };
 }
@@ -273,6 +300,9 @@ export function msUntil(hour: number, minute: number, now: Date = new Date()): n
 }
 
 /** After the turn: commit the changes to the job branch, write the result and the report. */
+/** The job changed a file outside its write scope (0.17): no commit. */
+class ScopeViolation extends Error {}
+
 export async function finishJob(
   prepared: PreparedJob,
   outcome: TurnOutcome,
@@ -282,6 +312,7 @@ export async function finishJob(
   launchd: LaunchdRun = {},
 ): Promise<void> {
   const { job } = prepared;
+  let scopeFailure: string | undefined;
   const hadAgent = job.launchd !== undefined || launchd.fromLaunchd === true;
   delete job.launchd;
   const result: JobResult = {
@@ -289,6 +320,9 @@ export async function finishJob(
     steps: outcome.kind === "done" ? outcome.result.steps : 0,
     tokens: runtime.session === undefined ? 0 : totalTokens(runtime.session.usage),
     ...(runtime.session?.costUsd === undefined ? {} : { costUsd: runtime.session.costUsd }),
+    ...(runtime.session !== undefined && isCostIncomplete(runtime.session)
+      ? { costIncomplete: true }
+      : {}),
     durationMs: Date.now() - prepared.startedAt,
     ...(runtime.session === undefined ? {} : { sessionId: runtime.session.id }),
     files: [],
@@ -309,6 +343,14 @@ export async function finishJob(
     ...(outcome.kind === "error" ? { error: outcome.message } : {}),
   };
   try {
+    // The write scope (0.17, T6): a change outside it (the sandbox and the engine should have
+    // stopped it) fails the job, with no commit.
+    const outside = job.writeScope === undefined ? [] : await outsideScope(git, job);
+    if (outside.length > 0) {
+      scopeFailure = `changes outside the approved write scope, so nothing was committed: ${outside.slice(0, 20).join(", ")}${outside.length > 20 ? ", …" : ""}`;
+      result.error = [result.error, scopeFailure].filter(Boolean).join("; ");
+      throw new ScopeViolation();
+    }
     const commit = await commitJob(
       git,
       job,
@@ -317,14 +359,20 @@ export async function finishJob(
     if (commit !== undefined) result.commit = commit;
     result.files = await jobChanges(git, job);
   } catch (error) {
-    if (!(error instanceof JobGitError)) throw error;
-    result.error = [result.error, `commit: ${error.message}`].filter(Boolean).join("; ");
+    if (!(error instanceof ScopeViolation)) {
+      if (!(error instanceof JobGitError)) throw error;
+      result.error = [result.error, `commit: ${error.message}`].filter(Boolean).join("; ");
+    }
   }
   if (outcome.kind !== "interrupted") {
     result.proof = await proveJob(prepared, result, runtime, renderer, git);
   }
   job.status =
-    outcome.kind === "error" ? "failed" : outcome.kind === "interrupted" ? "stopped" : "done";
+    outcome.kind === "error" || scopeFailure !== undefined
+      ? "failed"
+      : outcome.kind === "interrupted"
+        ? "stopped"
+        : "done";
   job.endedAt = new Date().toISOString();
   job.result = result;
   await saveJob(job);

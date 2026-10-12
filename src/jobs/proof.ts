@@ -262,9 +262,16 @@ export function parseReview(text: string): { verdict: Verdict; text: string } {
   return { verdict: m?.[1]?.toLowerCase() === "ready" ? "ready" : "needs-look", text: text.trim() };
 }
 
-/** The job's verdict: "ready" only when nothing stops it and the review (when there is one) says so. */
-export function jobVerdict(flags: readonly RiskFlag[], review: Verdict | undefined): Verdict {
-  if (flags.some((f) => f.level === "stop")) return "needs-look";
+/**
+ * The job's verdict: "ready" only when nothing stops it and the review (when there is one) says so.
+ * A review that was asked for but failed is never "ready" (Codex review of 1370184): nobody looked.
+ */
+export function jobVerdict(
+  flags: readonly RiskFlag[],
+  review: Verdict | undefined,
+  reviewFailed = false,
+): Verdict {
+  if (reviewFailed || flags.some((f) => f.level === "stop")) return "needs-look";
   return review ?? (flags.length === 0 ? "ready" : "needs-look");
 }
 

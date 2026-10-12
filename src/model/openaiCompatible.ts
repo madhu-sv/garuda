@@ -1,6 +1,7 @@
 import { withoutServerBlocks } from "./serverTools.js";
 import { extractTextToolCalls, StreamHold, type TextToolCallMode } from "./textToolCalls.js";
 import type {
+  AttemptMeter,
   ContentBlock,
   Message,
   ModelClient,
@@ -24,7 +25,7 @@ import type {
  * - No cache breakpoints: the API has none. The system prompt and the tool list still keep the
  *   same bytes (N2), so servers with automatic prefix caching reuse them.
  * - Tool results become "tool" messages; the tool call id links them.
- * - A server that sends no usage gets an estimate (4 characters per token), so compaction still works.
+ * - Missing or incomplete usage gets a labelled estimate for context sizing. Its reservation stays spent.
  * - Some small models write a tool call as JSON text. Under the model's "textToolCalls" mode it
  *   becomes a real call (see textToolCalls.ts). While streamed text can still be one, the adapter
  *   holds it back from the screen.
@@ -57,7 +58,11 @@ export class OpenAICompatibleClient implements ModelClient {
   }
 
   async *stream(request: ModelRequest, options?: StreamOptions): AsyncIterable<ModelEvent> {
-    const http = await this.post(toWireBody(this.options.model, request), options?.signal);
+    const http = await this.post(
+      toWireBody(this.options.model, request),
+      options?.signal,
+      options?.meter,
+    );
     const mode = request.tools.length === 0 ? "off" : (this.options.textToolCalls ?? "whole");
     const state = newStreamState();
     // Holds back text while it can still be a tool call written as text.
@@ -88,7 +93,11 @@ export class OpenAICompatibleClient implements ModelClient {
     yield { type: "response", response };
   }
 
-  private async post(body: unknown, signal: AbortSignal | undefined): Promise<Response> {
+  private async post(
+    body: unknown,
+    signal: AbortSignal | undefined,
+    meter: AttemptMeter | undefined,
+  ): Promise<Response> {
     const url = `${this.options.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     const headers: Record<string, string> = {
       "content-type": "application/json",
@@ -109,6 +118,8 @@ export class OpenAICompatibleClient implements ModelClient {
         const cause = causeCode(error);
         if (attempt < this.delays.length && cause !== "ECONNREFUSED") {
           await sleep(this.delays[attempt] ?? 1_000, signal);
+          // The token budget (0.17): the failed request keeps its reservation; the retry reserves.
+          meter?.retry();
           continue;
         }
         throw new Error(
@@ -126,6 +137,7 @@ export class OpenAICompatibleClient implements ModelClient {
             ? Math.min(retryAfter, MAX_RETRY_AFTER_MS)
             : (this.delays[attempt] ?? 1_000);
         await sleep(wait, signal);
+        meter?.retry();
         continue;
       }
       throw new Error(
@@ -301,10 +313,12 @@ export function finishResponse(
       input: parseArguments(call.args),
     });
   }
+  const reported = providerUsage(state.usage);
   return {
     content,
     stopReason: stopReason(state, content),
-    usage: usageOf(state, request, content),
+    usage: reported ?? estimatedUsage(request, content),
+    ...(reported === undefined ? { usageReported: false } : {}),
   };
 }
 
@@ -334,22 +348,27 @@ function stopReason(state: StreamState, content: readonly ContentBlock[]): StopR
   return "other";
 }
 
-function usageOf(
-  state: StreamState,
-  request: ModelRequest,
-  content: readonly ContentBlock[],
-): Usage {
-  const u = state.usage;
-  if (u?.prompt_tokens !== undefined) {
-    const cached = u.prompt_tokens_details?.cached_tokens ?? 0;
-    return {
-      inputTokens: Math.max(0, u.prompt_tokens - cached),
-      outputTokens: u.completion_tokens ?? 0,
-      cacheReadTokens: cached,
-      cacheWriteTokens: 0,
-    };
-  }
-  // No usage from the server: estimate, so context tracking and compaction still work.
+/** Both totals must be present and valid before a reservation can be released. */
+function providerUsage(u: WireChunk["usage"]): Usage | undefined {
+  const input = u?.prompt_tokens;
+  const output = u?.completion_tokens;
+  const cached = u?.prompt_tokens_details?.cached_tokens ?? 0;
+  if (!tokenCount(input) || !tokenCount(output) || !tokenCount(cached) || cached > input)
+    return undefined;
+  return {
+    inputTokens: input - cached,
+    outputTokens: output,
+    cacheReadTokens: cached,
+    cacheWriteTokens: 0,
+  };
+}
+
+function tokenCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** Kept on the response for context tracking, never used as provider-reported expenditure. */
+function estimatedUsage(request: ModelRequest, content: readonly ContentBlock[]): Usage {
   const chars = (value: unknown) => JSON.stringify(value).length;
   return {
     inputTokens: Math.ceil(

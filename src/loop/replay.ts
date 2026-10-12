@@ -171,5 +171,6 @@ const NO_PERMISSIONS: PermissionGate = {
     throw new Error("Replay runs no commands.");
   },
   deniedByPolicy: () => true,
+  writeScopeDenial: async () => "replay: no writes",
   commandPolicyDenial: () => "Replay runs no commands.",
 };

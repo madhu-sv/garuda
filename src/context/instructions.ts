@@ -178,9 +178,9 @@ export function buildSystemPrompt(
       : []),
     ...(moe
       ? [
-          "For language-specific tasks (idiomatic architecture, refactoring, testing or AST investigation in Go,",
-          "Rust, Python, Java, or TypeScript), call delegate_expert: a specialized subagent executes in its own context",
-          "with deep language tooling and returns an actionable report.",
+          "For language-specific tasks (idiomatic architecture, refactoring, testing or code investigation in Go,",
+          "Rust, Python, Java, or TypeScript), call delegate_expert: a specialized subagent works in its own context",
+          "with the code index tools and the language's test command, and returns an actionable report.",
         ]
       : []),
     "Use edit_file to change a file and write_file to create one. Read the file with read_file first:",

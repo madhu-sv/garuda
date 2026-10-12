@@ -58,6 +58,8 @@
     "startup": "node scripts/startup.mjs",
     "eval": "node dist/cli/index.js eval",
     "baseline:capture": "node scripts/capture-quality-baseline.mjs",
+    "code-intelligence:validate": "vitest run test/lspReferenceSample.test.ts test/codeIntelligenceSample.test.ts --reporter=verbose",
+    "code-intelligence:capture": "node scripts/capture-reference-oracle.mjs",
     "prepack": "pnpm build"
   },
   "packageManager": "pnpm@10.28.0",

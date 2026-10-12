@@ -26,7 +26,7 @@ interface ToolSpec { name: string; description: string; inputSchema: Record<stri
 interface ServerToolSpec { type: "web_search"; maxUses; allowedDomains?; blockedDomains? }   // 0.6
 interface ModelRequest { system; messages: Message[]; tools: ToolSpec[]; serverTools?: ServerToolSpec[]; maxTokens; thinking?: ThinkingRequest }
 interface ThinkingRequest { adaptive?: boolean; display?: "summarized" | "omitted"; effort?: Effort; hide?: boolean }   // 0.9; hide 0.14
-interface ModelResponse { content: AssistantBlock[]; stopReason: StopReason; usage: Usage }
+interface ModelResponse { content: AssistantBlock[]; stopReason: StopReason; usage: Usage; usageReported?: boolean }
 type StopReason = "end_turn" | "tool_use" | "max_tokens" | "refusal" | "pause_turn" | "other";
 interface Usage { inputTokens; outputTokens; cacheReadTokens; cacheWriteTokens; webSearches? }
 type ModelEvent = { type: "text_delta"; text } | { type: "thinking_delta"; text } | { type: "response"; response: ModelResponse };
@@ -214,9 +214,16 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
   `tool_use` blocks, so the model sees proper `tool_calls` in the history.
 - Stop reasons: refusal or `content_filter` → refusal; tool calls → tool_use; `length` → max_tokens;
   `stop` → end_turn.
-- Usage: `prompt_tokens` minus `cached_tokens` is input, `cached_tokens` is cache read. A server that
-  sends no usage gets an estimate (4 characters per token), so context tracking and compaction still work.
-- Errors: two retries for 408, 409, 429 and 5xx (with `Retry-After` up to 30 s) and for network errors;
+- Usage: `prompt_tokens` minus `cached_tokens` is input, `cached_tokens` is cache read. Both input
+  and output totals must be nonnegative safe integers; cached tokens cannot exceed input. Missing,
+  partial or invalid usage gets a context estimate (4 characters per token), with `usageReported:
+  false`. `CallMeter.done(undefined)` keeps the full reservation; estimates do not enter reported
+  session totals or cost calculations. `reportedUsage(response)` returns zero for such estimates.
+  Model adapters that estimate usage must set this flag. Absent flags mean reported usage for
+  compatibility with existing adapters and journals.
+- Errors: two retries for 408, 409, 429 and 5xx (with `Retry-After` up to 30 s) and for network errors
+  (0.17: each retry first calls `options.meter.retry()`, which reserves in the token budget, or stops
+  the call when there is no room);
   "Cannot reach <provider> at <url>. Is the server running?" for a refused connection; a context-length
   error adds a hint to set `contextWindow`. Ctrl-C aborts the request.
 - No cache breakpoints: the API has none. The system prompt and tool list keep the same bytes, so servers
@@ -257,3 +264,19 @@ mapping, a local fake Chat Completions server: split chunks, tool calls, tool ca
 held text, `lines` mode set in `models.json`, usage, retries, errors, and a whole Garuda turn),
 `test/textToolCalls.test.ts` (the accepted forms in each mode, every rule that keeps text as text, and
 `StreamHold`).
+
+## The token budget at the provider (0.17, review T9)
+
+`StreamOptions.meter` (an `AttemptMeter`) comes from the loop's `CallMeter`. Every generation attempt
+of a call reserves in the turn's budget, and a request that ends with no reported usage keeps its
+whole reservation:
+
+- `OpenAICompatibleClient`: each HTTP retry calls `meter.retry()` first.
+- `DeadlineClient`: the switch from a batch request to the normal API calls `meter.retry()`; the
+  cancelled batch request stays spent.
+- `AnthropicClient`: with a meter, the SDK gets `maxRetries: 0`, so it never sends the request again
+  on its own; the loop retries, and each attempt reserves. A rate limit (429, `rate_limit_error`) is
+  now a transient error for the loop.
+- `AnthropicBatchClient`: metered `batches.create()` also gets `maxRetries: 0`. Submission retries
+  belong to Garuda's loop and reserve separately. Status polling, result retrieval and cancellation
+  are not additional generation submissions.

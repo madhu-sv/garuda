@@ -54,6 +54,7 @@ checks it again (schema, id, root, rules).
 | `root`, `base`, `branch`, `worktree` | The checkout; the start commit; `garuda/job-<id>`; `~/.garuda/worktrees/<project>-<hash>/<id>`. |
 | `model` | The chat's model at scheduling time; `garuda run -m` overrides it. |
 | `allow` | Permission rules for this job only, in the settings format. |
+| `writeScope` | (0.17, review T6) The paths in the worktree that the job may change: `src/` is a folder, `README.md` one file. `/schedule` proposes it (`proposeWriteScope`: the static prefix of each `edit_file`/`write_file` rule, and the build folders of the marker files) and the question shows it. Entries are relative, not the root, no `..`, not `.git`/`.garuda`, no link (`scopeEntryProblem`, `prepareWriteScope`). Absent: the whole worktree (a job from before 0.17, or a rule with no folder); the run's first lines say so. |
 | `onUnapproved` | `deny-and-continue` (the only mode in 0.7). |
 | `at`, `maxSteps`, `links` | The time given to `/schedule`; the step limit (100); linked ignored folders. |
 | `queue` | In the project's night queue (0.11); `/schedule` sets it. |
@@ -86,15 +87,26 @@ checks it again (schema, id, root, rules).
    run); symlinks for the links.
 3. Settings: the worktree's `.garuda/settings.json` (its parts that loosen safety only when the user
    pinned them for the main checkout: `gateProjectSettings`, no question), plus the job's rules in
-   `allow`, `maxSteps`, and the links' real paths as sandbox write paths (tool caches).
+   `allow`, `maxSteps`, the links' real paths as sandbox write paths (tool caches), and the write
+   scope (`settings.writeScope`). `prepareWriteScope` refuses a scope entry through a link or outside
+   the worktree, and creates missing folder entries (bubblewrap binds only existing paths).
 4. The CLI builds the runtime as for `-p`, with root = the worktree, the session store of the checkout (the
    session file stays out of the branch), the approver `AutoApprover("deny")` (consents for project MCP
    servers, hooks, skills, agents and Claude's search all get "no"), no undo snapshots (the branch is the
    safety net), and `unattended` for the engine. Without an OS sandbox the run stops (status `failed`).
 5. One turn with the job prompt. The engine allows reads, commands in the sandbox and the job's rules; a
    call that would ask is denied with `JOB_DENIAL` ("not in the approved list … continue without it … list
-   it") and recorded.
-6. `finishJob`: `git add -A` without `.garuda/sessions|index|evals|jobs` and the links, a commit with no
+   it") and recorded. With a write scope, the OS sandbox makes the worktree read-only except the
+   scope (`ExecPolicy.writeScope`), and the engine denies an edit outside it even when a rule allows
+   it (also recorded); the path as named and the place it reaches through links (for a new file: its
+   nearest existing parent) must both be in the scope (`scopeDenial`), and the write tools check it
+   again just before they write (`writeScopeDenial`). A job never runs a command outside the sandbox:
+   the engine denies `outside_sandbox` before it reads any rule. The job's test command has the same
+   scope; `execPolicy` creates missing scope folders again before each command (a clean after the
+   tests before the job removes empty ones).
+6. `finishJob`: with a write scope, `outsideScope` (`git status --porcelain -z --untracked-files=all`,
+   without Garuda's files and the links) first; a change outside the scope fails the job with no
+   commit. Then `git add -A` without `.garuda/sessions|index|evals|jobs` and the links, a commit with no
    hooks (`Garuda job <id>: <title>`, plus the stop reason when it did not end `done`), the changed files
    (`diff --name-status` and `--numstat` from the base), the result in the job file, the report in
    `.garuda/jobs/<id>.md`, and a notification (OSC 9 or the bell) when stdout is a terminal.
@@ -153,12 +165,17 @@ response: batch responses at half the token price.
   deleted or changed, manifests or lock files, CI/container/`.env` files, more than 20 files or 500 lines,
   denied calls, tests fixed by the job, no file changed.
 - The review (`job.review` not false, and a commit): `runtime.askModel(reviewerSystem(stack),
-  reviewPrompt(...))`, one request with no tools and no session. The role: a principal engineer and a
+  reviewPrompt(...))`, one request with no tools, outside the conversation. Since the Codex review of
+  1370184 it is under the session's token budget: it reserves its whole size plus 8,192 output tokens
+  first (no room: a clear error, recorded as `reviewError`), every attempt is metered, and its usage
+  goes into the session (`side_usage` record). The role: a principal engineer and a
   domain expert in the stack (`stackOf`: languages of the changed files, then the profiles' labels). The
   input: the job prompt, the files, the test results (the failing output), the flags and `git diff base
   branch` (cut at 60,000 characters). `parseReview` reads `VERDICT: ready | needs a look`; no verdict line
-  counts as "needs a look". A failed review is recorded (`reviewError`), never an error of the job.
-- `jobVerdict`: any STOP flag → needs a look; else the review's verdict; with no review, ready only
+  counts as "needs a look". A failed review is recorded (`reviewError`), never an error of the job,
+  and the verdict is "needs a look" (Codex review of 1370184: before, a clean job with a failed review
+  said "ready to merge", although nobody reviewed it).
+- `jobVerdict`: a failed review or any STOP flag → needs a look; else the review's verdict; with no review, ready only
   with no flag. The result keeps `proof` (verdict, test runs with the last 30 lines, flags, review text
   and cost). The report puts Verdict, Tests, Risk flags and the review first; the notification says
   "ready to merge" or "needs a look".
@@ -174,7 +191,11 @@ response: batch responses at half the token price.
   come along, output appended to `.garuda/jobs/<id>.log`, 24 h at most). The worktrees keep the jobs
   apart; each job still does its own proof of work and report, and does not notify.
 - At the end the command reloads the job files and writes one digest, `.garuda/jobs/night-<date>.md`
-  (`nightDigest`): a row per job (verdict, tests after, files, cost with the review, branch), then the
+  (`nightDigest`): a row per job (verdict, tests after, files, cost with the review, branch). Costs keep
+  their uncertainty (review of 3a9f51b; `jobCost`, `sumCosts`, `formatCost` in `jobs/text.ts`): an
+  unknown part makes the cost "unknown", never $0.0000; a minimum part (the run's `costIncomplete`,
+  or `proof.reviewCostIncomplete` when a review attempt had no reported usage) makes it
+  "≥ $X (incomplete)"; a job that started but has no result makes the total a minimum. Then the
   jobs that need a look with their flags and the review's summary. It sends one notification
   ("N job(s), M ready to merge") when stdout is a terminal.
 - `/jobs delete <id>` (`jobs/remove.ts`, `Runtime.deleteJob`): refuses a running job; `jobLeftovers`

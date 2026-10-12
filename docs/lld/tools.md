@@ -46,9 +46,15 @@ treats it as read-only.
   5. `permissions.check()` → "Permission denied: …", with `denied: true` on the outcome (0.5: the JSON
      output lists these calls in `permission_denials`). The request carries `callId` (0.15).
   6. `run()`, `toText()`, `isError()`. The tool's context has `callId` too, so a check inside the
-     tool (a `web_fetch` redirect to a new host) names the same call (0.15).
+     tool (a `web_fetch` redirect to a new host) names the same call (0.15). `capResult` (0.17, T9)
+     cuts the middle of a result over `LIMITS.resultChars` (100 000): the token budget needs a known
+     bound for each result. `runsSubagent(name)` tells the loop which tools run a subagent (their
+     answer is at most `LIMITS.childAnswerChars`, 20 000).
   7. `hooks.after()` may append feedback.
   8. `report()`, when the tool has it, adds the subagent report to the outcome.
+  9. Cap the complete outcome after hooks and formatting, including error and denial paths:
+     100 000 characters, or 20 000 for a subagent (metadata included). The loop applies the same
+     cap to custom/replay runners before emitting results or adding them to the conversation.
   Any exception becomes `Error: <tool> failed: <message>`.
 
 ## Built-in tools
@@ -60,15 +66,15 @@ treats it as read-only.
 | `grep` (F13) | yes | – | JavaScript regex, written in TypeScript (no ripgrep binary). The match runs in a worker thread (`regexWorker.ts`, 0.14.1, review): a pattern that backtracks badly cannot block Garuda; Ctrl-C ends it, and one file may take at most 10 s. Modes `files`, `content`, `count`; `glob`, `ignoreCase`, `context` (0–5). Skips binary files, files > 1 MB and sensitive files. Default 100 results, max 500. Files that the team policy denies (`denyPaths`) are not searched (G04). |
 | `write_file` (F10) | no | path | Create only (fails if the file exists), folders created, atomic (temp file + hard link). Approval shows the diff; `describe` also sets `CallInfo.change` (no old text; 0.15, for ACP's diff view). With LSP on, the result adds the errors of the new file (see [lsp.md](lsp.md)). |
 | `edit_file` (F11, UTF-8 only: a file that is not valid UTF-8 is refused, 0.14) | no | path | Replace one exact `old_string`. Fails on 0 or several matches, and when the file is unread or changed since the last read. The edit is planned before approval (real diff, and `CallInfo.change` with the text before and after; 0.15, for ACP) and planned again after it. Atomic write that keeps the file mode and follows symlinks. With LSP on, the result adds the errors of the changed file. Partial approval (U0): `describe` sets `hunks: true` when the preview is complete; with `context.approvedHunks` it writes only those hunks (`applyHunks`), refuses when the change differs from the reviewed preview, and names the rejected hunks in the result. |
-| `bash` (F14) | no | command | Runs through the Executor; timeout default 120 s, max 600 s; stdout and stderr capped at 30 000 bytes each (middle cut). Strips a leading `cd <root> &&`. Hints: read-only commands (use file tools), pipes into head/tail, sandbox blocks. `outside_sandbox: true` runs with no isolation and always asks. `is_daemon: true` (0.14, only with `daemons.enabled`) starts a background daemon and returns at once with its `daemonId`. Without the setting the parameter is not in the schema, and a call with it fails. |
+| `bash` (F14) | no | command | Runs through the Executor; timeout default 120 s, max 600 s; stdout and stderr capped at 30 000 bytes each (middle cut). Strips a leading `cd <root> &&`. Hints: read-only commands (use file tools), pipes into head/tail, sandbox blocks. `outside_sandbox: true` runs with no isolation and asks, unless an allow rule or a session answer covers the command; not in the strict profile (0.17). `is_daemon: true` (0.14, only with `daemons.enabled`) starts a background daemon and returns at once with its `daemonId`. Without the setting the parameter is not in the schema, and a call with it fails. |
 | `process_manager` (0.14) | yes | – | Only with `daemons.enabled`. Input: `action`, `daemonId?`, `lines?`, `stream?`. `list`, `status` (PID, uptime, exit code), `logs` (capped, newest lines) and `kill` (SIGTERM, then SIGKILL, to the process group). Marked read-only, so `list`, `status` and `logs` need no question; `kill` sets `CallInfo.mutates` (0.14, review), so the permission check treats that call as a write: it asks or follows a rule, and plan mode refuses it. The status becomes `stopped` when the process has ended, not when the stop was asked. |
 | `todo_write` | yes | – | The model's plan for a task with several steps: the whole list each call (≤ 30 steps of ≤ 300 characters; status `pending`, `in_progress`, `completed`; at most one in progress). The result shows the list back with `[x]`, `[>]`, `[ ]`; the chat draws a checklist. No state outside the conversation. Only with `todo.enabled: true` (off by default: in the A/B eval the model never called it, 0.4). |
 | `remember` | no | input | Appends one fact to `.garuda/memory.md` (max 8000 chars). The user approves each fact. Loads in the next session only (N2). |
 | `find_symbol` | yes | – | Code index: definitions (exact or fuzzy). Only when `codeIndex` is `lookup` or `all`. |
-| `find_references` | yes | – | Code index: every use, following imports. `lookup` or `all`. |
-| `find_callers` (0.15) | yes | – | Code index: invocation sites and enclosing caller scope (class, method, function). `lookup` or `all`. |
-| `impact_analysis` (0.15) | yes | target | Code index: blast radius, direct dependents, caller graph, risk level, and test suite discovery. `lookup` or `all`. |
-| `ast_query` (0.15) | yes | – | Code index: structural AST query filtering by kind, visibility, container, and wildcards. `lookup` or `all`. |
+| `find_references` | yes | – | Indexed reference sites; identifier matching outside JS/TS (Java, Python, Go, Rust, plugins) is marked approximate. `lookup` or `all`. |
+| `find_callers` (0.15) | yes | – | Indexed caller candidates and enclosing scopes; results outside JS/TS marked approximate. `lookup` or `all`. |
+| `impact_analysis` (0.15) | yes | target | Estimated dependents, callers, risk and affected tests; results outside JS/TS marked approximate, risk heuristic. `lookup` or `all`. |
+| `ast_query` (0.15) | yes | – | Symbol declaration filters by kind, visibility, container and wildcards; extraction outside JS/TS uses heuristics. `lookup` or `all`. |
 | `repo_map` | yes | – | Code index: exports and imports per file; a folder summary above 30 files. `all` only. |
 | `web_fetch` | no | URL | See [web.md](web.md). Present unless `web.enabled` is false. |
 | `explore` | yes | – | A read-only subagent answers one question about the code. See [agents.md](agents.md). Only with `subagents.enabled: true` (off by default). |

@@ -16,10 +16,11 @@ Version 0.16 introduces a **dynamic language plugin architecture** with:
 interface LanguageExpert {
   readonly id: string;
   readonly extensions: readonly string[];
+  readonly referencesApproximate?: true;                   // Java, Python, Go, Rust; user/project plugins
   summarise(path, content): FileNode;                         // exports + imports, cheap, cached
   findSymbols(files, query, exact, limit): SymbolHit[];
   findReferences(files, name, inFile, limit):
-    { definition?: SymbolHit; references: ReferenceHit[]; candidates: SymbolHit[] };
+    { definition?: SymbolHit; references: ReferenceHit[]; candidates: SymbolHit[]; approximate?: true };
 }
 
 interface LanguagePlugin {
@@ -41,8 +42,9 @@ interface LanguageStatus {
 interface SymbolHit { name; kind; path; line; container?; exported }
 interface ReferenceHit { path; line; text; isDefinition }
 interface CallerHit { callerName; callerKind; path; line; callLine; callText }
-interface CallerResult { definition?; callers: CallerHit[]; candidates: SymbolHit[] }
+interface CallerResult { definition?; callers: CallerHit[]; candidates: SymbolHit[]; approximate?: true }
 interface ImpactResult {
+  approximate?: true;
   target: string;
   targetKind: "file" | "symbol";
   resolvedPath?: string;
@@ -78,9 +80,29 @@ interface FileNode { path; exports: ExportEntry[]; imports: string[] }
 - Parser fixes (0.14): TS references find the name as a whole word on its line; Python multi-line
   strings that open mid-line (`X = """`); Go `var (`/`const (`/`type (` groups and generics; Java type
   declarations anchored at the line start, and `else`/`return`/`yield` lines are not methods.
+- TS reference search position (Codex review of 1370184): the search starts at the name node of the
+  declaration that the symbol search found (`declarationNameStart`), not at the first matching word on
+  its line. Before, `type Opts = { count: number }; export const count = …` searched the property
+  `count` and found no use of the const. The whole-word search stays only as a fallback for a
+  declaration with no matching name node.
 - `repoMap(dir)`: file nodes; unchanged files (same content hash) come from the cache in
   `.garuda/index/code-graph.json` (versioned). The cache is rewritten after each map.
 - Experts load lazily on first use, so the index costs nothing at startup.
+
+## Reference accuracy (T10)
+
+Java, Python, Go and Rust reference matching is approximate, and so is every user or project plugin:
+the index wraps a plugin's expert with `referencesApproximate`, because Garuda cannot vouch for its
+matching (Codex review of 1370184; before, Go/Rust/plugin results had no label). The optional result-level `approximate: true` flag
+is propagated to callers and impact, including empty/missing results. A built-in expert also
+advertises `referencesApproximate` so missing results can be labelled. Tool output warns before
+any hits; chat prefixes the warning with `≈`; derived impact risk is heuristic. Strings,
+shadowing, overloads and aliases can produce false positives or negatives. Use a compiler or
+language server before a rename. Production lookup does not invoke those servers.
+
+Absence of the optional flag does not certify perfect accuracy. Existing user plugins remain
+compatible. The [60-query reference evidence](../quality-baseline/code-intelligence-baseline.md)
+uses frozen jdtls/pyright locations; its scope and separate manual alias sample are documented.
 
 ## Built-in Language Plugins
 
@@ -90,26 +112,28 @@ interface FileNode { path; exports: ExportEntry[]; imports: string[] }
 - Follows imports, re-exports, and renames across files.
 
 ### Python (`python.ts`)
-- Pure AST parser for Python source code.
+- Heuristic declaration extraction and identifier matching; not a Python compiler or AST parser.
 - Extensions: `.py`.
 - Extracts imports, functions, async functions, classes, methods, constructors, variables, and constants.
 - Respects `__all__` export manifests and private naming conventions (`_foo`).
 
 ### Java (`java.ts`)
-- Pure AST parser for Java source code.
+- Heuristic declaration extraction and identifier matching; not a Java compiler or AST parser.
 - Extensions: `.java`.
 - Extracts packages, imports, classes, interfaces, records, enums, methods, constructors, and fields.
 - Tracks brace nesting depth for container resolution.
 
 ### Go (`plugins/go.ts` — 0.16)
-- Pure AST parser for Go source code.
+- Heuristic line-based declaration extraction and regular-expression identifier matching; not a Go
+  compiler or AST parser. References are marked approximate.
 - Extensions: `.go`.
 - Extracts packages, imports (single and block `import ( ... )`), structs, interfaces, type aliases.
 - Extracts functions and receiver methods (`func (r *Receiver) Method(...)`), setting receiver type as container.
 - Determines export status by capitalized identifier convention (`[A-Z]`).
 
 ### Rust (`plugins/rust.ts` — 0.16)
-- Pure AST parser for Rust source code.
+- Heuristic line-based declaration extraction and regular-expression identifier matching; not a Rust
+  compiler or AST parser. References are marked approximate.
 - Extensions: `.rs`.
 - Extracts modules (`mod`), imports (`use`), structs, enums, traits, type aliases, free functions, and macros (`macro_rules!`).
 - Tracks `impl [Trait for] Type { ... }` blocks with brace depth stack to associate methods with their container type.

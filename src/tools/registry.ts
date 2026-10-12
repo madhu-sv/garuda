@@ -2,6 +2,10 @@ import { z } from "zod";
 import { AuditWriteError } from "../audit/logger.js";
 import type { ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { CallInfo } from "../permissions/types.js";
+import { capResult, LIMITS } from "./limits.js";
+
+export { capResult } from "./limits.js";
+
 import {
   type AnyTool,
   SubagentFailure,
@@ -41,6 +45,10 @@ export class ToolRegistry implements ToolRunner {
     return this.tools.get(name)?.runsCommands === true;
   }
 
+  runsSubagent(name: string): boolean {
+    return this.tools.get(name)?.report !== undefined;
+  }
+
   /**
    * Tool definitions for the model, sorted by name.
    * A stable order keeps the prompt cache valid across turns (N2).
@@ -63,6 +71,13 @@ export class ToolRegistry implements ToolRunner {
    * The permission check runs after validation and before `run` (F17–F20).
    */
   async execute(call: ToolUseBlock, context: ToolContext): Promise<ToolOutcome> {
+    const outcome = await this.executeUnbounded(call, context);
+    const max = this.runsSubagent(call.name) ? LIMITS.childAnswerChars : LIMITS.resultChars;
+    // Apply the bound after formatting and hooks, including all errors and denial paths.
+    return { ...outcome, content: capResult(outcome.content, max) };
+  }
+
+  private async executeUnbounded(call: ToolUseBlock, context: ToolContext): Promise<ToolOutcome> {
     const tool = this.tools.get(call.name);
     if (tool === undefined) {
       return { content: `Error: unknown tool "${call.name}".`, isError: true };
@@ -139,7 +154,7 @@ export class ToolRegistry implements ToolRunner {
               ...(info?.preview === undefined ? {} : { approvedPreview: info.preview }),
             };
       const output: unknown = await tool.run(parsed.data, runContext);
-      const content = tool.toText ? tool.toText(output) : String(output);
+      const content = capResult(tool.toText ? tool.toText(output) : String(output));
       const outcome = { content, isError: tool.isError?.(output) === true };
       ran = outcome;
       await logRun(outcome.isError);

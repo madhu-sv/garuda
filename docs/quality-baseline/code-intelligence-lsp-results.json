@@ -1,0 +1,693 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "shopkit-java-python-lsp-v1",
+  "corpusSha256": "342aefb254f32070cf7aee7137ab5a58b58f5be18b74d14e336298cd6ccea913",
+  "oracleSha256": "28be74d1f3642ee5cdcc5fcc7c4ded0bd8b846f585d034591661bce43a38b8f7",
+  "measuredSources": [
+    {
+      "path": "src/knowledge/index.ts",
+      "sha256": "31e2d07934e1e3b0ade43020c6da427f19752c281ab10ee26b59c26d01d43ce9"
+    },
+    {
+      "path": "src/knowledge/java.ts",
+      "sha256": "8c2d8f65e6a80a3f9cb333e500f95aacccdc7918c10e9fe9a9dde01ea58f26e9"
+    },
+    {
+      "path": "src/knowledge/python.ts",
+      "sha256": "0c7265c88d1208c28dbb816b35ce0e60601623dc4a432a58b631af35a8e06349"
+    }
+  ],
+  "unit": "unique project-relative path:line, excluding the selected declaration",
+  "selection": "30 symbols per language, frozen before LSP capture; ten feature templates, three retail names per template; synthetic, not a representative real-repository estimate",
+  "limit": 1000,
+  "languages": {
+    "java": {
+      "queries": 30,
+      "truePositives": 33,
+      "falsePositives": 21,
+      "falseNegatives": 3,
+      "precision": 0.6111111111111112,
+      "recall": 0.9166666666666666
+    },
+    "python": {
+      "queries": 30,
+      "truePositives": 45,
+      "falsePositives": 18,
+      "falseNegatives": 3,
+      "precision": 0.7142857142857143,
+      "recall": 0.9375
+    }
+  },
+  "combined": {
+    "queries": 60,
+    "truePositives": 78,
+    "falsePositives": 39,
+    "falseNegatives": 6,
+    "precision": 0.6666666666666666,
+    "recall": 0.9285714285714286
+  },
+  "cases": [
+    {
+      "id": "java-01",
+      "language": "java",
+      "feature": "qualified call",
+      "actual": ["src/shopkit/case00/Use00.java:3"],
+      "expected": ["src/shopkit/case00/Use00.java:3"],
+      "truePositives": ["src/shopkit/case00/Use00.java:3"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-02",
+      "language": "java",
+      "feature": "static import",
+      "actual": ["src/shopkit/case01/Use01.java:2", "src/shopkit/case01/Use01.java:4"],
+      "expected": ["src/shopkit/case01/Use01.java:4"],
+      "truePositives": ["src/shopkit/case01/Use01.java:4"],
+      "falsePositives": ["src/shopkit/case01/Use01.java:2"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-03",
+      "language": "java",
+      "feature": "receiver homonym",
+      "actual": [
+        "src/shopkit/case02/Other02.java:2",
+        "src/shopkit/case02/Use02.java:3",
+        "src/shopkit/case02/Use02.java:4"
+      ],
+      "expected": ["src/shopkit/case02/Use02.java:3"],
+      "truePositives": ["src/shopkit/case02/Use02.java:3"],
+      "falsePositives": ["src/shopkit/case02/Other02.java:2", "src/shopkit/case02/Use02.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-04",
+      "language": "java",
+      "feature": "parameter shadow",
+      "actual": ["src/shopkit/case03/Use03.java:3", "src/shopkit/case03/Use03.java:4"],
+      "expected": ["src/shopkit/case03/Use03.java:3"],
+      "truePositives": ["src/shopkit/case03/Use03.java:3"],
+      "falsePositives": ["src/shopkit/case03/Use03.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-05",
+      "language": "java",
+      "feature": "string and comment",
+      "actual": ["src/shopkit/case04/Use04.java:3", "src/shopkit/case04/Use04.java:4"],
+      "expected": ["src/shopkit/case04/Use04.java:3"],
+      "truePositives": ["src/shopkit/case04/Use04.java:3"],
+      "falsePositives": ["src/shopkit/case04/Use04.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-06",
+      "language": "java",
+      "feature": "slash inside string before call",
+      "actual": [],
+      "expected": ["src/shopkit/case05/Use05.java:3"],
+      "truePositives": [],
+      "falsePositives": [],
+      "falseNegatives": ["src/shopkit/case05/Use05.java:3"]
+    },
+    {
+      "id": "java-07",
+      "language": "java",
+      "feature": "inherited method",
+      "actual": ["src/shopkit/case06/Use06.java:3"],
+      "expected": ["src/shopkit/case06/Use06.java:3"],
+      "truePositives": ["src/shopkit/case06/Use06.java:3"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-08",
+      "language": "java",
+      "feature": "overload selection",
+      "actual": [
+        "src/shopkit/case07/Target07.java:4",
+        "src/shopkit/case07/Use07.java:3",
+        "src/shopkit/case07/Use07.java:4"
+      ],
+      "expected": ["src/shopkit/case07/Use07.java:3"],
+      "truePositives": ["src/shopkit/case07/Use07.java:3"],
+      "falsePositives": ["src/shopkit/case07/Target07.java:4", "src/shopkit/case07/Use07.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-09",
+      "language": "java",
+      "feature": "method reference",
+      "actual": ["src/shopkit/case08/Use08.java:4", "src/shopkit/case08/Use08.java:5"],
+      "expected": ["src/shopkit/case08/Use08.java:4", "src/shopkit/case08/Use08.java:5"],
+      "truePositives": ["src/shopkit/case08/Use08.java:4", "src/shopkit/case08/Use08.java:5"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-10",
+      "language": "java",
+      "feature": "multiple uses on one line",
+      "actual": ["src/shopkit/case09/Use09.java:3", "src/shopkit/case09/Use09.java:4"],
+      "expected": ["src/shopkit/case09/Use09.java:3", "src/shopkit/case09/Use09.java:4"],
+      "truePositives": ["src/shopkit/case09/Use09.java:3", "src/shopkit/case09/Use09.java:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-11",
+      "language": "java",
+      "feature": "qualified call",
+      "actual": ["src/shopkit/case10/Use10.java:3"],
+      "expected": ["src/shopkit/case10/Use10.java:3"],
+      "truePositives": ["src/shopkit/case10/Use10.java:3"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-12",
+      "language": "java",
+      "feature": "static import",
+      "actual": ["src/shopkit/case11/Use11.java:2", "src/shopkit/case11/Use11.java:4"],
+      "expected": ["src/shopkit/case11/Use11.java:4"],
+      "truePositives": ["src/shopkit/case11/Use11.java:4"],
+      "falsePositives": ["src/shopkit/case11/Use11.java:2"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-13",
+      "language": "java",
+      "feature": "receiver homonym",
+      "actual": [
+        "src/shopkit/case12/Other12.java:2",
+        "src/shopkit/case12/Use12.java:3",
+        "src/shopkit/case12/Use12.java:4"
+      ],
+      "expected": ["src/shopkit/case12/Use12.java:3"],
+      "truePositives": ["src/shopkit/case12/Use12.java:3"],
+      "falsePositives": ["src/shopkit/case12/Other12.java:2", "src/shopkit/case12/Use12.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-14",
+      "language": "java",
+      "feature": "parameter shadow",
+      "actual": ["src/shopkit/case13/Use13.java:3", "src/shopkit/case13/Use13.java:4"],
+      "expected": ["src/shopkit/case13/Use13.java:3"],
+      "truePositives": ["src/shopkit/case13/Use13.java:3"],
+      "falsePositives": ["src/shopkit/case13/Use13.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-15",
+      "language": "java",
+      "feature": "string and comment",
+      "actual": ["src/shopkit/case14/Use14.java:3", "src/shopkit/case14/Use14.java:4"],
+      "expected": ["src/shopkit/case14/Use14.java:3"],
+      "truePositives": ["src/shopkit/case14/Use14.java:3"],
+      "falsePositives": ["src/shopkit/case14/Use14.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-16",
+      "language": "java",
+      "feature": "slash inside string before call",
+      "actual": [],
+      "expected": ["src/shopkit/case15/Use15.java:3"],
+      "truePositives": [],
+      "falsePositives": [],
+      "falseNegatives": ["src/shopkit/case15/Use15.java:3"]
+    },
+    {
+      "id": "java-17",
+      "language": "java",
+      "feature": "inherited method",
+      "actual": ["src/shopkit/case16/Use16.java:3"],
+      "expected": ["src/shopkit/case16/Use16.java:3"],
+      "truePositives": ["src/shopkit/case16/Use16.java:3"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-18",
+      "language": "java",
+      "feature": "overload selection",
+      "actual": [
+        "src/shopkit/case17/Target17.java:4",
+        "src/shopkit/case17/Use17.java:3",
+        "src/shopkit/case17/Use17.java:4"
+      ],
+      "expected": ["src/shopkit/case17/Use17.java:3"],
+      "truePositives": ["src/shopkit/case17/Use17.java:3"],
+      "falsePositives": ["src/shopkit/case17/Target17.java:4", "src/shopkit/case17/Use17.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-19",
+      "language": "java",
+      "feature": "method reference",
+      "actual": ["src/shopkit/case18/Use18.java:4", "src/shopkit/case18/Use18.java:5"],
+      "expected": ["src/shopkit/case18/Use18.java:4", "src/shopkit/case18/Use18.java:5"],
+      "truePositives": ["src/shopkit/case18/Use18.java:4", "src/shopkit/case18/Use18.java:5"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-20",
+      "language": "java",
+      "feature": "multiple uses on one line",
+      "actual": ["src/shopkit/case19/Use19.java:3", "src/shopkit/case19/Use19.java:4"],
+      "expected": ["src/shopkit/case19/Use19.java:3", "src/shopkit/case19/Use19.java:4"],
+      "truePositives": ["src/shopkit/case19/Use19.java:3", "src/shopkit/case19/Use19.java:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-21",
+      "language": "java",
+      "feature": "qualified call",
+      "actual": ["src/shopkit/case20/Use20.java:3"],
+      "expected": ["src/shopkit/case20/Use20.java:3"],
+      "truePositives": ["src/shopkit/case20/Use20.java:3"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-22",
+      "language": "java",
+      "feature": "static import",
+      "actual": ["src/shopkit/case21/Use21.java:2", "src/shopkit/case21/Use21.java:4"],
+      "expected": ["src/shopkit/case21/Use21.java:4"],
+      "truePositives": ["src/shopkit/case21/Use21.java:4"],
+      "falsePositives": ["src/shopkit/case21/Use21.java:2"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-23",
+      "language": "java",
+      "feature": "receiver homonym",
+      "actual": [
+        "src/shopkit/case22/Other22.java:2",
+        "src/shopkit/case22/Use22.java:3",
+        "src/shopkit/case22/Use22.java:4"
+      ],
+      "expected": ["src/shopkit/case22/Use22.java:3"],
+      "truePositives": ["src/shopkit/case22/Use22.java:3"],
+      "falsePositives": ["src/shopkit/case22/Other22.java:2", "src/shopkit/case22/Use22.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-24",
+      "language": "java",
+      "feature": "parameter shadow",
+      "actual": ["src/shopkit/case23/Use23.java:3", "src/shopkit/case23/Use23.java:4"],
+      "expected": ["src/shopkit/case23/Use23.java:3"],
+      "truePositives": ["src/shopkit/case23/Use23.java:3"],
+      "falsePositives": ["src/shopkit/case23/Use23.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-25",
+      "language": "java",
+      "feature": "string and comment",
+      "actual": ["src/shopkit/case24/Use24.java:3", "src/shopkit/case24/Use24.java:4"],
+      "expected": ["src/shopkit/case24/Use24.java:3"],
+      "truePositives": ["src/shopkit/case24/Use24.java:3"],
+      "falsePositives": ["src/shopkit/case24/Use24.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-26",
+      "language": "java",
+      "feature": "slash inside string before call",
+      "actual": [],
+      "expected": ["src/shopkit/case25/Use25.java:3"],
+      "truePositives": [],
+      "falsePositives": [],
+      "falseNegatives": ["src/shopkit/case25/Use25.java:3"]
+    },
+    {
+      "id": "java-27",
+      "language": "java",
+      "feature": "inherited method",
+      "actual": ["src/shopkit/case26/Use26.java:3"],
+      "expected": ["src/shopkit/case26/Use26.java:3"],
+      "truePositives": ["src/shopkit/case26/Use26.java:3"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-28",
+      "language": "java",
+      "feature": "overload selection",
+      "actual": [
+        "src/shopkit/case27/Target27.java:4",
+        "src/shopkit/case27/Use27.java:3",
+        "src/shopkit/case27/Use27.java:4"
+      ],
+      "expected": ["src/shopkit/case27/Use27.java:3"],
+      "truePositives": ["src/shopkit/case27/Use27.java:3"],
+      "falsePositives": ["src/shopkit/case27/Target27.java:4", "src/shopkit/case27/Use27.java:4"],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-29",
+      "language": "java",
+      "feature": "method reference",
+      "actual": ["src/shopkit/case28/Use28.java:4", "src/shopkit/case28/Use28.java:5"],
+      "expected": ["src/shopkit/case28/Use28.java:4", "src/shopkit/case28/Use28.java:5"],
+      "truePositives": ["src/shopkit/case28/Use28.java:4", "src/shopkit/case28/Use28.java:5"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "java-30",
+      "language": "java",
+      "feature": "multiple uses on one line",
+      "actual": ["src/shopkit/case29/Use29.java:3", "src/shopkit/case29/Use29.java:4"],
+      "expected": ["src/shopkit/case29/Use29.java:3", "src/shopkit/case29/Use29.java:4"],
+      "truePositives": ["src/shopkit/case29/Use29.java:3", "src/shopkit/case29/Use29.java:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-01",
+      "language": "python",
+      "feature": "direct import",
+      "actual": ["case00/use.py:1", "case00/use.py:4"],
+      "expected": ["case00/use.py:1", "case00/use.py:4"],
+      "truePositives": ["case00/use.py:1", "case00/use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-02",
+      "language": "python",
+      "feature": "renamed import",
+      "actual": ["case01/use.py:1"],
+      "expected": ["case01/use.py:1"],
+      "truePositives": ["case01/use.py:1"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-03",
+      "language": "python",
+      "feature": "module qualified call",
+      "actual": ["case02/use.py:4"],
+      "expected": ["case02/use.py:4"],
+      "truePositives": ["case02/use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-04",
+      "language": "python",
+      "feature": "module alias",
+      "actual": ["case03/use.py:4"],
+      "expected": ["case03/use.py:4"],
+      "truePositives": ["case03/use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-05",
+      "language": "python",
+      "feature": "parameter shadow",
+      "actual": ["case04/use.py:1", "case04/use.py:4", "case04/use.py:6", "case04/use.py:7"],
+      "expected": ["case04/use.py:1", "case04/use.py:4"],
+      "truePositives": ["case04/use.py:1", "case04/use.py:4"],
+      "falsePositives": ["case04/use.py:6", "case04/use.py:7"],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-06",
+      "language": "python",
+      "feature": "module homonym",
+      "actual": [
+        "case05/other.py:1",
+        "case05/unrelated.py:1",
+        "case05/unrelated.py:2",
+        "case05/use.py:1",
+        "case05/use.py:4"
+      ],
+      "expected": ["case05/use.py:1", "case05/use.py:4"],
+      "truePositives": ["case05/use.py:1", "case05/use.py:4"],
+      "falsePositives": ["case05/other.py:1", "case05/unrelated.py:1", "case05/unrelated.py:2"],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-07",
+      "language": "python",
+      "feature": "string and comment",
+      "actual": ["case06/use.py:1", "case06/use.py:4", "case06/use.py:6"],
+      "expected": ["case06/use.py:1", "case06/use.py:4"],
+      "truePositives": ["case06/use.py:1", "case06/use.py:4"],
+      "falsePositives": ["case06/use.py:6"],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-08",
+      "language": "python",
+      "feature": "hash inside string before call",
+      "actual": ["case07/use.py:1"],
+      "expected": ["case07/use.py:1", "case07/use.py:4"],
+      "truePositives": ["case07/use.py:1"],
+      "falsePositives": [],
+      "falseNegatives": ["case07/use.py:4"]
+    },
+    {
+      "id": "python-09",
+      "language": "python",
+      "feature": "reexport alias",
+      "actual": ["case08/api.py:1"],
+      "expected": ["case08/api.py:1"],
+      "truePositives": ["case08/api.py:1"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-10",
+      "language": "python",
+      "feature": "assigned callable",
+      "actual": ["case09/use.py:1", "case09/use.py:2"],
+      "expected": ["case09/use.py:1", "case09/use.py:2"],
+      "truePositives": ["case09/use.py:1", "case09/use.py:2"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-11",
+      "language": "python",
+      "feature": "direct import",
+      "actual": ["case10/use.py:1", "case10/use.py:4"],
+      "expected": ["case10/use.py:1", "case10/use.py:4"],
+      "truePositives": ["case10/use.py:1", "case10/use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-12",
+      "language": "python",
+      "feature": "renamed import",
+      "actual": ["case11/use.py:1"],
+      "expected": ["case11/use.py:1"],
+      "truePositives": ["case11/use.py:1"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-13",
+      "language": "python",
+      "feature": "module qualified call",
+      "actual": ["case12/use.py:4"],
+      "expected": ["case12/use.py:4"],
+      "truePositives": ["case12/use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-14",
+      "language": "python",
+      "feature": "module alias",
+      "actual": ["case13/use.py:4"],
+      "expected": ["case13/use.py:4"],
+      "truePositives": ["case13/use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-15",
+      "language": "python",
+      "feature": "parameter shadow",
+      "actual": ["case14/use.py:1", "case14/use.py:4", "case14/use.py:6", "case14/use.py:7"],
+      "expected": ["case14/use.py:1", "case14/use.py:4"],
+      "truePositives": ["case14/use.py:1", "case14/use.py:4"],
+      "falsePositives": ["case14/use.py:6", "case14/use.py:7"],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-16",
+      "language": "python",
+      "feature": "module homonym",
+      "actual": [
+        "case15/other.py:1",
+        "case15/unrelated.py:1",
+        "case15/unrelated.py:2",
+        "case15/use.py:1",
+        "case15/use.py:4"
+      ],
+      "expected": ["case15/use.py:1", "case15/use.py:4"],
+      "truePositives": ["case15/use.py:1", "case15/use.py:4"],
+      "falsePositives": ["case15/other.py:1", "case15/unrelated.py:1", "case15/unrelated.py:2"],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-17",
+      "language": "python",
+      "feature": "string and comment",
+      "actual": ["case16/use.py:1", "case16/use.py:4", "case16/use.py:6"],
+      "expected": ["case16/use.py:1", "case16/use.py:4"],
+      "truePositives": ["case16/use.py:1", "case16/use.py:4"],
+      "falsePositives": ["case16/use.py:6"],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-18",
+      "language": "python",
+      "feature": "hash inside string before call",
+      "actual": ["case17/use.py:1"],
+      "expected": ["case17/use.py:1", "case17/use.py:4"],
+      "truePositives": ["case17/use.py:1"],
+      "falsePositives": [],
+      "falseNegatives": ["case17/use.py:4"]
+    },
+    {
+      "id": "python-19",
+      "language": "python",
+      "feature": "reexport alias",
+      "actual": ["case18/api.py:1"],
+      "expected": ["case18/api.py:1"],
+      "truePositives": ["case18/api.py:1"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-20",
+      "language": "python",
+      "feature": "assigned callable",
+      "actual": ["case19/use.py:1", "case19/use.py:2"],
+      "expected": ["case19/use.py:1", "case19/use.py:2"],
+      "truePositives": ["case19/use.py:1", "case19/use.py:2"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-21",
+      "language": "python",
+      "feature": "direct import",
+      "actual": ["case20/use.py:1", "case20/use.py:4"],
+      "expected": ["case20/use.py:1", "case20/use.py:4"],
+      "truePositives": ["case20/use.py:1", "case20/use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-22",
+      "language": "python",
+      "feature": "renamed import",
+      "actual": ["case21/use.py:1"],
+      "expected": ["case21/use.py:1"],
+      "truePositives": ["case21/use.py:1"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-23",
+      "language": "python",
+      "feature": "module qualified call",
+      "actual": ["case22/use.py:4"],
+      "expected": ["case22/use.py:4"],
+      "truePositives": ["case22/use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-24",
+      "language": "python",
+      "feature": "module alias",
+      "actual": ["case23/use.py:4"],
+      "expected": ["case23/use.py:4"],
+      "truePositives": ["case23/use.py:4"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-25",
+      "language": "python",
+      "feature": "parameter shadow",
+      "actual": ["case24/use.py:1", "case24/use.py:4", "case24/use.py:6", "case24/use.py:7"],
+      "expected": ["case24/use.py:1", "case24/use.py:4"],
+      "truePositives": ["case24/use.py:1", "case24/use.py:4"],
+      "falsePositives": ["case24/use.py:6", "case24/use.py:7"],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-26",
+      "language": "python",
+      "feature": "module homonym",
+      "actual": [
+        "case25/other.py:1",
+        "case25/unrelated.py:1",
+        "case25/unrelated.py:2",
+        "case25/use.py:1",
+        "case25/use.py:4"
+      ],
+      "expected": ["case25/use.py:1", "case25/use.py:4"],
+      "truePositives": ["case25/use.py:1", "case25/use.py:4"],
+      "falsePositives": ["case25/other.py:1", "case25/unrelated.py:1", "case25/unrelated.py:2"],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-27",
+      "language": "python",
+      "feature": "string and comment",
+      "actual": ["case26/use.py:1", "case26/use.py:4", "case26/use.py:6"],
+      "expected": ["case26/use.py:1", "case26/use.py:4"],
+      "truePositives": ["case26/use.py:1", "case26/use.py:4"],
+      "falsePositives": ["case26/use.py:6"],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-28",
+      "language": "python",
+      "feature": "hash inside string before call",
+      "actual": ["case27/use.py:1"],
+      "expected": ["case27/use.py:1", "case27/use.py:4"],
+      "truePositives": ["case27/use.py:1"],
+      "falsePositives": [],
+      "falseNegatives": ["case27/use.py:4"]
+    },
+    {
+      "id": "python-29",
+      "language": "python",
+      "feature": "reexport alias",
+      "actual": ["case28/api.py:1"],
+      "expected": ["case28/api.py:1"],
+      "truePositives": ["case28/api.py:1"],
+      "falsePositives": [],
+      "falseNegatives": []
+    },
+    {
+      "id": "python-30",
+      "language": "python",
+      "feature": "assigned callable",
+      "actual": ["case29/use.py:1", "case29/use.py:2"],
+      "expected": ["case29/use.py:1", "case29/use.py:2"],
+      "truePositives": ["case29/use.py:1", "case29/use.py:2"],
+      "falsePositives": [],
+      "falseNegatives": []
+    }
+  ]
+}

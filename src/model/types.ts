@@ -150,6 +150,8 @@ export interface ModelResponse {
   content: AssistantBlock[];
   stopReason: StopReason;
   usage: Usage;
+  /** False when `usage` is an estimate, not a complete provider report. Absent: reported (legacy). */
+  usageReported?: boolean;
   /** The share of the token price that this response costs (0.7: 0.5 through the Batch API). */
   priceFactor?: number;
 }
@@ -163,6 +165,16 @@ export type ModelEvent =
 
 export interface StreamOptions {
   signal?: AbortSignal;
+  /**
+   * The token budget's meter for this call (0.17, T9). A client that sends the request again on its
+   * own (an HTTP retry, a batch job's switch to the normal API) calls `retry()` first: it reserves
+   * for the new request, or throws when the budget has no room.
+   */
+  meter?: AttemptMeter;
+}
+
+export interface AttemptMeter {
+  retry(): void;
 }
 
 /**
@@ -181,6 +193,11 @@ export const ZERO_USAGE: Usage = {
   cacheReadTokens: 0,
   cacheWriteTokens: 0,
 };
+
+/** Only provider-reported usage belongs in session totals; estimates still size the context. */
+export function reportedUsage(response: ModelResponse): Usage {
+  return response.usageReported === false ? ZERO_USAGE : response.usage;
+}
 
 export function addUsage(a: Usage, b: Usage): Usage {
   const searches = (a.webSearches ?? 0) + (b.webSearches ?? 0);

@@ -47,7 +47,7 @@ sequenceDiagram
 ```
 
 The executor choice decides much of the behaviour: with an OS sandbox, commands run with no approval;
-without one, every command asks. MCP servers and hooks start later, before the first turn, because
+without one, every command asks (unless an allow rule covers it). MCP servers and hooks start later, before the first turn, because
 their consent questions need the chat UI.
 
 ## 3. One turn
@@ -142,7 +142,7 @@ sequenceDiagram
 
 When `moe.enabled` is on (or `subagents.enabled: true`), the orchestrator can call `delegate_expert`.
 The task is routed via `inferLanguage` to a language specialist (Go, Rust, Python, Java, TypeScript),
-which spawns an isolated child subagent with language-specific AST tools, test runners (`cargo test`, `go test ./...`,
+which spawns an isolated child subagent with the code index tools (approximate outside JS/TS), test runners (`cargo test`, `go test ./...`,
 `pytest`, `mvn test`, `pnpm test`), and idiomatic prompt rules. Details: [lld/agents.md](lld/agents.md).
 
 ```mermaid
@@ -265,7 +265,7 @@ name for MCP servers (`mcp__github__*`).
 
 The executor is Seatbelt on macOS, bubblewrap on Linux, or the host when neither works (`auto`).
 
-0.17, planned (see [lld/bounded-changes.md](lld/bounded-changes.md)): with `"commands": { "mode": "staged" }` (opt-in), a `bash` command runs in a staging copy of the project and its changes ask before they reach the project. The strict profile (0.17, done; opt-in) requires the OS sandbox: no host fallback and no `outside_sandbox`. A job's commands write only in its approved folders.
+0.17, planned (see [lld/bounded-changes.md](lld/bounded-changes.md)): with `"commands": { "mode": "staged" }` (opt-in), a `bash` command runs in a staging copy of the project and its changes ask before they reach the project. The strict profile (0.17, done; opt-in) requires the OS sandbox: no host fallback and no `outside_sandbox`. A job's commands and edits write only in its approved paths (0.17, done: job write scopes).
 
 Network allowlist (0.13). With `network.allow` in the settings, the runtime starts a local proxy
 before the first turn (after the user agreed to the project's list). Sandboxed commands get
@@ -400,7 +400,7 @@ hunk (a cut preview has no `h`). Tests check the file on disk (`test/hunkApprova
 | Code index | `.garuda/settings.json` (`codeIndex`) | `find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`, `repo_map`. |
 | LSP diagnostics | `.garuda/settings.json` (`lsp`), `--lsp`, `~/.garuda/lsp.json` | Language server errors in edit results. |
 | Formatters (0.10) | `.garuda/settings.json` (`formatters`) | The project's formatter after each edit; off by default. |
-| Language experts & plugins (0.16) | `~/.garuda/languages/` (`.garuda/languages/` is not loaded, merge gate) | Code index AST support for languages (TS/JS, Python, Java, Go, Rust, and user plugins). |
+| Language experts & plugins (0.16) | `~/.garuda/languages/` (`.garuda/languages/` is not loaded, merge gate) | Local code index for TS/JS, Python, Java, Go, Rust and user plugins. T10 (0.17 implemented): references outside JS/TS (Java, Python, Go, Rust, plugins) and derived callers/impact carry an approximate warning; precision/recall measured against 60 frozen LSP queries. |
 | MoE language specialists (0.17) | `.garuda/settings.json` (`moe`), built-in | Subagent delegation tool `delegate_expert` and `/experts`. |
 | Team policy & audit log (0.17, W5) | The managed policy file and `~/.garuda/policy.json` (never the project's), `~/.garuda/audit/<project>-<hash>/*.jsonl` | Team guardrails that a project cannot loosen; an audit log with redaction and a hash chain per file (tamper-evident, not tamper-proof), with `/audit` and `/audit verify`. |
 | Executors | `src/sandbox/` (`Executor`) | Another isolation technology. |

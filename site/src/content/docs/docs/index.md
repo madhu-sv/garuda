@@ -13,7 +13,8 @@ Garuda is built safety first:
   project, the temp folders and the package caches, and they have no network unless you open it.
 - **Edits ask first.** An edit shows its diff. You allow it once, for the session, or not at all.
   Commands in the sandbox run with no question, inside its limits; a command outside the sandbox
-  always asks. `/undo` restores what a turn changed, commands included.
+  asks, unless one of your allow rules covers it. `/undo` restores the files in its snapshot
+  (ignored files, such as build output, are not in it).
 - **Your rules decide.** Deny rules always win. A team policy sets limits that a project cannot
   loosen, and an audit log records every decision.
 

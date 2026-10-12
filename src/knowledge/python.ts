@@ -1,6 +1,13 @@
 import { readFileSync, statSync } from "node:fs";
 import { isAbsolute } from "node:path";
-import type { ExportEntry, FileNode, LanguageExpert, ReferenceHit, SymbolHit } from "./types.js";
+import type {
+  ExportEntry,
+  FileNode,
+  LanguageExpert,
+  ReferenceHit,
+  ReferenceResult,
+  SymbolHit,
+} from "./types.js";
 
 export const PYTHON_EXTENSIONS = [".py", ".pyw"] as const;
 
@@ -18,6 +25,7 @@ interface ParsedPythonFile {
 export class PythonExpert implements LanguageExpert {
   readonly id = "python";
   readonly extensions = PYTHON_EXTENSIONS;
+  readonly referencesApproximate = true;
   private readonly cache = new Map<
     string,
     { mtimeMs: number; size: number; parsed: ParsedPythonFile }
@@ -63,17 +71,13 @@ export class PythonExpert implements LanguageExpert {
     name: string,
     inFile: string | undefined,
     limit: number,
-  ): {
-    definition: SymbolHit | undefined;
-    references: ReferenceHit[];
-    candidates: SymbolHit[];
-  } {
+  ): ReferenceResult {
     const candidates = this.findSymbols(files, name, true, 20).filter(
       (c) => inFile === undefined || c.path === inFile,
     );
     const definition = candidates[0];
     if (definition === undefined) {
-      return { definition: undefined, references: [], candidates };
+      return { definition: undefined, references: [], candidates, approximate: true };
     }
 
     const references: ReferenceHit[] = [];
@@ -108,7 +112,7 @@ export class PythonExpert implements LanguageExpert {
     }
 
     references.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
-    return { definition, references, candidates };
+    return { definition, references, candidates, approximate: true };
   }
 
   private getOrParse(relPath: string): ParsedPythonFile | undefined {

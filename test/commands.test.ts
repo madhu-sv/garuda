@@ -75,6 +75,30 @@ async function runtimeFor(root: string, home: string, approver: Approver, notice
   });
 }
 
+it("shows the approximate warning to chat users for refs, callers and impact, including empty results", async () => {
+  const { root, home } = setup({}, {});
+  writeFileSync(
+    join(root, "price.py"),
+    "def subtotal(value):\n    return value\n\nresult = subtotal(1)\n",
+  );
+  const runtime = await runtimeFor(root, home, new Recorder("deny"));
+  const store = new ChatStore({ model: "fake", sandbox: "none" }, { paint: noColor });
+  try {
+    const context = { runtime, renderer: store, sessionPath: (id: string) => id };
+    for (const command of [
+      "/refs subtotal",
+      "/callers subtotal",
+      "/impact price.py",
+      "/refs missing",
+    ]) {
+      await runCommand(command, context);
+      expect(store.getState().items.at(-1)?.text).toMatch(/^≈ Approximate:/);
+    }
+  } finally {
+    await runtime.close();
+  }
+});
+
 describe("custom commands: parsing (0.4)", () => {
   it("reads frontmatter with plain or quoted values, and leaves other files alone", () => {
     expect(

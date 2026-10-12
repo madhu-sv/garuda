@@ -2,6 +2,108 @@
 
 ## 0.17.0 (unreleased)
 
+- MoE wording (review of 3a9f51b): the `delegate_expert` description and the system prompt no
+  longer promise "deep language AST tools"; they name the code index tools and say that results
+  outside JS/TS are approximate. A test guards public and model-facing text.
+- Job and night-digest costs (review of 3a9f51b): an incomplete cost shows as "≥ $X (incomplete)"
+  and an unknown cost as "unknown" (before: exact $0.5000 and $0.0000), also in the totals and
+  for the review. A review attempt with no reported usage marks the review cost incomplete; an
+  estimated review response costs 0 as a minimum instead of an estimated price.
+- Executor contract test (Codex review of 1370184): after `shutdown()`, the shell and any sandbox
+  wrapper must be gone too, not only the background child.
+- T10 evidence (Codex review of 1370184): the corpus, oracle and source fingerprints are hashed
+  with LF line endings, so a Windows checkout with CRLF passes the evidence tests. The published
+  values do not change.
+- Token budget (Codex review of 1370184): while tools run, the room that subagents must leave
+  for the parent also covers a compaction that is due before the next request.
+- Subagent spend with no report (Codex review of 1370184): a cancelled child's tokens, already in
+  the budget, now make the cost "≥ $X (incomplete)" and show the budget line, with the part from
+  subagents named.
+- Docs (Codex review of 1370184): Go and Rust experts are heuristic, not AST parsers; MoE
+  specialists get the code index tools, not "full AST" tools; the T10 record says that only one
+  capture is stored; the README states what the precision/recall figures do and do not cover.
+- T10 evidence guard (Codex review of 1370184): fixed precision/recall floors (Java 33/54 and
+  33/36, Python 45/63 and 45/48) apply on every run, also during an evidence refresh; a refresh
+  variable set in CI fails the test.
+- Approximate references (Codex review of 1370184): Go and Rust references, and every user or
+  project plugin's, now carry the same approximate warning as Java/Python in tools, chat, callers
+  and impact. Tool descriptions name these languages.
+- TypeScript references (Codex review of 1370184): the search starts at the declaration's own
+  name, not at the first matching word on its line, which could be another symbol (a property of a
+  type declared earlier on the line).
+- Jobs (Codex review of 1370184): a review that was asked for but failed (a provider error, no
+  budget) gives the verdict "needs a look", never "ready to merge". The error stays in `reviewError`.
+- JSON output (review of 1370184): `total_cost_usd` stays a number for compatibility, but an unknown
+  or partial cost is never a bare number: new `total_cost_is_unknown`, `total_cost_is_incomplete` and
+  `cost_is_incomplete` flags, beside the existing `cost_is_unknown`.
+- Cost after a failed attempt (review of 1370184): one retry, 529, batch fallback or cancel no
+  longer makes the cost unknown for the rest of the session. The cost stays a known minimum, shown
+  as "≥ $X (incomplete)" in the turn line, `/usage`, `/sessions`, job reports and eval reports, also
+  after a resume. Only a missing price makes the cost unknown.
+- The job review is under the token budget (Codex review of 1370184): its request reserves first
+  (a one-token policy no longer lets an 8,192-token request through), every attempt is metered, and
+  its usage counts for the session and on resume.
+- Team policy `denyPaths` in the OS sandbox (Codex review of 1370184): when the patterns match more
+  than 1,000 paths, commands stop with a message instead of running with only the first 1,000
+  protected; the patterns now find files in every folder, also `node_modules` and `.git`
+  (review of 3a9f51b: `**/private.txt` had no sandbox rule in `node_modules`).
+- Code intelligence (T10): Java/Python reference results carry `approximate: true`, propagated to
+  callers and impact, including empty results. Model tool output starts with a warning; chat adds
+  `≈`. Impact risk is labelled heuristic. Matching algorithms are unchanged. A frozen 30-Java/
+  30-Python corpus, captured with jdtls 1.61.0 and pyright 1.1.406, records precision and recall;
+  offline regression checks verify the oracle, source fingerprints and published results. A
+  supplementary manually labelled edge-case sample records stricter alias semantics separately.
+- Token budget, review of b2bf1c2: successful OpenAI-compatible responses with missing, partial
+  or invalid usage keep their full reservation charged. Estimates remain labelled on responses
+  for context sizing, but do not enter reported session or child totals, avoiding a double charge.
+  The existing `unreported` records preserve the charge across resume; affected costs are unknown.
+  Usage displays and JSON distinguish budget charges and estimates; evals mark incomplete token
+  totals and means unknown. Legacy journals remain readable with their historical totals.
+- Token budget, review of 597104a: every input reservation covers the full current request,
+  including changed instructions, tool definitions and server-tool settings on resume. A larger
+  previous measured context plus new messages is still kept. Oversized requests stop before a
+  provider call; small budgets may refuse calls earlier. Existing journals need no migration.
+- Token budget, review of 6c9f929: metered Anthropic batch submission disables SDK retries;
+  reported child debits survive cancellation, parallel failures and resume, without duplicating
+  report aggregation. Started parallel calls settle before the turn ends. Complete results are
+  capped after hooks and on errors (20 000 characters for subagents, including metadata; 100 000
+  otherwise), also for custom/replay runners. The final-answer floor accounts for JSON escaping
+  and result-message structure; small budgets can refuse child work earlier. Compaction reserves
+  its system prompt and the rest of its full request. Existing journals remain readable.
+- Token budget, review of 31aab17: a subagent's wrap-up request is reserved in full (system prompt
+  and tools too); every provider request reserves, also an HTTP retry and a batch job's switch to
+  the normal API (the Anthropic SDK no longer retries on its own under the budget; the loop retries,
+  also a rate limit); the parent's room for its final answer covers the results of its calls (a
+  tool result is at most 100 000 characters, a subagent's answer at most 20 000); charges for
+  failed requests stay with the session, also after a resume; `/compact` counts against the budget.
+- One token budget for the turn and its agent tree (review T9): each model call reserves its request
+  and output limit first, and the run stops with `token_budget` when they do not fit; subagents,
+  compaction and retries reserve in the same budget; parallel subagents cannot pass the parent's cap,
+  and they leave the parent room for its final answer. A failed or cancelled call with no reported
+  usage counts as fully spent. A small `tokenBudget` now stops a run before the call that would pass
+  it, not after.
+- Job write scopes, third review: a job never runs a command outside the sandbox, also when an
+  allow rule matches (`outside_sandbox` dropped the scope); an edit through a symbolic link must
+  reach a path in the scope, checked by the engine and again by the write tool just before it writes;
+  the job's test command has the same scope as every other command, and the approval question says
+  so. Claims: without a sandbox, a command (or an MCP call) asks unless an allow rule covers it; undo
+  covers the files in its snapshot. The claims test knows these phrases.
+- Job write scopes (review T6): `/schedule` proposes `"writeScope"`, the paths in the worktree that
+  the job may change (the plan's edit and write paths, and the build folders), and the question
+  shows it. The OS sandbox makes the rest of the worktree read-only for the job's commands, the
+  engine denies edits outside it, and a change outside it fails the job with no commit. Jobs without
+  a scope say "Commands may write anywhere in the worktree."
+- Design (second review): staged commands never fall back to direct mode and never apply an
+  incomplete change list; the shared budget keeps a reservation as spent when a request fails or is
+  cancelled with no reported usage (docs/lld/bounded-changes.md).
+- Exact claims, second pass (second review): the sandbox writes the project, temp folders and
+  package caches (not "only the project"); a command outside the sandbox asks unless an allow rule
+  or a session answer covers it (not "always"); `/undo` restores the files in its snapshot, not
+  ignored files (not "what a turn changed"). The claims test now reads whole paragraphs and knows
+  these phrases.
+- Audit checkpoint fixes (second review): a failed checkpoint write no longer makes the next audit
+  line repeat the sequence number and chain head (the chain was broken); a checkpoint or a folder
+  that cannot be read is reported as broken, not as "no checkpoint" or "no files".
 - Audit checkpoint: with `"audit": { "checkpoint": true }` in a policy file (off by default),
   Garuda keeps each log file's last `seq` and `hash`, and `/audit verify` finds lines cut from the end
   of a file and a deleted file. The docs list what verify detects with and without it (review T8).

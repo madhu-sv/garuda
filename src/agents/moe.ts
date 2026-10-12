@@ -224,7 +224,8 @@ export function createMoeDispatchTool(
     name: DELEGATE_EXPERT_TOOL,
     description: [
       "Delegate a language-specific sub-task to a specialized language expert subagent (Go, Rust, Python, Java, or TypeScript).",
-      "The specialist operates in its own isolated subagent session with deep language AST tools and idiomatic knowledge,",
+      "The specialist runs in its own subagent session with the code index tools and idiomatic knowledge of its language",
+      "(JS/TS references come from the TypeScript language service; other languages use name matching, marked approximate),",
       "returning an actionable analysis, fix, or test verification so your context stays small.",
       "Specialists: go, rust, python, java, typescript (or 'auto').",
     ].join(" "),

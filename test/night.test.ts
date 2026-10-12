@@ -126,6 +126,55 @@ describe("the night shift (0.11)", () => {
     expect(text).toContain("- b2: The tests fail after the job. Review: A clean change.");
   });
 
+  // Review of 3a9f51b (P2): an incomplete cost showed as exact, and an unknown cost as $0.0000.
+  it("the digest keeps an incomplete or unknown cost, also the review's", () => {
+    const root = "/tmp/no-such-project";
+    const base = {
+      stopReason: "done",
+      steps: 1,
+      tokens: 10,
+      durationMs: 1000,
+      files: [],
+      denied: [],
+      answer: "",
+    };
+    const proof = (extra: object = {}) => ({
+      verdict: "needs-look" as const,
+      flags: [],
+      ...extra,
+    });
+    const incomplete = job(root, "d1", {
+      status: "done",
+      result: { ...base, costUsd: 0.5, costIncomplete: true, proof: proof() },
+    });
+    const reviewFailed = job(root, "d2", {
+      status: "done",
+      result: {
+        ...base,
+        costUsd: 0.25,
+        proof: proof({ reviewError: "timeout", reviewCostIncomplete: true }),
+      },
+    });
+    const unknown = job(root, "d3", { status: "done", result: { ...base, proof: proof() } });
+    const known = job(root, "d4", {
+      status: "done",
+      result: { ...base, costUsd: 0.1, proof: proof() },
+    });
+    const started = new Date(2026, 8, 30, 1, 0);
+    const ended = new Date(2026, 8, 30, 2, 0);
+
+    const partial = nightDigest([incomplete, reviewFailed, known], started, ended);
+    expect(partial).toContain("cost ≥ $0.8500 (incomplete).");
+    expect(partial).toContain("| ≥ $0.5000 (incomplete) |");
+    expect(partial).toContain("| ≥ $0.2500 (incomplete) |");
+    expect(partial).toContain("| $0.1000 |");
+
+    const withUnknown = nightDigest([incomplete, unknown], started, ended);
+    expect(withUnknown).toContain("cost unknown.");
+    expect(withUnknown).toContain("| unknown |");
+    expect(withUnknown).not.toContain("$0.0000");
+  });
+
   it("garuda night: runs the queue, reloads the jobs, writes the digest; an empty queue and a bad --parallel", async () => {
     const root = await project((r) => [job(r, "c1"), job(r, "c2")]);
     const ran: string[] = [];

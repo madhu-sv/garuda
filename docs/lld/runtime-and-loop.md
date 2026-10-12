@@ -92,7 +92,9 @@ Sessions and models in the chat (0.6):
   (see [format.md](format.md)).
 - `runCheck(command, timeoutMs, signal)` and `askModel(system, text, signal)` (0.11, a job's proof of
   work): a command in the sandbox with bash's policy, outside the engine; one model request with no
-  tools, the main model and its price, no session.
+  tools, the main model and its price, outside the conversation. `askModel` reserves in the session's
+  token budget like a main call (`callModelWithRetry` with a meter), and its usage goes into the
+  session as a `side_usage` record (Codex review of 1370184).
 - `sessionRecords()`: the current session's records, for `/export`.
 - `compact(focus, signal)` (0.8): `compactNow` on the current session with the main model and its price;
   the result has the tokens before and after and the summary's cost.
@@ -192,6 +194,43 @@ In 0.14, the core agent loop and runtime coordinators were decomposed into cohes
   - `callModel.ts`: Model invocation, response streaming, server tools resolution, and transient error backoff retries.
   - `events.ts`: Structured agent lifecycle event dispatcher.
   - `limits.ts`: Step limit and token budget checks, context window exhaustion detection, and output-limit recovery.
+  - `budget.ts` (0.17, review T9): `TokenBudget`, one budget for a turn and its agent tree.
+    `runAgent` makes it from what is left of `tokenBudget` in the session (or gets a child view in
+    `deps.budget`) and puts it in the tool context. Each model attempt reserves
+    `requestTokens(session, request) + maxTokens` first (`callModelWithRetry`'s `metered`); no room
+    throws `BudgetExhausted`, and the run stops with `token_budget` (a refused call is not a step).
+    A reported usage settles the reservation; a failure or a cancel with no usage keeps all of it
+    as spent. The compaction summary reserves in the same budget. Before the tools run, the loop
+    sets a floor: a child's reservation must leave it, so the parent keeps room for its final
+    answer.
+  - Third review (0192): every provider request reserves (`CallMeter`: the loop's attempts, an
+    HTTP client's own retries, a batch job's switch to the normal API), and a request with no
+    usage keeps its reservation before the next one starts. The floor is the next request's
+    bound: the last reservation, plus the output limit, plus each call's result bound
+    (`LIMITS.resultChars`, or `LIMITS.childAnswerChars` for a subagent). The budget is a session
+    limit: charges with no reported usage go to `session.unreportedTokens` (an `unreported`
+    record, read again on resume), and the next turn starts from `budgetSpent(session)`.
+    `/compact` (`Runtime.compact`) reserves its summary request in the same session budget.
+  - Review of 6c9f929: the floor uses the current input estimate plus a full result-message
+    skeleton, up to six JSON characters per result character, and the output limit. When a
+    compaction is due before the next request (`compactionDue`), the floor also holds the summary
+    request: that estimate again plus 4,096 output tokens (Codex review of 1370184). The full
+    rendered result is capped, including hook feedback, errors and subagent metadata. Reported
+    child spend is journaled immediately through `onChildSpend`, attributed to the direct child;
+    its later report replaces only the pending debits it covers. `budgetSpent` counts usage,
+    unreported charges and pending child debits. Parallel batches drain all started calls before
+    ending the turn and detaching the tracker. Compaction uses `fullRequestTokens`, including the
+    summary system prompt. Existing journals need no migration.
+  - Review of 597104a: `requestTokens` takes the larger of the full current request estimate and
+    the last measured context plus messages after the last assistant response. Changed instructions,
+    tool definitions and server-tool settings on resume are included before admission. The higher
+    measured allowance is preserved; this can refuse a call earlier. Tokenization remains approximate.
+  - Review of b2bf1c2: a successful response with `usageReported: false` settles without a usage
+    count, keeping the full reservation as spent. `reportedUsage` excludes its estimates from
+    run and session totals; estimates remain on the response for context sizing. `unreported`
+    records persist the charge. `AgentResult.unreportedTokens` exposes this run's unknown budget
+    charges, counting pending known child debits as reported. Human usage displays and JSON label
+    incomplete data; compaction and child reports follow the same accounting rule.
   - `loopDetector.ts`: Repeated tool call detection preventing infinite loops.
   - `toolRunner.ts`: Tool execution pipeline, read-only call parallelization, progress tracking, and execution metadata capture.
 

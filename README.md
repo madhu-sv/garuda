@@ -33,7 +33,7 @@ The requirements doc defines the scope. Code, tests and commits refer to its IDs
 | 0.12: benchmark your repo (eval tasks from the repo's own git history), output-limit recovery | Done |
 | 0.13: network allowlist for commands (W6): presets or hosts, through Garuda's proxy, off by default | Done |
 | 0.14: sandbox launch probe, core modularization, background daemons (opt-in), interactive patch staging (W4) | Done (0.14.0) |
-| 0.15: multi-language AST code intelligence (Python, Java, TS/JS, call graph, blast radius, /callers, /defs, /impact, ast_query) | Done (0.14.0) |
+| 0.15: multi-language code intelligence (Python, Java, TS/JS, caller candidates, impact, /callers, /defs, /impact, ast_query) | Done (0.14.0) |
 | 0.16: language plugins (Go and Rust built in, user plugins in ~/.garuda/languages, /languages; project plugins not loaded) | Done (0.14.0) |
 | 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | Done (0.14.0) |
 | Editors over the Agent Client Protocol (`garuda acp`: VS Code with an extension, Zed, JetBrains, Neovim, Emacs) | Done (0.15.0) |
@@ -55,10 +55,11 @@ areas and fixes the open findings of all nine areas (see [CHANGELOG.md](CHANGELO
 in 0.16.1:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
-- Subagents: each child has its own step and token budget (capped by the team policy); it does not
-  take what the parent has left, and parallel `explore` calls each get one.
-- Audit log: lines cut from the end of a file, or a removed file, are not detected (no anchor outside
-  the file).
+- Token budget: a call's reservation is an estimate (about 4 characters per token, plus the output
+  limit), so a provider that counts more input tokens than the estimate can pass the cap by that
+  difference.
+- Audit log: without the checkpoint (`"audit": { "checkpoint": true }`, off by default), lines cut
+  from the end of a file, or a removed file, are not detected.
 - On macOS, secret-named variables other than the provider API keys stay in Garuda's own environment.
 - Build tool caches that the sandbox may write (`~/.gradle/wrapper`, `jdks`, `native`, `caches`,
   `~/.m2/wrapper`) hold programs that a build runs later outside the sandbox. They stay writable, because
@@ -122,9 +123,11 @@ Tools: read_file, glob and grep run with no question.
 write_file and edit_file show a diff first. You pick: allow once, allow for this session, or deny.
 Commands (bash) run in an OS sandbox when your machine has one (see Sandbox below). There they run
 with no question: the sandbox lets them write only in the project, temp folders and package caches,
-with no network. So a command can change project files without a question; `/undo` restores what a
-turn changed, commands included. A command outside the sandbox always asks. Without a sandbox, each
-command asks first, so read each one before you allow it.
+with no network. So a command can change project files without a question; `/undo` restores the
+files in its snapshot (ignored files, such as build output, are not in it). A command outside the
+sandbox asks, unless one of your allow rules covers it; the strict profile forbids it. Without a
+sandbox, each command asks first, unless one of your allow rules covers it, so read each one before
+you allow it.
 Garuda removes a leading `cd <working root> &&` from a command, because each command already starts there.
 When the model reads files with bash, or pipes into head or tail, the result adds a short `[Garuda: …]` note that tells it to use the file tools.
 
@@ -136,6 +139,10 @@ prints one JSON object per line as the task runs. The fields are those of Claude
 g -p "Run the tests" --output-format json | jq -r '.subtype, .total_cost_usd, .result'
 g -p "Fix the lint errors" --output-format stream-json --verbose > run.jsonl
 ```
+
+`total_cost_usd` is always a number. Check `total_cost_is_unknown` (no price) and
+`total_cost_is_incomplete` (a known minimum, for example after a failed attempt) before you use it
+as an exact cost.
 
 stdout holds only JSON; warnings and errors go to stderr (`--verbose` adds the tool activity). The exit
 code does not change. Details: [docs/lld/cli.md](docs/lld/cli.md#json-output-jsonoutputts-05).
@@ -534,18 +541,29 @@ It answers code questions on this machine, with zero native C++ compilation depe
   - Tests and evals load the built-in experts only.
 - Tools for the agent (read-only, no approval), chosen with `"codeIndex"` in `.garuda/settings.json`:
   `"off"` (default), `"lookup"` (`find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`) or `"all"` (also `repo_map`).
-  `find_callers` traces structural invocation hierarchies across languages; `impact_analysis` computes blast radius, dependents, and discovers affected test suites (including Go `*_test.go` and Rust `*_test.rs`); `ast_query` filters symbols by kind, container, and wildcards.
+  `find_callers` groups indexed reference sites by their enclosing symbol; `impact_analysis` estimates dependents, blast radius and affected tests (including Go `*_test.go` and Rust `*_test.rs`); `ast_query` filters symbols by kind, container, and wildcards.
+  Java, Python, Go and Rust references use identifier matching, and Garuda cannot vouch for a user
+  plugin. Their references, callers and impact results are
+  marked **Approximate**, including empty results: matching can include unrelated symbols and miss
+  aliases or dynamic uses. Check with a compiler or language server before a rename. These tools do
+  not run jdtls or pyright. The [fixed 60-query measurement](docs/quality-baseline/code-intelligence-baseline.md)
+  records Java precision/recall **61.1%/91.7%**, Python **71.4%/93.8%**, against frozen language-server
+  reference results. So about 2 in 5 Java hits and 3 in 10 Python hits were not real references. The
+  recall counts only the reference patterns in this generated sample (30 queries per language, one
+  capture, Linux); aliases, dynamic dispatch and real-repository layouts can lower it. This sample does
+  not establish accuracy on your repository.
 - Chat commands for you: `/where X` (or `/defs X`), `/refs X`, `/callers X`, `/impact X`, `/map [folder]`, and `/languages` (lists active language plugins, indexed file counts, and standby status).
 - The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
-  Pure AST parsers run in-process and preserve single-binary distribution.
+  Experts run in-process and preserve single-binary distribution; outside JS/TS, declaration extraction
+  and reference matching use heuristics.
 - Files follow `.gitignore`. Sensitive files are never indexed.
 
 ## Mixture-of-Experts (MoE) subagent dispatch and /experts (0.17)
 
 Garuda features an autonomous Mixture-of-Experts (MoE) dispatch architecture for polyglot codebases:
 
-- **Specialist profiles**: Dedicated subagents for Go, Rust, Python, Java, and TypeScript equipped with language-idiomatic prompts, toolchain testing commands (`cargo test`, `go test ./...`, `pytest`, `mvn test`, `pnpm test`), and scoped AST tools.
-- **Dynamic delegation**: The primary orchestrator agent can invoke `delegate_expert({ language, task, files })` to dispatch complex language-specific tasks to child subagents. The child subagent runs with full AST code tools, executes language tests, and returns a synthesized report without cluttering the primary context window.
+- **Specialist profiles**: Dedicated subagents for Go, Rust, Python, Java, and TypeScript equipped with language-idiomatic prompts, toolchain testing commands (`cargo test`, `go test ./...`, `pytest`, `mvn test`, `pnpm test`), and the code index tools.
+- **Dynamic delegation**: The primary orchestrator agent can invoke `delegate_expert({ language, task, files })` to dispatch complex language-specific tasks to child subagents. The child subagent runs with the code index tools (`find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`, `repo_map`; only JS/TS uses a language service, the other languages use heuristic matching marked approximate), executes language tests, and returns a synthesized report without cluttering the primary context window.
 - **Chat command**: `/experts` lists all available language specialists, their active test commands, and their active status / indexed file counts.
 - **Banner & Observability**: The startup banner features a dedicated `subagents` row (`subagents: explore · 5 MoE experts (Go, Rust, Python, Java, TS)`). In session, `/session` provides a full breakdown of active subagents, agents, skills, and tools.
 - **Configuration**: off by default (no measured gain yet). Turn it on with `"moe": { "enabled": true }` in
@@ -575,8 +593,10 @@ A team policy sets limits that a project cannot loosen, and an audit log records
   - `denyPaths`: root-relative path patterns that the agent may not read or write (for example
     `["**/.env*", "secret/**"]`). File tools refuse them; `grep`, `glob` and the code index skip them
     (no content, no name). Commands in the OS sandbox cannot read or write them either: the matching
-    files and folders are added to the sandbox profile when each command starts (not searched:
-    `node_modules`, `.git`; at most 1,000 paths). A symbolic link to a denied file is denied too.
+    files and folders are added to the sandbox profile when each command starts (every folder is
+    searched, also `node_modules` and `.git`, so a large tree makes each command start slower). When the patterns match more than
+    1,000 paths, commands do not run, with a message: Garuda never leaves a denied path without a
+    rule. A symbolic link to a denied file is denied too.
   - `allowedModels`: Allowlist of LLM models permitted for use in the organization.
   - `network`: `blockedHosts` (`*.example.com` for subdomains) and `strictAllowlist`. A blocked host
     stays blocked for `web_fetch` and for sandboxed commands, also when the project's
@@ -621,7 +641,26 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
 
 - After each turn Garuda prints steps, tokens (with cache reads), cost, context use and the session total.
 - A run stops at 50 steps, at the session token budget (20M tokens), or after the same tool call
-  3 times in a row. Garuda says why.
+  3 times in a row. Garuda says why. The budget holds for the whole turn (0.17): each model call
+  reserves its request and its output limit first, and stops when they do not fit; subagents,
+  compaction and retries reserve in the same budget, and a subagent never takes the room that the
+  parent needs for its final answer. Every generation attempt reserves, also provider retries
+  and a batch job's switch to the normal API. Any call without complete provider-reported usage
+  keeps its full reservation charged, even if the response succeeded, also after a resume.
+  Reported child expenditure is saved immediately,
+  including before cancellation or a parallel batch failure. `/compact` counts its full summary
+  request too. Complete tool results, including errors and hook feedback, are at most 100 000
+  characters; subagent results are at most 20 000 including metadata. The final-answer floor
+  allows for worst-case JSON escaping, so small budgets can refuse child work earlier.
+  Every request estimate covers the full current system prompt, conversation, tool definitions
+  and provider settings, including after a resume or model change. If the previous measured context
+  plus new messages is larger, Garuda keeps that allowance. This can refuse a call earlier.
+  Missing, partial or invalid OpenAI-compatible usage gets a labelled estimate for context sizing.
+  Estimates are excluded from reported token totals and never added on top of the full charge.
+  `/usage` and the turn summary show the separate budget charge; the cost shows as a minimum,
+  "≥ $X (incomplete)", never as unknown. Providers that
+  omit usage can therefore reach the budget sooner. JSON marks estimated assistant usage and
+  incomplete result totals; eval reports show unknown tokens, means and cache share for these runs.
 - When the connection to the model breaks while a response streams, Garuda sends the request again (up
   to 2 times) and says so. The session keeps only the complete response.
 - At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,
@@ -652,7 +691,8 @@ In the sandbox, a command:
 
 Commands in the sandbox run with no approval. Deny rules still apply. When the sandbox blocks a command
 (for example `pnpm install` needs the network), the model can ask to run it outside the sandbox.
-That always asks you first, and the prompt says "OUTSIDE the sandbox".
+That asks you first, unless one of your allow rules covers the command, and the prompt says
+"OUTSIDE the sandbox". The strict profile forbids it.
 
 Settings:
 
@@ -664,7 +704,7 @@ Settings:
 ```
 
 - `executor`: `auto` (default) uses the sandbox when it works on this machine, else runs on the host
-  with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again.
+  with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again (unless an allow rule covers it).
 - `sandbox.writePaths` and `sandbox.denyRead` add paths. `~/` is the home folder; other relative paths
   start at the root.
 - macOS sandbox probe (0.14): at startup Garuda runs `true` through `/usr/bin/sandbox-exec` once. When
@@ -826,7 +866,7 @@ Security:
 - When a configured server is not available (you said no, it failed or it stopped), Garuda tells
   the model once in a `<garuda_note>`, so the model says so instead of guessing. Server text cannot
   pose as such a note or close its `<mcp_result>` wrapper.
-- Every MCP tool call asks for approval and shows its arguments. Server hints such as
+- An MCP tool call asks for approval and shows its arguments, unless an allow rule covers it. Server hints such as
   `readOnlyHint` are shown, never trusted. Allow rules skip the question:
   `mcp__github__get_issue` or `mcp__github__*`.
 - Tool names get the prefix `mcp__<server>__`, so a server cannot replace a Garuda tool.
@@ -922,6 +962,16 @@ A plan can run later, with nobody at the keyboard: for example overnight.
 - The job asks nothing. Reads, commands in the sandbox and the calls in its list are allowed; any other call
   is denied, and the job goes on and reports it. You can edit the list (`"allow"`) in
   `.garuda/jobs/<id>.json` before the run.
+- The write scope (0.17): `/schedule` also proposes `"writeScope"`, the paths in the worktree that the
+  job may change: the folders and files of the plan's `edit_file` and `write_file` rules, and the
+  build folders of the project (`target/`, `build/`, `dist/` …). The question shows it. The OS sandbox
+  makes the rest of the worktree read-only for the job's commands, the engine denies edits outside
+  it, and a change outside it fails the job with no commit. A rule with no folder (`edit_file(**/*.ts)`)
+  gives no scope: the question then says that commands may write anywhere in the worktree. Jobs made
+  before 0.17 have no scope. The scope holds for every command of the job, also its test command
+  (proof of work), and a job never runs a command outside the sandbox, whatever its rules say. A test
+  that writes a file outside the scope (for example `coverage.txt` in the root) fails; add a folder
+  for it to `"writeScope"`. An edit through a symbolic link must reach a path in the scope too.
 - A job needs git and the OS sandbox. `node_modules` and `.venv` are linked from your checkout.
 - At the end Garuda commits the changes on the job branch (no git hooks run) and writes a report:
   `.garuda/jobs/<id>.md`, also shown by `/jobs <id>`. Review with `git diff`, then `git merge
