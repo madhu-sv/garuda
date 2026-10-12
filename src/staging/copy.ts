@@ -35,6 +35,8 @@ export interface StagingOptions {
   executor: Executor;
   home?: string;
   platform?: NodeJS.Platform;
+  /** For tests: false skips the clone and reflink probe, so the copy is plain on any machine. */
+  fastCopy?: boolean;
   maxPlainBytes?: number;
   /** For tests: whether a process id still runs. */
   alive?: (pid: number) => boolean;
@@ -61,9 +63,12 @@ export class StagingCopy {
     const run = (command: string) => host(options.executor, root, command);
 
     // Probe the fast methods on one small file, so a plain copy is known before it starts.
-    const probe = await run(
-      `f=$(mktemp ${q(join(base, ".probe-XXXXXX"))}) && cp ${platform === "darwin" ? "-c" : "--reflink=always"} "$f" "$f.copy"; s=$?; rm -f "$f" "$f.copy"; exit $s`,
-    );
+    const probe =
+      options.fastCopy === false
+        ? { exitCode: 1 }
+        : await run(
+            `f=$(mktemp ${q(join(base, ".probe-XXXXXX"))}) && cp ${platform === "darwin" ? "-c" : "--reflink=always"} "$f" "$f.copy"; s=$?; rm -f "$f" "$f.copy"; exit $s`,
+          );
     const method: CopyMethod =
       probe.exitCode === 0 ? (platform === "darwin" ? "clone" : "reflink") : "plain";
     if (method === "plain") {

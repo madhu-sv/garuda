@@ -81,8 +81,9 @@ const found = findOsSandbox();
 describe.runIf("executor" in found)("staged commands in the OS sandbox", () => {
   it("discard: the project does not change; the model gets the note (control: direct mode changes it)", async () => {
     const { root, home } = project();
-    const sed = "sed -i 's/1/99/' src/a.ts";
-    const { runtime, approver, results } = await session(root, home, [sed], () => "deny");
+    // Portable on macOS and Linux (BSD sed -i needs a suffix argument; GNU sed does not).
+    const write = "printf 'export const a = 99;\\n' > src/a.ts";
+    const { runtime, approver, results } = await session(root, home, [write], () => "deny");
     expect(read(join(root, "src/a.ts"))).toBe("export const a = 1;\n");
     const asked = approver.requests.find((r) => r.title === "The command changed files");
     expect(asked?.preview).toContain("modified src/a.ts");
@@ -91,7 +92,7 @@ describe.runIf("executor" in found)("staged commands in the OS sandbox", () => {
     await runtime.close();
 
     const direct = project();
-    const control = await session(direct.root, direct.home, [sed], () => "deny", "direct");
+    const control = await session(direct.root, direct.home, [write], () => "deny", "direct");
     expect(read(join(direct.root, "src/a.ts"))).toBe("export const a = 99;\n");
     await control.runtime.close();
   });
@@ -101,7 +102,7 @@ describe.runIf("executor" in found)("staged commands in the OS sandbox", () => {
     const { runtime, results } = await session(
       root,
       home,
-      ["sed -i 's/1/99/' src/a.ts && rm src/b.ts && echo new > src/c.ts"],
+      ["printf 'export const a = 99;\\n' > src/a.ts && rm src/b.ts && echo new > src/c.ts"],
       () => "once",
     );
     expect(read(join(root, "src/a.ts"))).toBe("export const a = 99;\n");
@@ -118,16 +119,24 @@ describe.runIf("executor" in found)("staged commands in the OS sandbox", () => {
     await runtime.close();
   });
 
-  it("a write to the project's absolute path is staged too", async () => {
+  // Linux mounts the copy at the project's path: the write goes to the copy and asks. macOS runs
+  // the command at the copy's path with the project read-only: the write fails (decision Q3).
+  it("a write to the project's absolute path never reaches the project", async () => {
     const { root, home } = project();
-    const { runtime, approver } = await session(
+    const { runtime, approver, results } = await session(
       root,
       home,
       [`echo changed > ${root}/src/a.ts`],
       () => "deny",
     );
     expect(read(join(root, "src/a.ts"))).toBe("export const a = 1;\n");
-    expect(approver.requests.some((r) => r.title === "The command changed files")).toBe(true);
+    const asked = approver.requests.some((r) => r.title === "The command changed files");
+    if (process.platform === "darwin") {
+      expect(asked).toBe(false);
+      expect(results[0]).toMatch(/Operation not permitted|Read-only/);
+    } else {
+      expect(asked).toBe(true);
+    }
     await runtime.close();
   });
 
@@ -154,7 +163,7 @@ describe.runIf("executor" in found)("staged commands in the OS sandbox", () => {
     const { runtime, approver } = await session(
       root,
       home,
-      ["sed -i 's/1/7/' src/a.ts"],
+      ["printf 'export const a = 7;\\n' > src/a.ts"],
       () => "once",
       "staged",
       { outside_sandbox: true },

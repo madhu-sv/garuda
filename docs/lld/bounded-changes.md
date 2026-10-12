@@ -193,6 +193,10 @@ plain copy, 0.09 s.
   0.4 s; session start with both first trees 3.0 s (git hashes every file twice, once); then per
   command about 0.1 s before (`prepare`) and 0.08 s after (`collect`). Garuda's own repository: copy
   0.09 s.
+- **macOS run (0215).** The user's macOS run found test faults, not product faults: BSD `sed -i`
+  needs a suffix argument, so the tests now write with `printf`; a write to the project's absolute
+  path fails on macOS (the command runs at the copy's path), so that test checks the platform; the
+  plain-copy limit test uses `fastCopy: false` instead of a wrong platform.
 - **Overlay backend: not built.** It would save only the copy (0.4 s above); the first trees and the
   per-command lists cost the same, and overlayfs does not allow changes to the project (its lower
   layer) while a command runs. A proposal for later, if a large project needs it.

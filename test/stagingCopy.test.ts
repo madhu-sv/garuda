@@ -54,8 +54,9 @@ describe("StagingCopy", () => {
 
   it("a plain copy over the limit stops: an error with the reason, no folder left", async () => {
     const { root, home } = setup();
-    // "darwin" on Linux: the clone probe fails, so the copy would be plain.
-    const made = StagingCopy.create(root, { executor, home, platform: "darwin", maxPlainBytes: 1 });
+    // No clone or reflink probe: a plain copy on any machine (before, "darwin" forced it, which
+    // works only on Linux; the macOS run cloned and passed the limit).
+    const made = StagingCopy.create(root, { executor, home, fastCopy: false, maxPlainBytes: 1 });
     await expect(made).rejects.toThrow(StagingError);
     await expect(made).rejects.toThrow(/plain staging copy is limited/);
     const left = readdirSync(join(home, ".garuda", "staging")).filter((n) => !n.startsWith("."));
