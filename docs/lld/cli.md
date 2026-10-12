@@ -63,8 +63,10 @@ for `claude -p --output-format …` read Garuda too.
 Every line has `session_id` and `uuid`; `parent_tool_use_id` is `null` (subagent steps are not streamed).
 
 The `result` line: `subtype`, `is_error`, `duration_ms`, `duration_api_ms`, `num_turns` (model calls),
-`result` (the last response's text, success only), `stop_reason`, `total_cost_usd` (the session total; 0
-when the price is unknown), `usage` (this run), `modelUsage` (one entry for the main model; subagent use is
+`result` (the last response's text, success only), `stop_reason`, `total_cost_usd` (the session total;
+a number for compatibility with Claude Code: 0 with `total_cost_is_unknown` when the price is unknown,
+a known minimum with `total_cost_is_incomplete` when some spending has no known cost; review of
+1370184), `cost_is_unknown` / `cost_is_incomplete` (the same for this run), `usage` (this run), `modelUsage` (one entry for the main model; subagent use is
 included in it), `permission_denials`, `errors` (error subtypes), `terminal_reason`.
 
 | Garuda stop | `subtype` | `terminal_reason` |

@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- JSON output (review of 1370184): `total_cost_usd` stays a number for compatibility, but an unknown
+  or partial cost is never a bare number: new `total_cost_is_unknown`, `total_cost_is_incomplete` and
+  `cost_is_incomplete` flags, beside the existing `cost_is_unknown`.
 - Cost after a failed attempt (review of 1370184): one retry, 529, batch fallback or cancel no
   longer makes the cost unknown for the rest of the session. The cost stays a known minimum, shown
   as "≥ $X (incomplete)" in the turn line, `/usage`, `/sessions`, job reports and eval reports, also

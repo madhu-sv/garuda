@@ -140,6 +140,10 @@ g -p "Run the tests" --output-format json | jq -r '.subtype, .total_cost_usd, .r
 g -p "Fix the lint errors" --output-format stream-json --verbose > run.jsonl
 ```
 
+`total_cost_usd` is always a number. Check `total_cost_is_unknown` (no price) and
+`total_cost_is_incomplete` (a known minimum, for example after a failed attempt) before you use it
+as an exact cost.
+
 stdout holds only JSON; warnings and errors go to stderr (`--verbose` adds the tool activity). The exit
 code does not change. Details: [docs/lld/cli.md](docs/lld/cli.md#json-output-jsonoutputts-05).
 

@@ -503,11 +503,22 @@ async function start(options: Options, program: Command): Promise<number> {
           });
     if (output !== undefined) events = output;
     const costBefore = runtime.session?.costUsd ?? 0;
+    const unreportedBefore = runtime.session?.unreportedTokens ?? 0;
+    const incompleteBefore = runtime.session?.costIncomplete ?? false;
     const finish = (outcome: TurnOutcome) => {
-      const cost = runtime.session?.costUsd;
+      const session = runtime.session;
+      const cost = session?.costUsd;
+      // A number for compatibility, with flags (review of 1370184): never a bare 0 for "unknown".
+      const runIncomplete =
+        session !== undefined &&
+        (session.unreportedTokens > unreportedBefore ||
+          (session.costIncomplete && !incompleteBefore));
       output?.finish(outcome, {
         totalCostUsd: cost ?? 0,
+        ...(cost === undefined ? { totalCostUnknown: true } : {}),
+        ...(session?.costIncomplete === true ? { totalCostIncomplete: true } : {}),
         runCostUsd: cost === undefined ? undefined : cost - costBefore,
+        ...(runIncomplete ? { runCostIncomplete: true } : {}),
         contextWindow: runtime.limits.contextWindow,
         maxOutputTokens: resolved.maxTokens ?? DEFAULT_MAX_TOKENS,
         ...(outcome.kind === "done"

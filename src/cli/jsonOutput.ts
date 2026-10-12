@@ -39,10 +39,18 @@ export interface RunInfo {
 
 /** The rest of the `result` line, known when the turn ends. */
 export interface ResultInfo {
-  /** The session total, as Claude Code reports a resumed session. 0 when the price is unknown. */
+  /**
+   * The session total, as Claude Code reports a resumed session: a number, for compatibility. 0
+   * when the price is unknown (then `totalCostUnknown`); a known minimum when some spending has no
+   * known cost (then `totalCostIncomplete`). Review of 1370184.
+   */
   totalCostUsd: number;
-  /** This run's cost, for `modelUsage`. */
+  totalCostUnknown?: boolean;
+  totalCostIncomplete?: boolean;
+  /** This run's cost, for `modelUsage`; undefined when the price is unknown. */
   runCostUsd: number | undefined;
+  /** This run's cost is a known minimum. */
+  runCostIncomplete?: boolean;
   contextWindow: number;
   maxOutputTokens: number;
   /** The stop message for an early stop (errors[]). */
@@ -311,11 +319,16 @@ export function resultLine(
     ...(subtype === "success" ? { result: info.lastText } : {}),
     stop_reason: result?.modelStopReason ?? null,
     total_cost_usd: info.totalCostUsd,
+    ...(info.totalCostUnknown === true ? { total_cost_is_unknown: true } : {}),
+    ...(info.totalCostIncomplete === true ? { total_cost_is_incomplete: true } : {}),
     usage: apiUsage(usage),
     ...((result?.unreportedTokens ?? 0) > 0
       ? { usage_is_incomplete: true, unreported_budget_tokens: result?.unreportedTokens }
       : {}),
     ...(info.runCostUsd === undefined ? { cost_is_unknown: true } : {}),
+    ...(info.runCostUsd !== undefined && info.runCostIncomplete === true
+      ? { cost_is_incomplete: true }
+      : {}),
     modelUsage: {
       [info.model]: {
         inputTokens: usage.inputTokens,
