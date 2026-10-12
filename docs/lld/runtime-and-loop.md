@@ -221,6 +221,12 @@ In 0.14, the core agent loop and runtime coordinators were decomposed into cohes
     the last measured context plus messages after the last assistant response. Changed instructions,
     tool definitions and server-tool settings on resume are included before admission. The higher
     measured allowance is preserved; this can refuse a call earlier. Tokenization remains approximate.
+  - Review of b2bf1c2: a successful response with `usageReported: false` settles without a usage
+    count, keeping the full reservation as spent. `reportedUsage` excludes its estimates from
+    run and session totals; estimates remain on the response for context sizing. `unreported`
+    records persist the charge. `AgentResult.unreportedTokens` exposes this run's unknown budget
+    charges, counting pending known child debits as reported. Human usage displays and JSON label
+    incomplete data; compaction and child reports follow the same accounting rule.
   - `loopDetector.ts`: Repeated tool call detection preventing infinite loops.
   - `toolRunner.ts`: Tool execution pipeline, read-only call parallelization, progress tracking, and execution metadata capture.
 

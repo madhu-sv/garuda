@@ -44,7 +44,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `title` | title (0.8, `/sessions rename`; the last one wins; resume ignores it) |
 | `thinking` | choice (0.9, `/thinking`; the last one wins; a resume brings it back) |
 | `continue` | message, maxTokens (0.12: the note after a response cut off at the output limit; a resume adds the message; not a turn in `/sessions`) |
-| `unreported` | tokens (0.17, T9: a failed or cancelled model request with no reported usage keeps its whole reservation; the session's budget counts these with the usage, and a resume adds them up in `unreportedTokens`) |
+| `unreported` | tokens (0.17, T9: any model request without complete reported usage keeps its whole reservation, also on success; the session's budget counts these with reported usage, and a resume adds them up in `unreportedTokens`) |
 | `child_debit` | childSessionId, tokens (reported child spend, written immediately at settlement; a later tool report replaces only the amount it includes, so cancellation and partial reports cannot erase expenditure or double-charge it) |
 | `end` | stopReason, steps |
 
@@ -101,6 +101,12 @@ A resume with another model than the session's last one leaves all thinking out.
 ## Resume (`resume.ts`)
 
 The session allowance counts reported usage, unreported reservations and pending child debits.
+Responses marked `usageReported: false` keep their estimates for context sizing but contribute no
+reported tokens or exact USD cost. The full reservation is already in `unreportedTokens`, so live
+accounting and replay never add the estimates again. The same rule applies to summary responses.
+Any unknown reservation makes the session cost unknown, including after replay. Existing journals
+without the source flag retain their historical totals: their old estimates cannot be distinguished
+from reports retroactively. No migration is performed; the corrected policy applies to new calls.
 `rebuildState` restores the same pending-debit map. Journals without `child_debit` records keep
 their original totals, with an empty map; no on-disk migration is needed. Returned child reports
 still provide usage and USD-cost breakdowns. Pending debits protect the token allowance; they do

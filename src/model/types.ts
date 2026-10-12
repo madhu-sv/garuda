@@ -150,6 +150,8 @@ export interface ModelResponse {
   content: AssistantBlock[];
   stopReason: StopReason;
   usage: Usage;
+  /** False when `usage` is an estimate, not a complete provider report. Absent: reported (legacy). */
+  usageReported?: boolean;
   /** The share of the token price that this response costs (0.7: 0.5 through the Batch API). */
   priceFactor?: number;
 }
@@ -191,6 +193,11 @@ export const ZERO_USAGE: Usage = {
   cacheReadTokens: 0,
   cacheWriteTokens: 0,
 };
+
+/** Only provider-reported usage belongs in session totals; estimates still size the context. */
+export function reportedUsage(response: ModelResponse): Usage {
+  return response.usageReported === false ? ZERO_USAGE : response.usage;
+}
 
 export function addUsage(a: Usage, b: Usage): Usage {
   const searches = (a.webSearches ?? 0) + (b.webSearches ?? 0);

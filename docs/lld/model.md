@@ -26,7 +26,7 @@ interface ToolSpec { name: string; description: string; inputSchema: Record<stri
 interface ServerToolSpec { type: "web_search"; maxUses; allowedDomains?; blockedDomains? }   // 0.6
 interface ModelRequest { system; messages: Message[]; tools: ToolSpec[]; serverTools?: ServerToolSpec[]; maxTokens; thinking?: ThinkingRequest }
 interface ThinkingRequest { adaptive?: boolean; display?: "summarized" | "omitted"; effort?: Effort; hide?: boolean }   // 0.9; hide 0.14
-interface ModelResponse { content: AssistantBlock[]; stopReason: StopReason; usage: Usage }
+interface ModelResponse { content: AssistantBlock[]; stopReason: StopReason; usage: Usage; usageReported?: boolean }
 type StopReason = "end_turn" | "tool_use" | "max_tokens" | "refusal" | "pause_turn" | "other";
 interface Usage { inputTokens; outputTokens; cacheReadTokens; cacheWriteTokens; webSearches? }
 type ModelEvent = { type: "text_delta"; text } | { type: "thinking_delta"; text } | { type: "response"; response: ModelResponse };
@@ -214,8 +214,13 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
   `tool_use` blocks, so the model sees proper `tool_calls` in the history.
 - Stop reasons: refusal or `content_filter` → refusal; tool calls → tool_use; `length` → max_tokens;
   `stop` → end_turn.
-- Usage: `prompt_tokens` minus `cached_tokens` is input, `cached_tokens` is cache read. A server that
-  sends no usage gets an estimate (4 characters per token), so context tracking and compaction still work.
+- Usage: `prompt_tokens` minus `cached_tokens` is input, `cached_tokens` is cache read. Both input
+  and output totals must be nonnegative safe integers; cached tokens cannot exceed input. Missing,
+  partial or invalid usage gets a context estimate (4 characters per token), with `usageReported:
+  false`. `CallMeter.done(undefined)` keeps the full reservation; estimates do not enter reported
+  session totals or cost calculations. `reportedUsage(response)` returns zero for such estimates.
+  Model adapters that estimate usage must set this flag. Absent flags mean reported usage for
+  compatibility with existing adapters and journals.
 - Errors: two retries for 408, 409, 429 and 5xx (with `Retry-After` up to 30 s) and for network errors
   (0.17: each retry first calls `options.meter.retry()`, which reserves in the token budget, or stops
   the call when there is no room);

@@ -628,8 +628,9 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   reserves its request and its output limit first, and stops when they do not fit; subagents,
   compaction and retries reserve in the same budget, and a subagent never takes the room that the
   parent needs for its final answer. Every generation attempt reserves, also provider retries
-  and a batch job's switch to the normal API. A failed call with no reported usage counts as fully
-  spent, also in later turns and after a resume. Reported child expenditure is saved immediately,
+  and a batch job's switch to the normal API. Any call without complete provider-reported usage
+  keeps its full reservation charged, even if the response succeeded, also after a resume.
+  Reported child expenditure is saved immediately,
   including before cancellation or a parallel batch failure. `/compact` counts its full summary
   request too. Complete tool results, including errors and hook feedback, are at most 100 000
   characters; subagent results are at most 20 000 including metadata. The final-answer floor
@@ -637,6 +638,11 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   Every request estimate covers the full current system prompt, conversation, tool definitions
   and provider settings, including after a resume or model change. If the previous measured context
   plus new messages is larger, Garuda keeps that allowance. This can refuse a call earlier.
+  Missing, partial or invalid OpenAI-compatible usage gets a labelled estimate for context sizing.
+  Estimates are excluded from reported token totals and never added on top of the full charge.
+  `/usage` and the turn summary show the separate budget charge; cost is unknown. Providers that
+  omit usage can therefore reach the budget sooner. JSON marks estimated assistant usage and
+  incomplete result totals; eval reports show unknown tokens, means and cache share for these runs.
 - When the connection to the model breaks while a response streams, Garuda sends the request again (up
   to 2 times) and says so. The session keeps only the complete response.
 - At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,

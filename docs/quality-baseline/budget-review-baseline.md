@@ -152,3 +152,28 @@ Validation on Linux: full `corepack pnpm check` passes (93 files; 918 passed, on
 45 skipped; 964 tests total), including typecheck and Biome. CLI and site builds pass. macOS
 validation remains for the user; these tests make no live provider calls. The separate P2 finding
 about estimated usage settlement for successful OpenAI-compatible responses is still open.
+
+## P2 unreported-success repair, review of b2bf1c2
+
+The compatible adapter previously converted absent usage into estimates without a source flag.
+`CallMeter` treated those counts as reported and released the rest of its reservation: the probe
+settled a 1,000-token hold to 10 estimated tokens. Partial reports could also imply zero output.
+
+The adapter now requires complete valid input and output counts and a valid cache subset before
+settling to a reported usage. Otherwise it sets `usageReported: false`, and the meter retains the
+full reservation. Estimates still size the context, but are excluded from reported run, session,
+child and summary totals. The existing `unreported` records preserve the charge without counting
+the estimates again. Cost becomes unknown. Human and JSON output label the difference; eval rows,
+token means and cache shares are unknown where usage is incomplete.
+
+`test/budgetUsage.test.ts` adds 19 cases: eight absent, partial or invalid usage reports; complete,
+cached and zero-report positive controls; a real file-journal resume and refused next turn; child
+usage and wrap-up; compaction replay; legacy replay; an HTTP retry; parallel child reservations;
+and an eval reporting case. All 19 pass on the repair. On b2bf1c2, 15 fail at the intended assertions
+and four controls pass. One existing local-provider test now expects unknown cost when its server
+omits usage, with a comment explaining the change.
+
+Validation on Linux: full `corepack pnpm check` passes (94 files; 937 passed, one expected failure,
+45 skipped; 983 tests total), including typecheck and Biome. CLI and site builds pass. Tests use mocked provider responses;
+no live provider billing or macOS validation is claimed. Legacy journals without source flags keep
+their old totals; historical estimates cannot be identified retroactively.

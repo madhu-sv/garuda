@@ -4,6 +4,7 @@ import {
   addUsage,
   type Message,
   type ModelResponse,
+  reportedUsage,
   type ToolResultBlock,
   type Usage,
   ZERO_USAGE,
@@ -31,14 +32,14 @@ export interface Session {
   /** Absolute path of the working root. */
   root: string;
   messages: Message[];
-  /** Token use for the whole session, including earlier runs and resumes. */
+  /** Provider-reported token use for the session; estimates remain on individual responses. */
   usage: Usage;
-  /** Cost for the whole session. Undefined when the model price is unknown. */
+  /** Session cost. Undefined when a price or a request's usage is unknown. */
   costUsd: number | undefined;
   /** Context size after the last response, in tokens. Compaction (F23) reads it. */
   contextTokens: number;
   /**
-   * Tokens charged to the budget with no reported usage (0.17, T9): failed or cancelled requests.
+   * Tokens charged to the budget with no reported usage (0.17, T9), even on a successful response.
    * The session's token budget counts them with the usage.
    */
   unreportedTokens: number;
@@ -142,7 +143,8 @@ export function addAssistantResponse(
   step: number,
   costUsd: number | undefined,
 ): void {
-  addCost(session, response.usage, costUsd);
+  if (response.usageReported === false) costUsd = undefined;
+  addCost(session, reportedUsage(response), costUsd);
   session.contextTokens = contextSize(response.usage);
   if (response.content.length > 0) {
     session.messages.push({ role: "assistant", content: response.content });
@@ -215,6 +217,8 @@ export function closeOpenToolCalls(session: Session): number {
 export function addUnreported(session: Session, tokens: number): void {
   if (tokens <= 0) return;
   session.unreportedTokens += tokens;
+  // The provider may have billed the reservation; no exact session cost is known.
+  session.costUsd = undefined;
   session.journal?.write({ type: "unreported", tokens });
 }
 

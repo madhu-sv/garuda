@@ -104,7 +104,8 @@ export function costOf(usage: Usage, price: Price, factor = 1): number {
 }
 
 /** The cost of one model response: its tokens at its own price factor (0.7). */
-export function responseCost(response: ModelResponse, price: Price): number {
+export function responseCost(response: ModelResponse, price: Price): number | undefined {
+  if (response.usageReported === false) return undefined;
   return costOf(response.usage, price, response.priceFactor ?? 1);
 }
 

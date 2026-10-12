@@ -180,6 +180,12 @@ The per-task means leave error runs out and add `(passes/all of all attempts; n 
 `scoredRate`, `attemptedRate`). Tokens and cost of error runs still count in the totals. A task that runs longer than 10 minutes is
 a failure with the stop reason `timeout`, not an error (12 hours with `--batch on`).
 
+Usage evidence (0.17): `tokens` and `cacheReadTokens` contain provider-reported counts only.
+When a request has no complete usage report, `report.json` also includes `unreportedTokens`, the
+full reservations charged to its budget. The table shows `tok ? (n reserved)`, token means are
+unknown for affected tasks, and the cache-share summary is unknown. USD cost is unknown too.
+This prevents an unmeasured run from appearing to use zero tokens or to be free.
+
 ## Method
 
 - Noise is large: one task can take 7 to 13 steps. Compare only with `--repeat 3` or more, on the same

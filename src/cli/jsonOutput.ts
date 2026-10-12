@@ -236,6 +236,7 @@ export function assistantLine(response: ModelResponse, model: string): Line {
       stop_reason: response.stopReason,
       stop_sequence: null,
       usage: apiUsage(response.usage),
+      ...(response.usageReported === false ? { usage_is_estimated: true } : {}),
     },
     parent_tool_use_id: null,
   };
@@ -311,6 +312,10 @@ export function resultLine(
     stop_reason: result?.modelStopReason ?? null,
     total_cost_usd: info.totalCostUsd,
     usage: apiUsage(usage),
+    ...((result?.unreportedTokens ?? 0) > 0
+      ? { usage_is_incomplete: true, unreported_budget_tokens: result?.unreportedTokens }
+      : {}),
+    ...(info.runCostUsd === undefined ? { cost_is_unknown: true } : {}),
     modelUsage: {
       [info.model]: {
         inputTokens: usage.inputTokens,

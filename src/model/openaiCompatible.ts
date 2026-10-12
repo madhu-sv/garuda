@@ -25,7 +25,7 @@ import type {
  * - No cache breakpoints: the API has none. The system prompt and the tool list still keep the
  *   same bytes (N2), so servers with automatic prefix caching reuse them.
  * - Tool results become "tool" messages; the tool call id links them.
- * - A server that sends no usage gets an estimate (4 characters per token), so compaction still works.
+ * - Missing or incomplete usage gets a labelled estimate for context sizing. Its reservation stays spent.
  * - Some small models write a tool call as JSON text. Under the model's "textToolCalls" mode it
  *   becomes a real call (see textToolCalls.ts). While streamed text can still be one, the adapter
  *   holds it back from the screen.
@@ -313,10 +313,12 @@ export function finishResponse(
       input: parseArguments(call.args),
     });
   }
+  const reported = providerUsage(state.usage);
   return {
     content,
     stopReason: stopReason(state, content),
-    usage: usageOf(state, request, content),
+    usage: reported ?? estimatedUsage(request, content),
+    ...(reported === undefined ? { usageReported: false } : {}),
   };
 }
 
@@ -346,22 +348,27 @@ function stopReason(state: StreamState, content: readonly ContentBlock[]): StopR
   return "other";
 }
 
-function usageOf(
-  state: StreamState,
-  request: ModelRequest,
-  content: readonly ContentBlock[],
-): Usage {
-  const u = state.usage;
-  if (u?.prompt_tokens !== undefined) {
-    const cached = u.prompt_tokens_details?.cached_tokens ?? 0;
-    return {
-      inputTokens: Math.max(0, u.prompt_tokens - cached),
-      outputTokens: u.completion_tokens ?? 0,
-      cacheReadTokens: cached,
-      cacheWriteTokens: 0,
-    };
-  }
-  // No usage from the server: estimate, so context tracking and compaction still work.
+/** Both totals must be present and valid before a reservation can be released. */
+function providerUsage(u: WireChunk["usage"]): Usage | undefined {
+  const input = u?.prompt_tokens;
+  const output = u?.completion_tokens;
+  const cached = u?.prompt_tokens_details?.cached_tokens ?? 0;
+  if (!tokenCount(input) || !tokenCount(output) || !tokenCount(cached) || cached > input)
+    return undefined;
+  return {
+    inputTokens: input - cached,
+    outputTokens: output,
+    cacheReadTokens: cached,
+    cacheWriteTokens: 0,
+  };
+}
+
+function tokenCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** Kept on the response for context tracking, never used as provider-reported expenditure. */
+function estimatedUsage(request: ModelRequest, content: readonly ContentBlock[]): Usage {
   const chars = (value: unknown) => JSON.stringify(value).length;
   return {
     inputTokens: Math.ceil(

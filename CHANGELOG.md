@@ -2,6 +2,12 @@
 
 ## 0.17.0 (unreleased)
 
+- Token budget, review of b2bf1c2: successful OpenAI-compatible responses with missing, partial
+  or invalid usage keep their full reservation charged. Estimates remain labelled on responses
+  for context sizing, but do not enter reported session or child totals, avoiding a double charge.
+  The existing `unreported` records preserve the charge across resume; affected costs are unknown.
+  Usage displays and JSON distinguish budget charges and estimates; evals mark incomplete token
+  totals and means unknown. Legacy journals remain readable with their historical totals.
 - Token budget, review of 597104a: every input reservation covers the full current request,
   including changed instructions, tool definitions and server-tool settings on resume. A larger
   previous measured context plus new messages is still kept. Oversized requests stop before a

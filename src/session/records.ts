@@ -60,6 +60,7 @@ export interface SubagentReport {
   model: string;
   steps: number;
   stopReason: string;
+  /** Provider-reported usage only; unknown reservations are charged through the shared budget. */
   usage: Usage;
   costUsd?: number;
 }
@@ -128,7 +129,7 @@ export interface ContinueRecord extends Base {
 
 /**
  * Tokens charged to the session's budget with no reported usage (0.17, review T9): a model request
- * that failed or was cancelled keeps its whole reservation. Kept apart from the usage (which is
+ * without complete usage keeps its whole reservation, even on success. Kept apart from the usage (which is
  * what the provider reported), and read again on resume.
  */
 export interface UnreportedRecord extends Base {

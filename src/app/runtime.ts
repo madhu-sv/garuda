@@ -1494,9 +1494,8 @@ export class Runtime {
       .join("")
       .trim();
     const price = this.price;
-    return price === undefined
-      ? { text: answer }
-      : { text: answer, costUsd: responseCost(response, price) };
+    const costUsd = price === undefined ? undefined : responseCost(response, price);
+    return costUsd === undefined ? { text: answer } : { text: answer, costUsd };
   }
 
   /**

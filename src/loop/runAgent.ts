@@ -7,6 +7,7 @@ import {
   type ModelClient,
   type ModelRequest,
   type ModelResponse,
+  reportedUsage,
   type ServerToolResultBlock,
   type ServerToolSpec,
   type StopReason,
@@ -121,12 +122,14 @@ export interface AgentDeps {
 export interface AgentResult {
   stopReason: AgentStopReason;
   steps: number;
-  /** Token use for this run only. The session keeps the running total. */
+  /** Provider-reported token use for this run only; unknown reservations are separate. */
   usage: Usage;
   /** Time spent in model calls in this run, retries included (0.5). */
   apiMs: number;
   /** The stop reason of the last model response (0.5). */
   modelStopReason?: StopReason;
+  /** Full reservations charged in this run without provider-reported usage; separate from `usage`. */
+  unreportedTokens?: number;
 }
 
 /**
@@ -153,6 +156,8 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   const stopTrackingChildren = shared.onChildSpend((id, tokens) =>
     addChildDebit(session, id, tokens),
   );
+  const initialSpend = shared.spent;
+  const initialReported = budgetSpent(session) - session.unreportedTokens;
   const recent: string[] = [];
   let usage = ZERO_USAGE;
   let steps = 0;
@@ -163,11 +168,14 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
 
   const finish = (stopReason: AgentStopReason): AgentResult => {
     if (deps.endRecord !== false) session.journal?.write({ type: "end", stopReason, steps });
+    const reported = budgetSpent(session) - session.unreportedTokens - initialReported;
+    const unreportedTokens = Math.max(0, shared.spent - initialSpend - reported);
     return {
       stopReason,
       steps,
       usage,
       apiMs,
+      ...(unreportedTokens > 0 ? { unreportedTokens } : {}),
       ...(modelStopReason === undefined ? {} : { modelStopReason }),
     };
   };
@@ -242,9 +250,9 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
           }
         : kept;
       modelStopReason = response.stopReason;
-      usage = addUsage(usage, response.usage);
+      usage = addUsage(usage, reportedUsage(response));
       addAssistantResponse(session, response, steps, cost(response));
-      emit({ type: "step_end", step: steps, usage: response.usage, response });
+      emit({ type: "step_end", step: steps, usage: reportedUsage(response), response });
       for (const call of response.content) {
         if (call.type !== "server_tool_use") continue;
         const result = response.content.find(

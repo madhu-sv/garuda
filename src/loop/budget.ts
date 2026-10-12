@@ -145,8 +145,8 @@ export class CallMeter {
     this.start();
   }
 
-  /** The call ended with this reported usage. */
-  done(used: number): void {
+  /** The call ended; without reported usage, keep its whole reservation charged. */
+  done(used?: number): void {
     if (this.open !== undefined) this.budget.settle(this.open, used);
     this.open = undefined;
   }

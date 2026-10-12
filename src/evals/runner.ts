@@ -192,6 +192,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   const session = runtime.session;
   if (session !== undefined) {
     result.tokens = totalTokens(session.usage);
+    if (session.unreportedTokens > 0) result.unreportedTokens = session.unreportedTokens;
     result.costUsd = session.costUsd;
     result.cacheReadTokens = session.usage.cacheReadTokens;
     if (options.outDir !== undefined) {
@@ -347,7 +348,9 @@ export function formatReport(results: readonly EvalResult[]): string {
       r.passed ? "PASS" : isErrorRun(r) ? "ERR " : "FAIL",
       r.id.padEnd(18),
       `${String(r.steps).padStart(3)} steps`,
-      `${(r.tokens / 1000).toFixed(1).padStart(7)}k tok`,
+      (r.unreportedTokens ?? 0) > 0
+        ? `tok ? (${r.unreportedTokens} reserved)`
+        : `${(r.tokens / 1000).toFixed(1).padStart(7)}k tok`,
       r.costUsd === undefined ? "   cost ?" : `$${r.costUsd.toFixed(4).padStart(7)}`,
       `${(r.durationMs / 1000).toFixed(0).padStart(4)} s`,
       r.stopReason,
@@ -364,8 +367,11 @@ export function formatReport(results: readonly EvalResult[]): string {
     (summary.errors > 0 ? ` · ${summary.errors} error run(s)` : "");
   const tokens = results.reduce((s, r) => s + r.tokens, 0);
   const cached = results.reduce((s, r) => s + (r.cacheReadTokens ?? 0), 0);
-  const share =
-    tokens === 0 ? "" : ` · ${Math.round((cached / tokens) * 100)}% of tokens from the cache`;
+  const share = results.some((r) => (r.unreportedTokens ?? 0) > 0)
+    ? " · cache share unknown"
+    : tokens === 0
+      ? ""
+      : ` · ${Math.round((cached / tokens) * 100)}% of tokens from the cache`;
   const lines = [...rows, "", `${counted} · ${steps} steps · cost ${cost}${share}`];
   const ids = [...new Set(results.map((r) => r.id))];
   // With --repeat, one run says little: show the mean per task.
@@ -391,7 +397,9 @@ function meanRows(results: readonly EvalResult[], ids: readonly string[]): strin
         `${mean((r) => r.steps)
           .toFixed(1)
           .padStart(5)} steps`,
-        `${(mean((r) => r.tokens) / 1000).toFixed(1).padStart(7)}k tok`,
+        runs.some((r) => (r.unreportedTokens ?? 0) > 0)
+          ? "    tok ?"
+          : `${(mean((r) => r.tokens) / 1000).toFixed(1).padStart(7)}k tok`,
         runs.every((r) => r.costUsd !== undefined)
           ? `$${mean((r) => r.costUsd ?? 0)
               .toFixed(4)

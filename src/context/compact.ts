@@ -8,6 +8,7 @@ import type {
   ModelResponse,
   ToolResultBlock,
 } from "../model/types.js";
+import { reportedUsage } from "../model/types.js";
 import type { Session } from "../session/session.js";
 import { addCost } from "../session/session.js";
 import { compacted } from "../session/undo.js";
@@ -169,8 +170,8 @@ async function summaryStage(
     ],
   };
   const messages = [opening, ...recent];
-  const costUsd = costOf?.(summary);
-  addCost(session, summary.usage, costUsd);
+  const costUsd = summary.usageReported === false ? undefined : costOf?.(summary);
+  addCost(session, reportedUsage(summary), costUsd);
   // The context also holds the system prompt and the tool list, which do not change: take off only
   // what the messages lost (0.8; before, the estimate counted the messages alone).
   const savedChars = Math.max(0, charCount(session.messages) - charCount(messages));

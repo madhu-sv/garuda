@@ -1,6 +1,6 @@
 import type { AgentResult, AgentStopReason } from "../loop/runAgent.js";
 import { totalTokens } from "../model/pricing.js";
-import type { Session } from "../session/session.js";
+import { budgetSpent, type Session } from "../session/session.js";
 
 /** Short token counts: 950, 12.3k, 4.5M. */
 export function formatTokens(n: number): string {
@@ -26,10 +26,15 @@ export function usageLine(
   const percent = Math.round((session.contextTokens / contextWindow) * 100);
   return [
     `${result.stopReason} · ${result.steps} step(s)`,
-    `${formatTokens(input)} in (${formatTokens(u.cacheReadTokens)} cached) / ${formatTokens(u.outputTokens)} out`,
+    `${session.unreportedTokens > 0 ? "reported " : ""}${formatTokens(input)} in (${formatTokens(u.cacheReadTokens)} cached) / ${formatTokens(u.outputTokens)} out`,
     formatUsd(runCostUsd),
     `context ${percent}% of ${formatTokens(contextWindow)}`,
     `session ${formatTokens(totalTokens(session.usage))} tokens, ${formatUsd(session.costUsd)}`,
+    ...(session.unreportedTokens > 0
+      ? [
+          `budget ${formatTokens(budgetSpent(session))} tokens (${formatTokens(session.unreportedTokens)} reserved without reported usage)`,
+        ]
+      : []),
   ].join(" · ");
 }
 

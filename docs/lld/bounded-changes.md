@@ -295,6 +295,9 @@ A `Budget` object, made per turn and shared by the parent and all its children:
   call, and the run stops with `token_budget`.
 - `settle(reservation, used)` after the call returns the unused part, but only when the provider
   reported the usage of that request.
+- This applies to successful responses too. Missing, partial or invalid OpenAI-compatible usage
+  is marked `usageReported: false`; the full reservation stays charged. Context estimates are not
+  added to reported session totals or to that charge. The existing `unreported` records persist it.
 - **Failures and cancellation (second review).** A request that fails, times out or is cancelled
   with no reported usage keeps its whole reservation as spent: the provider may have charged for
   it. A request with a reported usage (also a cut-off stream) settles to that usage. Releasing a

@@ -2,7 +2,7 @@ import { contextSize } from "../model/pricing.js";
 import { hasServerBlocks, withoutServerBlocks } from "../model/serverTools.js";
 import { type ThinkingChoice, withoutThinking } from "../model/thinking.js";
 import type { Message } from "../model/types.js";
-import { addUsage, ZERO_USAGE } from "../model/types.js";
+import { addUsage, reportedUsage, ZERO_USAGE } from "../model/types.js";
 import type { SessionRecord, StartRecord } from "./records.js";
 import { REDACTED } from "./redact.js";
 import { closeOpenToolCalls, createSession, type Session, settleChildDebits } from "./session.js";
@@ -91,8 +91,8 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         }
         break;
       case "assistant":
-        state.usage = addUsage(state.usage, record.response.usage);
-        addCost(record.costUsd);
+        state.usage = addUsage(state.usage, reportedUsage(record.response));
+        addCost(record.response.usageReported === false ? undefined : record.costUsd);
         state.contextTokens = contextSize(record.response.usage);
         if (record.response.content.length > 0) {
           state.messages.push({ role: "assistant", content: record.response.content });
@@ -103,16 +103,17 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         compacted(state.undo);
         state.contextTokens = record.afterTokens;
         if (record.summary !== undefined) {
-          state.usage = addUsage(state.usage, record.summary.usage);
-          addCost(record.costUsd);
+          state.usage = addUsage(state.usage, reportedUsage(record.summary));
+          addCost(record.summary.usageReported === false ? undefined : record.costUsd);
         }
         break;
       case "thinking":
         state.thinking = record.choice;
         break;
       case "unreported":
-        // Failed or cancelled requests still count for the session's budget (0.17, T9).
+        // Any request without reported usage keeps its reservation, including a successful one.
         state.unreportedTokens += record.tokens;
+        state.costUsd = undefined;
         break;
       case "child_debit":
         state.childDebits.set(

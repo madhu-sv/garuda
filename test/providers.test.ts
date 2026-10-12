@@ -504,6 +504,7 @@ describe("OpenAI-compatible client", () => {
     const result = await runtime.runTurn("what is a?", AbortSignal.timeout(10_000));
     expect(result).toMatchObject({ stopReason: "done", steps: 2 });
     expect(runtime.limits.contextWindow).toBe(16384);
-    expect(runtime.session?.costUsd).toBe(0);
+    // This server omits usage: estimates size the context, but do not establish an exact cost.
+    expect(runtime.session?.costUsd).toBeUndefined();
   });
 });

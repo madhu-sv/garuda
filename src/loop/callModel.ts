@@ -33,7 +33,15 @@ export async function callModelWithRetry(
     meter?.start();
     try {
       const response = await callModel(model, request, signal, emit, meter);
-      meter?.done(totalTokens(response.usage));
+      meter?.done(response.usageReported === false ? undefined : totalTokens(response.usage));
+      if (response.usageReported === false) {
+        emit({
+          type: "notice",
+          text:
+            "The provider did not report complete token usage. Response token counts are estimates; cost is unknown." +
+            (meter === undefined ? "" : " The full reservation stays charged to the budget."),
+        });
+      }
       return response;
     } catch (error) {
       meter?.failed();

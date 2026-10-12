@@ -3,6 +3,7 @@ import { modelFacts, type Runtime } from "../../app/runtime.js";
 import { AuditDirError, verifyAuditDir } from "../../audit/logger.js";
 import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { totalTokens, WEB_SEARCH_USD } from "../../model/pricing.js";
+import { budgetSpent } from "../../session/session.js";
 import {
   callersText,
   findCallersTool,
@@ -765,9 +766,14 @@ export function usageSummary(runtime: Runtime): string {
   const u = session.usage;
   const cost = session.costUsd === undefined ? "cost unknown" : `$${session.costUsd.toFixed(4)}`;
   return [
-    `Session ${session.id}: ${formatTokens(totalTokens(u))} tokens, ${cost}`,
+    `Session ${session.id}: ${formatTokens(totalTokens(u))}${session.unreportedTokens > 0 ? " reported" : ""} tokens, ${cost}`,
     `  input ${formatTokens(u.inputTokens)}, cache read ${formatTokens(u.cacheReadTokens)}, cache write ${formatTokens(u.cacheWriteTokens)}, output ${formatTokens(u.outputTokens)}`,
     `  context ${formatTokens(session.contextTokens)} of ${formatTokens(runtime.limits.contextWindow)}`,
+    ...(session.unreportedTokens > 0
+      ? [
+          `  budget ${formatTokens(budgetSpent(session))} tokens (${formatTokens(session.unreportedTokens)} reserved without reported usage)`,
+        ]
+      : []),
     ...(u.webSearches === undefined
       ? []
       : [
