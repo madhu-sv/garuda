@@ -1,6 +1,7 @@
 import type { ToolResultBlock, ToolUseBlock } from "../model/types.js";
 import type { Executor } from "../sandbox/types.js";
 import type { ToolCallMeta } from "../session/records.js";
+import { capResult, LIMITS } from "../tools/limits.js";
 import type { ToolContext, ToolRunner } from "../tools/types.js";
 import type { AgentEvent } from "./events.js";
 
@@ -25,11 +26,15 @@ export async function runTools(
   const runOne = async (call: ToolUseBlock): Promise<ToolResultBlock> => {
     emit({ type: "tool_call", call });
     const started = Date.now();
-    const outcome = await tools.execute(call, {
+    const raw = await tools.execute(call, {
       ...context,
       callId: call.id,
       progress: (text) => emit({ type: "tool_progress", call, text }),
     });
+    // Custom/replay runners get the same bound as the registry before results reach the model.
+    const max =
+      tools.runsSubagent?.(call.name) === true ? LIMITS.childAnswerChars : LIMITS.resultChars;
+    const outcome = { ...raw, content: capResult(raw.content, max) };
     const item: ToolCallMeta = {
       toolUseId: call.id,
       name: call.name,
@@ -53,8 +58,14 @@ export async function runTools(
   const results: ToolResultBlock[] = [];
   for (const batch of batches(calls, (call) => tools.isReadOnly(call.name))) {
     context.signal.throwIfAborted();
-    if (batch.parallel) results.push(...(await Promise.all(batch.calls.map(runOne))));
-    else for (const call of batch.calls) results.push(await runOne(call));
+    if (batch.parallel) {
+      // Drain every started child before ending the turn or detaching its debit tracker.
+      // Promise.all alone could reject while siblings were still spending in the background.
+      const settled = await Promise.allSettled(batch.calls.map(runOne));
+      const failed = settled.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+      for (const result of settled) if (result.status === "fulfilled") results.push(result.value);
+    } else for (const call of batch.calls) results.push(await runOne(call));
   }
   const order = new Map(calls.map((call, i) => [call.id, i]));
   meta.sort((a, b) => (order.get(a.toolUseId) ?? 0) - (order.get(b.toolUseId) ?? 0));

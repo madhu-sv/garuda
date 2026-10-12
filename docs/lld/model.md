@@ -262,7 +262,7 @@ held text, `lines` mode set in `models.json`, usage, retries, errors, and a whol
 
 ## The token budget at the provider (0.17, review T9)
 
-`StreamOptions.meter` (an `AttemptMeter`) comes from the loop's `CallMeter`. Every provider request
+`StreamOptions.meter` (an `AttemptMeter`) comes from the loop's `CallMeter`. Every generation attempt
 of a call reserves in the turn's budget, and a request that ends with no reported usage keeps its
 whole reservation:
 
@@ -272,3 +272,6 @@ whole reservation:
 - `AnthropicClient`: with a meter, the SDK gets `maxRetries: 0`, so it never sends the request again
   on its own; the loop retries, and each attempt reserves. A rate limit (429, `rate_limit_error`) is
   now a transient error for the loop.
+- `AnthropicBatchClient`: metered `batches.create()` also gets `maxRetries: 0`. Submission retries
+  belong to Garuda's loop and reserve separately. Status polling, result retrieval and cancellation
+  are not additional generation submissions.

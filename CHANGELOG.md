@@ -2,6 +2,13 @@
 
 ## 0.17.0 (unreleased)
 
+- Token budget, review of 6c9f929: metered Anthropic batch submission disables SDK retries;
+  reported child debits survive cancellation, parallel failures and resume, without duplicating
+  report aggregation. Started parallel calls settle before the turn ends. Complete results are
+  capped after hooks and on errors (20 000 characters for subagents, including metadata; 100 000
+  otherwise), also for custom/replay runners. The final-answer floor accounts for JSON escaping
+  and result-message structure; small budgets can refuse child work earlier. Compaction reserves
+  its system prompt and the rest of its full request. Existing journals remain readable.
 - Token budget, review of 31aab17: a subagent's wrap-up request is reserved in full (system prompt
   and tools too); every provider request reserves, also an HTTP retry and a batch job's switch to
   the normal API (the Anthropic SDK no longer retries on its own under the budget; the loop retries,

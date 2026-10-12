@@ -19,8 +19,9 @@ import type { PermissionGate } from "../permissions/types.js";
 import type { Executor } from "../sandbox/types.js";
 import {
   addAssistantResponse,
+  addChildDebit,
+  addChildReport,
   addContinuation,
-  addCost,
   addToolResults,
   addUnreported,
   budgetSpent,
@@ -149,6 +150,9 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
     new TokenBudget(Math.max(0, budget - budgetSpent(session)), undefined, (tokens) =>
       addUnreported(session, tokens),
     );
+  const stopTrackingChildren = shared.onChildSpend((id, tokens) =>
+    addChildDebit(session, id, tokens),
+  );
   const recent: string[] = [];
   let usage = ZERO_USAGE;
   let steps = 0;
@@ -168,16 +172,17 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
     };
   };
 
-  closeOpenToolCalls(session);
-
   // True while a main model call waits for its reservation: a refused call is not a step.
   let calling = false;
   try {
+    closeOpenToolCalls(session);
     return await loop();
   } catch (error) {
     if (!(error instanceof BudgetExhausted)) throw error;
     if (calling) steps--;
     return finish("token_budget");
+  } finally {
+    stopTrackingChildren();
   }
 
   async function loop(): Promise<AgentResult> {
@@ -279,21 +284,30 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
         ...(deps.audit === undefined ? {} : { audit: deps.audit }),
         budget: shared,
       };
-      // Children (subagents) reserve in the same budget, but leave this run room for one more call
-      // of the same size: its final answer.
-      // The floor (third review): the next request holds this one, this response, and the results
-      // of these calls (each bounded: LIMITS.resultChars, a subagent's answer childAnswerChars),
-      // and it needs its own output limit.
-      shared.setFloor(
-        reserve + outputLimit + calls.reduce((sum, call) => sum + resultBound(deps.tools, call), 0),
-      );
+      // Protect the next request's own estimate: the current reported context, a full result
+      // message (ids and JSON structure included), worst-case JSON escaping, and its output limit.
+      const resultMessage = [
+        {
+          role: "user",
+          content: calls.map((call) => ({
+            type: "tool_result",
+            toolUseId: call.id,
+            content: "",
+            isError: false,
+          })),
+        },
+      ];
+      const resultChars =
+        JSON.stringify(resultMessage).length +
+        calls.reduce((sum, call) => sum + 6 * resultBound(deps.tools, call), 0);
+      shared.setFloor(requestTokens(session, request) + Math.ceil(resultChars / 4) + outputLimit);
       const { results, meta } = await runTools(calls, deps, context, emit).finally(() =>
         shared.setFloor(0),
       );
       addToolResults(session, results, meta);
       for (const { subagent } of meta) {
         if (subagent === undefined) continue;
-        addCost(session, subagent.usage, subagent.costUsd);
+        addChildReport(session, subagent);
         usage = addUsage(usage, subagent.usage);
       }
 
@@ -305,8 +319,8 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
   }
 }
 
-/** The most tokens that one call's result can add to the next request (0.17, T9). */
+/** Raw character cap of the complete result, matching the registry's final cap. */
 function resultBound(tools: ToolRunner, call: ToolUseBlock): number {
   const subagent = tools.runsSubagent?.(call.name) === true;
-  return Math.ceil((subagent ? LIMITS.childAnswerChars : LIMITS.resultChars) / 4);
+  return subagent ? LIMITS.childAnswerChars : LIMITS.resultChars;
 }

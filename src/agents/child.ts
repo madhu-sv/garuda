@@ -137,7 +137,7 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
   };
   // The child reserves in the turn's shared budget (0.17, T9): its own cap, inside what the parent
   // has left, never into the parent's room for its final answer.
-  const budget = context.budget?.child(limits.tokenBudget);
+  const budget = context.budget?.child(limits.tokenBudget, run.id);
   try {
     const result = await runAgent(session, {
       model,

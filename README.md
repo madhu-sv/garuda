@@ -627,10 +627,13 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   3 times in a row. Garuda says why. The budget holds for the whole turn (0.17): each model call
   reserves its request and its output limit first, and stops when they do not fit; subagents,
   compaction and retries reserve in the same budget, and a subagent never takes the room that the
-  parent needs for its final answer. Every request to the provider reserves, also its own retries
+  parent needs for its final answer. Every generation attempt reserves, also provider retries
   and a batch job's switch to the normal API. A failed call with no reported usage counts as fully
-  spent, also in later turns and after a resume. `/compact` counts too. A tool result is at most
-  100 000 characters, and a subagent's answer at most 20 000.
+  spent, also in later turns and after a resume. Reported child expenditure is saved immediately,
+  including before cancellation or a parallel batch failure. `/compact` counts its full summary
+  request too. Complete tool results, including errors and hook feedback, are at most 100 000
+  characters; subagent results are at most 20 000 including metadata. The final-answer floor
+  allows for worst-case JSON escaping, so small budgets can refuse child work earlier.
 - When the connection to the model breaks while a response streams, Garuda sends the request again (up
   to 2 times) and says so. The session keeps only the complete response.
 - At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,

@@ -342,6 +342,27 @@ Five gaps, each with a regression test in `test/budget.test.ts`:
   (`unreported` records) and count in later turns and after a resume.
 - `/compact` reserves its summary request in the session's budget.
 
+### T9 repair following review of 6c9f929
+
+- Metered Anthropic batch creation sets `maxRetries: 0`, just like streaming. Garuda's loop
+  reserves each resubmission; status polling and cancellation are not generation submissions.
+- Known child charges are saved at settlement as `child_debit` records, attributed to the direct
+  child's report id. Reports replace only the amount they cover. Pending charges remain counted
+  after cancellation, failed parallel batches and resume; old journals start with an empty map.
+  This protects the allowance without double-counting nested reports or discarding partial ones.
+- Read-only parallel batches await all started calls before leaving the turn, keeping settlement
+  tracking active even when one child fails. No new request starts after an abort.
+- Results are capped after formatting and hooks, on every result path, and at the loop boundary
+  for custom/replay runners. Subagent metadata fits inside its 20 000-character result cap.
+- The parent floor uses the current request estimate, the exact empty-result message structure,
+  worst-case JSON escaping (six characters per string character), and the output limit. This
+  conservatism can refuse child work earlier at small budgets; the parent can still answer.
+- Compaction reserves `max(previous context, full summary input estimate) + 4096`, including its
+  system prompt. The approximate provider-token-count limitation is unchanged.
+
+Tests and local validation are recorded in
+[the budget review record](../quality-baseline/budget-review-baseline.md).
+
 ## T10: approximate code-intelligence results
 
 ### Behaviour

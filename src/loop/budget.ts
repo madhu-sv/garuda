@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { ModelRequest } from "../model/types.js";
 import type { Session } from "../session/session.js";
 
@@ -36,7 +37,9 @@ export interface Budget {
   /** Settle a reservation: with the call's usage, or (no usage) keep all of it as spent. */
   settle(hold: Hold, used?: number): void;
   /** A view for a child run: its own cap, inside what this budget has left. */
-  child(cap: number): Budget;
+  child(cap: number, sessionId?: string): Budget;
+  /** Reported descendant expenditure, attributed to the direct child's report id. */
+  onChildSpend(listener: (sessionId: string, tokens: number) => void): () => void;
   /** The tokens that children must leave for this run's final answer. */
   setFloor(tokens: number): void;
 }
@@ -49,12 +52,14 @@ export class TokenBudget implements Budget {
   private spentTokens = 0;
   private heldTokens = 0;
   private floor = 0;
+  private readonly childListeners = new Set<(sessionId: string, tokens: number) => void>();
 
   constructor(
     private readonly total: number,
     private readonly parent?: TokenBudget,
     /** At the root: tokens charged with no reported usage, for the session's record (review). */
     private readonly onUnreported?: (tokens: number) => void,
+    private readonly sessionId?: string,
   ) {}
 
   get left(): number {
@@ -77,8 +82,13 @@ export class TokenBudget implements Budget {
     else this.give(record.tokens, Math.max(0, used), 0);
   }
 
-  child(cap: number): Budget {
-    return new TokenBudget(Math.max(0, cap), this);
+  child(cap: number, sessionId = randomUUID()): Budget {
+    return new TokenBudget(Math.max(0, cap), this, undefined, sessionId);
+  }
+
+  onChildSpend(listener: (sessionId: string, tokens: number) => void): () => void {
+    this.childListeners.add(listener);
+    return () => this.childListeners.delete(listener);
   }
 
   setFloor(tokens: number): void {
@@ -98,11 +108,15 @@ export class TokenBudget implements Budget {
     return true;
   }
 
-  private give(held: number, spent: number, unreported: number): void {
+  private give(held: number, spent: number, unreported: number, childId?: string): void {
     this.heldTokens -= held;
     this.spentTokens += spent;
-    if (this.parent !== undefined) this.parent.give(held, spent, unreported);
+    if (this.parent !== undefined)
+      this.parent.give(held, spent, unreported, this.sessionId ?? childId);
     else if (unreported > 0) this.onUnreported?.(unreported);
+    if (childId !== undefined && unreported === 0 && spent > 0) {
+      for (const listener of this.childListeners) listener(childId, spent);
+    }
   }
 }
 
@@ -161,7 +175,18 @@ export function requestTokens(session: Session, request: ModelRequest): number {
       approxTokens(JSON.stringify(request.messages.slice(lastAssistant + 1)))
     );
   }
+  return fullRequestTokens(request);
+}
+
+/** Complete request input estimate, including system and tool definitions. */
+export function fullRequestTokens(request: ModelRequest): number {
   return approxTokens(
-    JSON.stringify({ system: request.system, messages: request.messages, tools: request.tools }),
+    JSON.stringify({
+      system: request.system,
+      messages: request.messages,
+      tools: request.tools,
+      ...(request.serverTools === undefined ? {} : { serverTools: request.serverTools }),
+      ...(request.thinking === undefined ? {} : { thinking: request.thinking }),
+    }),
   );
 }

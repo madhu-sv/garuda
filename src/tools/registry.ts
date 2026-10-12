@@ -2,7 +2,10 @@ import { z } from "zod";
 import { AuditWriteError } from "../audit/logger.js";
 import type { ToolSpec, ToolUseBlock } from "../model/types.js";
 import type { CallInfo } from "../permissions/types.js";
-import { LIMITS } from "./limits.js";
+import { capResult, LIMITS } from "./limits.js";
+
+export { capResult } from "./limits.js";
+
 import {
   type AnyTool,
   SubagentFailure,
@@ -68,6 +71,13 @@ export class ToolRegistry implements ToolRunner {
    * The permission check runs after validation and before `run` (F17–F20).
    */
   async execute(call: ToolUseBlock, context: ToolContext): Promise<ToolOutcome> {
+    const outcome = await this.executeUnbounded(call, context);
+    const max = this.runsSubagent(call.name) ? LIMITS.childAnswerChars : LIMITS.resultChars;
+    // Apply the bound after formatting and hooks, including all errors and denial paths.
+    return { ...outcome, content: capResult(outcome.content, max) };
+  }
+
+  private async executeUnbounded(call: ToolUseBlock, context: ToolContext): Promise<ToolOutcome> {
     const tool = this.tools.get(call.name);
     if (tool === undefined) {
       return { content: `Error: unknown tool "${call.name}".`, isError: true };
@@ -185,15 +195,4 @@ export class ToolRegistry implements ToolRunner {
       return { content: `Error: ${call.name} failed: ${message}`, isError: true, ...failed };
     }
   }
-}
-
-/**
- * The hard cap of one tool result (0.17, T9): the token budget keeps room for the next request,
- * so each result needs a known bound. Tools keep their own, smaller limits; this one cuts the
- * middle of anything larger.
- */
-export function capResult(content: string, max: number = LIMITS.resultChars): string {
-  if (content.length <= max) return content;
-  const half = Math.floor((max - 100) / 2);
-  return `${content.slice(0, half)}\n[… ${content.length - 2 * half} characters cut: a tool result is at most ${max} characters]\n${content.slice(-half)}`;
 }

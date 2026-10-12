@@ -5,7 +5,7 @@ import type { Message } from "../model/types.js";
 import { addUsage, ZERO_USAGE } from "../model/types.js";
 import type { SessionRecord, StartRecord } from "./records.js";
 import { REDACTED } from "./redact.js";
-import { closeOpenToolCalls, createSession, type Session } from "./session.js";
+import { closeOpenToolCalls, createSession, type Session, settleChildDebits } from "./session.js";
 import type { SessionStore } from "./store.js";
 import {
   compacted,
@@ -23,6 +23,7 @@ export interface RebuiltState {
   costUsd: number | undefined;
   contextTokens: number;
   unreportedTokens: number;
+  childDebits: Map<string, number>;
   /** The last start or resume record: model, root and limits in use. */
   start: StartRecord | undefined;
   /** Undo points and redo entries (0.4). */
@@ -39,6 +40,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
     costUsd: 0,
     contextTokens: 0,
     unreportedTokens: 0,
+    childDebits: new Map(),
     start: undefined,
     undo: emptyUndoState(),
   };
@@ -84,6 +86,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         for (const call of record.calls) {
           if (call.subagent === undefined) continue;
           state.usage = addUsage(state.usage, call.subagent.usage);
+          settleChildDebits(state.childDebits, call.subagent);
           addCost(call.subagent.costUsd);
         }
         break;
@@ -110,6 +113,12 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
       case "unreported":
         // Failed or cancelled requests still count for the session's budget (0.17, T9).
         state.unreportedTokens += record.tokens;
+        break;
+      case "child_debit":
+        state.childDebits.set(
+          record.childSessionId,
+          (state.childDebits.get(record.childSessionId) ?? 0) + record.tokens,
+        );
         break;
       case "end":
       case "title":
@@ -159,6 +168,7 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
   session.costUsd = state.costUsd;
   session.contextTokens = state.contextTokens;
   session.unreportedTokens = state.unreportedTokens;
+  session.childDebits = state.childDebits;
   session.undo = state.undo;
   if (state.thinking !== undefined) session.thinking = state.thinking;
   journal.write({ type: "resume", sessionId: id, ...options.start });

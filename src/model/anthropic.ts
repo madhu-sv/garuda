@@ -350,7 +350,11 @@ export class AnthropicBatchClient implements ModelClient {
     ) as Anthropic.Messages.MessageCreateParamsNonStreaming;
     const batch = await this.client.messages.batches.create(
       { requests: [{ custom_id: "garuda", params }] },
-      signal === undefined ? {} : { signal },
+      {
+        ...(signal === undefined ? {} : { signal }),
+        // Batch submission is a generation attempt too. The loop, not the SDK, owns retries.
+        ...(options?.meter === undefined ? {} : { maxRetries: 0 }),
+      },
     );
     const started = Date.now();
     this.onWait?.({ batchId: batch.id, waitedMs: 0, status: "created" });

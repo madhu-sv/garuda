@@ -1,4 +1,4 @@
-import { approxTokens, type Budget } from "../loop/budget.js";
+import { type Budget, fullRequestTokens } from "../loop/budget.js";
 import { callModelWithRetry, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
 import { hasServerBlocks, serverPairText, withoutServerBlocks } from "../model/serverTools.js";
 import type {
@@ -290,8 +290,7 @@ async function summarise(
       ? undefined
       : {
           budget,
-          tokens:
-            Math.max(before, approxTokens(JSON.stringify(request.messages))) + SUMMARY_MAX_TOKENS,
+          tokens: Math.max(before, fullRequestTokens(request)) + SUMMARY_MAX_TOKENS,
         };
   return callModelWithRetry(model, request, signal, () => {}, delays, metered);
 }

@@ -136,6 +136,13 @@ export interface UnreportedRecord extends Base {
   tokens: number;
 }
 
+/** Reported child expenditure, saved before its tool report is available. */
+export interface ChildDebitRecord extends Base {
+  type: "child_debit";
+  childSessionId: string;
+  tokens: number;
+}
+
 export interface EndRecord extends Base {
   type: "end";
   stopReason: string;
@@ -155,6 +162,7 @@ export type SessionRecord =
   | ThinkingRecord
   | ContinueRecord
   | UnreportedRecord
+  | ChildDebitRecord
   | EndRecord;
 
 /** A record before the journal adds the time. */

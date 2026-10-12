@@ -207,8 +207,16 @@ In 0.14, the core agent loop and runtime coordinators were decomposed into cohes
     bound: the last reservation, plus the output limit, plus each call's result bound
     (`LIMITS.resultChars`, or `LIMITS.childAnswerChars` for a subagent). The budget is a session
     limit: charges with no reported usage go to `session.unreportedTokens` (an `unreported`
-    record, read again on resume), and the next turn starts from `usage + unreportedTokens`.
+    record, read again on resume), and the next turn starts from `budgetSpent(session)`.
     `/compact` (`Runtime.compact`) reserves its summary request in the same session budget.
+  - Review of 6c9f929: the floor uses the current input estimate plus a full result-message
+    skeleton, up to six JSON characters per result character, and the output limit. The full
+    rendered result is capped, including hook feedback, errors and subagent metadata. Reported
+    child spend is journaled immediately through `onChildSpend`, attributed to the direct child;
+    its later report replaces only the pending debits it covers. `budgetSpent` counts usage,
+    unreported charges and pending child debits. Parallel batches drain all started calls before
+    ending the turn and detaching the tracker. Compaction uses `fullRequestTokens`, including the
+    summary system prompt. Existing journals need no migration.
   - `loopDetector.ts`: Repeated tool call detection preventing infinite loops.
   - `toolRunner.ts`: Tool execution pipeline, read-only call parallelization, progress tracking, and execution metadata capture.
 

@@ -12,6 +12,7 @@ interface Session {
   id; root;
   messages: Message[];
   usage: Usage; costUsd?: number; contextTokens: number;
+  childDebits: Map<string, number>; // reported child tokens not yet included in a tool report
   files: FileTracker;
   journal?: Journal;
 }
@@ -44,6 +45,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `thinking` | choice (0.9, `/thinking`; the last one wins; a resume brings it back) |
 | `continue` | message, maxTokens (0.12: the note after a response cut off at the output limit; a resume adds the message; not a turn in `/sessions`) |
 | `unreported` | tokens (0.17, T9: a failed or cancelled model request with no reported usage keeps its whole reservation; the session's budget counts these with the usage, and a resume adds them up in `unreportedTokens`) |
+| `child_debit` | childSessionId, tokens (reported child spend, written immediately at settlement; a later tool report replaces only the amount it includes, so cancellation and partial reports cannot erase expenditure or double-charge it) |
 | `end` | stopReason, steps |
 
 ## Store (`store.ts`)
@@ -97,6 +99,12 @@ on disk (a tool result with a secret), every thinking block from that message on
 A resume with another model than the session's last one leaves all thinking out.
 
 ## Resume (`resume.ts`)
+
+The session allowance counts reported usage, unreported reservations and pending child debits.
+`rebuildState` restores the same pending-debit map. Journals without `child_debit` records keep
+their original totals, with an empty map; no on-disk migration is needed. Returned child reports
+still provide usage and USD-cost breakdowns. Pending debits protect the token allowance; they do
+not invent a USD charge for an interrupted child whose report did not reach the parent.
 
 `rebuildState(records)` replays the records into messages, usage, cost and context size (compaction
 records replace the messages; subagent reports in `tool_results` add their usage and cost; `snapshot`,

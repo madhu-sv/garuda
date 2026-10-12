@@ -52,6 +52,9 @@ treats it as read-only.
      answer is at most `LIMITS.childAnswerChars`, 20 000).
   7. `hooks.after()` may append feedback.
   8. `report()`, when the tool has it, adds the subagent report to the outcome.
+  9. Cap the complete outcome after hooks and formatting, including error and denial paths:
+     100 000 characters, or 20 000 for a subagent (metadata included). The loop applies the same
+     cap to custom/replay runners before emitting results or adding them to the conversation.
   Any exception becomes `Error: <tool> failed: <message>`.
 
 ## Built-in tools

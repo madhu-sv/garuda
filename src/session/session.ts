@@ -9,7 +9,7 @@ import {
   ZERO_USAGE,
 } from "../model/types.js";
 import { FileTracker } from "./fileTracker.js";
-import type { ToolCallMeta } from "./records.js";
+import type { SubagentReport, ToolCallMeta } from "./records.js";
 import { type Journal, newSessionId } from "./store.js";
 import {
   emptyUndoState,
@@ -42,6 +42,8 @@ export interface Session {
    * The session's token budget counts them with the usage.
    */
   unreportedTokens: number;
+  /** Reported child tokens not yet represented by an aggregated child report. */
+  childDebits: Map<string, number>;
   /** What the agent has read, for the edit_file freshness check (F11). */
   files: FileTracker;
   /** Where records go. Absent in tests that do not need a record. */
@@ -65,6 +67,7 @@ export function createSession(
     costUsd: 0,
     contextTokens: 0,
     unreportedTokens: 0,
+    childDebits: new Map(),
     files: new FileTracker(),
     undo: emptyUndoState(),
   };
@@ -215,7 +218,29 @@ export function addUnreported(session: Session, tokens: number): void {
   session.journal?.write({ type: "unreported", tokens });
 }
 
-/** What the session's token budget has spent: the reported usage and the unreported charges. */
+/** Session expenditure: usage, unknown reservations and known child charges awaiting a report. */
 export function budgetSpent(session: Session): number {
-  return totalTokens(session.usage) + session.unreportedTokens;
+  let children = 0;
+  for (const tokens of session.childDebits.values()) children += tokens;
+  return totalTokens(session.usage) + session.unreportedTokens + children;
+}
+
+/** Persist known child spend immediately; a cancelled batch may never return a report. */
+export function addChildDebit(session: Session, childSessionId: string, tokens: number): void {
+  if (tokens <= 0) return;
+  session.childDebits.set(childSessionId, (session.childDebits.get(childSessionId) ?? 0) + tokens);
+  session.journal?.write({ type: "child_debit", childSessionId, tokens });
+}
+
+/** Replace a child's pending debits with its full usage report, without counting it twice. */
+export function addChildReport(session: Session, report: SubagentReport): void {
+  addCost(session, report.usage, report.costUsd);
+  settleChildDebits(session.childDebits, report);
+}
+
+/** A partial report must not erase reported descendant expenditure it does not include. */
+export function settleChildDebits(debits: Map<string, number>, report: SubagentReport): void {
+  const rest = Math.max(0, (debits.get(report.sessionId) ?? 0) - totalTokens(report.usage));
+  if (rest === 0) debits.delete(report.sessionId);
+  else debits.set(report.sessionId, rest);
 }
