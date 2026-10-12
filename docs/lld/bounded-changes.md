@@ -189,7 +189,13 @@ plain copy, 0.09 s.
   sensitive ones by name. Deletions of ignored files are not shown.
 - **System prompt (0213).** In staged mode the model learns that the user applies or discards a
   command's changes, and that a discard leaves the project unchanged.
-- **Not yet:** the overlay backend (0214).
+- **Measured (Linux, ext4, no reflink).** A generated project with 20 000 files (79 MB): plain copy
+  0.4 s; session start with both first trees 3.0 s (git hashes every file twice, once); then per
+  command about 0.1 s before (`prepare`) and 0.08 s after (`collect`). Garuda's own repository: copy
+  0.09 s.
+- **Overlay backend: not built.** It would save only the copy (0.4 s above); the first trees and the
+  per-command lists cost the same, and overlayfs does not allow changes to the project (its lower
+  layer) while a command runs. A proposal for later, if a large project needs it.
 
 ### Decisions of the user (2026-10-10)
 
