@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- T10 evidence guard (Codex review of 1370184): fixed precision/recall floors (Java 33/54 and
+  33/36, Python 45/63 and 45/48) apply on every run, also during an evidence refresh; a refresh
+  variable set in CI fails the test.
 - Approximate references (Codex review of 1370184): Go and Rust references, and every user or
   project plugin's, now carry the same approximate warning as Java/Python in tools, chat, callers
   and impact. Tool descriptions name these languages.

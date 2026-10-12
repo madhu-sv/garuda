@@ -385,7 +385,8 @@ lookup or breaking existing plugins. Absence of the flag is not a perfect-accura
 Thirty symbols in a generated shopkit Java project and thirty in Python are frozen in JSON, with
 reference locations captured from jdtls 1.61.0 and pyright 1.1.406. Tests score unique `path:line`
 sites, excluding the selected declaration, and reject a lower precision/recall or stale evidence.
-Two fresh captures agree. The supplementary manual alias sample is separate.
+Fixed floors in the test code (the T10 values) apply on every run, also during a refresh, and a
+refresh variable set in CI fails (Codex review of 1370184). Two fresh captures agree. The supplementary manual alias sample is separate.
 
 See [the evidence record](../quality-baseline/code-intelligence-baseline.md) for denominators,
 limits, toolchain and reproduction. Java precision/recall: 61.1%/91.7%; Python: 71.4%/93.8%.
@@ -397,6 +398,7 @@ These synthetic, template-based measurements do not establish real-repository ac
 - TypeScript results in TS-only and mixed projects do not inherit the warning.
 - Truncation keeps the warning; malformed/stale/incomplete oracle evidence fails validation.
 - All 60 queries reproduce the recorded report; the scorer handles duplicates and empty predictions.
+- A report under a fixed floor fails, whatever the published file says; a refresh in CI fails.
 
 ## Docs to change with each patch
 

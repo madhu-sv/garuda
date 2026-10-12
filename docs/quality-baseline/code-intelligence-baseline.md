@@ -97,6 +97,12 @@ precision/recall. They also require the complete score report to match, so an im
 reviewed evidence refresh. The refresh commands generate evidence; they do not approve a lower
 baseline. Review every changed false positive/negative and update this record before accepting it.
 
+Fixed floors (Codex review of 1370184): `LSP_FLOORS` in `test/lspReferenceSample.ts` holds the T10
+values, Java precision ≥ 33/54 and recall ≥ 33/36, Python precision ≥ 45/63 and recall ≥ 45/48. The
+test checks them on every run, also during a refresh, so a refresh cannot lower the bar. Before,
+the published JSON was the only bar. A refresh variable (`GARUDA_LSP_REFERENCE_REPORT`,
+`GARUDA_REFERENCE_REPORT`) set in CI fails the test: CI compares, it never writes evidence.
+
 ## Result labels
 
 Java/Python experts and the index return `approximate: true` on the result envelope. References,

@@ -2,6 +2,9 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { expect, it } from "vitest";
 import {
+  checkLspFloors,
+  evidenceOutput,
+  LSP_FLOORS,
   measureLspReferenceSample,
   scoreReferenceSites,
   validateReferenceOracle,
@@ -41,10 +44,48 @@ it("rejects stale, incomplete, empty or malformed oracle evidence", () => {
   expect(() => validateReferenceOracle(changed)).toThrow("site/range mismatch");
 });
 
+// Codex review of 1370184: the published file was the only bar, and a refresh could lower it.
+it("fixed precision/recall floors reject a lowered report, whatever the published file says", () => {
+  const at = (tp: number, fp: number, fn: number) => ({
+    truePositives: tp,
+    falsePositives: fp,
+    falseNegatives: fn,
+    precision: tp / (tp + fp),
+    recall: tp / (tp + fn),
+  });
+  const good = { languages: { java: at(33, 21, 3), python: at(45, 18, 3) } };
+  expect(() => checkLspFloors(good)).not.toThrow();
+  expect(() => checkLspFloors({ languages: { ...good.languages, java: at(33, 22, 3) } })).toThrow(
+    "java precision",
+  );
+  expect(() => checkLspFloors({ languages: { ...good.languages, python: at(45, 18, 4) } })).toThrow(
+    "python recall",
+  );
+  expect(LSP_FLOORS).toEqual({
+    java: { precision: 33 / 54, recall: 33 / 36 },
+    python: { precision: 45 / 63, recall: 45 / 48 },
+  });
+});
+
+it("an evidence refresh is refused in CI", () => {
+  expect(evidenceOutput("GARUDA_LSP_REFERENCE_REPORT", {})).toBeUndefined();
+  expect(evidenceOutput("GARUDA_LSP_REFERENCE_REPORT", { GARUDA_LSP_REFERENCE_REPORT: "x" })).toBe(
+    "x",
+  );
+  expect(() =>
+    evidenceOutput("GARUDA_LSP_REFERENCE_REPORT", {
+      GARUDA_LSP_REFERENCE_REPORT: "x",
+      CI: "true",
+    }),
+  ).toThrow("CI");
+});
+
 it("measures all 60 LSP-oracle queries and guards the published precision/recall", async () => {
   const report = await measureLspReferenceSample();
   expect(report.combined.queries).toBe(60);
-  const output = process.env.GARUDA_LSP_REFERENCE_REPORT;
+  // The fixed floors apply always, also to a refresh, so a refresh cannot lower the bar.
+  checkLspFloors(report);
+  const output = evidenceOutput("GARUDA_LSP_REFERENCE_REPORT", process.env);
   if (output) {
     mkdirSync(dirname(output), { recursive: true });
     writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);

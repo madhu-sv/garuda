@@ -238,3 +238,45 @@ export async function measureLspReferenceSample() {
     cases,
   };
 }
+
+/**
+ * Fixed floors for the frozen LSP sample (Codex review of 1370184): the values measured at T10.
+ * Before, the published JSON was the only bar, and a refresh with a worse matcher lowered it.
+ * Change a floor only in a reviewed commit that says why.
+ */
+export const LSP_FLOORS = {
+  java: { precision: 33 / 54, recall: 33 / 36 },
+  python: { precision: 45 / 63, recall: 45 / 48 },
+} as const;
+
+/** Throw when a language is under its fixed precision or recall floor. */
+export function checkLspFloors(report: {
+  languages: Record<keyof typeof LSP_FLOORS, { precision: number | null; recall: number | null }>;
+}): void {
+  for (const lang of ["java", "python"] as const) {
+    for (const metric of ["precision", "recall"] as const) {
+      const value = report.languages[lang][metric];
+      const floor = LSP_FLOORS[lang][metric];
+      // No predictions or no gold sites (null) is under every floor.
+      if (value === null || !(value + 1e-12 >= floor)) {
+        throw new Error(
+          `${lang} ${metric} ${value?.toFixed(4) ?? "none"} is under the floor ${floor.toFixed(4)}`,
+        );
+      }
+    }
+  }
+}
+
+/**
+ * The path for an evidence refresh, from `name` in `env`. A refresh rewrites the published file,
+ * so it is refused in CI: there, the run must compare, never write.
+ */
+export function evidenceOutput(
+  name: string,
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  const output = env[name];
+  if (!output) return undefined;
+  if (env.CI) throw new Error(`${name} is set in CI: evidence refreshes are local and reviewed.`);
+  return output;
+}

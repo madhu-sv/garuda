@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { expect, it } from "vitest";
+import { evidenceOutput } from "./lspReferenceSample.js";
 import { measureReferenceSample, referenceCorpus } from "./referenceSample.js";
 
 it("measures the frozen Java/Python reference sample and keeps the published evidence current", async () => {
@@ -14,7 +15,7 @@ it("measures the frozen Java/Python reference sample and keeps the published evi
     }
   }
   const report = await measureReferenceSample();
-  const output = process.env.GARUDA_REFERENCE_REPORT;
+  const output = evidenceOutput("GARUDA_REFERENCE_REPORT", process.env);
   if (output) {
     mkdirSync(dirname(output), { recursive: true });
     writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
