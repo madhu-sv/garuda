@@ -31,6 +31,8 @@ class TypeScriptExpert implements LanguageExpert {
   private readonly service: TS.LanguageService;
   private files: string[] = [];
   private readonly versions = new Map<string, string>();
+  /** The start of each found symbol's name node, for the reference search. */
+  private readonly namePositions = new WeakMap<SymbolHit, number>();
 
   constructor(
     private readonly ts: typeof TS,
@@ -142,14 +144,10 @@ class TypeScriptExpert implements LanguageExpert {
     const program = this.service.getProgram();
     const sf = program?.getSourceFile(file);
     if (sf === undefined) return { definition, references: [], candidates };
-    // The position of the name inside the declaration line.
-    const lineStart = sf.getPositionOfLineAndCharacter(definition.line - 1, 0);
-    // The name as a whole word (0.14, review): indexOf found "port" inside "export", and the
-    // reference search on a keyword gave 0 references for a used name.
-    const lineEnd = sf.text.indexOf("\n", lineStart);
-    const lineText = sf.text.slice(lineStart, lineEnd < 0 ? undefined : lineEnd);
-    const word = new RegExp(`(?<![\\w$])${name.replace(/[$]/g, "\\$")}(?![\\w$])`).exec(lineText);
-    const at = word === null ? -1 : lineStart + word.index;
+    // The declaration's own name node (Codex review of 1370184): the first matching word on the
+    // line could be another symbol, such as a property of a type before the declaration.
+    // With no such node (an unusual declaration), the whole word on the line is the fallback.
+    const at = this.namePositions.get(definition) ?? wordOnLine(sf, definition.line, name);
     const groups = at < 0 ? undefined : this.service.findReferences(file, at);
 
     const references: ReferenceHit[] = [];
@@ -191,7 +189,7 @@ class TypeScriptExpert implements LanguageExpert {
     const sf = this.service.getProgram()?.getSourceFile(item.fileName);
     if (sf === undefined) return undefined;
     const line = sf.getLineAndCharacterOfPosition(item.textSpan.start).line + 1;
-    return {
+    const hit: SymbolHit = {
       name: item.name,
       kind: item.kind,
       path: this.rel(item.fileName),
@@ -199,6 +197,9 @@ class TypeScriptExpert implements LanguageExpert {
       ...(item.containerName ? { container: item.containerName } : {}),
       exported: item.kindModifiers.split(",").includes("export"),
     };
+    const at = declarationNameStart(this.ts, sf, item);
+    if (at !== undefined) this.namePositions.set(hit, at);
+    return hit;
   }
 
   private abs(path: string): string {
@@ -208,6 +209,45 @@ class TypeScriptExpert implements LanguageExpert {
   private rel(file: string): string {
     return relative(this.root, file).split(sep).join("/");
   }
+}
+
+/**
+ * The start of the name of the declaration that a navigate-to item spans: the node with exactly the
+ * item's span, and a name with the item's text. Undefined when there is no such node.
+ */
+function declarationNameStart(
+  ts: typeof TS,
+  sf: TS.SourceFile,
+  item: TS.NavigateToItem,
+): number | undefined {
+  const start = item.textSpan.start;
+  const end = start + item.textSpan.length;
+  let found: number | undefined;
+  const visit = (node: TS.Node): void => {
+    if (found !== undefined || node.end < start || node.getStart(sf) > end) return;
+    const name = (node as TS.Node & { name?: TS.Node }).name;
+    if (
+      node.getStart(sf) === start &&
+      node.end === end &&
+      name !== undefined &&
+      ((name as TS.Node & { text?: string }).text ?? name.getText(sf)) === item.name
+    ) {
+      found = name.getStart(sf);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return found;
+}
+
+/** The first whole-word match of a name on a line, or -1 (0.14, review: not "port" in "export"). */
+function wordOnLine(sf: TS.SourceFile, line: number, name: string): number {
+  const lineStart = sf.getPositionOfLineAndCharacter(line - 1, 0);
+  const lineEnd = sf.text.indexOf("\n", lineStart);
+  const lineText = sf.text.slice(lineStart, lineEnd < 0 ? undefined : lineEnd);
+  const word = new RegExp(`(?<![\\w$])${name.replace(/[$]/g, "\\$")}(?![\\w$])`).exec(lineText);
+  return word === null ? -1 : lineStart + word.index;
 }
 
 function scriptKind(ts: typeof TS, path: string): TS.ScriptKind {

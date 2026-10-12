@@ -40,6 +40,22 @@ describe("TypeScript references", () => {
   });
 });
 
+describe("references: the declaration's own name (Codex review of 1370184)", () => {
+  it("a TypeScript lookup uses the declared name, not an earlier word on its line", async () => {
+    // The first "count" on line 1 is a property of Opts; the search must start at the const.
+    const root = project({
+      "src/lib.ts":
+        "type Opts = { count: number }; export const count = (o: Opts): number => o.count;\n",
+      "src/use.ts": 'import { count } from "./lib.js";\nexport const n = count;\n',
+    });
+    const result = await new KnowledgeIndex(root).findReferences("count", "src/lib.ts");
+    expect(result.definition?.kind).not.toBe("property");
+    expect(result.references.filter((r) => r.path === "src/use.ts").map((r) => r.line)).toEqual([
+      1, 2,
+    ]);
+  });
+});
+
 describe("callers: module-level code is <module>", () => {
   it("Python: by indentation; TS: by brace depth", async () => {
     const root = project({

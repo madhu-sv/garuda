@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- TypeScript references (Codex review of 1370184): the search starts at the declaration's own
+  name, not at the first matching word on its line, which could be another symbol (a property of a
+  type declared earlier on the line).
 - Jobs (Codex review of 1370184): a review that was asked for but failed (a provider error, no
   budget) gives the verdict "needs a look", never "ready to merge". The error stays in `reviewError`.
 - JSON output (review of 1370184): `total_cost_usd` stays a number for compatibility, but an unknown

@@ -80,6 +80,11 @@ interface FileNode { path; exports: ExportEntry[]; imports: string[] }
 - Parser fixes (0.14): TS references find the name as a whole word on its line; Python multi-line
   strings that open mid-line (`X = """`); Go `var (`/`const (`/`type (` groups and generics; Java type
   declarations anchored at the line start, and `else`/`return`/`yield` lines are not methods.
+- TS reference search position (Codex review of 1370184): the search starts at the name node of the
+  declaration that the symbol search found (`declarationNameStart`), not at the first matching word on
+  its line. Before, `type Opts = { count: number }; export const count = …` searched the property
+  `count` and found no use of the const. The whole-word search stays only as a fallback for a
+  declaration with no matching name node.
 - `repoMap(dir)`: file nodes; unchanged files (same content hash) come from the cache in
   `.garuda/index/code-graph.json` (versioned). The cache is rewritten after each map.
 - Experts load lazily on first use, so the index costs nothing at startup.
