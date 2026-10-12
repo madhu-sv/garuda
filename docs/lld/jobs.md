@@ -165,7 +165,10 @@ response: batch responses at half the token price.
   deleted or changed, manifests or lock files, CI/container/`.env` files, more than 20 files or 500 lines,
   denied calls, tests fixed by the job, no file changed.
 - The review (`job.review` not false, and a commit): `runtime.askModel(reviewerSystem(stack),
-  reviewPrompt(...))`, one request with no tools and no session. The role: a principal engineer and a
+  reviewPrompt(...))`, one request with no tools, outside the conversation. Since the Codex review of
+  1370184 it is under the session's token budget: it reserves its whole size plus 8,192 output tokens
+  first (no room: a clear error, recorded as `reviewError`), every attempt is metered, and its usage
+  goes into the session (`side_usage` record). The role: a principal engineer and a
   domain expert in the stack (`stackOf`: languages of the changed files, then the profiles' labels). The
   input: the job prompt, the files, the test results (the failing output), the flags and `git diff base
   branch` (cut at 60,000 characters). `parseReview` reads `VERDICT: ready | needs a look`; no verdict line

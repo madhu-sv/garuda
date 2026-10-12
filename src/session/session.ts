@@ -248,3 +248,24 @@ export function settleChildDebits(debits: Map<string, number>, report: SubagentR
   if (rest === 0) debits.delete(report.sessionId);
   else debits.set(report.sessionId, rest);
 }
+
+/**
+ * The usage of a model request outside the conversation (the job review): into the session's
+ * usage and cost, and its journal (Codex review of 1370184). An estimate (no reported usage) adds
+ * nothing: the budget meter kept the whole reservation as unreported.
+ */
+export function addSideUsage(
+  session: Session,
+  purpose: "review",
+  response: ModelResponse,
+  costUsd: number | undefined,
+): void {
+  if (response.usageReported === false) return;
+  addCost(session, response.usage, costUsd);
+  session.journal?.write({
+    type: "side_usage",
+    purpose,
+    usage: response.usage,
+    ...(costUsd === undefined ? {} : { costUsd }),
+  });
+}

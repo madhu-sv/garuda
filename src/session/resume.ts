@@ -121,6 +121,11 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
           (state.childDebits.get(record.childSessionId) ?? 0) + record.tokens,
         );
         break;
+      case "side_usage":
+        // A request outside the conversation, such as the job review (Codex review of 1370184).
+        state.usage = addUsage(state.usage, record.usage);
+        addCost(record.costUsd);
+        break;
       case "end":
       case "title":
         break;

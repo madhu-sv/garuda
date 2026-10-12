@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- The job review is under the token budget (Codex review of 1370184): its request reserves first
+  (a one-token policy no longer lets an 8,192-token request through), every attempt is metered, and
+  its usage counts for the session and on resume.
 - Team policy `denyPaths` in the OS sandbox (Codex review of 1370184): when the patterns match more
   than 1,000 paths, commands stop with a message instead of running with only the first 1,000
   protected; a pattern that names `node_modules` or `.git` now finds files there.

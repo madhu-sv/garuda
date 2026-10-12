@@ -144,6 +144,17 @@ export interface ChildDebitRecord extends Base {
   tokens: number;
 }
 
+/**
+ * A model request outside the conversation (Codex review of 1370184): the job review. Its usage
+ * counts for the session's budget and cost; resume adds it.
+ */
+export interface SideUsageRecord extends Base {
+  type: "side_usage";
+  purpose: "review";
+  usage: Usage;
+  costUsd?: number;
+}
+
 export interface EndRecord extends Base {
   type: "end";
   stopReason: string;
@@ -164,6 +175,7 @@ export type SessionRecord =
   | ContinueRecord
   | UnreportedRecord
   | ChildDebitRecord
+  | SideUsageRecord
   | EndRecord;
 
 /** A record before the journal adds the time. */

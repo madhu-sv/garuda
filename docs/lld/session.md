@@ -46,6 +46,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `continue` | message, maxTokens (0.12: the note after a response cut off at the output limit; a resume adds the message; not a turn in `/sessions`) |
 | `unreported` | tokens (0.17, T9: any model request without complete reported usage keeps its whole reservation, also on success; the session's budget counts these with reported usage, and a resume adds them up in `unreportedTokens`) |
 | `child_debit` | childSessionId, tokens (reported child spend, written immediately at settlement; a later tool report replaces only the amount it includes, so cancellation and partial reports cannot erase expenditure or double-charge it) |
+| `side_usage` | purpose (`review`), usage, costUsd (Codex review of 1370184: a model request outside the conversation, the job review; its usage counts for the session's budget and cost, and resume adds it) |
 | `end` | stopReason, steps |
 
 ## Store (`store.ts`)

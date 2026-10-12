@@ -92,7 +92,9 @@ Sessions and models in the chat (0.6):
   (see [format.md](format.md)).
 - `runCheck(command, timeoutMs, signal)` and `askModel(system, text, signal)` (0.11, a job's proof of
   work): a command in the sandbox with bash's policy, outside the engine; one model request with no
-  tools, the main model and its price, no session.
+  tools, the main model and its price, outside the conversation. `askModel` reserves in the session's
+  token budget like a main call (`callModelWithRetry` with a meter), and its usage goes into the
+  session as a `side_usage` record (Codex review of 1370184).
 - `sessionRecords()`: the current session's records, for `/export`.
 - `compact(focus, signal)` (0.8): `compactNow` on the current session with the main model and its price;
   the result has the tokens before and after and the summary's cost.

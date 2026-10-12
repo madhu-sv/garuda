@@ -35,7 +35,8 @@ import {
   profileAccess,
   profileNotes,
 } from "../lang/profiles.js";
-import { BudgetExhausted, TokenBudget } from "../loop/budget.js";
+import { approxTokens, BudgetExhausted, TokenBudget } from "../loop/budget.js";
+import { callModelWithRetry, MODEL_RETRY_DELAYS_MS } from "../loop/callModel.js";
 import {
   type AgentEvent,
   type AgentResult,
@@ -64,6 +65,7 @@ import { fitThinking } from "../model/thinking.js";
 import type {
   Message,
   ModelClient,
+  ModelRequest,
   ModelResponse,
   ServerToolSpec,
   ThinkingRequest,
@@ -90,6 +92,7 @@ import type { SessionSummary } from "../session/list.js";
 import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
 import {
+  addSideUsage,
   addUnreported,
   addUserMessage,
   budgetSpent,
@@ -127,6 +130,9 @@ const FORMAT_TIMEOUT_MS = 20_000;
  * The note that starts each plan-mode turn (0.4). The system prompt stays the same in both modes
  * (N2); the permission engine and the sandbox enforce the mode, this note explains it.
  */
+/** The output limit of a request outside the conversation (the job review, 0.11). */
+const ASK_MODEL_MAX_TOKENS = 8_192;
+
 export const PLAN_NOTE =
   "Plan mode is on. Investigate and write a plan; do not change anything. File edits, file writes and remember are blocked, and bash runs in a sandbox that cannot write the project (temp folders only), so read-only commands and tests that write nothing in the project still work. End with a numbered plan: the files to change, the change in each, and how to test it. Then add a ```permissions block with one rule per line for the calls the build needs beyond the sandbox: edit_file(path) and write_file(path) for each file to change or create (globs such as src/** are fine), bash(command) for commands that need the network, and web_fetch(host) for pages. Commands that stay in the project (tests, builds) need no line.";
 
@@ -1476,25 +1482,44 @@ export class Runtime {
     signal: AbortSignal,
   ): Promise<{ text: string; costUsd?: number }> {
     const model = await this.client();
-    let response: ModelResponse | undefined;
-    for await (const event of model.stream(
-      {
-        system,
-        messages: [{ role: "user", content: [{ type: "text", text }] }],
-        tools: [],
-        maxTokens: 8_192,
+    const request: ModelRequest = {
+      system,
+      messages: [{ role: "user", content: [{ type: "text", text }] }],
+      tools: [],
+      maxTokens: ASK_MODEL_MAX_TOKENS,
+    };
+    // The session's token budget (Codex review of 1370184): the review request reserves its whole
+    // size first, every attempt (also a retry) is metered, and its usage goes into the session.
+    const session = this.current;
+    const budget = new TokenBudget(
+      Math.max(0, this.limits.tokenBudget - (session === undefined ? 0 : budgetSpent(session))),
+      undefined,
+      (tokens) => {
+        if (session !== undefined) addUnreported(session, tokens);
       },
-      { signal },
-    )) {
-      if (event.type === "response") response = event.response;
+    );
+    const tokens =
+      approxTokens(JSON.stringify({ system, messages: request.messages, tools: [] })) +
+      ASK_MODEL_MAX_TOKENS;
+    let response: ModelResponse;
+    try {
+      response = await callModelWithRetry(model, request, signal, () => {}, MODEL_RETRY_DELAYS_MS, {
+        budget,
+        tokens,
+      });
+    } catch (error) {
+      if (!(error instanceof BudgetExhausted)) throw error;
+      throw new Error(
+        "The session's token budget has no room for the review request. Raise limits.tokenBudget, or review the diff yourself.",
+      );
     }
-    if (response === undefined) throw new Error("The model gave no answer.");
     const answer = response.content
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
       .trim();
     const price = this.price;
     const costUsd = price === undefined ? undefined : responseCost(response, price);
+    if (session !== undefined) addSideUsage(session, "review", response, costUsd);
     return costUsd === undefined ? { text: answer } : { text: answer, costUsd };
   }
 
