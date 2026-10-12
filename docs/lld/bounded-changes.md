@@ -145,6 +145,17 @@ Garuda applies nothing and shows the paths. The staged change stays for one more
 - An incomplete change list (a fake walk at the file limit): the question offers only discard.
 - Live test on macOS (clone) and Linux (overlay, and copy with an older bwrap).
 
+### As built: the staging copy (0211)
+
+`src/staging/copy.ts`: `StagingCopy.create(root, { executor, home })` makes the copy in
+`~/.garuda/staging/<root hash>-<pid>-<random>` (folder 0700). A probe on one small file picks the
+method: `cp -c` (clonefile, macOS), `cp --reflink=always` (Linux), else a plain `cp -a`. A plain
+copy over 2 GB (`du -sk` first) throws `StagingError` with the reason; a failed copy throws and
+leaves no folder. Copies of ended processes for the same project are removed at the next start.
+`remove()` deletes the copy at the session end. The copy is complete: dot files, `.git` and links
+as links. Not yet used by commands (0212). Measured here (Linux, no reflink): Garuda's repository,
+plain copy, 0.09 s.
+
 ### Decisions of the user (2026-10-10)
 
 - **Q1.** Ignored files stay only in the staging copy. They are never applied.
