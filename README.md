@@ -713,6 +713,30 @@ Settings:
 - On Linux, install bubblewrap (`sudo apt install bubblewrap`). Some systems block the user namespaces
   that it needs; Garuda then falls back to the host and says why.
 
+### Staged commands (0.17, off by default)
+
+With `"commands": { "mode": "staged" }` in `.garuda/settings.json`, a command in the sandbox cannot
+change your project without your answer:
+
+- At the session start, Garuda makes a staging copy of the project in `~/.garuda/staging/` (a clone on
+  APFS, a reflink on Btrfs or XFS, else a plain copy of at most 2 GB). It is removed at the end.
+- Each sandboxed command runs in the copy. On Linux the copy is mounted at the project's path; on macOS
+  the command runs at the copy's path, and the project is read-only for it.
+- After the command, Garuda lists what changed. No change that git tracks: no question. A change: the
+  question shows the files and the diff, and you apply or discard. Apply copies the files into the
+  project (all or nothing; `/undo` takes them back). The model gets a note with your answer.
+- Files that `.gitignore` covers (build output, `node_modules`) stay in the copy for the next commands
+  and are never applied. Changes in `.git` are not applied either. The question counts them per
+  folder and names sensitive ones (for example `.env`).
+- A file that you changed in the project during the command is a conflict: nothing is applied. A link
+  that points out of the project is refused. A list that is not complete (more than 50,000 files) can
+  only be discarded.
+- No copy (no OS sandbox, a project over the limits): the session does not start. Garuda never runs
+  the commands in direct mode instead.
+- Not staged: `outside_sandbox: true` (it asks first, as before), MCP servers and language servers
+  (long-running programs), and scheduled jobs (they have their own worktree). Background daemons are
+  off in staged mode. A hook that writes files asks like a command.
+
 ### Network allowlist (0.13)
 
 Installs and builds need a package registry, but not the whole internet. The allowlist lets commands in

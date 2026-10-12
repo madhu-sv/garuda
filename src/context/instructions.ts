@@ -106,6 +106,7 @@ export function buildSystemPrompt(
     codeIndex = DEFAULT_CODE_INDEX_MODE,
     sandboxed = false,
     strict = false,
+    staged = false,
     mcp = false,
     web = false,
     hooks = false,
@@ -123,6 +124,8 @@ export function buildSystemPrompt(
     sandboxed?: boolean;
     /** The strict profile (0.17): no outside_sandbox. */
     strict?: boolean;
+    /** Staged commands (0.17, T5): a command's changes reach the project only after a yes. */
+    staged?: boolean;
     mcp?: boolean;
     web?: boolean;
     hooks?: boolean;
@@ -213,6 +216,13 @@ export function buildSystemPrompt(
             "outside_sandbox: true. The user must approve that. The user approves each file change.",
           ]
         : ["The user approves each command and each file change."]),
+    ...(staged
+      ? [
+          "Staged mode: commands run in a copy of the project. When a command changes files that git tracks, the user",
+          "applies or discards the changes; the result says which. After a discard the project did not change: do not",
+          "assume the command's edits are there. Files that git ignores (build output) stay for later commands but never reach the project.",
+        ]
+      : []),
     "Each bash call starts in the working root. Do not cd to it, and do not use absolute paths.",
     "Do not pipe a command into tail or head: the pipe hides the exit code, and Garuda already cuts long output.",
     "If the user denies a call, do not retry it. Ask what to do instead.",

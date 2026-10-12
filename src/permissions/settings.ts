@@ -140,6 +140,11 @@ const schema = z.strictObject({
    * (merge gate): no measured gain yet, and they add tools and long-lived processes.
    */
   daemons: z.strictObject({ enabled: z.boolean().optional() }).optional(),
+  /**
+   * Staged commands (0.17, review T5): "staged" runs each sandboxed command in a staging copy and
+   * asks before its changes reach the project. Default "direct".
+   */
+  commands: z.strictObject({ mode: z.enum(["direct", "staged"]).optional() }).optional(),
   /** Mixture-of-Experts language specialist subagent dispatch (0.17). */
   moe: z
     .strictObject({
@@ -192,6 +197,7 @@ export interface Settings {
   subagents?: { enabled?: boolean; maxSteps?: number; tokenBudget?: number };
   moe?: { enabled?: boolean; maxSteps?: number; tokenBudget?: number };
   daemons?: { enabled: boolean };
+  commands?: { mode: "direct" | "staged" };
   todo?: { enabled: boolean };
   lsp?: { enabled: boolean };
   undo?: { enabled: boolean };
@@ -226,6 +232,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     subagents,
     moe,
     daemons,
+    commands,
     todo,
     lsp,
     undo,
@@ -275,6 +282,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(limits.tokenBudget === undefined ? {} : { tokenBudget: limits.tokenBudget }),
     ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
     ...(model.price === undefined ? {} : { price: model.price }),
+    ...(commands?.mode === undefined ? {} : { commands: { mode: commands.mode } }),
     ...(todo?.enabled === undefined ? {} : { todo: { enabled: todo.enabled } }),
     ...(lsp?.enabled === undefined ? {} : { lsp: { enabled: lsp.enabled } }),
     ...(undo?.enabled === undefined ? {} : { undo: { enabled: undo.enabled } }),

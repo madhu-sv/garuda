@@ -33,6 +33,11 @@ export interface ExecPolicy {
    * stay protected).
    */
   writeScope?: { root: string; paths: string[] };
+  /**
+   * Folders mounted over other paths, writable (0.17, review T5: the staging copy over the project
+   * in staged mode). Only bubblewrap supports it; applied after `writePaths`, before the holes.
+   */
+  mounts?: { source: string; target: string }[];
   network: boolean;
   /**
    * The network allowlist (0.13): with `sandbox` and no `network`, the command reaches the internet
@@ -73,6 +78,8 @@ export interface ExecResult {
   /** True when the caller aborted (Ctrl-C) and the process tree was killed. */
   aborted: boolean;
   durationMs: number;
+  /** Staged mode (0.17, review T5): what happened to the command's changes, for the model. */
+  staged?: { note: string };
 }
 
 export interface ExecOptions {

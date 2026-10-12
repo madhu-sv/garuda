@@ -35,6 +35,10 @@ Seatbelt on macOS and bubblewrap on Linux. A command in the sandbox:
 - cannot start apps on macOS, and sees only its own processes on Linux;
 - gets only a short list of environment variables, so API keys stay out.
 
+Staged commands (0.17, off by default): with `"commands": { "mode": "staged" }`, a sandboxed command
+runs in a staging copy of the project. When it changes files that git tracks, you see the diff and
+apply or discard; nothing reaches the project without your answer.
+
 ## The network allowlist
 
 When you list hosts (or presets such as `npm` and `pypi`), sandboxed commands reach them through

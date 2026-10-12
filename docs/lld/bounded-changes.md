@@ -145,6 +145,62 @@ Garuda applies nothing and shows the paths. The staged change stays for one more
 - An incomplete change list (a fake walk at the file limit): the question offers only discard.
 - Live test on macOS (clone) and Linux (overlay, and copy with an older bwrap).
 
+### As built: the staging copy (0211)
+
+`src/staging/copy.ts`: `StagingCopy.create(root, { executor, home })` makes the copy in
+`~/.garuda/staging/<root hash>-<pid>-<random>` (folder 0700). A probe on one small file picks the
+method: `cp -c` (clonefile, macOS), `cp --reflink=always` (Linux), else a plain `cp -a`. A plain
+copy over 2 GB (`du -sk` first) throws `StagingError` with the reason; a failed copy throws and
+leaves no folder. Copies of ended processes for the same project are removed at the next start.
+`remove()` deletes the copy at the session end. The copy is complete: dot files, `.git` and links
+as links. Not yet used by commands (0212). Measured here (Linux, no reflink): Garuda's repository,
+plain copy, 0.09 s.
+
+### As built: staged commands (0212)
+
+- **Setting.** `"commands": { "mode": "direct" | "staged" }` (default direct). `Runtime.create` starts
+  `StagedCommands` (copy and store) or throws `StagingError`: no OS sandbox, a copy over the limits,
+  more than 50 000 files. The session does not start; no direct-mode fallback. A scheduled job
+  (unattended, or with a write scope) keeps direct mode in its own worktree.
+- **Executor.** `StagingExecutor` wraps the OS executor. It stages `run()` calls that are sandboxed
+  with the root writable (the bash tool, and hooks); `outside_sandbox`, read-only roots (plan mode,
+  language servers) and Garuda's own host git pass through; `start()` (MCP and language servers)
+  passes through; `daemons` is undefined (off). Staged runs go one at a time.
+- **Placement.** bubblewrap: `ExecPolicy.mounts` binds the copy over the root after the writable
+  paths, so `.git/hooks`, `.garuda/` and the denied paths stay protected inside the copy, and an
+  absolute path to the project reaches the copy. Seatbelt: `stagedPolicy(..., "move")` makes the copy
+  the working root, moves the root's paths to it, and denies writes to the project (Q3).
+- **Lists.** `src/staging/staged.ts` runs git with a store next to the copy (`<copy>.git`, outside
+  every sandbox write path) and one index per work tree. `prepare()` brings the copy to the project's
+  tree with `read-tree -m -u` (this also carries Garuda's own edits and the user's edits into the
+  copy); `collect()` lists the changes (.gitignore applies, as for `/undo`).
+- **Question.** Title "The command changed files": the command, the file list and the diff (cut at
+  60 000 characters; the list is complete). Apply or Discard. An incomplete list: Discard only.
+  An error or Ctrl-C at the question discards.
+- **Apply.** All or nothing. A path that also changed in the project since `prepare()` is a conflict;
+  a link out of the root is refused; then nothing is applied and the changes are discarded (as
+  built, a conflict does not keep the change for another question: the model gets a note to run the
+  command again). Otherwise `read-tree -m -u` moves the project from its tree now to that tree plus
+  the command's changes (modes, links in the root and deletions included). The turn's undo snapshot
+  covers it.
+- **Not applied, shown (0213).** Before the command, a marker file in the store; after it, `find
+  -newer` in the copy lists files written outside the tracked changes (ignored files and `.git`, at
+  most 100 000 names). The question shows them as a count per top folder ("build/: 212 files"), and
+  sensitive ones by name. Deletions of ignored files are not shown.
+- **System prompt (0213).** In staged mode the model learns that the user applies or discards a
+  command's changes, and that a discard leaves the project unchanged.
+- **Measured (Linux, ext4, no reflink).** A generated project with 20 000 files (79 MB): plain copy
+  0.4 s; session start with both first trees 3.0 s (git hashes every file twice, once); then per
+  command about 0.1 s before (`prepare`) and 0.08 s after (`collect`). Garuda's own repository: copy
+  0.09 s.
+- **macOS run (0215).** The user's macOS run found test faults, not product faults: BSD `sed -i`
+  needs a suffix argument, so the tests now write with `printf`; a write to the project's absolute
+  path fails on macOS (the command runs at the copy's path), so that test checks the platform; the
+  plain-copy limit test uses `fastCopy: false` instead of a wrong platform.
+- **Overlay backend: not built.** It would save only the copy (0.4 s above); the first trees and the
+  per-command lists cost the same, and overlayfs does not allow changes to the project (its lower
+  layer) while a command runs. A proposal for later, if a large project needs it.
+
 ### Decisions of the user (2026-10-10)
 
 - **Q1.** Ignored files stay only in the staging copy. They are never applied.
