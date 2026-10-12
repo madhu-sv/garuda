@@ -90,3 +90,34 @@ describe("public safety claims", () => {
     expect(found).toEqual([]);
   });
 });
+
+/**
+ * Code-intelligence claims (reviews of 1370184 and 3a9f51b): outside JS/TS the code tools match
+ * names with heuristics. No text, including what the model reads, may promise AST tools.
+ */
+const AST_OVERCLAIMS: readonly RegExp[] = [
+  /pure AST/i,
+  /full AST/i,
+  /deep language (?:AST )?tool/i,
+  /AST (?:code )?tools/i,
+  /AST investigation/i,
+];
+
+/** Public texts, and the source that writes tool descriptions and the system prompt. */
+const CODE_CLAIM_TEXTS = ["README.md", "docs", "src/agents", "src/context", "src/tools"];
+
+describe("code-intelligence claims", () => {
+  it("no public or model-facing text promises AST tools", () => {
+    const found: string[] = [];
+    for (const file of CODE_CLAIM_TEXTS.flatMap(files)) {
+      if (!/\.(md|ts)$/.test(file)) continue;
+      for (const { line, text } of paragraphs(readFileSync(file, "utf8"))) {
+        for (const claim of AST_OVERCLAIMS) {
+          const hit = claim.exec(text);
+          if (hit !== null) found.push(`${relative(repo, file)}:${line}: ${hit[0]}`);
+        }
+      }
+    }
+    expect(found).toEqual([]);
+  });
+});

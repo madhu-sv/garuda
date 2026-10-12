@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- MoE wording (review of 3a9f51b): the `delegate_expert` description and the system prompt no
+  longer promise "deep language AST tools"; they name the code index tools and say that results
+  outside JS/TS are approximate. A test guards public and model-facing text.
 - Job and night-digest costs (review of 3a9f51b): an incomplete cost shows as "≥ $X (incomplete)"
   and an unknown cost as "unknown" (before: exact $0.5000 and $0.0000), also in the totals and
   for the review. A review attempt with no reported usage marks the review cost incomplete; an

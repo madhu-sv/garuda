@@ -142,7 +142,7 @@ sequenceDiagram
 
 When `moe.enabled` is on (or `subagents.enabled: true`), the orchestrator can call `delegate_expert`.
 The task is routed via `inferLanguage` to a language specialist (Go, Rust, Python, Java, TypeScript),
-which spawns an isolated child subagent with language-specific AST tools, test runners (`cargo test`, `go test ./...`,
+which spawns an isolated child subagent with the code index tools (approximate outside JS/TS), test runners (`cargo test`, `go test ./...`,
 `pytest`, `mvn test`, `pnpm test`), and idiomatic prompt rules. Details: [lld/agents.md](lld/agents.md).
 
 ```mermaid

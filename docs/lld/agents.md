@@ -7,7 +7,7 @@ Subagents in Garuda keep the primary orchestrator agent's context window lean, f
 Garuda implements a three-tier subagent architecture:
 
 1. **Explore Subagent (`explore.ts`, 0.3)**: A read-only reconnaissance agent that executes broad search queries across the repository using `glob`, `grep`, `read_file`, and code index tools.
-2. **Mixture-of-Experts (MoE) Language Specialists (`moe.ts`, 0.17)**: Autonomous specialist subagents for **Go**, **Rust**, **Python**, **Java**, and **TypeScript** equipped with language-specific AST tools, test runners (`cargo test`, `go test ./...`, etc.), and idiomatic prompt guidelines.
+2. **Mixture-of-Experts (MoE) Language Specialists (`moe.ts`, 0.17)**: Autonomous specialist subagents for **Go**, **Rust**, **Python**, **Java**, and **TypeScript** equipped with the code index tools (approximate outside JS/TS), test runners (`cargo test`, `go test ./...`, etc.), and idiomatic prompt guidelines.
 3. **Custom Agents (`custom.ts`, `agentTool.ts`, 0.5)**: User and project Markdown agents configured in Claude Code subagent format (`.garuda/agents/*.md`, `.claude/agents/*.md`).
 
 All subagent types share a common child execution engine (`child.ts`) that enforces security boundaries, session journaling, token budgets, and step limits.
