@@ -2,6 +2,11 @@
 
 ## 0.17.0 (unreleased)
 
+- Staged commands (T5, off by default): with `"commands": { "mode": "staged" }`, each sandboxed
+  command runs in a staging copy of the project; when it changes files that git tracks, you see the
+  diff and apply or discard (all or nothing, with `/undo`). Ignored files stay in the copy. No copy:
+  the session does not start (no fallback to direct mode). Linux mounts the copy at the project's
+  path; macOS runs the command at the copy's path with the project read-only.
 - MoE wording (review of 3a9f51b): the `delegate_expert` description and the system prompt no
   longer promise "deep language AST tools"; they name the code index tools and say that results
   outside JS/TS are approximate. A test guards public and model-facing text.

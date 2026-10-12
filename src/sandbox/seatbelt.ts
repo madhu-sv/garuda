@@ -15,6 +15,8 @@ export class SeatbeltExecutor extends ProcessExecutor {
 
   protected launch(argv: string[], policy: ExecPolicy): Launch {
     if (!policy.sandbox) return plain(argv);
+    // Seatbelt cannot mount a folder over another (staged mode uses a working root of its own).
+    if ((policy.mounts ?? []).length > 0) throw new Error("Seatbelt cannot mount folders.");
     return { file: SANDBOX_EXEC, args: ["-p", seatbeltProfile(policy), ...argv] };
   }
 }

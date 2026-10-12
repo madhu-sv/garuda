@@ -114,6 +114,7 @@ flowchart TB
 | Tools | `src/tools/` | The tool interface, the registry (validation, hooks, permission check, run), and the built-in tools. |
 | Permissions | `src/permissions/` | Decide per call: allow, deny or ask. Rules, settings, path guard, sensitive files, sandbox paths. |
 | Sandbox | `src/sandbox/` | The `Executor`: run a command or start a long-running process, on the host or in an OS sandbox. |
+| Staging | `src/staging/` | Staged commands (0.17, T5, opt-in): the staging copy, the list of a command's changes (git with a store of Garuda's own), apply or discard after the user's answer, and `StagingExecutor`, which wraps the OS executor. |
 | Session | `src/session/` | The conversation in memory, the JSONL journal, resume, redaction, read tracking, the session list (0.6), titles and delete (0.8). |
 | Context | `src/context/` | System prompt, instruction files (`AGENTS.md`, `CLAUDE.md`, `GARUDA.md`), project memory, compaction. |
 | Commands | `src/commands/` | Custom slash commands: load, expand, consent for project commands. |

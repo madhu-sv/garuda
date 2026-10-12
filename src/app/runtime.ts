@@ -103,6 +103,9 @@ import {
 import { newSessionId, type SessionStore } from "../session/store.js";
 import { loadSkills, type Skill, skillConsent } from "../skills/load.js";
 import { createSkillTool, skillText } from "../skills/tool.js";
+import { StagingError } from "../staging/copy.js";
+import { StagingExecutor } from "../staging/executor.js";
+import { StagedCommands } from "../staging/staged.js";
 import { defaultTools, readOnlyTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
 import type { FormatSource } from "../tools/types.js";
@@ -311,6 +314,8 @@ export interface RuntimeOptions {
    * `undo.enabled: false` turns it off.
    */
   undo?: { home?: string };
+  /** Staged commands (0.17, T5): the home folder for ~/.garuda/staging. Default: the user's. */
+  staging?: { home?: string };
   lsp?: {
     enabled?: boolean;
     home?: string;
@@ -345,6 +350,8 @@ export class Runtime {
   readonly executor: Executor;
   /** Set when "auto" found no OS sandbox. The CLI shows it once. */
   readonly executorNotice: string | undefined;
+  /** Staged commands (0.17, T5): the staging copy, when "commands.mode" is "staged". */
+  staged: StagedCommands | undefined;
   readonly system: string;
   /** Build tools found in the root (0.3): Maven, Gradle, Python. */
   readonly profiles: readonly LanguageProfile[];
@@ -690,7 +697,33 @@ export class Runtime {
       ...(options.audit === undefined ? { enabled: false } : {}),
       ...(options.onNotice === undefined ? {} : { onError: options.onNotice }),
     });
-    const choice = createExecutor(settings.executor, undefined, isStrict(policy));
+    let choice = createExecutor(settings.executor, undefined, isStrict(policy));
+    // Staged commands (0.17, review T5): the staging copy now, or the session does not start. No
+    // fallback to direct mode. A scheduled job runs in its own worktree with no one to ask, so it
+    // keeps direct mode there.
+    let staged: StagedCommands | undefined;
+    if (
+      settings.commands?.mode === "staged" &&
+      options.unattended === undefined &&
+      settings.writeScope === undefined
+    ) {
+      if (choice.executor.isolation !== "os") {
+        throw new StagingError(
+          `Staged commands ("commands": { "mode": "staged" }) need the OS sandbox, and this session has none${choice.notice === undefined ? "" : `: ${choice.notice}`}. Garuda does not run commands in direct mode instead.`,
+        );
+      }
+      staged = await StagedCommands.start(options.root, {
+        executor: choice.executor,
+        ...(options.staging?.home === undefined ? {} : { home: options.staging.home }),
+      });
+      const approver = options.approver;
+      choice = {
+        ...choice,
+        executor: new StagingExecutor(choice.executor, staged, (request, signal) =>
+          approver.ask(request, signal),
+        ),
+      };
+    }
     let mcpServers: ServerConfig[] = [];
     if (options.mcp !== false) {
       const loaded = await loadMcpConfig({
@@ -762,6 +795,7 @@ export class Runtime {
       policy,
       auditLogger,
     );
+    runtime.staged = staged;
     if (runtime.lspEnabled) {
       try {
         runtime.lspAutoInstall = (await loadLspConfig(runtime.lspHome)).autoInstall;
@@ -1816,6 +1850,9 @@ export class Runtime {
     // and jobs from exiting, because its pipes held Node's event loop.
     this.executor.daemons?.shutdown();
     await Promise.all([this.mcp?.close(), this.lspManager?.close(), this.networkProxy?.close()]);
+    // The staging copy ends with the session (0.17, T5). A copy of a crashed process goes at the
+    // next start.
+    await this.staged?.remove().catch(() => {});
   }
 
   /** The network allowlist in effect (0.13): the settings entries, or [] when the proxy is off. */

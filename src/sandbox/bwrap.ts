@@ -44,6 +44,9 @@ export function bwrapArgv(
   // Later mounts cover earlier ones: writable paths, then read-only holes, then hidden paths.
   for (const path of policy.writePaths)
     if (kind(path) !== undefined) args.push("--bind", path, path);
+  // The staging copy over the project (0.17, review T5): the command sees the project's paths,
+  // but every write goes to the copy. The holes below then apply inside the copy.
+  for (const mount of policy.mounts ?? []) args.push("--bind", mount.source, mount.target);
   if (policy.writeScope !== undefined) {
     // A job's write scope (0.17): the root read-only, then its scope paths writable; the holes
     // and hidden paths below come after, so they still cover paths in a scope folder.

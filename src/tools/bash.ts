@@ -233,6 +233,7 @@ export function createBashTool({
           ? sandboxHint(result, policy.proxy !== undefined, strict)
           : undefined;
       if (blocked !== undefined) hints.push(blocked);
+      if (result.staged !== undefined) hints.push(result.staged.note);
       return { ...result, hints };
     },
 

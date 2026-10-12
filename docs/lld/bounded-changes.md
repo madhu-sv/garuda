@@ -156,6 +156,36 @@ leaves no folder. Copies of ended processes for the same project are removed at 
 as links. Not yet used by commands (0212). Measured here (Linux, no reflink): Garuda's repository,
 plain copy, 0.09 s.
 
+### As built: staged commands (0212)
+
+- **Setting.** `"commands": { "mode": "direct" | "staged" }` (default direct). `Runtime.create` starts
+  `StagedCommands` (copy and store) or throws `StagingError`: no OS sandbox, a copy over the limits,
+  more than 50 000 files. The session does not start; no direct-mode fallback. A scheduled job
+  (unattended, or with a write scope) keeps direct mode in its own worktree.
+- **Executor.** `StagingExecutor` wraps the OS executor. It stages `run()` calls that are sandboxed
+  with the root writable (the bash tool, and hooks); `outside_sandbox`, read-only roots (plan mode,
+  language servers) and Garuda's own host git pass through; `start()` (MCP and language servers)
+  passes through; `daemons` is undefined (off). Staged runs go one at a time.
+- **Placement.** bubblewrap: `ExecPolicy.mounts` binds the copy over the root after the writable
+  paths, so `.git/hooks`, `.garuda/` and the denied paths stay protected inside the copy, and an
+  absolute path to the project reaches the copy. Seatbelt: `stagedPolicy(..., "move")` makes the copy
+  the working root, moves the root's paths to it, and denies writes to the project (Q3).
+- **Lists.** `src/staging/staged.ts` runs git with a store next to the copy (`<copy>.git`, outside
+  every sandbox write path) and one index per work tree. `prepare()` brings the copy to the project's
+  tree with `read-tree -m -u` (this also carries Garuda's own edits and the user's edits into the
+  copy); `collect()` lists the changes (.gitignore applies, as for `/undo`).
+- **Question.** Title "The command changed files": the command, the file list and the diff (cut at
+  60 000 characters; the list is complete). Apply or Discard. An incomplete list: Discard only.
+  An error or Ctrl-C at the question discards.
+- **Apply.** All or nothing. A path that also changed in the project since `prepare()` is a conflict;
+  a link out of the root is refused; then nothing is applied and the changes are discarded (as
+  built, a conflict does not keep the change for another question: the model gets a note to run the
+  command again). Otherwise `read-tree -m -u` moves the project from its tree now to that tree plus
+  the command's changes (modes, links in the root and deletions included). The turn's undo snapshot
+  covers it.
+- **Not yet:** the question does not name ignored sensitive files or count ignored files per folder
+  (they are never applied); the overlay backend (0214).
+
 ### Decisions of the user (2026-10-10)
 
 - **Q1.** Ignored files stay only in the staging copy. They are never applied.
