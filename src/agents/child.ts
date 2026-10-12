@@ -26,6 +26,7 @@ import {
   addUserMessage,
   budgetSpent,
   createSession,
+  isCostIncomplete,
 } from "../session/session.js";
 import type { Journal } from "../session/store.js";
 import { LIMITS } from "../tools/limits.js";
@@ -133,7 +134,7 @@ export async function runChild(run: ChildRun, context: ToolContext): Promise<Chi
       stopReason,
       usage: session.usage,
       ...(costUsd === undefined ? {} : { costUsd }),
-      ...(session.costIncomplete ? { costIncomplete: true } : {}),
+      ...(isCostIncomplete(session) ? { costIncomplete: true } : {}),
     };
   };
   // The child reserves in the turn's shared budget (0.17, T9): its own cap, inside what the parent

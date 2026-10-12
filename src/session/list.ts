@@ -1,5 +1,6 @@
 import type { SessionRecord } from "./records.js";
 import { rebuildState } from "./resume.js";
+import { isCostIncomplete } from "./session.js";
 
 /** One row of /sessions (0.6). */
 export interface SessionSummary {
@@ -41,7 +42,8 @@ export function summariseSession(
     turns: prompts.length,
     model: state.start?.model,
     costUsd: state.costUsd,
-    costIncomplete: state.costIncomplete,
+    // A child debit with no report: its USD cost is not known (Codex review of 1370184).
+    costIncomplete: isCostIncomplete(state),
   };
 }
 

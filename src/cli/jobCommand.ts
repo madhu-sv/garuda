@@ -31,6 +31,7 @@ import { loadSettings, type Settings } from "../permissions/settings.js";
 import { prepareWriteScope } from "../permissions/writeScope.js";
 import { createExecutor } from "../sandbox/index.js";
 import type { Executor } from "../sandbox/types.js";
+import { isCostIncomplete } from "../session/session.js";
 import { notificationBytes, pickChannel } from "./notify.js";
 import type { Renderer } from "./renderer.js";
 import type { TurnOutcome } from "./turn.js";
@@ -315,7 +316,9 @@ export async function finishJob(
     steps: outcome.kind === "done" ? outcome.result.steps : 0,
     tokens: runtime.session === undefined ? 0 : totalTokens(runtime.session.usage),
     ...(runtime.session?.costUsd === undefined ? {} : { costUsd: runtime.session.costUsd }),
-    ...(runtime.session?.costIncomplete === true ? { costIncomplete: true } : {}),
+    ...(runtime.session !== undefined && isCostIncomplete(runtime.session)
+      ? { costIncomplete: true }
+      : {}),
     durationMs: Date.now() - prepared.startedAt,
     ...(runtime.session === undefined ? {} : { sessionId: runtime.session.id }),
     files: [],

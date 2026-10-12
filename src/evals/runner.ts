@@ -14,6 +14,7 @@ import { parseSettings } from "../permissions/settings.js";
 import { HostExecutor } from "../sandbox/host.js";
 import type { ExecutorName } from "../sandbox/index.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
+import { isCostIncomplete } from "../session/session.js";
 import { FileSessionStore } from "../session/store.js";
 import { writeFiles } from "./files.js";
 import { isProtectedPath } from "./projects.js";
@@ -194,7 +195,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     result.tokens = totalTokens(session.usage);
     if (session.unreportedTokens > 0) result.unreportedTokens = session.unreportedTokens;
     result.costUsd = session.costUsd;
-    if (session.costIncomplete) result.costIncomplete = true;
+    if (isCostIncomplete(session)) result.costIncomplete = true;
     result.cacheReadTokens = session.usage.cacheReadTokens;
     if (options.outDir !== undefined) {
       mkdirSync(options.outDir, { recursive: true });

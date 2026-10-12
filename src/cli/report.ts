@@ -1,6 +1,11 @@
 import type { AgentResult, AgentStopReason } from "../loop/runAgent.js";
 import { totalTokens } from "../model/pricing.js";
-import { budgetSpent, type Session } from "../session/session.js";
+import {
+  budgetSpent,
+  isCostIncomplete,
+  pendingChildTokens,
+  type Session,
+} from "../session/session.js";
 
 /** Short token counts: 950, 12.3k, 4.5M. */
 export function formatTokens(n: number): string {
@@ -14,6 +19,21 @@ export function formatUsd(usd: number | undefined, incomplete = false): string {
   if (usd === undefined) return "cost unknown";
   const amount = usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
   return incomplete ? `≥ ${amount} (incomplete)` : amount;
+}
+
+/**
+ * "budget N tokens (…)" when the budget counts more than reported usage: reservations with no
+ * reported usage, or child spend with no report (Codex review of 1370184: before, only the first).
+ */
+export function budgetNote(session: Session): string | undefined {
+  const unreported = session.unreportedTokens;
+  const children = pendingChildTokens(session);
+  if (unreported <= 0 && children <= 0) return undefined;
+  const parts = [
+    ...(unreported > 0 ? [`${formatTokens(unreported)} reserved without reported usage`] : []),
+    ...(children > 0 ? [`${formatTokens(children)} from subagents with no report`] : []),
+  ];
+  return `budget ${formatTokens(budgetSpent(session))} tokens (${parts.join(", ")})`;
 }
 
 /** The line that Garuda prints after each turn (F22). */
@@ -30,15 +50,11 @@ export function usageLine(
   const percent = Math.round((session.contextTokens / contextWindow) * 100);
   return [
     `${result.stopReason} · ${result.steps} step(s)`,
-    `${session.unreportedTokens > 0 ? "reported " : ""}${formatTokens(input)} in (${formatTokens(u.cacheReadTokens)} cached) / ${formatTokens(u.outputTokens)} out`,
+    `${budgetNote(session) !== undefined ? "reported " : ""}${formatTokens(input)} in (${formatTokens(u.cacheReadTokens)} cached) / ${formatTokens(u.outputTokens)} out`,
     formatUsd(runCostUsd, runCostIncomplete),
     `context ${percent}% of ${formatTokens(contextWindow)}`,
-    `session ${formatTokens(totalTokens(session.usage))} tokens, ${formatUsd(session.costUsd, session.costIncomplete)}`,
-    ...(session.unreportedTokens > 0
-      ? [
-          `budget ${formatTokens(budgetSpent(session))} tokens (${formatTokens(session.unreportedTokens)} reserved without reported usage)`,
-        ]
-      : []),
+    `session ${formatTokens(totalTokens(session.usage))} tokens, ${formatUsd(session.costUsd, isCostIncomplete(session))}`,
+    ...(budgetNote(session) === undefined ? [] : [budgetNote(session)]),
   ].join(" · ");
 }
 

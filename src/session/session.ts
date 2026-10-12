@@ -235,9 +235,24 @@ export function addUnreported(session: Session, tokens: number): void {
 
 /** Session expenditure: usage, unknown reservations and known child charges awaiting a report. */
 export function budgetSpent(session: Session): number {
-  let children = 0;
-  for (const tokens of session.childDebits.values()) children += tokens;
-  return totalTokens(session.usage) + session.unreportedTokens + children;
+  return totalTokens(session.usage) + session.unreportedTokens + pendingChildTokens(session);
+}
+
+/** Child tokens charged to the budget with no child report yet (a cancelled or lost subagent). */
+export function pendingChildTokens(session: Pick<Session, "childDebits">): number {
+  let tokens = 0;
+  for (const value of session.childDebits.values()) tokens += value;
+  return tokens;
+}
+
+/**
+ * The session's cost leaves out some spending (Codex review of 1370184): its own flag, or child
+ * spend with no report, whose USD cost is not known. `costUsd` is then a minimum.
+ */
+export function isCostIncomplete(
+  session: Pick<Session, "costIncomplete" | "childDebits">,
+): boolean {
+  return session.costIncomplete || pendingChildTokens(session) > 0;
 }
 
 /** Persist known child spend immediately; a cancelled batch may never return a report. */

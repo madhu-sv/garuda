@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- Subagent spend with no report (Codex review of 1370184): a cancelled child's tokens, already in
+  the budget, now make the cost "≥ $X (incomplete)" and show the budget line, with the part from
+  subagents named.
 - Docs (Codex review of 1370184): Go and Rust experts are heuristic, not AST parsers; MoE
   specialists get the code index tools, not "full AST" tools; the T10 record says that only one
   capture is stored; the README states what the precision/recall figures do and do not cover.

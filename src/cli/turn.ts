@@ -1,5 +1,6 @@
 import type { Runtime } from "../app/runtime.js";
 import type { AgentResult } from "../loop/runAgent.js";
+import { pendingChildTokens } from "../session/session.js";
 import { describeError } from "./errors.js";
 import type { Renderer } from "./renderer.js";
 import { stopMessage, usageLine } from "./report.js";
@@ -64,6 +65,7 @@ async function runTurn(
   const costBefore = runtime.session?.costUsd ?? 0;
   const unreportedBefore = runtime.session?.unreportedTokens ?? 0;
   const incompleteBefore = runtime.session?.costIncomplete ?? false;
+  const pendingBefore = runtime.session === undefined ? 0 : pendingChildTokens(runtime.session);
   try {
     const result = await runtime.runTurn(prompt, controller.signal);
     const session = runtime.session;
@@ -72,6 +74,7 @@ async function runTurn(
       // The run's cost is a minimum when this run had spending with no known cost.
       const runIncomplete =
         session.unreportedTokens > unreportedBefore ||
+        pendingChildTokens(session) > pendingBefore ||
         (session.costIncomplete && !incompleteBefore);
       renderer.info(
         `\n[${usageLine(result, session, runCost, runtime.limits.contextWindow, runIncomplete)}]`,

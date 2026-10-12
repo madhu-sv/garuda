@@ -20,6 +20,7 @@ import {
 import { AutoApprover } from "../permissions/autoApprover.js";
 import { JOB_DENIAL } from "../permissions/engine.js";
 import type { CallTarget } from "../permissions/types.js";
+import { isCostIncomplete, pendingChildTokens } from "../session/session.js";
 import { FileSessionStore, parseRecords } from "../session/store.js";
 import { defaultTools } from "../tools/index.js";
 import { ToolRegistry } from "../tools/registry.js";
@@ -505,6 +506,7 @@ async function start(options: Options, program: Command): Promise<number> {
     const costBefore = runtime.session?.costUsd ?? 0;
     const unreportedBefore = runtime.session?.unreportedTokens ?? 0;
     const incompleteBefore = runtime.session?.costIncomplete ?? false;
+    const pendingBefore = runtime.session === undefined ? 0 : pendingChildTokens(runtime.session);
     const finish = (outcome: TurnOutcome) => {
       const session = runtime.session;
       const cost = session?.costUsd;
@@ -512,11 +514,14 @@ async function start(options: Options, program: Command): Promise<number> {
       const runIncomplete =
         session !== undefined &&
         (session.unreportedTokens > unreportedBefore ||
+          pendingChildTokens(session) > pendingBefore ||
           (session.costIncomplete && !incompleteBefore));
       output?.finish(outcome, {
         totalCostUsd: cost ?? 0,
         ...(cost === undefined ? { totalCostUnknown: true } : {}),
-        ...(session?.costIncomplete === true ? { totalCostIncomplete: true } : {}),
+        ...(session !== undefined && isCostIncomplete(session)
+          ? { totalCostIncomplete: true }
+          : {}),
         runCostUsd: cost === undefined ? undefined : cost - costBefore,
         ...(runIncomplete ? { runCostIncomplete: true } : {}),
         contextWindow: runtime.limits.contextWindow,

@@ -114,7 +114,11 @@ from reports retroactively. No migration is performed; the corrected policy appl
 `rebuildState` restores the same pending-debit map. Journals without `child_debit` records keep
 their original totals, with an empty map; no on-disk migration is needed. Returned child reports
 still provide usage and USD-cost breakdowns. Pending debits protect the token allowance; they do
-not invent a USD charge for an interrupted child whose report did not reach the parent.
+not invent a USD charge for an interrupted child whose report did not reach the parent. Since the
+Codex review of 1370184 a pending debit makes the cost a minimum (`isCostIncomplete`: the flag, or
+any `pendingChildTokens`), in the turn line, `/usage`, `/sessions`, JSON, jobs and evals; and the
+budget line (`budgetNote`) shows when either unreported reservations or pending child tokens make
+the budget larger than the reported usage. Before, only unreported reservations showed it.
 
 `rebuildState(records)` replays the records into messages, usage, cost and context size (compaction
 records replace the messages; subagent reports in `tool_results` add their usage and cost; `snapshot`,
