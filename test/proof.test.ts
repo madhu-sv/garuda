@@ -226,4 +226,86 @@ describe("proof of work: a whole job (0.11)", () => {
     expect(report).toContain("SUMMARY: The fix is correct.");
     expect(model.remaining).toBe(0);
   });
+
+  it("a requested review that fails gives 'needs a look', also when the tests pass (Codex review of 1370184)", async () => {
+    const dir = join(base, `r${n++}`);
+    const root = join(dir, "project");
+    const home = join(dir, "home");
+    mkdirSync(home, { recursive: true });
+    write(root, {
+      "src/math.js": "export const add = (a, b) => a + b;\n",
+      "package.json": '{ "type": "module" }\n',
+      "check.mjs":
+        'import { add } from "./src/math.js";\nif (add(2, 3) !== 5) process.exit(1);\nconsole.log("ok");\n',
+      ".gitignore": ".garuda/sessions/\n",
+      ".garuda/settings.json": JSON.stringify({ executor: "host" }),
+    });
+    const g = (...args: string[]) => git(host, root, args);
+    await g("init", "-q", "-b", "main");
+    await g("config", "user.email", "dev@example.com");
+    await g("config", "user.name", "Dev");
+    await g("add", "-A");
+    await g("commit", "-q", "-m", "start");
+    const created = await createJob({
+      root,
+      executor: new SandboxedHost(),
+      approver: new AutoApprover("once"),
+      plan: {
+        request: "Add a comment",
+        plan: "1. Add a comment.\n\n```permissions\nedit_file(src/math.js)\n```",
+        sessionId: "s1",
+      },
+      modelId: "fake",
+      home,
+      test: `${process.execPath} check.mjs`,
+      signal: new AbortController().signal,
+    });
+    if (!created.ok) throw new Error(created.text);
+    const prepared = await prepareJob(root, created.job.id, undefined, quiet, host);
+    if (typeof prepared === "number") throw new Error(`exit ${prepared}`);
+    const model = new FakeModelClient([
+      reply([toolUse("read_file", { path: "src/math.js" }, "r1")]),
+      reply([
+        toolUse(
+          "edit_file",
+          {
+            path: "src/math.js",
+            old_string: "export const add",
+            new_string: "// Adds two numbers.\nexport const add",
+          },
+          "e1",
+        ),
+      ]),
+      reply([text("Added the comment.")]),
+      () => {
+        throw new Error("the review request failed");
+      },
+    ]);
+    const runtime = await Runtime.create({
+      root: prepared.root,
+      modelId: "fake",
+      model: async () => model,
+      approver: new AutoApprover("deny"),
+      store: new FileSessionStore(root),
+      settings: prepared.settings,
+      unattended: { reason: JOB_DENIAL, onDeny: () => {} },
+      mcp: false,
+      hooks: false,
+      profiles: [],
+    });
+    await testsBefore(prepared, runtime, quiet, host);
+    expect(prepared.testsBefore?.exitCode).toBe(0);
+    const result = await runtime.runTurn(prepared.job.prompt, new AbortController().signal);
+    await finishJob(prepared, { kind: "done", result }, runtime, quiet, host);
+    const job = await loadJob(root, created.job.id);
+    expect(job.result?.proof?.after?.exitCode).toBe(0);
+    expect(job.result?.proof?.reviewError).toContain("the review request failed");
+    expect(job.result?.proof?.verdict).toBe("needs-look");
+    await runtime.close();
+  });
+
+  it("jobVerdict: a failed review is never 'ready'", () => {
+    expect(jobVerdict([], undefined, true)).toBe("needs-look");
+    expect(jobVerdict([], undefined, false)).toBe("ready");
+  });
 });

@@ -141,7 +141,7 @@ async function proveJob(
       proof.reviewError = (error as Error).message;
     }
   }
-  proof.verdict = jobVerdict(flags, proof.review?.verdict);
+  proof.verdict = jobVerdict(flags, proof.review?.verdict, proof.reviewError !== undefined);
   return proof;
 }
 

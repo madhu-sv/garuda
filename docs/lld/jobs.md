@@ -172,8 +172,10 @@ response: batch responses at half the token price.
   domain expert in the stack (`stackOf`: languages of the changed files, then the profiles' labels). The
   input: the job prompt, the files, the test results (the failing output), the flags and `git diff base
   branch` (cut at 60,000 characters). `parseReview` reads `VERDICT: ready | needs a look`; no verdict line
-  counts as "needs a look". A failed review is recorded (`reviewError`), never an error of the job.
-- `jobVerdict`: any STOP flag → needs a look; else the review's verdict; with no review, ready only
+  counts as "needs a look". A failed review is recorded (`reviewError`), never an error of the job,
+  and the verdict is "needs a look" (Codex review of 1370184: before, a clean job with a failed review
+  said "ready to merge", although nobody reviewed it).
+- `jobVerdict`: a failed review or any STOP flag → needs a look; else the review's verdict; with no review, ready only
   with no flag. The result keeps `proof` (verdict, test runs with the last 30 lines, flags, review text
   and cost). The report puts Verdict, Tests, Risk flags and the review first; the notification says
   "ready to merge" or "needs a look".

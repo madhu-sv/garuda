@@ -2,6 +2,8 @@
 
 ## 0.17.0 (unreleased)
 
+- Jobs (Codex review of 1370184): a review that was asked for but failed (a provider error, no
+  budget) gives the verdict "needs a look", never "ready to merge". The error stays in `reviewError`.
 - JSON output (review of 1370184): `total_cost_usd` stays a number for compatibility, but an unknown
   or partial cost is never a bare number: new `total_cost_is_unknown`, `total_cost_is_incomplete` and
   `cost_is_incomplete` flags, beside the existing `cost_is_unknown`.
