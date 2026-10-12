@@ -21,7 +21,7 @@ import { compacted } from "../session/undo.js";
  */
 
 /** The output limit of the summary request. */
-const SUMMARY_MAX_TOKENS = 4096;
+export const SUMMARY_MAX_TOKENS = 4096;
 
 export interface CompactionOptions {
   contextWindow: number;
@@ -62,6 +62,15 @@ export const SUMMARY_SYSTEM = [
   "Write short plain sentences and lists. Do not invent facts.",
 ].join("\n");
 
+/** The next step starts with a compaction (the same test as `compactIfNeeded`, before the split). */
+export function compactionDue(
+  session: Session,
+  contextWindow: number,
+  threshold: number = COMPACTION_DEFAULTS.threshold,
+): boolean {
+  return session.contextTokens > contextWindow * threshold;
+}
+
 export async function compactIfNeeded(
   session: Session,
   model: ModelClient,
@@ -72,7 +81,7 @@ export async function compactIfNeeded(
   const target = options.target ?? COMPACTION_DEFAULTS.target;
   const keepSteps = options.keepSteps ?? COMPACTION_DEFAULTS.keepSteps;
   const before = session.contextTokens;
-  if (before <= options.contextWindow * threshold) return undefined;
+  if (!compactionDue(session, options.contextWindow, threshold)) return undefined;
 
   const split = splitIndex(session.messages, keepSteps);
   if (split <= 0) return undefined;

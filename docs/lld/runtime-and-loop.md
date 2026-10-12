@@ -212,7 +212,9 @@ In 0.14, the core agent loop and runtime coordinators were decomposed into cohes
     record, read again on resume), and the next turn starts from `budgetSpent(session)`.
     `/compact` (`Runtime.compact`) reserves its summary request in the same session budget.
   - Review of 6c9f929: the floor uses the current input estimate plus a full result-message
-    skeleton, up to six JSON characters per result character, and the output limit. The full
+    skeleton, up to six JSON characters per result character, and the output limit. When a
+    compaction is due before the next request (`compactionDue`), the floor also holds the summary
+    request: that estimate again plus 4,096 output tokens (Codex review of 1370184). The full
     rendered result is capped, including hook feedback, errors and subagent metadata. Reported
     child spend is journaled immediately through `onChildSpend`, attributed to the direct child;
     its later report replaces only the pending debits it covers. `budgetSpent` counts usage,

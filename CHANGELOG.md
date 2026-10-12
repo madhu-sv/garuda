@@ -2,6 +2,8 @@
 
 ## 0.17.0 (unreleased)
 
+- Token budget (Codex review of 1370184): while tools run, the room that subagents must leave
+  for the parent also covers a compaction that is due before the next request.
 - Subagent spend with no report (Codex review of 1370184): a cancelled child's tokens, already in
   the budget, now make the cost "≥ $X (incomplete)" and show the budget line, with the part from
   subagents named.

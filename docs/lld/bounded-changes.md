@@ -359,7 +359,8 @@ Five gaps, each with a regression test in `test/budget.test.ts`:
 - Results are capped after formatting and hooks, on every result path, and at the loop boundary
   for custom/replay runners. Subagent metadata fits inside its 20 000-character result cap.
 - The parent floor uses the current request estimate, the exact empty-result message structure,
-  worst-case JSON escaping (six characters per string character), and the output limit. This
+  worst-case JSON escaping (six characters per string character), and the output limit; plus the
+  summary request when a compaction is due before the next request (Codex review of 1370184). This
   conservatism can refuse child work earlier at small budgets; the parent can still answer.
 - Compaction reserves `max(previous context, full summary input estimate) + 4096`, including its
   system prompt. The approximate provider-token-count limitation is unchanged.

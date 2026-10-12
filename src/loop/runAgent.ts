@@ -1,5 +1,5 @@
 import type { AuditLogger } from "../audit/logger.js";
-import { compactIfNeeded } from "../context/compact.js";
+import { compactIfNeeded, compactionDue, SUMMARY_MAX_TOKENS } from "../context/compact.js";
 import type { KnowledgeIndex } from "../knowledge/index.js";
 import { type Price, responseCost } from "../model/pricing.js";
 import {
@@ -308,7 +308,14 @@ export async function runAgent(session: Session, deps: AgentDeps): Promise<Agent
       const resultChars =
         JSON.stringify(resultMessage).length +
         calls.reduce((sum, call) => sum + 6 * resultBound(deps.tools, call), 0);
-      shared.setFloor(requestTokens(session, request) + Math.ceil(resultChars / 4) + outputLimit);
+      const next = requestTokens(session, request) + Math.ceil(resultChars / 4);
+      // A compaction that is due runs first, and its summary request reserves at least the whole
+      // conversation plus its output limit (Codex review of 1370184: before, the floor left it out).
+      const summary =
+        deps.contextWindow !== undefined && compactionDue(session, deps.contextWindow)
+          ? next + SUMMARY_MAX_TOKENS
+          : 0;
+      shared.setFloor(next + outputLimit + summary);
       const { results, meta } = await runTools(calls, deps, context, emit).finally(() =>
         shared.setFloor(0),
       );
