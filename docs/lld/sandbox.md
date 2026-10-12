@@ -193,7 +193,8 @@ Only with `daemons.enabled: true` (off by default). Then `bash` accepts `is_daem
 ## Tests
 
 `test/executorContract.ts` is one suite that every executor must pass: output, exit code, working folder,
-environment allowlist, output cap, timeout, `shutdown()`, process-tree kill on abort, and (0.14, review)
+environment allowlist, output cap, timeout, `shutdown()` (the child, and since the Codex review of
+1370184 also the shell and any sandbox wrapper: `shellRunning`), process-tree kill on abort, and (0.14, review)
 a command that returns although a background child keeps its output open: after the command's own
 process exits, `run()` waits at most `EXIT_DRAIN_MS` (2 s) for the pipes, then kills the group, closes
 the pipes and returns; the timeout and Ctrl-C now signal the group even after bash has exited. Since

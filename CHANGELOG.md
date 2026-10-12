@@ -2,6 +2,8 @@
 
 ## 0.17.0 (unreleased)
 
+- Executor contract test (Codex review of 1370184): after `shutdown()`, the shell and any sandbox
+  wrapper must be gone too, not only the background child.
 - T10 evidence (Codex review of 1370184): the corpus, oracle and source fingerprints are hashed
   with LF line endings, so a Windows checkout with CRLF passes the evidence tests. The published
   values do not change.

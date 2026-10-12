@@ -93,6 +93,30 @@ export async function sleeping(marker: string, root: string): Promise<boolean> {
   return r.stdout.text.trim() === "yes";
 }
 
+/**
+ * Whether a process whose command line holds `sleep <marker> & wait` still runs: the shell of a
+ * contract command, and a sandbox wrapper around it (Codex review of 1370184). The `[s]` keeps
+ * the pgrep shell's own command line from matching.
+ */
+export async function shellRunning(marker: string, root: string): Promise<boolean> {
+  const pattern = `[s]leep ${marker.replace(/\./g, "\\.")} & wait`;
+  const r = await new HostExecutor().run(
+    `pgrep -f '${pattern}' >/dev/null && echo yes || echo no`,
+    {
+      root,
+      sandbox: false,
+      writePaths: [],
+      denyWritePaths: [],
+      denyReadPaths: [],
+      network: true,
+      envAllowlist: ["PATH"],
+      timeoutMs: 5_000,
+      maxOutputBytes: 1_000,
+    },
+  );
+  return r.stdout.text.trim() === "yes";
+}
+
 export async function waitUntil(check: () => Promise<boolean>, timeoutMs = 5_000): Promise<void> {
   const end = Date.now() + timeoutMs;
   while (!(await check())) {
