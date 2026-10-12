@@ -129,3 +129,26 @@ and hook feedback within the 20,000-character cap. A failed parallel batch waits
 call to settle before the turn ends. Pending reported debits protect the allowance after resume;
 USD-cost breakdowns still depend on returned reports. Provider tokenization remains approximate.
 No macOS host, live provider or remote CI validation is claimed by this patch.
+
+## P1 resume-request repair, review of 597104a
+
+The previous context count could omit instructions or tool definitions added before resume.
+A mocked provider using the same full-request character estimate admitted a 50-token reservation
+and reached 2,080 session tokens against a 500-token cap. This did not depend on tokenizer variance.
+
+`requestTokens` now takes the larger of the full current request estimate and the previous measured
+context plus subsequent messages. Main calls, child calls, wrap-up and the parent floor share this
+helper. The full estimate includes system, messages, client tools, server tools and thinking settings.
+No session record changes are needed. A larger historical measurement stays conservative even after
+a model change; provider tokenization can still exceed the estimate.
+
+`test/budgetRequest.test.ts` adds seven tests. Six use actual file journals and `resumeSession`:
+three refusal cases for larger instructions, client tool definitions and server-tool settings,
+and three positive controls that admit those requests with enough budget. One live-turn control
+keeps a larger measured context allowance. Before the source change, the three refusal cases failed
+and the four controls passed. Afterward all seven pass. No existing test was changed.
+
+Validation on Linux: full `corepack pnpm check` passes (93 files; 918 passed, one expected failure,
+45 skipped; 964 tests total), including typecheck and Biome. CLI and site builds pass. macOS
+validation remains for the user; these tests make no live provider calls. The separate P2 finding
+about estimated usage settlement for successful OpenAI-compatible responses is still open.

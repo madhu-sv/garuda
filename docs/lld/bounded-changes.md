@@ -317,10 +317,12 @@ A `Budget` object, made per turn and shared by the parent and all its children:
 ### As built (0191)
 
 - `src/loop/budget.ts`: `TokenBudget` (reserve, settle, child, setFloor) and `requestTokens`.
-- The estimate of a request is the last known context size plus about 4 characters per token for
-  what came after it (on the first call: the whole request, tool list included), plus the output
-  limit. A provider that counts more input tokens than the estimate can pass the cap by that
-  difference; the README lists it as a limit.
+- The input estimate is the larger of the whole current request (system prompt, conversation,
+  client and server tool definitions, thinking settings) and the last measured context plus new
+  messages. Both character estimates use about 4 characters per token; the caller adds the output
+  limit. This covers changed instructions and tools on resume without discarding a larger measured
+  allowance. It needs no journal migration. A provider that counts more input tokens than the
+  estimate can pass the cap by that difference; the README lists it as a limit.
 - A refused call is not a step. A child's wrap-up call reserves the whole conversation plus the
   wrap-up note.
 - Behaviour change: a small `tokenBudget` now stops a run before a call that may not fit, not after

@@ -2,6 +2,10 @@
 
 ## 0.17.0 (unreleased)
 
+- Token budget, review of 597104a: every input reservation covers the full current request,
+  including changed instructions, tool definitions and server-tool settings on resume. A larger
+  previous measured context plus new messages is still kept. Oversized requests stop before a
+  provider call; small budgets may refuse calls earlier. Existing journals need no migration.
 - Token budget, review of 6c9f929: metered Anthropic batch submission disables SDK retries;
   reported child debits survive cancellation, parallel failures and resume, without duplicating
   report aggregation. Started parallel calls settle before the turn ends. Complete results are

@@ -217,6 +217,10 @@ In 0.14, the core agent loop and runtime coordinators were decomposed into cohes
     unreported charges and pending child debits. Parallel batches drain all started calls before
     ending the turn and detaching the tracker. Compaction uses `fullRequestTokens`, including the
     summary system prompt. Existing journals need no migration.
+  - Review of 597104a: `requestTokens` takes the larger of the full current request estimate and
+    the last measured context plus messages after the last assistant response. Changed instructions,
+    tool definitions and server-tool settings on resume are included before admission. The higher
+    measured allowance is preserved; this can refuse a call earlier. Tokenization remains approximate.
   - `loopDetector.ts`: Repeated tool call detection preventing infinite loops.
   - `toolRunner.ts`: Tool execution pipeline, read-only call parallelization, progress tracking, and execution metadata capture.
 

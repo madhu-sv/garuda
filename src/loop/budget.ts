@@ -164,18 +164,21 @@ export function approxTokens(text: string): number {
 }
 
 /**
- * The tokens to reserve for a request's input (0.17, T9): the last known context size plus a
- * rough size of what came after the last response; on the first call, a rough size of it all.
+ * The tokens to reserve for a request's input (0.17, T9): at least the whole current request.
+ * Keep the last measured context plus subsequent messages when it is larger. Instructions,
+ * tools and provider settings can change between turns or on resume; the old count misses those.
  */
 export function requestTokens(session: Session, request: ModelRequest): number {
+  const full = fullRequestTokens(request);
   const lastAssistant = request.messages.map((m) => m.role).lastIndexOf("assistant");
   if (session.contextTokens > 0 && lastAssistant >= 0) {
-    return (
+    return Math.max(
+      full,
       session.contextTokens +
-      approxTokens(JSON.stringify(request.messages.slice(lastAssistant + 1)))
+        approxTokens(JSON.stringify(request.messages.slice(lastAssistant + 1))),
     );
   }
-  return fullRequestTokens(request);
+  return full;
 }
 
 /** Complete request input estimate, including system and tool definitions. */

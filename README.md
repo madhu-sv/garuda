@@ -634,6 +634,9 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   request too. Complete tool results, including errors and hook feedback, are at most 100 000
   characters; subagent results are at most 20 000 including metadata. The final-answer floor
   allows for worst-case JSON escaping, so small budgets can refuse child work earlier.
+  Every request estimate covers the full current system prompt, conversation, tool definitions
+  and provider settings, including after a resume or model change. If the previous measured context
+  plus new messages is larger, Garuda keeps that allowance. This can refuse a call earlier.
 - When the connection to the model breaks while a response streams, Garuda sends the request again (up
   to 2 times) and says so. The session keeps only the complete response.
 - At 80% of the context window, Garuda first cuts long tool outputs in older turns. If that is not enough,
