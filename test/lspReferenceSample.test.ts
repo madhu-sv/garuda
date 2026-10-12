@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { expect, it } from "vitest";
@@ -7,6 +8,7 @@ import {
   LSP_FLOORS,
   measureLspReferenceSample,
   scoreReferenceSites,
+  sourceHash,
   validateReferenceOracle,
 } from "./lspReferenceSample.js";
 
@@ -65,6 +67,17 @@ it("fixed precision/recall floors reject a lowered report, whatever the publishe
     java: { precision: 33 / 54, recall: 33 / 36 },
     python: { precision: 45 / 63, recall: 45 / 48 },
   });
+});
+
+// Codex review of 1370184 (P3): raw-byte hashes failed on a checkout with CRLF line endings
+// (Windows, core.autocrlf), although the measured code was the same.
+it("evidence hashes do not depend on line endings", () => {
+  expect(sourceHash(Buffer.from("a\r\nb\r\n"))).toBe(sourceHash(Buffer.from("a\nb\n")));
+  // LF content keeps its plain SHA-256, so the published evidence stays valid.
+  expect(sourceHash(Buffer.from("a\nb\n"))).toBe(
+    createHash("sha256").update("a\nb\n").digest("hex"),
+  );
+  expect(sourceHash(Buffer.from("a\nb\n"))).not.toBe(sourceHash(Buffer.from("a\nc\n")));
 });
 
 it("an evidence refresh is refused in CI", () => {

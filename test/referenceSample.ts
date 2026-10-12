@@ -27,7 +27,9 @@ const schema = z.object({
   ),
 });
 
-const hash = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
+// Line endings do not change the evidence (Codex review of 1370184); see sourceHash.
+const hash = (bytes: string | Buffer) =>
+  createHash("sha256").update(bytes.toString("utf8").replace(/\r\n/g, "\n")).digest("hex");
 const corpusBytes = readFileSync(
   new URL("./fixtures/code-intelligence-references.json", import.meta.url),
 );

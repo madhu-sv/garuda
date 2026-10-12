@@ -92,7 +92,9 @@ GARUDA_REFERENCE_REPORT=docs/quality-baseline/code-intelligence-reference-result
   corepack pnpm exec vitest run test/codeIntelligenceSample.test.ts
 ```
 
-Run Biome formatting before the final measurement: hashes cover the raw fixture bytes. Ordinary
+Run Biome formatting before the final measurement: hashes cover the fixture and source text with
+LF line endings, so a CRLF checkout (Windows, `core.autocrlf`) gives the same evidence (Codex review
+of 1370184; before, the raw bytes were hashed). Ordinary
 tests reject stale evidence, incomplete/empty oracle rows, inconsistent ranges/sites and lower
 precision/recall. They also require the complete score report to match, so an improvement needs a
 reviewed evidence refresh. The refresh commands generate evidence; they do not approve a lower

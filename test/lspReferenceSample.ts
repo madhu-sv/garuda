@@ -5,7 +5,14 @@ import { dirname, join } from "node:path";
 import { z } from "zod";
 import { KnowledgeIndex } from "../src/knowledge/index.js";
 
-const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+/**
+ * SHA-256 of a text file with LF line endings (Codex review of 1370184): a checkout with CRLF
+ * (Windows, core.autocrlf) measures the same code and must give the same evidence. LF content
+ * keeps its plain SHA-256.
+ */
+export const sourceHash = (bytes: Buffer | string): string =>
+  createHash("sha256").update(bytes.toString("utf8").replace(/\r\n/g, "\n")).digest("hex");
+const hash = sourceHash;
 const language = z.enum(["java", "python"]);
 const position = z.object({
   line: z.number().int().nonnegative(),

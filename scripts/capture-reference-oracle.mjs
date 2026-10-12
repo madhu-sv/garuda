@@ -35,6 +35,9 @@ for (const key of ["jdtls", "pyright", "java-home", "output"])
       `Required: --${key}. This command never installs tools or replaces evidence implicitly.`,
     );
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// The corpus is text: hash it with LF line endings, as the tests do (Codex review of 1370184).
+const textHash = (bytes) =>
+  createHash("sha256").update(bytes.toString("utf8").replace(/\r\n/g, "\n")).digest("hex");
 const bytes = readFileSync(
   new URL("../test/fixtures/code-intelligence-lsp-corpus.json", import.meta.url),
 );
@@ -286,7 +289,7 @@ try {
   const report = {
     schemaVersion: 1,
     corpusId: corpus.id,
-    corpusSha256: hash(bytes),
+    corpusSha256: textHash(bytes),
     capturedAt: new Date().toISOString(),
     toolchain: {
       jdtls: {

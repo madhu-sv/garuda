@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- T10 evidence (Codex review of 1370184): the corpus, oracle and source fingerprints are hashed
+  with LF line endings, so a Windows checkout with CRLF passes the evidence tests. The published
+  values do not change.
 - Token budget (Codex review of 1370184): while tools run, the room that subagents must leave
   for the parent also covers a compaction that is due before the next request.
 - Subagent spend with no report (Codex review of 1370184): a cancelled child's tokens, already in
