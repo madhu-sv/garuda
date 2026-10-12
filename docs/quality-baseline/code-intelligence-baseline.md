@@ -14,8 +14,9 @@ cases. These are synthetic cases, not 30 independent real maintenance tasks or a
 The oracle was captured with **jdtls 1.61.0** (OSGi build `202609031315`; server reports
 `1.61.0-SNAPSHOT`) and **pyright 1.1.406**, using Temurin JDK 21.0.12.1 and Node 24.19.0 on Linux
 x64. Downloads were checksum-verified. All 66 Java source files compile with `javac`; all 99
-Python files parse. Two fresh server/workspace captures returned identical locations for all
-60 queries. Each capture requires project readiness, diagnostics for every source file, a bound
+Python files parse. A second fresh server/workspace capture returned identical locations for all
+60 queries at the time; only one capture is stored, so the repository cannot show that agreement.
+Each capture requires project readiness, diagnostics for every source file, a bound
 selected declaration, and two identical reference responses. A timeout, import error, source
 diagnostic error or unexpected empty reference set prevents writing an oracle.
 

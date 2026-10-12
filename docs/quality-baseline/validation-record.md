@@ -166,8 +166,8 @@ with the checker's capabilities, `initialize` returned the `garuda-setup` method
 ## T10 reference evidence (12 October 2026)
 
 On `aefac70` plus the T10 patch, 30 Java and 30 Python frozen queries were captured with real
-jdtls 1.61.0 and pyright 1.1.406 on Linux x64 (JDK 21.0.12.1, Node 24.19.0). Two fresh captures
-agree on every location. Java: 33 TP, 21 FP, 3 FN, precision 61.1% and recall 91.7%. Python:
+jdtls 1.61.0 and pyright 1.1.406 on Linux x64 (JDK 21.0.12.1, Node 24.19.0). A second capture
+agreed on every location at the time; only one capture is stored, so the repository cannot show this. Java: 33 TP, 21 FP, 3 FN, precision 61.1% and recall 91.7%. Python:
 45 TP, 18 FP, 3 FN, precision 71.4% and recall 93.8%. The unit is a unique `path:line` outside the
 selected declaration. This measures synthetic binding/reference cases, not production task
 success, caller/impact accuracy or complete alias/dynamic dispatch coverage.

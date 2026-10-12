@@ -386,7 +386,7 @@ Thirty symbols in a generated shopkit Java project and thirty in Python are froz
 reference locations captured from jdtls 1.61.0 and pyright 1.1.406. Tests score unique `path:line`
 sites, excluding the selected declaration, and reject a lower precision/recall or stale evidence.
 Fixed floors in the test code (the T10 values) apply on every run, also during a refresh, and a
-refresh variable set in CI fails (Codex review of 1370184). Two fresh captures agree. The supplementary manual alias sample is separate.
+refresh variable set in CI fails (Codex review of 1370184). Only one capture is stored (a second, not stored, agreed at the time). The supplementary manual alias sample is separate.
 
 See [the evidence record](../quality-baseline/code-intelligence-baseline.md) for denominators,
 limits, toolchain and reproduction. Java precision/recall: 61.1%/91.7%; Python: 71.4%/93.8%.

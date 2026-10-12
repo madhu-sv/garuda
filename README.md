@@ -548,7 +548,10 @@ It answers code questions on this machine, with zero native C++ compilation depe
   aliases or dynamic uses. Check with a compiler or language server before a rename. These tools do
   not run jdtls or pyright. The [fixed 60-query measurement](docs/quality-baseline/code-intelligence-baseline.md)
   records Java precision/recall **61.1%/91.7%**, Python **71.4%/93.8%**, against frozen language-server
-  reference results. This synthetic sample does not establish accuracy on your repository.
+  reference results. So about 2 in 5 Java hits and 3 in 10 Python hits were not real references. The
+  recall counts only the reference patterns in this generated sample (30 queries per language, one
+  capture, Linux); aliases, dynamic dispatch and real-repository layouts can lower it. This sample does
+  not establish accuracy on your repository.
 - Chat commands for you: `/where X` (or `/defs X`), `/refs X`, `/callers X`, `/impact X`, `/map [folder]`, and `/languages` (lists active language plugins, indexed file counts, and standby status).
 - The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
   Experts run in-process and preserve single-binary distribution; outside JS/TS, declaration extraction
@@ -559,8 +562,8 @@ It answers code questions on this machine, with zero native C++ compilation depe
 
 Garuda features an autonomous Mixture-of-Experts (MoE) dispatch architecture for polyglot codebases:
 
-- **Specialist profiles**: Dedicated subagents for Go, Rust, Python, Java, and TypeScript equipped with language-idiomatic prompts, toolchain testing commands (`cargo test`, `go test ./...`, `pytest`, `mvn test`, `pnpm test`), and scoped AST tools.
-- **Dynamic delegation**: The primary orchestrator agent can invoke `delegate_expert({ language, task, files })` to dispatch complex language-specific tasks to child subagents. The child subagent runs with full AST code tools, executes language tests, and returns a synthesized report without cluttering the primary context window.
+- **Specialist profiles**: Dedicated subagents for Go, Rust, Python, Java, and TypeScript equipped with language-idiomatic prompts, toolchain testing commands (`cargo test`, `go test ./...`, `pytest`, `mvn test`, `pnpm test`), and the code index tools.
+- **Dynamic delegation**: The primary orchestrator agent can invoke `delegate_expert({ language, task, files })` to dispatch complex language-specific tasks to child subagents. The child subagent runs with the code index tools (`find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`, `repo_map`; only JS/TS uses a language service, the other languages use heuristic matching marked approximate), executes language tests, and returns a synthesized report without cluttering the primary context window.
 - **Chat command**: `/experts` lists all available language specialists, their active test commands, and their active status / indexed file counts.
 - **Banner & Observability**: The startup banner features a dedicated `subagents` row (`subagents: explore · 5 MoE experts (Go, Rust, Python, Java, TS)`). In session, `/session` provides a full breakdown of active subagents, agents, skills, and tools.
 - **Configuration**: off by default (no measured gain yet). Turn it on with `"moe": { "enabled": true }` in

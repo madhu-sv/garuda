@@ -124,14 +124,16 @@ uses frozen jdtls/pyright locations; its scope and separate manual alias sample 
 - Tracks brace nesting depth for container resolution.
 
 ### Go (`plugins/go.ts` — 0.16)
-- Pure AST parser for Go source code.
+- Heuristic line-based declaration extraction and regular-expression identifier matching; not a Go
+  compiler or AST parser. References are marked approximate.
 - Extensions: `.go`.
 - Extracts packages, imports (single and block `import ( ... )`), structs, interfaces, type aliases.
 - Extracts functions and receiver methods (`func (r *Receiver) Method(...)`), setting receiver type as container.
 - Determines export status by capitalized identifier convention (`[A-Z]`).
 
 ### Rust (`plugins/rust.ts` — 0.16)
-- Pure AST parser for Rust source code.
+- Heuristic line-based declaration extraction and regular-expression identifier matching; not a Rust
+  compiler or AST parser. References are marked approximate.
 - Extensions: `.rs`.
 - Extracts modules (`mod`), imports (`use`), structs, enums, traits, type aliases, free functions, and macros (`macro_rules!`).
 - Tracks `impl [Trait for] Type { ... }` blocks with brace depth stack to associate methods with their container type.

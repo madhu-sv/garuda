@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- Docs (Codex review of 1370184): Go and Rust experts are heuristic, not AST parsers; MoE
+  specialists get the code index tools, not "full AST" tools; the T10 record says that only one
+  capture is stored; the README states what the precision/recall figures do and do not cover.
 - T10 evidence guard (Codex review of 1370184): fixed precision/recall floors (Java 33/54 and
   33/36, Python 45/63 and 45/48) apply on every run, also during an evidence refresh; a refresh
   variable set in CI fails the test.
