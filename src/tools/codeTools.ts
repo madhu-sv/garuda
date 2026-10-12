@@ -37,7 +37,7 @@ export const findSymbolTool: Tool<z.infer<typeof findSymbolInput>, SymbolHit[]> 
   name: "find_symbol",
   description: [
     "Find where a function, class, method, variable or type is defined (JS/TS, Python, Java).",
-    "Returns path:line, kind and whether it is exported. Java/Python declarations are extracted with heuristics.",
+    "Returns path:line, kind and whether it is exported. Java/Python/Go/Rust declarations are extracted with heuristics.",
   ].join("\n"),
   inputSchema: findSymbolInput,
   readOnly: true,
@@ -83,7 +83,7 @@ export const findReferencesTool: Tool<z.infer<typeof findReferencesInput>, Refer
   name: "find_references",
   description: [
     "Find indexed references to a symbol (JS/TS, Python, Java).",
-    "JS/TS uses language-service bindings. Java/Python identifier matching is approximate: it can include unrelated names and miss aliases or dynamic uses.",
+    "JS/TS uses language-service bindings. Java, Python, Go, Rust and plugin languages use approximate identifier matching: it can include unrelated names and miss aliases or dynamic uses.",
     "Use it to see who calls a function, to plan a rename, or to find unused code.",
   ].join("\n"),
   inputSchema: findReferencesInput,
@@ -141,7 +141,7 @@ export const findCallersTool: Tool<z.infer<typeof findCallersInput>, CallerResul
   name: "find_callers",
   description: [
     "Find indexed caller candidates and their enclosing scopes (JS/TS, Python, Java).",
-    "Java/Python results are approximate identifier matches, including matches that may not be calls. Validate before planning changes.",
+    "Results outside JS/TS are approximate identifier matches, including matches that may not be calls. Validate before planning changes.",
   ].join("\n"),
   inputSchema: findCallersInput,
   readOnly: true,

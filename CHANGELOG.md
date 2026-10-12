@@ -2,6 +2,9 @@
 
 ## 0.17.0 (unreleased)
 
+- Approximate references (Codex review of 1370184): Go and Rust references, and every user or
+  project plugin's, now carry the same approximate warning as Java/Python in tools, chat, callers
+  and impact. Tool descriptions name these languages.
 - TypeScript references (Codex review of 1370184): the search starts at the declaration's own
   name, not at the first matching word on its line, which could be another symbol (a property of a
   type declared earlier on the line).

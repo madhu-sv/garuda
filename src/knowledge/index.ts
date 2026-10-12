@@ -520,7 +520,8 @@ export class KnowledgeIndex {
     const pairs: Array<{ plugin: LanguagePlugin; expert: LanguageExpert }> = [];
     for (const plugin of plugins) {
       const expert = await plugin.factory(this.root);
-      pairs.push({ plugin, expert });
+      // Garuda cannot vouch for a user or project plugin's matching (Codex review of 1370184).
+      pairs.push({ plugin, expert: plugin.source === "built-in" ? expert : approximate(expert) });
     }
     this.pluginExperts = pairs;
     return pairs;
@@ -619,4 +620,18 @@ function enclosingSymbol(
   }
   if (content !== "" && braceDepthAt(content, line) === 0) return undefined;
   return callables.filter((s) => s.line <= line).sort((a, b) => b.line - a.line)[0];
+}
+
+/** An expert whose reference results carry the approximate warning; every call goes to `expert`. */
+function approximate(expert: LanguageExpert): LanguageExpert {
+  if (expert.referencesApproximate === true) return expert;
+  return {
+    id: expert.id,
+    extensions: expert.extensions,
+    referencesApproximate: true,
+    summarise: (path, content) => expert.summarise(path, content),
+    findSymbols: (files, query, exact, limit) => expert.findSymbols(files, query, exact, limit),
+    findReferences: (files, name, inFile, limit) =>
+      expert.findReferences(files, name, inFile, limit),
+  };
 }

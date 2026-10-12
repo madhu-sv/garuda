@@ -16,7 +16,7 @@ Version 0.16 introduces a **dynamic language plugin architecture** with:
 interface LanguageExpert {
   readonly id: string;
   readonly extensions: readonly string[];
-  readonly referencesApproximate?: true;                   // built-in Java/Python
+  readonly referencesApproximate?: true;                   // Java, Python, Go, Rust; user/project plugins
   summarise(path, content): FileNode;                         // exports + imports, cheap, cached
   findSymbols(files, query, exact, limit): SymbolHit[];
   findReferences(files, name, inFile, limit):
@@ -91,7 +91,9 @@ interface FileNode { path; exports: ExportEntry[]; imports: string[] }
 
 ## Reference accuracy (T10)
 
-Java/Python reference matching is approximate. The optional result-level `approximate: true` flag
+Java, Python, Go and Rust reference matching is approximate, and so is every user or project plugin:
+the index wraps a plugin's expert with `referencesApproximate`, because Garuda cannot vouch for its
+matching (Codex review of 1370184; before, Go/Rust/plugin results had no label). The optional result-level `approximate: true` flag
 is propagated to callers and impact, including empty/missing results. A built-in expert also
 advertises `referencesApproximate` so missing results can be labelled. Tool output warns before
 any hits; chat prefixes the warning with `≈`; derived impact risk is heuristic. Strings,

@@ -140,4 +140,48 @@ describe("approximate reference results", () => {
       /^Approximate:/,
     );
   });
+
+  // Codex review of 1370184: Go and Rust match identifiers by regular expression, and Garuda cannot
+  // vouch for a user plugin; their results carry the same warning as Java/Python.
+  it("go and rust: index and tool text keep the approximation", async () => {
+    const root = await project({
+      "main.go": "package main\n\nfunc Total() int { return 1 }\n\nfunc main() { _ = Total() }\n",
+      "src/lib.rs": "pub fn total() -> i32 { 1 }\n\npub fn use_it() -> i32 { total() }\n",
+    });
+    const index = new KnowledgeIndex(root);
+    for (const [name, path] of [
+      ["Total", "main.go"],
+      ["total", "src/lib.rs"],
+    ] as const) {
+      const refs = await index.findReferences(name, path);
+      expect(refs.definition?.path).toBe(path);
+      expect(refs).toMatchObject({ approximate: true });
+      expect(referencesText(refs)).toMatch(/^Approximate:/);
+    }
+    expect(await index.impactAnalysis("main.go")).toMatchObject({ approximate: true });
+  });
+
+  it("a user plugin's references are approximate", async () => {
+    const root = await project({ "a.rb": "def total\n  1\nend\ntotal\n" });
+    const home = await project({
+      ".garuda/languages/ruby.js": `export default function create() {
+  const hit = { name: "total", kind: "function", path: "a.rb", line: 1, exported: true };
+  return {
+    id: "ruby",
+    extensions: [".rb"],
+    summarise: (path) => ({ path, exports: [], imports: [] }),
+    findSymbols: (files, query) => (query === "total" ? [hit] : []),
+    findReferences: () => ({
+      definition: hit,
+      references: [{ path: "a.rb", line: 4, text: "total", isDefinition: false }],
+      candidates: [hit],
+    }),
+  };
+}
+`,
+    });
+    const refs = await new KnowledgeIndex(root, { home }).findReferences("total", "a.rb");
+    expect(refs.references.length).toBe(1);
+    expect(refs).toMatchObject({ approximate: true });
+  });
 });

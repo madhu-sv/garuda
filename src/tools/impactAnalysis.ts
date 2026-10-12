@@ -99,7 +99,7 @@ export const impactAnalysisTool: Tool<z.infer<typeof impactAnalysisInput>, Impac
   description: [
     "Perform blast radius & dependency impact analysis for a file or symbol (JS/TS, Python, Java).",
     "Discovers direct dependents, caller hierarchies, risk assessment, and recommended test suites to run.",
-    "Java/Python references and callers are approximate name matches; the risk score is heuristic. Verify before changing code.",
+    "References and callers outside JS/TS are approximate name matches; the risk score is heuristic. Verify before changing code.",
   ].join("\n"),
   inputSchema: impactAnalysisInput,
   readOnly: true,
@@ -149,7 +149,7 @@ export function astQueryText(hits: SymbolHit[]): string {
 export const astQueryTool: Tool<z.infer<typeof astQueryInput>, SymbolHit[]> = {
   name: "ast_query",
   description: [
-    "Filter parsed symbol declarations across the codebase (JS/TS, Python, Java). Java/Python extraction uses heuristics.",
+    "Filter parsed symbol declarations across the codebase (JS/TS, Python, Java, Go, Rust). Extraction outside JS/TS uses heuristics.",
     "Filter by symbol kind, exported visibility, enclosing class/container, and wildcard patterns.",
   ].join("\n"),
   inputSchema: astQueryInput,

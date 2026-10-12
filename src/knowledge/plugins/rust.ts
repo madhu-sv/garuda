@@ -14,6 +14,8 @@ export interface ParsedRustFile {
 export class RustExpert implements LanguageExpert {
   readonly id = "rust";
   readonly extensions = RUST_EXTENSIONS;
+  /** Regular-expression identifier matching, not resolved references (Codex review of 1370184). */
+  readonly referencesApproximate = true;
 
   private cache = new Map<string, { mtimeMs: number; size: number; parsed: ParsedRustFile }>();
 

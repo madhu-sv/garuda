@@ -371,7 +371,8 @@ Tests and local validation are recorded in
 
 ### Behaviour (implemented)
 
-Java/Python experts return `approximate: true` on the result envelope. The index propagates it
+Java/Python experts return `approximate: true` on the result envelope (Go, Rust and plugin experts
+are marked too, since the Codex review of 1370184). The index propagates it
 through references, callers and impact, including empty results and unresolved symbols. Model
 output starts with an approximate warning; chat adds `≈`. Impact risk is labelled heuristic.
 

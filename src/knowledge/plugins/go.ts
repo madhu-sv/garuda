@@ -14,6 +14,8 @@ export interface ParsedGoFile {
 export class GoExpert implements LanguageExpert {
   readonly id = "go";
   readonly extensions = GO_EXTENSIONS;
+  /** Regular-expression identifier matching, not resolved references (Codex review of 1370184). */
+  readonly referencesApproximate = true;
 
   private cache = new Map<string, { mtimeMs: number; size: number; parsed: ParsedGoFile }>();
 

@@ -39,7 +39,7 @@ export const HELP = [
   "  /jobs      the scheduled jobs of this project; /jobs <id> shows one; /jobs cancel|delete <id>; /jobs cancel night",
   "  /where X   where symbol X is defined (code index, no model call)",
   "  /defs X    alias of /where X (definitions of X)",
-  "  /refs X    indexed uses of symbol X (Java/Python approximate, no model call)",
+  "  /refs X    indexed uses of symbol X (approximate except JS/TS, no model call)",
   "  /callers X who calls symbol X (code index, no model call)",
   "  /impact X  blast radius and affected tests for file or symbol X",
   "  /map [dir] what each code file exports and imports",

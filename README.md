@@ -542,7 +542,8 @@ It answers code questions on this machine, with zero native C++ compilation depe
 - Tools for the agent (read-only, no approval), chosen with `"codeIndex"` in `.garuda/settings.json`:
   `"off"` (default), `"lookup"` (`find_symbol`, `find_references`, `find_callers`, `impact_analysis`, `ast_query`) or `"all"` (also `repo_map`).
   `find_callers` groups indexed reference sites by their enclosing symbol; `impact_analysis` estimates dependents, blast radius and affected tests (including Go `*_test.go` and Rust `*_test.rs`); `ast_query` filters symbols by kind, container, and wildcards.
-  Java/Python references use identifier matching. Their references, callers and impact results are
+  Java, Python, Go and Rust references use identifier matching, and Garuda cannot vouch for a user
+  plugin. Their references, callers and impact results are
   marked **Approximate**, including empty results: matching can include unrelated symbols and miss
   aliases or dynamic uses. Check with a compiler or language server before a rename. These tools do
   not run jdtls or pyright. The [fixed 60-query measurement](docs/quality-baseline/code-intelligence-baseline.md)
@@ -550,7 +551,7 @@ It answers code questions on this machine, with zero native C++ compilation depe
   reference results. This synthetic sample does not establish accuracy on your repository.
 - Chat commands for you: `/where X` (or `/defs X`), `/refs X`, `/callers X`, `/impact X`, `/map [folder]`, and `/languages` (lists active language plugins, indexed file counts, and standby status).
 - The code graph (files, exports, imports) is cached in `.garuda/index/code-graph.json` by file hash.
-  Experts run in-process and preserve single-binary distribution; Java/Python declaration extraction
+  Experts run in-process and preserve single-binary distribution; outside JS/TS, declaration extraction
   and reference matching use heuristics.
 - Files follow `.gitignore`. Sensitive files are never indexed.
 

@@ -5,7 +5,7 @@
   "measuredSources": [
     {
       "path": "src/knowledge/index.ts",
-      "sha256": "4c16b3e7bc7f85eb970a6c9f7598985fe0902b252a4423e796a675f73691ea2d"
+      "sha256": "31e2d07934e1e3b0ade43020c6da427f19752c281ab10ee26b59c26d01d43ce9"
     },
     {
       "path": "src/knowledge/java.ts",
