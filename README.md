@@ -593,8 +593,8 @@ A team policy sets limits that a project cannot loosen, and an audit log records
   - `denyPaths`: root-relative path patterns that the agent may not read or write (for example
     `["**/.env*", "secret/**"]`). File tools refuse them; `grep`, `glob` and the code index skip them
     (no content, no name). Commands in the OS sandbox cannot read or write them either: the matching
-    files and folders are added to the sandbox profile when each command starts (`node_modules`
-    and `.git` are searched only when a pattern names them). When the patterns match more than
+    files and folders are added to the sandbox profile when each command starts (every folder is
+    searched, also `node_modules` and `.git`, so a large tree makes each command start slower). When the patterns match more than
     1,000 paths, commands do not run, with a message: Garuda never leaves a denied path without a
     rule. A symbolic link to a denied file is denied too.
   - `allowedModels`: Allowlist of LLM models permitted for use in the organization.

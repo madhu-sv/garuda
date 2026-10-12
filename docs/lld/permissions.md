@@ -273,8 +273,12 @@ grep never searches them; the code index never indexes them.
 
 The team policy's `denyPaths` (0130, K6): `execPolicy` adds `policyDeniedPaths(root, denyPaths)` to
 both `denyReadPaths` and `denyWritePaths`. The patterns are matched against the disk when a command
-starts (globby, no .gitignore), because the OS sandboxes need real paths. `node_modules` and `.git`
-are searched only when a pattern names them. More than 1,000 matches throw `PolicyPathsOverflow`
+starts (globby, no .gitignore), because the OS sandboxes need real paths. Every folder is searched,
+also `node_modules` and `.git` (review of 3a9f51b: before, a wildcard such as `**/private.txt` was
+refused by the file tools in `node_modules` but had no sandbox rule there). Links are not followed;
+a package link resolves to its real path, which the search finds. Cost: one search of the whole
+tree per command, only when the policy has `denyPaths` (about 0.1 s warm, 3 s cold, for 14,000
+entries). More than 1,000 matches throw `PolicyPathsOverflow`
 (Codex review of 1370184): the command does not run, because Garuda cannot enforce the rest. Before,
 the list was cut at 1,000 and the other paths had no rule. The same holds for hooks, MCP servers,
 language servers and job tests, which use the same `execPolicy`.

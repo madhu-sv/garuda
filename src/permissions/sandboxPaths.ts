@@ -115,16 +115,15 @@ export class PolicyPathsOverflow extends Error {
   }
 }
 
-/** Folders that the search skips for speed, unless a pattern names them. */
-const SKIPPED_FOLDERS = ["node_modules", ".git"] as const;
-
 /**
  * The files and folders in the root that the team policy's `denyPaths` names, as absolute paths
  * for the OS sandbox (K6, review): file tools refused them, but `cat secret/x` in `bash` read them.
  * The sandbox needs real paths, so the patterns are matched against the disk when a command
- * starts: a file created later is covered from the next command on. node_modules and .git are
- * searched only when a pattern names them. More matches than MAX_POLICY_DENIED_PATHS throw
- * PolicyPathsOverflow: never a shorter list.
+ * starts: a file created later is covered from the next command on. The search covers every
+ * folder, also node_modules and .git (review of 3a9f51b: "**\/private.txt" refused the file tool in
+ * node_modules, but the sandbox had no rule there). Links are not followed: a package link in
+ * node_modules resolves to its real path, which the search finds. More matches than
+ * MAX_POLICY_DENIED_PATHS throw PolicyPathsOverflow: never a shorter list.
  */
 export function policyDeniedPaths(
   root: string,
@@ -132,10 +131,6 @@ export function policyDeniedPaths(
   ignoreCase: boolean = CASE_INSENSITIVE_FS,
 ): string[] {
   if (patterns.length === 0) return [];
-  const named = (folder: string) =>
-    patterns.some((p) =>
-      p.split("/").some((part) => (ignoreCase ? part.toLowerCase() : part) === folder),
-    );
   const found = globbySync(patterns.map(fullGlob), {
     cwd: root,
     absolute: true,
@@ -144,7 +139,6 @@ export function policyDeniedPaths(
     followSymbolicLinks: false,
     gitignore: false,
     caseSensitiveMatch: !ignoreCase,
-    ignore: SKIPPED_FOLDERS.filter((folder) => !named(folder)).map((folder) => `**/${folder}/**`),
   });
   if (found.length > MAX_POLICY_DENIED_PATHS) throw new PolicyPathsOverflow(found.length);
   return found;
