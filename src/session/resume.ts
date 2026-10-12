@@ -21,6 +21,7 @@ export interface RebuiltState {
   messages: Message[];
   usage: typeof ZERO_USAGE;
   costUsd: number | undefined;
+  costIncomplete: boolean;
   contextTokens: number;
   unreportedTokens: number;
   childDebits: Map<string, number>;
@@ -38,6 +39,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
     messages: [],
     usage: { ...ZERO_USAGE },
     costUsd: 0,
+    costIncomplete: false,
     contextTokens: 0,
     unreportedTokens: 0,
     childDebits: new Map(),
@@ -87,12 +89,16 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
           if (call.subagent === undefined) continue;
           state.usage = addUsage(state.usage, call.subagent.usage);
           settleChildDebits(state.childDebits, call.subagent);
+          if (call.subagent.costIncomplete === true) state.costIncomplete = true;
           addCost(call.subagent.costUsd);
         }
         break;
       case "assistant":
         state.usage = addUsage(state.usage, reportedUsage(record.response));
-        addCost(record.response.usageReported === false ? undefined : record.costUsd);
+        if (record.response.usageReported === false) {
+          state.costIncomplete = true;
+          addCost(state.costUsd === undefined ? undefined : 0);
+        } else addCost(record.costUsd);
         state.contextTokens = contextSize(record.response.usage);
         if (record.response.content.length > 0) {
           state.messages.push({ role: "assistant", content: record.response.content });
@@ -104,7 +110,10 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
         state.contextTokens = record.afterTokens;
         if (record.summary !== undefined) {
           state.usage = addUsage(state.usage, reportedUsage(record.summary));
-          addCost(record.summary.usageReported === false ? undefined : record.costUsd);
+          if (record.summary.usageReported === false) {
+            state.costIncomplete = true;
+            addCost(state.costUsd === undefined ? undefined : 0);
+          } else addCost(record.costUsd);
         }
         break;
       case "thinking":
@@ -113,7 +122,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
       case "unreported":
         // Any request without reported usage keeps its reservation, including a successful one.
         state.unreportedTokens += record.tokens;
-        state.costUsd = undefined;
+        state.costIncomplete = true;
         break;
       case "child_debit":
         state.childDebits.set(
@@ -172,6 +181,7 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
       : messages;
   session.usage = state.usage;
   session.costUsd = state.costUsd;
+  session.costIncomplete = state.costIncomplete;
   session.contextTokens = state.contextTokens;
   session.unreportedTokens = state.unreportedTokens;
   session.childDebits = state.childDebits;

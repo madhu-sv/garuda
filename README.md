@@ -649,7 +649,8 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   plus new messages is larger, Garuda keeps that allowance. This can refuse a call earlier.
   Missing, partial or invalid OpenAI-compatible usage gets a labelled estimate for context sizing.
   Estimates are excluded from reported token totals and never added on top of the full charge.
-  `/usage` and the turn summary show the separate budget charge; cost is unknown. Providers that
+  `/usage` and the turn summary show the separate budget charge; the cost shows as a minimum,
+  "≥ $X (incomplete)", never as unknown. Providers that
   omit usage can therefore reach the budget sooner. JSON marks estimated assistant usage and
   incomplete result totals; eval reports show unknown tokens, means and cache share for these runs.
 - When the connection to the model breaks while a response streams, Garuda sends the request again (up

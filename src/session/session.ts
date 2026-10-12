@@ -36,6 +36,11 @@ export interface Session {
   usage: Usage;
   /** Session cost. Undefined when a price or a request's usage is unknown. */
   costUsd: number | undefined;
+  /**
+   * The cost leaves out some spending (review of 1370184): a request with no reported usage, or a
+   * subagent's cost that was incomplete. `costUsd` is then a known minimum, never "unknown".
+   */
+  costIncomplete: boolean;
   /** Context size after the last response, in tokens. Compaction (F23) reads it. */
   contextTokens: number;
   /**
@@ -66,6 +71,7 @@ export function createSession(
     messages: [],
     usage: { ...ZERO_USAGE },
     costUsd: 0,
+    costIncomplete: false,
     contextTokens: 0,
     unreportedTokens: 0,
     childDebits: new Map(),
@@ -143,8 +149,12 @@ export function addAssistantResponse(
   step: number,
   costUsd: number | undefined,
 ): void {
-  if (response.usageReported === false) costUsd = undefined;
-  addCost(session, reportedUsage(response), costUsd);
+  // An estimate (no reported usage): its cost is not known, but the rest stays a known minimum.
+  if (response.usageReported === false) {
+    session.costIncomplete = true;
+    costUsd = undefined;
+    addCost(session, reportedUsage(response), session.costUsd === undefined ? undefined : 0);
+  } else addCost(session, reportedUsage(response), costUsd);
   session.contextTokens = contextSize(response.usage);
   if (response.content.length > 0) {
     session.messages.push({ role: "assistant", content: response.content });
@@ -217,8 +227,9 @@ export function closeOpenToolCalls(session: Session): number {
 export function addUnreported(session: Session, tokens: number): void {
   if (tokens <= 0) return;
   session.unreportedTokens += tokens;
-  // The provider may have billed the reservation; no exact session cost is known.
-  session.costUsd = undefined;
+  // The provider may have billed the reservation: the cost is now a minimum (review of 1370184:
+  // before, it became unknown for the rest of the session).
+  session.costIncomplete = true;
   session.journal?.write({ type: "unreported", tokens });
 }
 
@@ -239,6 +250,7 @@ export function addChildDebit(session: Session, childSessionId: string, tokens: 
 /** Replace a child's pending debits with its full usage report, without counting it twice. */
 export function addChildReport(session: Session, report: SubagentReport): void {
   addCost(session, report.usage, report.costUsd);
+  if (report.costIncomplete === true) session.costIncomplete = true;
   settleChildDebits(session.childDebits, report);
 }
 

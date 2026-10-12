@@ -63,6 +63,8 @@ export interface SubagentReport {
   /** Provider-reported usage only; unknown reservations are charged through the shared budget. */
   usage: Usage;
   costUsd?: number;
+  /** The child's cost leaves out some spending: `costUsd` is a minimum (review of 1370184). */
+  costIncomplete?: boolean;
 }
 
 export interface ToolResultsRecord extends Base {

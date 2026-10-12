@@ -171,7 +171,11 @@ async function summaryStage(
   };
   const messages = [opening, ...recent];
   const costUsd = summary.usageReported === false ? undefined : costOf?.(summary);
-  addCost(session, reportedUsage(summary), costUsd);
+  if (summary.usageReported === false) {
+    // An estimate: the cost stays a known minimum, marked incomplete (review of 1370184).
+    session.costIncomplete = true;
+    addCost(session, reportedUsage(summary), session.costUsd === undefined ? undefined : 0);
+  } else addCost(session, reportedUsage(summary), costUsd);
   // The context also holds the system prompt and the tool list, which do not change: take off only
   // what the messages lost (0.8; before, the estimate counted the messages alone).
   const savedChars = Math.max(0, charCount(session.messages) - charCount(messages));

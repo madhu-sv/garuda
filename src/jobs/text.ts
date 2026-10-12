@@ -20,7 +20,12 @@ export function jobPrompt(request: string, plan: string): string {
   ].join("\n");
 }
 
-const cost = (usd: number | undefined) => (usd === undefined ? "unknown" : `$${usd.toFixed(4)}`);
+const cost = (usd: number | undefined, incomplete = false) =>
+  usd === undefined
+    ? "unknown"
+    : incomplete
+      ? `≥ $${usd.toFixed(4)} (incomplete)`
+      : `$${usd.toFixed(4)}`;
 
 /** The job report (Markdown): for the terminal, the report file and /jobs <id>. */
 export function jobReport(job: Job): string {
@@ -40,7 +45,7 @@ export function jobReport(job: Job): string {
   if (job.startedAt !== undefined) lines.push(`- Started: ${job.startedAt}`);
   if (r === undefined) return lines.join("\n");
   lines.push(
-    `- Steps: ${r.steps} · tokens: ${Math.round(r.tokens / 100) / 10}k · cost: ${cost(r.costUsd)} · time: ${Math.round(r.durationMs / 1000)} s`,
+    `- Steps: ${r.steps} · tokens: ${Math.round(r.tokens / 100) / 10}k · cost: ${cost(r.costUsd, r.costIncomplete === true)} · time: ${Math.round(r.durationMs / 1000)} s`,
   );
   if (r.sessionId !== undefined) lines.push(`- Session: ${r.sessionId}`);
   if (r.modelCalls !== undefined) {

@@ -46,6 +46,8 @@ export interface EvalResult {
   /** Full reservations charged without provider-reported usage. Kept apart from `tokens`. */
   unreportedTokens?: number;
   costUsd: number | undefined;
+  /** The run had spending with no known cost: `costUsd` is a minimum (review of 1370184). */
+  costIncomplete?: boolean;
   durationMs: number;
   /** Tokens read from the prompt cache (0.7: to compare the Batch API's cache hits). */
   cacheReadTokens?: number;

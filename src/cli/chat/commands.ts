@@ -275,7 +275,9 @@ async function sessionsCommand(
     const facts = [
       s.id,
       `${s.turns} turn${s.turns === 1 ? "" : "s"}`,
-      ...(s.costUsd === undefined || s.costUsd === 0 ? [] : [`$${s.costUsd.toFixed(2)}`]),
+      ...(s.costUsd === undefined || (s.costUsd === 0 && !s.costIncomplete)
+        ? []
+        : [`${s.costIncomplete ? "≥ " : ""}$${s.costUsd.toFixed(2)}`]),
       ...(s.model === undefined ? [] : [s.model]),
     ].join(" · ");
     return [
@@ -764,7 +766,12 @@ export function usageSummary(runtime: Runtime): string {
   const session = runtime.session;
   if (session === undefined) return "No session yet.";
   const u = session.usage;
-  const cost = session.costUsd === undefined ? "cost unknown" : `$${session.costUsd.toFixed(4)}`;
+  const cost =
+    session.costUsd === undefined
+      ? "cost unknown"
+      : session.costIncomplete
+        ? `≥ $${session.costUsd.toFixed(4)} (incomplete)`
+        : `$${session.costUsd.toFixed(4)}`;
   return [
     `Session ${session.id}: ${formatTokens(totalTokens(u))}${session.unreportedTokens > 0 ? " reported" : ""} tokens, ${cost}`,
     `  input ${formatTokens(u.inputTokens)}, cache read ${formatTokens(u.cacheReadTokens)}, cache write ${formatTokens(u.cacheWriteTokens)}, output ${formatTokens(u.outputTokens)}`,

@@ -315,6 +315,7 @@ export async function finishJob(
     steps: outcome.kind === "done" ? outcome.result.steps : 0,
     tokens: runtime.session === undefined ? 0 : totalTokens(runtime.session.usage),
     ...(runtime.session?.costUsd === undefined ? {} : { costUsd: runtime.session.costUsd }),
+    ...(runtime.session?.costIncomplete === true ? { costIncomplete: true } : {}),
     durationMs: Date.now() - prepared.startedAt,
     ...(runtime.session === undefined ? {} : { sessionId: runtime.session.id }),
     files: [],

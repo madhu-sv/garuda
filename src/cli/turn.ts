@@ -62,12 +62,20 @@ async function runTurn(
   approver.onInterrupt = stop;
 
   const costBefore = runtime.session?.costUsd ?? 0;
+  const unreportedBefore = runtime.session?.unreportedTokens ?? 0;
+  const incompleteBefore = runtime.session?.costIncomplete ?? false;
   try {
     const result = await runtime.runTurn(prompt, controller.signal);
     const session = runtime.session;
     if (session !== undefined) {
       const runCost = session.costUsd === undefined ? undefined : session.costUsd - costBefore;
-      renderer.info(`\n[${usageLine(result, session, runCost, runtime.limits.contextWindow)}]`);
+      // The run's cost is a minimum when this run had spending with no known cost.
+      const runIncomplete =
+        session.unreportedTokens > unreportedBefore ||
+        (session.costIncomplete && !incompleteBefore);
+      renderer.info(
+        `\n[${usageLine(result, session, runCost, runtime.limits.contextWindow, runIncomplete)}]`,
+      );
     }
     const message = stopMessage(result.stopReason, runtime.limits);
     if (message !== undefined) renderer.warn(message);

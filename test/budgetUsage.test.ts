@@ -134,7 +134,8 @@ describe("successful responses without reported usage", () => {
     expect.soft(budgetSpent(session)).toBe(held);
     expect.soft(session.usage).toEqual(ZERO_USAGE);
     expect.soft(result.usage).toEqual(ZERO_USAGE);
-    expect.soft(session.costUsd).toBeUndefined();
+    expect.soft(session.costUsd).toBe(0);
+    expect.soft(session.costIncomplete).toBe(true);
     expect(session.contextTokens).toBeGreaterThan(0);
     const records = await store.read(session.id);
     const assistant = records.find((r) => r.type === "assistant");
@@ -168,7 +169,8 @@ describe("successful responses without reported usage", () => {
 
     const resumed = await resumeSession({ store, root, sessionId: session.id, start });
     expect.soft(resumed.usage).toEqual(ZERO_USAGE);
-    expect.soft(resumed.costUsd).toBeUndefined();
+    expect.soft(resumed.costUsd).toBe(0);
+    expect.soft(resumed.costIncomplete).toBe(true);
     expect.soft(budgetSpent(resumed)).toBe(held);
     addUserMessage(resumed, "again");
     const next = await runAgent(resumed, deps);
@@ -229,11 +231,13 @@ describe("successful responses without reported usage", () => {
     expect.soft(totalTokens(session.usage)).toBe(30);
     expect.soft(session.unreportedTokens).toBe(held);
     expect.soft(budgetSpent(session)).toBe(held + 30);
-    expect.soft(session.costUsd).toBeUndefined();
+    expect.soft(session.costUsd).toBeDefined();
+    expect.soft(session.costIncomplete).toBe(true);
     const rebuilt = rebuildState(journal.records);
     expect.soft(totalTokens(rebuilt.usage)).toBe(30);
     expect.soft(rebuilt.unreportedTokens).toBe(held);
-    expect(rebuilt.costUsd).toBeUndefined();
+    expect(rebuilt.costUsd).toBe(session.costUsd);
+    expect(rebuilt.costIncomplete).toBe(true);
   });
 
   it("charges an estimated compaction summary once and replays the same totals", async () => {
@@ -256,11 +260,12 @@ describe("successful responses without reported usage", () => {
     expect.soft(totalTokens(session.usage)).toBe(before);
     expect.soft(session.unreportedTokens).toBe(budget.spent);
     expect.soft(budgetSpent(session)).toBe(before + budget.spent);
-    expect.soft(session.costUsd).toBeUndefined();
+    expect.soft(session.costIncomplete).toBe(true);
     const rebuilt = rebuildState(journal.records);
     expect.soft(totalTokens(rebuilt.usage)).toBe(before);
     expect.soft(rebuilt.unreportedTokens).toBe(budget.spent);
-    expect(rebuilt.costUsd).toBeUndefined();
+    expect(rebuilt.costUsd).toBe(session.costUsd);
+    expect(rebuilt.costIncomplete).toBe(true);
   });
 
   it("replays legacy responses without the usage flag as reported", () => {
@@ -297,7 +302,8 @@ describe("successful responses without reported usage", () => {
     expect(budget.spent).toBeLessThanOrEqual(1_000);
     expect(parent.unreportedTokens).toBe(budget.spent);
     expect(result.report.usage).toEqual(ZERO_USAGE);
-    expect(result.report.costUsd).toBeUndefined();
+    expect(result.report.costUsd).toBe(0);
+    expect(result.report.costIncomplete).toBe(true);
   });
 
   it("retains both reservations when an HTTP retry succeeds without usage", async () => {
@@ -361,11 +367,13 @@ describe("successful responses without reported usage", () => {
     expect(result.passed).toBe(true);
     expect(result.tokens).toBe(0);
     expect(result.unreportedTokens).toBeGreaterThan(0);
-    expect(result.costUsd).toBeUndefined();
+    expect(result.costUsd).toBe(0);
+    expect(result.costIncomplete).toBe(true);
     const report = formatReport([result, { ...result }]);
     expect(report).toContain("tok ?");
     expect(report).toContain("cache share unknown");
     expect(report).toContain("Mean per task:");
     expect(report).not.toContain("0.0k tok");
+    expect(report).toContain("(incomplete)");
   });
 });

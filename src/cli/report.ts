@@ -9,9 +9,11 @@ export function formatTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
-function formatUsd(usd: number | undefined): string {
+/** A cost: "cost unknown" (no price), or a known amount; "≥ … (incomplete)" for a minimum. */
+export function formatUsd(usd: number | undefined, incomplete = false): string {
   if (usd === undefined) return "cost unknown";
-  return usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
+  const amount = usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
+  return incomplete ? `≥ ${amount} (incomplete)` : amount;
 }
 
 /** The line that Garuda prints after each turn (F22). */
@@ -20,6 +22,8 @@ export function usageLine(
   session: Session,
   runCostUsd: number | undefined,
   contextWindow: number,
+  /** The run had spending with no known cost (review of 1370184): the run cost is a minimum. */
+  runCostIncomplete = false,
 ): string {
   const u = result.usage;
   const input = u.inputTokens + u.cacheReadTokens + u.cacheWriteTokens;
@@ -27,9 +31,9 @@ export function usageLine(
   return [
     `${result.stopReason} · ${result.steps} step(s)`,
     `${session.unreportedTokens > 0 ? "reported " : ""}${formatTokens(input)} in (${formatTokens(u.cacheReadTokens)} cached) / ${formatTokens(u.outputTokens)} out`,
-    formatUsd(runCostUsd),
+    formatUsd(runCostUsd, runCostIncomplete),
     `context ${percent}% of ${formatTokens(contextWindow)}`,
-    `session ${formatTokens(totalTokens(session.usage))} tokens, ${formatUsd(session.costUsd)}`,
+    `session ${formatTokens(totalTokens(session.usage))} tokens, ${formatUsd(session.costUsd, session.costIncomplete)}`,
     ...(session.unreportedTokens > 0
       ? [
           `budget ${formatTokens(budgetSpent(session))} tokens (${formatTokens(session.unreportedTokens)} reserved without reported usage)`,

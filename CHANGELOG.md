@@ -2,6 +2,10 @@
 
 ## 0.17.0 (unreleased)
 
+- Cost after a failed attempt (review of 1370184): one retry, 529, batch fallback or cancel no
+  longer makes the cost unknown for the rest of the session. The cost stays a known minimum, shown
+  as "≥ $X (incomplete)" in the turn line, `/usage`, `/sessions`, job reports and eval reports, also
+  after a resume. Only a missing price makes the cost unknown.
 - The job review is under the token budget (Codex review of 1370184): its request reserves first
   (a one-token policy no longer lets an 8,192-token request through), every attempt is metered, and
   its usage counts for the session and on resume.

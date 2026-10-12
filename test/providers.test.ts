@@ -505,6 +505,8 @@ describe("OpenAI-compatible client", () => {
     expect(result).toMatchObject({ stopReason: "done", steps: 2 });
     expect(runtime.limits.contextWindow).toBe(16384);
     // This server omits usage: estimates size the context, but do not establish an exact cost.
-    expect(runtime.session?.costUsd).toBeUndefined();
+    // Since the review of 1370184 the cost is a known minimum (here 0), marked incomplete.
+    expect(runtime.session?.costUsd).toBe(0);
+    expect(runtime.session?.costIncomplete).toBe(true);
   });
 });

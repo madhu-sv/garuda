@@ -15,6 +15,8 @@ export interface SessionSummary {
   /** The model of the last start, resume or /models record. */
   model: string | undefined;
   costUsd: number | undefined;
+  /** `costUsd` is a minimum (review of 1370184). */
+  costIncomplete: boolean;
 }
 
 const TITLE_CHARS = 60;
@@ -39,6 +41,7 @@ export function summariseSession(
     turns: prompts.length,
     model: state.start?.model,
     costUsd: state.costUsd,
+    costIncomplete: state.costIncomplete,
   };
 }
 

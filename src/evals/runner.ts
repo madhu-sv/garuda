@@ -194,6 +194,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     result.tokens = totalTokens(session.usage);
     if (session.unreportedTokens > 0) result.unreportedTokens = session.unreportedTokens;
     result.costUsd = session.costUsd;
+    if (session.costIncomplete) result.costIncomplete = true;
     result.cacheReadTokens = session.usage.cacheReadTokens;
     if (options.outDir !== undefined) {
       mkdirSync(options.outDir, { recursive: true });
@@ -351,15 +352,21 @@ export function formatReport(results: readonly EvalResult[]): string {
       (r.unreportedTokens ?? 0) > 0
         ? `tok ? (${r.unreportedTokens} reserved)`
         : `${(r.tokens / 1000).toFixed(1).padStart(7)}k tok`,
-      r.costUsd === undefined ? "   cost ?" : `$${r.costUsd.toFixed(4).padStart(7)}`,
+      r.costUsd === undefined
+        ? "   cost ?"
+        : `${r.costIncomplete === true ? "≥" : ""}$${r.costUsd.toFixed(4).padStart(7)}`,
       `${(r.durationMs / 1000).toFixed(0).padStart(4)} s`,
       r.stopReason,
     ].join("  "),
   );
   const summary = summarize(results);
-  const cost = results.every((r) => r.costUsd !== undefined)
-    ? `$${results.reduce((s, r) => s + (r.costUsd ?? 0), 0).toFixed(4)}`
-    : "unknown";
+  // A run with an incomplete cost gives a minimum, not "unknown" (review of 1370184).
+  const known = `$${results.reduce((s, r) => s + (r.costUsd ?? 0), 0).toFixed(4)}`;
+  const cost = !results.every((r) => r.costUsd !== undefined)
+    ? "unknown"
+    : results.some((r) => r.costIncomplete === true)
+      ? `≥ ${known} (incomplete)`
+      : known;
   const steps = results.reduce((s, r) => s + r.steps, 0);
   const counted =
     `${summary.passed}/${summary.scored} scored runs passed (${percent(summary.scoredRate)})` +
@@ -401,7 +408,7 @@ function meanRows(results: readonly EvalResult[], ids: readonly string[]): strin
           ? "    tok ?"
           : `${(mean((r) => r.tokens) / 1000).toFixed(1).padStart(7)}k tok`,
         runs.every((r) => r.costUsd !== undefined)
-          ? `$${mean((r) => r.costUsd ?? 0)
+          ? `${runs.some((r) => r.costIncomplete === true) ? "≥" : ""}$${mean((r) => r.costUsd ?? 0)
               .toFixed(4)
               .padStart(7)}`
           : "   cost ?",

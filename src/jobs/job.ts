@@ -37,6 +37,8 @@ const resultSchema = z.object({
   steps: z.number(),
   tokens: z.number(),
   costUsd: z.number().optional(),
+  /** The cost leaves out some spending: `costUsd` is a minimum (review of 1370184). */
+  costIncomplete: z.boolean().optional(),
   durationMs: z.number(),
   sessionId: z.string().optional(),
   commit: z.string().optional(),

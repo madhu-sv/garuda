@@ -183,7 +183,8 @@ a failure with the stop reason `timeout`, not an error (12 hours with `--batch o
 Usage evidence (0.17): `tokens` and `cacheReadTokens` contain provider-reported counts only.
 When a request has no complete usage report, `report.json` also includes `unreportedTokens`, the
 full reservations charged to its budget. The table shows `tok ? (n reserved)`, token means are
-unknown for affected tasks, and the cache-share summary is unknown. USD cost is unknown too.
+unknown for affected tasks, and the cache-share summary is unknown. USD cost is a minimum:
+`costIncomplete` in `report.json`, "≥ $X (incomplete)" in the table (review of 1370184).
 This prevents an unmeasured run from appearing to use zero tokens or to be free.
 
 ## Method

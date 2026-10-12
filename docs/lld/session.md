@@ -105,7 +105,10 @@ The session allowance counts reported usage, unreported reservations and pending
 Responses marked `usageReported: false` keep their estimates for context sizing but contribute no
 reported tokens or exact USD cost. The full reservation is already in `unreportedTokens`, so live
 accounting and replay never add the estimates again. The same rule applies to summary responses.
-Any unknown reservation makes the session cost unknown, including after replay. Existing journals
+Any unknown reservation marks the session cost incomplete (`costIncomplete`), including after
+replay; `costUsd` stays a known minimum, shown as "≥ $X (incomplete)" (review of 1370184: before,
+one failed attempt made the cost unknown for the rest of the session). Only a missing price makes
+the cost unknown. A subagent report carries `costIncomplete` to its parent. Existing journals
 without the source flag retain their historical totals: their old estimates cannot be distinguished
 from reports retroactively. No migration is performed; the corrected policy applies to new calls.
 `rebuildState` restores the same pending-debit map. Journals without `child_debit` records keep
