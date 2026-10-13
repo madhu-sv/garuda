@@ -113,7 +113,8 @@ describe("agents: the file format (0.5)", () => {
   });
 
   it("maps model aliases like Claude Code", () => {
-    expect(aliasModel("haiku")).toBe("claude-haiku-4-5");
+    // The newest of the family (October 2026: Haiku 5.5).
+    expect(aliasModel("haiku")).toBe("claude-haiku-5-5");
     expect(aliasModel("sonnet")).toMatch(/^claude-sonnet-/);
     expect(aliasModel("gpt")).toBeUndefined();
   });
@@ -355,7 +356,7 @@ describe("agents in the runtime (0.5)", () => {
       resolve: (spec) => specs.push(spec),
     });
     await runtime.runTurn("Hi", signal());
-    expect(specs).toEqual(["claude-haiku-4-5"]);
+    expect(specs).toEqual(["claude-haiku-5-5"]);
   });
 
   it("no agent tool without agent files or with agents.enabled false", async () => {

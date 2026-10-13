@@ -2,6 +2,10 @@
 
 ## 0.17.0 (unreleased)
 
+- Models: Claude Sonnet 5.5 and Haiku 5.5 with their prices (Haiku 5.5 has a higher price for
+  prompts over 100,000 tokens); `sonnet` and `haiku` now name them. `garuda setup` lists the
+  models of your Anthropic account (Models API) and saves the list for `/models`; a model that
+  this Garuda does not know shows "price unknown". `pnpm models:check` is a release check.
 - Staged commands (T5, off by default): with `"commands": { "mode": "staged" }`, each sandboxed
   command runs in a staging copy of the project; when it changes files that git tracks, you see the
   diff and apply or discard (all or nothing, with `/undo`). Ignored files stay in the copy. No copy:

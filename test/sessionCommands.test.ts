@@ -176,9 +176,9 @@ describe("/models (0.6)", () => {
   it("an alias names the newest model of its family; without the option it cannot switch", async () => {
     const sonnet = new FakeModelClient([]);
     const runtime = await runtimeFor(project(), new FakeModelClient([]), {
-      models: choices({ "claude-sonnet-5": sonnet }),
+      models: choices({ "claude-sonnet-5-5": sonnet }),
     });
-    expect((await runtime.setModel("sonnet")).text).toMatch(/^The model is now claude-sonnet-5 /);
+    expect((await runtime.setModel("sonnet")).text).toMatch(/^The model is now claude-sonnet-5-5 /);
     const fixed = await runtimeFor(project(), new FakeModelClient([]));
     expect(await fixed.setModel("sonnet")).toEqual({
       ok: false,

@@ -89,10 +89,12 @@ describe("garuda setup (0.16)", () => {
     expect(statSync(join(home, CREDENTIALS_FILE)).mode & 0o777).toBe(0o600);
     expect(statSync(join(home, ".garuda")).mode & 0o777).toBe(0o700);
 
-    // One free request, to Anthropic's own API, with the key.
-    expect(seen).toHaveLength(1);
+    // The key check, then the account's model list for /models (0.17): free requests, to
+    // Anthropic's own API, with the key.
+    expect(seen).toHaveLength(2);
     expect(seen[0]?.url).toBe("https://api.anthropic.com/v1/models?limit=1");
-    expect(seen[0]?.headers["x-api-key"]).toBe(KEY);
+    expect(seen[1]?.url).toBe("https://api.anthropic.com/v1/models?limit=1000");
+    for (const s of seen) expect(s.headers["x-api-key"]).toBe(KEY);
     // The summary masks the key.
     const out = printed.join("\n");
     expect(out).not.toContain(KEY);

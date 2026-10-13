@@ -54,6 +54,7 @@ import { loadMcpConfig, type ServerConfig } from "../mcp/config.js";
 import type { McpManager, McpServerStatus } from "../mcp/manager.js";
 import { neutralizeTags } from "../mcp/sanitize.js";
 import { TrustStore } from "../mcp/trust.js";
+import type { Catalog } from "../model/catalog.js";
 import {
   aliasModel,
   lookupModel,
@@ -286,6 +287,8 @@ export interface RuntimeOptions {
       maxTokens?: number;
     };
     configured?: readonly string[];
+    /** The Anthropic models of the user's account (0.17), saved by `garuda setup`. */
+    catalog?: Catalog;
   };
   /**
    * A scheduled job (0.7): nobody can answer. A call that would ask is denied with `reason`;

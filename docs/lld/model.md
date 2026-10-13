@@ -235,7 +235,19 @@ default by the GPU memory (4k below 24 GiB); set `OLLAMA_CONTEXT_LENGTH`.
   to `claude-opus-5`). Unknown models get a 200k window and no price (cost shows as unknown).
 - Settings override: `model.price` (USD per million tokens: input, output, cacheRead, cacheWrite) and
   `model.contextWindow`.
-- `knownModels()` (0.6): the table, newest first, for `/models`.
+- `knownModels()` (0.6): the table, newest first, for `/models`. October 2026: Claude Sonnet 5.5
+  and Haiku 5.5 (thinking "always" in Garuda: Sonnet 5.5 turns thinking off only with
+  `between_tools`, Haiku 5.5 only at high effort or below; Garuda does not offer that yet).
+- `Price.over` (0.17): a higher price level for a long prompt (Haiku 5.5: more than 100 000 prompt
+  tokens, counting cache reads and writes). `costOf` applies it per request, so call it with one
+  response's usage.
+- `catalog.ts` (0.17): the account's models from the Models API, saved by `garuda setup`;
+  `mergedModels(catalog)` puts them first in `/models` and the setup picker, with Garuda's table
+  entry when it knows the model (also a dated id of a known model), else "price unknown" and the
+  API's `max_input_tokens`. The chat reads only the saved file, never the network. A model that
+  only the catalog knows runs with the default 200k window, until the table knows it.
+- `pnpm models:check` (`scripts/check-models.mjs`, 0.17): a release check with the developer's
+  own `ANTHROPIC_API_KEY`; it lists the API's models that the table misses and exits 1.
 - `costOf(usage, price)` adds `WEB_SEARCH_USD` ($0.01) per Claude web search (0.6); `totalTokens(usage)`, `contextSize(usage)` (input + cache read + cache write +
   output of the last response: the size of the context now).
 

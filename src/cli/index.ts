@@ -8,6 +8,7 @@ import { auditDirFor } from "../audit/logger.js";
 import { BUILTIN_COMMANDS } from "../commands/builtins.js";
 import { replaySession } from "../loop/replay.js";
 import { DEFAULT_MAX_TOKENS } from "../loop/runAgent.js";
+import { loadCatalog } from "../model/catalog.js";
 import {
   chooseModel,
   keepProviderKeys,
@@ -318,6 +319,8 @@ async function start(options: Options, program: Command): Promise<number> {
   // Web search (0.5): only the user's ~/.garuda/search.json and environment configure it. It reads
   // its keys now, before the model keys are taken out of the environment below.
   const searchConfig = await loadSearchConfig();
+  // The account's Anthropic models, saved by `garuda setup` (0.17): a file, never a network call.
+  const catalog = await loadCatalog();
 
   // Take the model-provider keys out of Garuda's own environment (0.14, review): a command in the
   // OS sandbox could otherwise read them from /proc/<pid>/environ of the Garuda process. create()
@@ -421,6 +424,8 @@ async function start(options: Options, program: Command): Promise<number> {
         };
       },
       configured: Object.keys(models.config.models),
+      // The account's model list from `garuda setup` (0.17); no network call here.
+      ...(catalog === undefined ? {} : { catalog }),
     },
     ...(options.resume === undefined ? {} : { resume: options.resume }),
     onEvent: (event) => events.event(event),
