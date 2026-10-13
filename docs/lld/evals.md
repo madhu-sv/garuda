@@ -223,3 +223,6 @@ tasks, run at the same time (`describe.concurrent`, 180 s limit each). They run 
 probe passes; otherwise they are skipped, and the test name holds the hint. So on a machine without
 Maven and JUnit in `~/.m2` (for example a cloud workspace with no access to Maven Central), `pnpm check`
 still passes and says what is missing.
+
+T11 (0.17, design): intervals, cost per accepted change, unexpected changes, a Claude Code baseline,
+a held-out split and a proposer loop for a prompt addendum. See [eval-evidence.md](eval-evidence.md).

@@ -8,6 +8,9 @@
 - Dependabot: `@types/node` stays on the oldest supported Node line (no major updates); each other
   major update comes as its own pull request.
 - The Homebrew formula in the repository names 0.17.0 and its tarball hash.
+- Design (T11, not built yet): eval evidence — intervals and consistency over repeated runs, cost per
+  accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
+  proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).
 
 ## 0.17.0 (2026-10-27)
 
