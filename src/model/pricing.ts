@@ -6,6 +6,11 @@ export interface Price {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  /**
+   * A higher price for a long prompt (Claude Haiku 5.5): a request whose prompt (input, cache reads
+   * and cache writes) has more than `tokens` tokens pays `price` for all of its tokens.
+   */
+  over?: { tokens: number; price: Omit<Price, "over"> };
 }
 
 export interface ModelInfo {
@@ -38,10 +43,25 @@ const OPTIONAL_46 = {
 /**
  * Known Claude models, by model-id prefix. The longest matching prefix wins,
  * so "claude-opus-5-5" does not fall back to "claude-opus-5".
- * Source: platform.claude.com/docs/en/about-claude/pricing (September 2026).
+ * Source: platform.claude.com/docs/en/about-claude/pricing (September 2026; Sonnet 5.5 and
+ * Haiku 5.5: October 2026). `scripts/check-models.mjs` compares this table with the Models API.
  * Settings can override both values (`model.price`, `model.contextWindow`).
  */
 const KNOWN: ReadonlyArray<readonly [prefix: string, info: ModelInfo]> = [
+  // October 2026. Sonnet 5.5 turns thinking "off" with `between_tools`, Haiku 5.5 only at high
+  // effort or below: Garuda does not offer off for them yet, so they are "always" here.
+  ["claude-sonnet-5-5", { price: p(2, 10, 0.1, 2.5), contextWindow: M, thinking: ALWAYS }],
+  [
+    "claude-haiku-5-5",
+    {
+      price: {
+        ...p(0.1, 0.5, 0.01, 0.125),
+        over: { tokens: 100_000, price: p(0.5, 2.5, 0.05, 0.625) },
+      },
+      contextWindow: M,
+      thinking: ALWAYS,
+    },
+  ],
   ["claude-fable-5-1", { price: p(10, 50, 0.25, 12.5), contextWindow: M, thinking: ALWAYS }],
   ["claude-fable-5", { price: p(10, 50, 1, 12.5), contextWindow: M, thinking: ALWAYS }],
   ["claude-opus-5-5", { price: p(4, 20, 0.2, 5), contextWindow: M, thinking: ALWAYS }],
@@ -92,11 +112,14 @@ export const WEB_SEARCH_USD = 0.01;
  * API); searches cost the same either way.
  */
 export function costOf(usage: Usage, price: Price, factor = 1): number {
+  // A price with a long-prompt level applies per request: call it with one response's usage.
+  const prompt = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+  const at = price.over !== undefined && prompt > price.over.tokens ? price.over.price : price;
   return (
-    ((usage.inputTokens * price.input +
-      usage.outputTokens * price.output +
-      usage.cacheReadTokens * price.cacheRead +
-      usage.cacheWriteTokens * price.cacheWrite) /
+    ((usage.inputTokens * at.input +
+      usage.outputTokens * at.output +
+      usage.cacheReadTokens * at.cacheRead +
+      usage.cacheWriteTokens * at.cacheWrite) /
       M) *
       factor +
     (usage.webSearches ?? 0) * WEB_SEARCH_USD

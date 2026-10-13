@@ -1,12 +1,19 @@
 import { homedir } from "node:os";
 import {
+  type Catalog,
+  fetchCatalog,
+  loadCatalog,
+  mergedModels,
+  saveCatalog,
+} from "../model/catalog.js";
+import {
   credentialsPath,
   KEY_NAME,
   maskKey,
   readCredentials,
   writeCredentials,
 } from "../model/credentials.js";
-import { knownModels } from "../model/pricing.js";
+import type { Price } from "../model/pricing.js";
 import {
   BUILTIN_PROVIDERS,
   chooseModel,
@@ -140,7 +147,15 @@ async function setup(
   const def = providers[provider] as ProviderDef;
 
   // 2. The model.
-  const model = await pickModel(io, provider, def, fetcher);
+  const anthropicKey =
+    def.type === "anthropic" ? (def.apiKeyEnv ?? "ANTHROPIC_API_KEY") : undefined;
+  const knownKey =
+    anthropicKey === undefined
+      ? undefined
+      : (env[anthropicKey] ?? "") !== ""
+        ? env[anthropicKey]
+        : stored.keys[anthropicKey];
+  const model = await pickModel(io, provider, def, fetcher, { home, env, key: knownKey });
   const spec = provider === "anthropic" ? model : `${provider}/${model}`;
   try {
     resolveModel(spec, config);
@@ -172,7 +187,13 @@ async function setup(
         const key = fromEnv !== "" ? fromEnv : (newKey ?? old);
         const result = await checkKey(provider, def, key, env, fetcher);
         io.print(result.message);
-        if (result.ok) break;
+        if (result.ok) {
+          // A new key: save the account's model list for /models (the picker had none).
+          if (def.type === "anthropic" && knownKey === undefined) {
+            await refreshCatalog(io, { home, env, key }, fetcher);
+          }
+          break;
+        }
         const next = await io.select("What now?", [
           ...(fromEnv === "" ? [{ name: "Enter the key again", value: "again" as const }] : []),
           { name: "Store it anyway", value: "store" as const },
@@ -219,15 +240,20 @@ async function pickModel(
   provider: string,
   def: ProviderDef,
   fetcher: typeof fetch,
+  account: { home: string; env: NodeJS.ProcessEnv; key: string | undefined },
 ): Promise<string> {
   let listed: string[] = [];
   const notes = new Map<string, string>();
   if (def.type === "anthropic") {
-    for (const { id, info } of knownModels()) {
+    // The account's models (0.17): with a key, the Models API's list, saved for /models; without
+    // one, the list that an earlier setup saved. Prices always come from Garuda's own table.
+    let catalog = await loadCatalog(account.home);
+    if (account.key !== undefined) {
+      catalog = (await refreshCatalog(io, account, fetcher)) ?? catalog;
+    }
+    for (const { id, info, known } of mergedModels(catalog)) {
       listed.push(id);
-      if (info.price !== undefined) {
-        notes.set(id, `$${info.price.input} in, $${info.price.output} out per million tokens`);
-      }
+      notes.set(id, known && info.price !== undefined ? priceNote(info.price) : UNKNOWN_PRICE);
     }
   } else if (def.local === true && def.baseUrl !== undefined) {
     listed = await localModels(def.baseUrl, fetcher);
@@ -251,6 +277,36 @@ async function pickModel(
     if (typed !== "" && ONE_WORD.test(typed)) return typed;
     io.print("Type a model name with no spaces.");
   }
+}
+
+const UNKNOWN_PRICE =
+  "price unknown to this Garuda version: costs show as unknown (set model.price, or update Garuda)";
+
+function priceNote(price: Price): string {
+  const more =
+    price.over === undefined ? "" : ` (more for prompts over ${price.over.tokens / 1000}k tokens)`;
+  return `$${price.input} in, $${price.output} out per million tokens${more}`;
+}
+
+/** Fetch and save the account's model list. Undefined, with a printed reason, when it fails. */
+async function refreshCatalog(
+  io: SetupIO,
+  account: { home: string; env: NodeJS.ProcessEnv; key: string | undefined },
+  fetcher: typeof fetch,
+): Promise<Catalog | undefined> {
+  const base = account.env.ANTHROPIC_BASE_URL ?? "";
+  const result = await fetchCatalog({
+    key: account.key,
+    ...(base === "" ? {} : { baseUrl: base }),
+    fetcher,
+  });
+  if ("problem" in result) {
+    io.print(`The list shows Garuda's own table: ${result.problem}.`);
+    return undefined;
+  }
+  await saveCatalog(result.catalog, account.home);
+  io.print(`Models of your account: ${result.catalog.models.length}.`);
+  return result.catalog;
 }
 
 /** The models that a local server lists, or none when it does not answer quickly. */

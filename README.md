@@ -116,7 +116,8 @@ From a source build without `pnpm link`, use `node dist/cli/index.js` in place o
 with one free request to the provider, and stores the model as `"default"` in
 `~/.garuda/models.json` and the key in `~/.garuda/credentials` (mode 0600; commands in the sandbox
 cannot read it). `garuda setup --show` shows the model and where each key comes from (masked);
-`garuda setup --forget [NAME]` removes stored keys. Environment variables still work and win:
+`garuda setup --forget [NAME]` removes stored keys. With a Claude key, setup lists the models of
+your account (a free request) and saves the list for `/models`; prices come from Garuda's own table. Environment variables still work and win:
 `ANTHROPIC_API_KEY`, `GARUDA_MODEL`. Do not sync or back up `~/.garuda/credentials` to other places.
 
 Tools: read_file, glob and grep run with no question.
@@ -201,8 +202,9 @@ Set the context window, price and output limit per model, and add providers, in 
   `/sessions <number or id>` continues one in the chat, as `--resume` does. Read tracking starts again.
   `/sessions rename <number or id> <title>` gives a session a title for the list. `/sessions delete <number
   or id>` asks, then deletes the session file and its subagent logs for good; the open session cannot go.
-- `/models` lists the known Claude models and the models in `~/.garuda/models.json`, with context window and
-  price. `/models <number, id or opus|sonnet|haiku|fable>` switches the main model for the next turns of this
+- `/models` lists the Claude models of your account (saved by `garuda setup`), Garuda's known Claude models
+  and the models in `~/.garuda/models.json`, with context window and price ("price unknown" for a model
+  that this Garuda version does not know yet). `/models <number, id or opus|sonnet|haiku|fable>` switches the main model for the next turns of this
   chat. The session records the change; a new chat starts with `-m` or `GARUDA_MODEL` again. The prompt cache
   starts again; a smaller window makes Garuda compact the conversation first. Explore keeps the start model.
 - `/export [file]` writes the conversation as Markdown in the working folder (default

@@ -1,11 +1,6 @@
 import { COMPACTION_DEFAULTS } from "../context/compact.js";
-import {
-  aliasModel,
-  knownModels,
-  lookupModel,
-  type ModelInfo,
-  type Price,
-} from "../model/pricing.js";
+import { type Catalog, mergedModels } from "../model/catalog.js";
+import { aliasModel, lookupModel, type ModelInfo, type Price } from "../model/pricing.js";
 import {
   changeThinking,
   fitThinking,
@@ -44,6 +39,8 @@ export interface ModelChoices {
     maxTokens?: number;
   };
   configured?: readonly string[];
+  /** The Anthropic models of the user's account (0.17), saved by `garuda setup`. */
+  catalog?: Catalog;
 }
 
 export interface ModelStateOptions {
@@ -122,10 +119,10 @@ export class ModelState {
   }
 
   modelList(): { spec: string; info: ModelInfo }[] {
-    const out: { spec: string; info: ModelInfo }[] = knownModels().map((m) => ({
-      spec: m.id,
-      info: m.info,
-    }));
+    // The account's models first (from setup's saved list), then Garuda's own table.
+    const out: { spec: string; info: ModelInfo }[] = mergedModels(this.choices?.catalog).map(
+      (m) => ({ spec: m.id, info: m.info }),
+    );
     for (const spec of this.choices?.configured ?? []) {
       if (out.some((m) => m.spec === spec)) continue;
       try {

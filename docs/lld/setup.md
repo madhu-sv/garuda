@@ -79,7 +79,12 @@ before):
 1. **Provider**: Anthropic (Claude), OpenRouter, a local server (Ollama, LM Studio, llama.cpp, vLLM),
    or a provider from `~/.garuda/models.json`.
 2. **Model**: a list of common models for the provider plus free text; for a local server, the
-   models that its `/models` endpoint lists, when it answers.
+   models that its `/models` endpoint lists, when it answers. Anthropic (0.17): with a key already
+   at hand (environment or stored), the account's models from `GET /v1/models` (all pages), saved
+   in `~/.garuda/cache/anthropic-models.json` (0600); without one, the list that an earlier setup
+   saved, then Garuda's table. Each entry shows its price from Garuda's table, or "price unknown"
+   for a model that this Garuda does not know. After a successful check of a new key, setup saves
+   the list too.
 3. **Key** (skipped for local servers): a hidden input. If the environment already has the key, setup
    says so and offers to keep using it (nothing stored).
 4. **Check** (default yes): one free request that lists models (Anthropic `GET /v1/models`, an
