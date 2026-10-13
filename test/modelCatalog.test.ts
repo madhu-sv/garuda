@@ -170,3 +170,15 @@ describe("the release check (scripts/check-models.mjs)", () => {
     });
   });
 });
+
+describe("/models line", () => {
+  it("shows Haiku 5.5's long-prompt price too", async () => {
+    const { modelFacts } = await import("../src/app/modelState.js");
+    expect(modelFacts(1_000_000, lookupModel("claude-haiku-5-5").price)).toBe(
+      "1.0M context, $0.1/$0.5 per M tokens ($0.5/$2.5 over 100k-token prompts)",
+    );
+    expect(modelFacts(1_000_000, lookupModel("claude-sonnet-5-5").price)).toBe(
+      "1.0M context, $2/$10 per M tokens",
+    );
+  });
+});

@@ -27,7 +27,12 @@ export function modelFacts(contextWindow: number, price: Price | undefined): str
       ? "price unknown"
       : price.input === 0 && price.output === 0
         ? "free"
-        : `$${price.input}/$${price.output} per M tokens`;
+        : `$${price.input}/$${price.output} per M tokens${
+            // Haiku 5.5 (0.17): a long prompt pays a higher price for all of its tokens.
+            price.over === undefined
+              ? ""
+              : ` ($${price.over.price.input}/$${price.over.price.output} over ${price.over.tokens / 1000}k-token prompts)`
+          }`;
   return `${window} context, ${cost}`;
 }
 
