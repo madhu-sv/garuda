@@ -194,3 +194,10 @@ Open (2026-10-14, IPI suite). Sandboxed commands may write `~/.npm`, `~/.cache` 
 (`WRITE_IN_HOME`), so an injected command can change a cached package that a later install outside
 the sandbox uses. `test/ipiSuite.test.ts` asserts the current state and fails when it changes. See
 [ipi-suite.md](ipi-suite.md).
+
+## IPI-04 macOS: a process in a new session outlives the command
+
+Open (2026-10-14, confirmed on macOS). Seatbelt has no process namespace; Garuda kills the
+command's process group when it ends, and a process that calls `setsid` leaves that group. It stays
+inside the sandbox's limits but keeps running. Linux is not affected (bubblewrap's PID namespace).
+See [ipi-suite.md](ipi-suite.md).

@@ -49,7 +49,10 @@ const MUTATIONS = [
       ["src/sandbox/bwrap.ts", ...unsharePid],
     ],
   ],
-  ["IPI-04: a new session", [["src/sandbox/bwrap.ts", ...unsharePid]]],
+  // macOS asserts the known gap in this case, and has no bubblewrap to mutate.
+  ...(process.platform === "darwin"
+    ? []
+    : [["IPI-04: a new session", [["src/sandbox/bwrap.ts", ...unsharePid]]]]),
   [
     "IPI-05",
     [
