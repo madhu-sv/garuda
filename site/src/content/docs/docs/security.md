@@ -74,5 +74,5 @@ checkpoint together. Sandboxed commands cannot write there.
 ## Known limits
 
 The open limits of each release are listed in the
-[README](https://github.com/madhu-sv/garuda#status). To report a problem, see
+[status page](/garuda/docs/guide/status/). To report a problem, see
 [SECURITY.md](https://github.com/madhu-sv/garuda/blob/main/SECURITY.md).

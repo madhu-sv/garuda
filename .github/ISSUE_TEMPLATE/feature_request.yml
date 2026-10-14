@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a new feature or a change in behaviour.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you want to do, and what stops you today. A real example helps most.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Your proposal
+      description: How Garuda could solve it. Other ways that you considered are welcome too.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Effect on safety
+      description: Does the change affect the sandbox, permissions, the team policy, secrets or the audit log? How?
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Can you help build it?
+      options:
+        - "Yes, I can send a pull request"
+        - "Maybe, with some guidance"
+        - "No"

@@ -59,10 +59,10 @@ Without this step, start Garuda with `node ~/garuda/dist/cli/index.js`.
 Install bubblewrap with your package manager, for example `sudo apt install bubblewrap`. Some
 systems block the user namespaces that bubblewrap needs. At startup Garuda checks that the sandbox
 works. If it does not, Garuda says why and runs commands on the host, where every command asks
-first, unless one of your allow rules covers it. See [Sandbox](/garuda/docs/guide/#sandbox) in the user guide.
+first, unless one of your allow rules covers it. See [Sandbox](/garuda/docs/guide/safety/#sandbox) in the user guide.
 
 ## A standalone binary
 
 With Node 25.5 or later, `pnpm package` builds one file, `bin/garuda`, that holds Node and Garuda.
 The target machine then does not need Node. See the
-[user guide](/garuda/docs/guide/#standalone-binary).
+[user guide](/garuda/docs/guide/getting-started/#standalone-binary).

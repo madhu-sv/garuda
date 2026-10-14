@@ -23,7 +23,7 @@ export ANTHROPIC_API_KEY=...
 export GARUDA_MODEL=claude-sonnet-5
 ```
 
-See [Models](/garuda/docs/guide/#models) for other providers.
+See [Models](/garuda/docs/guide/models/) for other providers.
 
 ## 2. Start a chat in your project
 

@@ -1,5 +1,5 @@
 // Copy the repository's Markdown docs into the site, so the docs have one source: docs/ and
-// README.md. Each file gets Starlight front matter (its first "# " heading becomes the title), and
+// README.md (the user guide: README.md and docs/guide/). Each file gets Starlight front matter (its first "# " heading becomes the title), and
 // relative links are rewritten: to the site page when the target is a synced doc, otherwise to the
 // file on GitHub. The output folders are generated (see site/.gitignore); edit the sources instead.
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -13,15 +13,21 @@ const GITHUB = "https://github.com/madhu-sv/garuda";
 const OUT = join(site, "src/content/docs/docs");
 
 /** Repository path (posix) → site path below /docs/, for every synced file. */
-const pages = new Map([["README.md", "guide"]]);
+// The README is the user guide's first page; docs/guide/ holds its other pages; the rest of docs/ is
+// the design section.
+const pages = new Map([["README.md", "guide/index"]]);
 for (const file of walk(join(repo, "docs"))) {
   const path = posix.normalize(relative(repo, file).split("\\").join("/"));
   if (!path.endsWith(".md")) continue;
   const inner = path.slice("docs/".length, -".md".length).replace(/(^|\/)README$/, "$1index");
-  pages.set(path, `design/${inner.replace(/^quality-baseline/, "quality")}`);
+  pages.set(
+    path,
+    inner.startsWith("guide/") ? inner : `design/${inner.replace(/^quality-baseline/, "quality")}`,
+  );
 }
 
 rmSync(join(OUT, "design"), { recursive: true, force: true });
+rmSync(join(OUT, "guide"), { recursive: true, force: true });
 rmSync(join(OUT, "guide.md"), { force: true });
 
 for (const [source, target] of pages) {

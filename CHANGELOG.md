@@ -7,6 +7,10 @@
   control; `pnpm ipi:mutations` shows that every case fails without its defence. Two known gaps are
   recorded: sandboxed commands may write the shared package caches (IPI-03), and on macOS a
   process in a new session outlives the command (IPI-04).
+- Docs: the README is short now (what Garuda does on your machine, install, quick start, links);
+  the user guide moved to `docs/guide/` (ten pages; the website shows them as the User guide
+  section). New community files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, a pull request template
+  and issue forms for bugs and features. `SECURITY.md` names 0.16.x as supported.
 - Models: Claude Sonnet 5.5 and Haiku 5.5 with their prices (Haiku 5.5 has a higher price for
   prompts over 100,000 tokens); `sonnet` and `haiku` now name them. `garuda setup` lists the
   models of your Anthropic account (Models API) and saves the list for `/models`; a model that

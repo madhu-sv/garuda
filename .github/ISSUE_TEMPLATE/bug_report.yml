@@ -1,0 +1,65 @@
+name: Bug report
+description: Garuda does something wrong, or fails.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. For a security problem (a sandbox escape, a permission or policy bypass, a secret in a file), do not use this form: see SECURITY.md (private reporting).
+        Never paste an API key, a token or a session file with secrets in it.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What Garuda did, and the exact error text if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest steps that show the problem, with the command line you used.
+      placeholder: |
+        1. garuda -p "..."
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Garuda version
+      description: The output of `garuda --version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Linux
+        - WSL
+    validations:
+      required: true
+  - type: input
+    id: sandbox
+    attributes:
+      label: Sandbox and model
+      description: The sandbox that Garuda reports at startup (Seatbelt, bubblewrap or none), and the model (for example claude-sonnet-5-5).
+  - type: input
+    id: install
+    attributes:
+      label: Install method
+      description: npm, Homebrew, the standalone binary, or a source build.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output or logs
+      description: The relevant output. Remove keys, tokens and private paths first.
+      render: text

@@ -62,7 +62,25 @@ export default defineConfig({
             { label: "Security model", slug: "docs/security" },
           ],
         },
-        { label: "User guide", slug: "docs/guide" },
+        {
+          label: "User guide",
+          items: [
+            { label: "Overview", slug: "docs/guide" },
+            { label: "Install and first run", slug: "docs/guide/getting-started" },
+            { label: "Models", slug: "docs/guide/models" },
+            { label: "Chat, sessions and undo", slug: "docs/guide/chat" },
+            { label: "Editors", slug: "docs/guide/editors" },
+            {
+              label: "Project instructions, commands, skills and agents",
+              slug: "docs/guide/projects",
+            },
+            { label: "Sandbox, permissions and policy", slug: "docs/guide/safety" },
+            { label: "MCP, web and code intelligence", slug: "docs/guide/tools" },
+            { label: "Scheduled jobs and the night shift", slug: "docs/guide/jobs" },
+            { label: "Evals", slug: "docs/guide/evals" },
+            { label: "Status and known limits", slug: "docs/guide/status" },
+          ],
+        },
         {
           label: "Design",
           items: [
