@@ -2,6 +2,11 @@
 
 ## 0.17.0 (unreleased)
 
+- Indirect prompt injection suite (`test/ipiSuite.test.ts`): ten injected-call cases against the
+  real sandbox, permission engine, tools, web_fetch, audit log and approval display, each with a
+  control; `pnpm ipi:mutations` shows that every case fails without its defence. Two known gaps are
+  recorded: sandboxed commands may write the shared package caches (IPI-03), and on macOS a
+  process in a new session outlives the command (IPI-04).
 - Models: Claude Sonnet 5.5 and Haiku 5.5 with their prices (Haiku 5.5 has a higher price for
   prompts over 100,000 tokens); `sonnet` and `haiku` now name them. `garuda setup` lists the
   models of your Anthropic account (Models API) and saves the list for `/models`; a model that
