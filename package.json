@@ -57,6 +57,7 @@
     "package": "tsup && node scripts/package.mjs",
     "startup": "node scripts/startup.mjs",
     "models:check": "node scripts/check-models.mjs",
+    "ipi:mutations": "node scripts/check-ipi-mutations.mjs",
     "eval": "node dist/cli/index.js eval",
     "baseline:capture": "node scripts/capture-quality-baseline.mjs",
     "code-intelligence:validate": "vitest run test/lspReferenceSample.test.ts test/codeIntelligenceSample.test.ts --reporter=verbose",
