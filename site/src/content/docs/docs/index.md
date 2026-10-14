@@ -22,7 +22,7 @@ Garuda is built safety first:
 
 - **Start here:** [Install](/garuda/docs/install/), [Quick start](/garuda/docs/quick-start/) and the
   [Security model](/garuda/docs/security/).
-- **[User guide](/garuda/docs/guide/):** every feature and setting. It is the repository's README.
+- **[User guide](/garuda/docs/guide/):** every feature and setting. It is the repository's README and its `docs/guide/` pages.
 - **[Design](/garuda/docs/design/):** the architecture, the high-level design and one document per
   component. These pages come from the `docs/` folder of the repository, so they stay the same as
   the code.

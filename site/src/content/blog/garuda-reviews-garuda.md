@@ -81,7 +81,7 @@ itself.
 The fixes are in 0.14.0, and each one has a test. I wrote them with Claude as a pair programmer.
 The suite now has 804 tests, and none of them needs the internet or an API key. The
 known limits that are still open are in the
-[README](https://github.com/madhu-sv/garuda#status), and the review script is simple to run
+[status page](https://madhu-sv.github.io/garuda/docs/guide/status/), and the review script is simple to run
 again. The next areas are the CLI and the extensions.
 
 If you find a security problem, please report it privately: see

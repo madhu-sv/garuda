@@ -6,7 +6,7 @@ Garuda runs commands and edits files for a model, so we take security reports se
 
 | Version | Supported |
 | --- | --- |
-| 0.14.x | Yes |
+| 0.16.x | Yes |
 | Older | No |
 
 ## Report a vulnerability
@@ -28,5 +28,6 @@ In scope: the permission engine and the team policy, the OS sandbox (Seatbelt, b
 network allowlist and its proxy, secret redaction, the audit log, and the consent for project
 content (hooks, MCP servers, settings, commands, skills, agents).
 
-Known limits are listed in the README under the status table. A report about one of them is still
+Known limits are listed in [docs/guide/status.md](docs/guide/status.md) and the
+[issue register](docs/quality-baseline/issue-register.md). A report about one of them is still
 welcome when it shows a new way to reach the same effect.
