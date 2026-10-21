@@ -40,7 +40,11 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+          # The newest release of the line, not an older one on the runner image (0.17).
+          check-latest: true
           cache: pnpm
+      - name: Node has the latest security fixes
+        run: node scripts/check-node.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm build

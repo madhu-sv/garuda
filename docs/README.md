@@ -12,6 +12,7 @@ this folder at each deploy).
 | [High-level design](hld.md) | How a task flows through the system: start, turns, tool calls, approvals, sandbox, sessions, extensions. |
 | Low-level design | One document per component: its types, algorithms, limits and tests. |
 | [Release](release.md) | How a version goes to npm (trusted publishing) and to the Homebrew tap. |
+| [Node and dependency security](security-deps.md) | The Node versions Garuda needs, the audit, Dependabot, and the advisory exceptions with their defences. |
 
 Low-level design documents:
 

@@ -8,7 +8,7 @@ coding-quality comparison. No paid model evaluation was run.
 
 ## Capture a baseline
 
-Use Node >=22 and the locked pnpm version with dependencies already installed. From a clean checkout:
+Use a Node that passes `node scripts/check-node.mjs` and the locked pnpm version with dependencies already installed. From a clean checkout:
 
 Keep the checkout outside OS temporary directories. The existing MCP sandbox test creates its
 denied-write target beside the checkout; a checkout under `/tmp` makes that target writable by

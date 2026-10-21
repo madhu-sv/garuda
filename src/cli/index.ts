@@ -18,6 +18,7 @@ import {
   type ResolvedModel,
   resolveModel,
 } from "../model/providers.js";
+import { nodeProblem } from "../nodeFloor.js";
 import { AutoApprover } from "../permissions/autoApprover.js";
 import { JOB_DENIAL } from "../permissions/engine.js";
 import type { CallTarget } from "../permissions/types.js";
@@ -73,6 +74,9 @@ interface Options {
 }
 
 async function main(): Promise<void> {
+  // 0.17: a Node without the latest security fixes still runs Garuda, with a warning on stderr.
+  const nodeWarning = nodeProblem();
+  if (nodeWarning !== undefined) process.stderr.write(`Warning: ${nodeWarning}\n`);
   const program = new Command()
     // Options after a subcommand belong to the subcommand: `garuda eval -m x` sets eval's model.
     .enablePositionalOptions()

@@ -4,7 +4,7 @@ Install Garuda, store a model and key, run the chat or one task, JSON output for
 
 ## Use
 
-Install (0.14.1 and later) with Homebrew or npm. You need Node 22 or later; Homebrew installs it.
+Install (0.14.1 and later) with Homebrew or npm. You need Node 22.23.4, 24.22.1 or 26.12.1, or a later release of the same line; Homebrew installs it. Garuda warns at start on an older Node.
 
 ```sh
 npm install -g @garuda-agent/garuda
@@ -19,7 +19,7 @@ brew trust --formula madhu-sv/garuda/garuda
 brew install garuda
 ```
 
-Or build from source. You need Node 22 or later, pnpm 10 and git. Node 25 and later do not include
+Or build from source. You need Node 22.23.4, 24.22.1 or 26.12.1, or a later release of the same line, pnpm 10 and git. Node 25 and later do not include
 corepack, so install pnpm with npm.
 
 ```sh
@@ -89,7 +89,8 @@ node dist/cli/index.js -p "Run the tests and tell me the result"
 
 `pnpm package` builds one executable file, `bin/garuda`, for the machine you build on.
 It holds Node and all of Garuda, so the target machine does not need Node.
-It needs Node 25.5 or later to build (it uses `node --build-sea`).
+It needs Node 26.12.1 or later to build (it uses `node --build-sea`). The binary holds that Node, so
+`pnpm package` refuses a Node without the latest security fixes.
 
 ```sh
 pnpm package

@@ -133,6 +133,23 @@ describe("glob (F12)", () => {
   it("says when nothing matches", async () => {
     expect((await call("glob", { pattern: "**/*.py" })).content).toBe("No files match.");
   });
+
+  // 0.17: `braces` (GHSA-vfj7-8cjw-p6xm, no fix) expands every group before the match. `{a,b}`
+  // 1900 times ran Node out of memory and the OS killed Garuda. 12 groups (4096 patterns) are
+  // safe to run without the limit, so this case fails without it ("No files match.").
+  it("refuses a pattern that brace expansion makes too large, in glob and in grep", async () => {
+    const wide = `src/${"{a,b}".repeat(12)}*.ts`;
+    expect((await call("glob", { pattern: wide })).content).toMatch(/expands to more than 1000/);
+    expect((await call("grep", { pattern: "x", glob: wide })).content).toMatch(
+      /expands to more than 1000/,
+    );
+    const deep = `${"{".repeat(11)}src${"}".repeat(11)}/*.ts`;
+    expect((await call("glob", { pattern: deep })).content).toMatch(/at most 10 deep/);
+    // Real patterns still work.
+    expect((await call("glob", { pattern: "{src,test}/**/*.{ts,tsx,js}" })).content).toContain(
+      "src/main.ts",
+    );
+  });
 });
 
 describe("grep (F13)", () => {

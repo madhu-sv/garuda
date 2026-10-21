@@ -3,7 +3,7 @@ title: Install
 description: Install Garuda with Homebrew or npm, or build it from source, on macOS or Linux.
 ---
 
-Garuda runs on macOS and Linux with Node 22 or later. Versions 0.14.1 and later are on Homebrew
+Garuda runs on macOS and Linux with Node 22.23.4, 24.22.1 or 26.12.1, or a later release of the same line. Versions 0.14.1 and later are on Homebrew
 and npm.
 
 ## Homebrew
@@ -32,7 +32,7 @@ The package is published from the repository's release workflow with npm trusted
 
 ## Build from source
 
-You need Node 22 or later, pnpm 10 and git. Node 25 and later do not include corepack, so install
+You need Node 22.23.4, 24.22.1 or 26.12.1, or a later release of the same line, pnpm 10 and git. Node 25 and later do not include corepack, so install
 pnpm with npm:
 
 ```sh
@@ -63,6 +63,6 @@ first, unless one of your allow rules covers it. See [Sandbox](/garuda/docs/guid
 
 ## A standalone binary
 
-With Node 25.5 or later, `pnpm package` builds one file, `bin/garuda`, that holds Node and Garuda.
+With Node 26.12.1 or later, `pnpm package` builds one file, `bin/garuda`, that holds Node and Garuda.
 The target machine then does not need Node. See the
 [user guide](/garuda/docs/guide/getting-started/#standalone-binary).

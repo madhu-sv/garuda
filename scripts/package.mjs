@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { floors, problem } from "./check-node.mjs";
 
 const root = join(import.meta.dirname, "..");
 const output = join(root, "bin", process.platform === "win32" ? "garuda.exe" : "garuda");
@@ -93,6 +94,13 @@ async function download(url) {
 }
 
 const node = await seaNode();
+
+// The binary holds this Node (0.17), so it must have the latest security fixes of its line.
+const seaVersion = execFileSync(node, ["-p", "process.versions.node"], { encoding: "utf8" }).trim();
+const unsafe = problem(seaVersion, floors(readFileSync(join(root, "src", "nodeFloor.ts"), "utf8")));
+if (unsafe !== undefined) {
+  fail(`${unsafe} The binary would hold that Node. Update Node, or set GARUDA_SEA_NODE.`);
+}
 
 mkdirSync(join(root, "bin"), { recursive: true });
 writeFileSync(
