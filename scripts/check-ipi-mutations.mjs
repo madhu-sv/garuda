@@ -15,6 +15,12 @@ const unsharePid = [
   'args.push("--unshare-pid", "--proc", "/proc");',
   'args.push("--proc", "/proc");',
 ];
+// macOS (0.17): the profile markers that the helper garuda-reap finds after the command.
+const markers = [
+  "src/sandbox/seatbelt.ts",
+  "    return policy.sandbox && this.reaper !== undefined ? this.reaper.track() : undefined;",
+  "    return undefined;",
+];
 const addressCheck = [
   '  if (range === "unicast") return { ok: true };',
   '  if (range !== "never") return { ok: true };',
@@ -44,23 +50,17 @@ const MUTATIONS = [
   ],
   [
     "IPI-04: a background",
+    // Three layers: the group kill, bubblewrap's PID namespace (Linux), the markers (macOS).
     [
       ["src/sandbox/process.ts", groupKill, "        // mutation: no group kill"],
       ["src/sandbox/bwrap.ts", ...unsharePid],
+      markers,
     ],
   ],
   // Linux: bubblewrap's PID namespace. macOS (0.17): the markers that the helper finds.
   [
     "IPI-04: a new session",
-    process.platform === "darwin"
-      ? [
-          [
-            "src/sandbox/seatbelt.ts",
-            "    return policy.sandbox && this.reaper !== undefined ? this.reaper.track() : undefined;",
-            "    return undefined;",
-          ],
-        ]
-      : [["src/sandbox/bwrap.ts", ...unsharePid]],
+    process.platform === "darwin" ? [markers] : [["src/sandbox/bwrap.ts", ...unsharePid]],
   ],
   [
     "IPI-05",

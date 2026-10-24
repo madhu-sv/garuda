@@ -18,7 +18,9 @@ copy with Garuda's own code.
 3. **Mutations.** `pnpm ipi:mutations` removes each defence in turn, runs its case and expects it
    to fail; it restores the files with `git checkout`. Result on Linux (bubblewrap, 2026-10-14):
    every case fails without its defence. Where two layers defend (IPI-04 on Linux, IPI-06,
-   IPI-10's two key patterns), the script removes both.
+   IPI-10's two key patterns), the script removes both. IPI-04's background case has three layers
+   since 0.17 (the group kill, bubblewrap's PID namespace, and on macOS the profile markers that
+   `garuda-reap` finds); the script removes all three.
 4. **Both platforms.** The sandbox cases run on Linux and macOS; run the suite and the mutation
    check on a Mac too.
 
