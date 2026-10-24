@@ -30,6 +30,8 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 
 ## Start sequence (`index.ts`)
 
+0. `nodeProblem()` (`src/nodeFloor.ts`, 0.17): on a Node without the latest security fixes of its
+   line, or on a line with no fixes, one `Warning:` line on stderr. Garuda still runs.
 1. `realpath(cwd)` becomes the root. A task comes from `-p` or from stdin when stdin is not a TTY.
 2. `Runtime.create` with a `SwitchApprover` (wraps `TerminalApprover`) and a switchable event target
    (starts as `PlainRenderer`). `onNotice` goes to the same target.

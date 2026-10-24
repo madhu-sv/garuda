@@ -30,7 +30,8 @@ The details: [Sandbox, permissions and policy](docs/guide/safety.md). The known 
 
 ## Install
 
-You need Node 22 or later (Homebrew installs it).
+You need Node 22.23.4, 24.22.1 or 26.12.1, or a later release of the same line: the latest security release of a supported line (Homebrew installs it). Garuda
+warns at start on an older Node.
 
 ```sh
 npm install -g @garuda-agent/garuda

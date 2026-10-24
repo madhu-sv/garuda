@@ -9,6 +9,12 @@ Garuda runs commands and edits files for a model, so we take security reports se
 | 0.16.x | Yes |
 | Older | No |
 
+## Node and dependencies
+
+Run Garuda on Node 22.23.4, 24.22.1 or 26.12.1, or a later release of the same line. Garuda warns
+at start on an older Node. CI, the release workflow and the dependency audit refuse a Node or a
+package with a known security fix missing. See [docs/security-deps.md](docs/security-deps.md).
+
 ## Report a vulnerability
 
 Do not open a public issue. Use GitHub's private vulnerability reporting: in this repository, open

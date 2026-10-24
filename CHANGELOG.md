@@ -2,6 +2,23 @@
 
 ## 0.17.0 (unreleased)
 
+- Node and dependency security (2026-10-21): Garuda warns at start on a Node without the latest
+  security fixes of its line (22.23.4, 24.22.1, 26.12.1; the Node.js security release of
+  2026-10-21: TLS hostname checks, DNS, Brotli), and `engines` names those versions. CI, the
+  release and website workflows take the newest Node of their line (`check-latest`) and stop on an
+  older one (`scripts/check-node.mjs`); `pnpm package` refuses one for the standalone binary. A new
+  Audit workflow (each push, pull request and Monday) fails on any advisory in a shipped package;
+  Dependabot opens weekly updates. `@modelcontextprotocol/client` 2.3.1 fixes two advisories in
+  the OAuth and HTTP transport of remote MCP servers (GHSA-6qxp-vccf-f47h, GHSA-6prh-2h8m-c8cw).
+  `glob` and `grep` refuse a pattern that brace expansion makes into more than 1000 patterns or
+  that nests `{…}` more than 10 deep: `braces` has no fix for GHSA-vfj7-8cjw-p6xm, and such a
+  pattern ran Node out of memory. See docs/security-deps.md.
+- zod 4.6.7: GHSA-mrhx-c7xc-m3w5 (high), one oversized array could run Node out of memory
+  during validation. zod checks the model's tool input and, in the MCP SDK, the messages of MCP
+  servers. The new Audit workflow found it.
+- GitHub Actions: `actions/checkout` 7.0.1 and `actions/setup-node` 7.1.0, which run on Node 24
+  (GitHub forces actions built for Node 20 onto Node 24 and warns). Still pinned to full commit
+  hashes. The release job turns off setup-node's automatic dependency cache.
 - Indirect prompt injection suite (`test/ipiSuite.test.ts`): ten injected-call cases against the
   real sandbox, permission engine, tools, web_fetch, audit log and approval display, each with a
   control; `pnpm ipi:mutations` shows that every case fails without its defence. Two known gaps are

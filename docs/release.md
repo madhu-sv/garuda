@@ -13,6 +13,9 @@ command is `garuda`. Homebrew installs the same npm package through the tap
 
 ## A release
 
+0. Check the Node table and the audit: `node scripts/check-node.mjs` and `pnpm audit --prod`
+   pass, and no Node.js security release is due with versions newer than `src/nodeFloor.ts`
+   (see [security-deps.md](security-deps.md)).
 1. Set the version in `package.json` and `src/version.ts` (a test checks that they match), add the
    release notes, and merge to `main`.
 2. Tag the merge commit and push the tag:
