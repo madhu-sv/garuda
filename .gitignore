@@ -9,3 +9,4 @@ dist-sea/
 bin/
 Claude*/
 /output/
+native/bin/

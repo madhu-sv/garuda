@@ -50,7 +50,8 @@ later mounts cover earlier ones. See [jobs.md](jobs.md) and [bounded-changes.md]
 
 ## ProcessExecutor (`process.ts`)
 
-The shared base class. Subclasses implement only `launch(argv, policy) → { file, args }`.
+The shared base class. Subclasses implement `launch(argv, policy, tracker?) → { file, args }`, and
+optionally `track(policy)` (0.17, macOS: see "Escaped processes on macOS" below).
 
 - `spawn` with `detached: true`: the command leads its own process group. A timeout, Ctrl-C (abort
   signal) or `shutdown()` signals the whole group: SIGTERM, then SIGKILL after 2 s. After the main
@@ -59,6 +60,10 @@ The shared base class. Subclasses implement only `launch(argv, policy) → { fil
 - Output: `OutputCapture` keeps the start and the end of each stream within `maxOutputBytes` and cuts
   the middle; the start shows what ran, the end shows how it finished.
 - `start()` registers the process group in the same set, so `shutdown()` also stops MCP servers.
+- With a tracker (0.17, Seatbelt with the helper): after the group kill, `run()` waits for
+  `tracker.reap()` and adds `reaped` (processes killed) or `reapProblem` to the result; `start()` reaps
+  when the process exits; `shutdown()` reaps every open tracker synchronously and removes the markers
+  folder. A launch that throws removes its markers.
 
 ## Executors
 
@@ -85,9 +90,48 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 (deny network-inbound (local ip "*:*"))
 (deny network-bind (local ip "*:*"))
 (allow network-* … "localhost:*")                  ; test servers keep working
+(deny file-read* (literal <markerA>))              ; 0.17: the tracker's markers, last (see below)
+(allow file-read* (literal <markerB>))
+(deny file-write* (subpath <markers folder>))
 ```
 
 Paths are Scheme strings with `\` and `"` escaped.
+
+### Escaped processes on macOS (`reaper.ts`, `native/garuda-reap.c`, 0.17)
+
+IPI-04: Seatbelt has no process namespace. A process can leave the command's process group with
+`setsid`, `setpgid`, or `posix_spawn` with `POSIX_SPAWN_SETSID` or `POSIX_SPAWN_SETPGROUP` (Node's
+`spawn(..., { detached: true })` uses the last), and the group kill misses it. It stays inside the
+sandbox, but it outlives the command. Probes on macOS 27 (2026-10-24) showed:
+
+- a Seatbelt rule that denies the `setsid` and `setpgid` system calls blocks only those two ways, not
+  the `posix_spawn` flags, and it breaks Python's `start_new_session`;
+- `ps -E` shows no environment of other processes, so an environment token cannot find them;
+- `sandbox_check(pid, "file-read-data", SANDBOX_FILTER_PATH, path)` works on other processes of
+  the same user, with no privilege, for paths that exist (a missing path reads as denied for every
+  process).
+
+A process cannot leave its Seatbelt profile. So each sandboxed command gets two marker files (A and
+B, random names) in a folder that the `Reaper` makes in the temp folder at the first command. The
+profile denies reads of A, allows reads of B, and denies writes to the folder (the last matching rule
+wins, so the command cannot delete its markers although the temp folder is writable). After the
+command, the helper `native/bin/garuda-reap A B` lists every process of the user
+(`proc_listallpids`, `proc_pidinfo`), and sends SIGKILL to each one with A denied and B allowed.
+Processes without a sandbox allow both; App Store sandboxes deny both (the markers are outside their
+containers); the profiles of other commands deny other markers. It scans again until a scan finds no
+new process (at most 10), so children started during a scan are found too. It refuses to run when a
+marker is missing (exit 3). On the user's Mac: four ways out (fork + setsid, posix_spawn with SETSID
+and a cleared environment, with SETPGROUP and closed descriptors, Node's detached spawn) were all
+found and killed, no other process matched (259 sandboxed processes were excluded), and one scan took
+12 ms.
+
+The helper is a universal arm64 + x86_64 binary with an ad-hoc signature, built by
+`scripts/build-native.mjs` (clang; `pnpm build` and `pnpm test` run it on macOS, and rebuild it when
+the source is newer). The release workflow builds it on a Mac (`--require`) and the npm package holds
+it; it is not in git. `locateHelper()` looks for `native/bin/garuda-reap` up from the module. The
+standalone binary (`pnpm package`) has none.
+
+The bash tool tells the model when Garuda killed such processes, or when the check failed.
 
 ### bubblewrap arguments (`bwrapArgv`)
 
@@ -162,6 +206,9 @@ own its executor: before 0.14.1 all runtimes shared one, and an eval task that e
 commands and checks of the other tasks of `--parallel` (SIGKILL, no output).
 
 The probes:
+- On macOS without the helper (0.17), the sandbox works but a process that leaves the group can
+  outlive its command: `auto` and `os` use Seatbelt with the notice `HELPER_MISSING`; the strict
+  profile refuses with `StrictProfileError`.
 - On macOS, `/usr/bin/sandbox-exec` must exist, and a probe
   (`sandbox-exec -p '(version 1)(allow default)' -- true`) must succeed (0.14). It fails, for example,
   in a nested sandbox; then `auto` uses `HostExecutor` with a notice that gives the first line of the
@@ -202,6 +249,11 @@ the pipes and returns; the timeout and Ctrl-C now signal the group even after ba
 `test/hostExecutor.test.ts` runs it for the host; `test/sandbox.test.ts` runs it for the machine's OS
 sandbox, plus real checks: writes outside the root fail, protected paths stay read-only, denied reads
 fail, no network, and `sandbox: false` isolates nothing. The Seatbelt tests run only on macOS.
+`test/reaper.test.ts` (0.17) tests the markers and their profile rules, the executor wiring with a
+fake helper (reap after `run()` and after a started process exits, `reapProblem`, `shutdown()`), and
+the selection without the helper (notice; strict refuses); on macOS it runs the real helper: a
+process that left the group by `setsid` and one by Node's detached spawn are killed (control: without
+the helper they outlive the command), and an unsandboxed process survives the scan.
 `test/daemon.test.ts` (0.14) tests daemon launch, log capture, status, kill, the log caps, that the
 setting is off by default, and that `Runtime.close()` stops a running daemon.
 `test/networkProxy.test.ts` (0.13) tests the allowlist, the proxy (tunnel, 403 with the reason, IP

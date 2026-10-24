@@ -17,8 +17,9 @@ To report a security problem, use [SECURITY.md](SECURITY.md), not a public issue
 ## Build and test
 
 You need Node 22.23.4, 24.22.1 or 26.12.1, or a later release of the same line, pnpm 10 and git. `node scripts/check-node.mjs`
-checks your Node. Node 25 and later do not include corepack, so install
-pnpm with npm.
+checks your Node. On macOS you also need the Command Line Tools (`xcode-select --install`): `pnpm
+build` and `pnpm test` compile the helper `native/bin/garuda-reap` with clang. Node 25 and later do
+not include corepack, so install pnpm with npm.
 
 ```sh
 npm install -g pnpm@10

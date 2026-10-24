@@ -197,7 +197,9 @@ the sandbox uses. `test/ipiSuite.test.ts` asserts the current state and fails wh
 
 ## IPI-04 macOS: a process in a new session outlives the command
 
-Open (2026-10-14, confirmed on macOS). Seatbelt has no process namespace; Garuda kills the
+Resolved in 0.17: the helper `garuda-reap` finds the command's processes by markers in their
+Seatbelt profile and kills them after the command (test/reaper.test.ts, test/ipiSuite.test.ts).
+History: open (2026-10-14, confirmed on macOS). Seatbelt has no process namespace; Garuda kills the
 command's process group when it ends, and a process that calls `setsid` leaves that group. It stays
 inside the sandbox's limits but keeps running. Linux is not affected (bubblewrap's PID namespace).
 See [ipi-suite.md](ipi-suite.md).

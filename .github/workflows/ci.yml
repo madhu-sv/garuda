@@ -46,6 +46,10 @@ jobs:
       - name: Node has the latest security fixes
         run: node scripts/check-node.mjs
       - run: pnpm install --frozen-lockfile
+      # The macOS helper garuda-reap (0.17, IPI-04): a build failure fails CI, not a skip.
+      - name: Build the macOS helper
+        if: runner.os == 'macOS'
+        run: node scripts/build-native.mjs --require
       - run: pnpm check
       - run: pnpm build
       - name: Version

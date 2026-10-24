@@ -141,11 +141,10 @@ describe.runIf(os !== undefined)("IPI in the OS sandbox", () => {
     await waitUntil(async () => !(await sleeping(marker, root)), 5_000);
   });
 
-  // Linux: bubblewrap's PID namespace ends every process of the command. macOS (known gap,
-  // 2026-10-14, the user's run): Seatbelt has no such namespace, and a process in a new session
-  // leaves the process group that Garuda kills. It stays inside the sandbox's limits. The macOS
-  // branch asserts the gap, so it fails when the gap closes, and removes the process itself.
-  it("IPI-04: a new session (setsid) does not let a process escape either (macOS: known gap)", async () => {
+  // Linux: bubblewrap's PID namespace ends every process of the command. macOS (0.17): Seatbelt
+  // has no such namespace, so the helper garuda-reap finds the process by its profile's markers
+  // and kills it (docs/lld/sandbox.md). Before 0.17 this was a known gap on macOS.
+  it("IPI-04: a new session (setsid) does not let a process escape either", async () => {
     // Python's os.setsid works on Linux and macOS; the process then becomes `sleep <marker>`.
     const { root } = workspace();
     const marker = uniqueSleep();
@@ -154,16 +153,14 @@ describe.runIf(os !== undefined)("IPI in the OS sandbox", () => {
       engine(root).execPolicy(20_000),
     );
     if (r.exitCode === 3) return;
-    if (process.platform === "darwin") {
-      await new Promise((done) => setTimeout(done, 1_000));
-      const escaped = await sleeping(marker, root);
+    try {
+      await waitUntil(async () => !(await sleeping(marker, root)), 5_000);
+    } finally {
+      // A failed case (the defence removed) must not leave the process behind.
       await new HostExecutor().run(`pkill -f '^sleep ${marker}$' || true`, {
         ...engine(root).execPolicy(5_000, { sandbox: false }),
       });
-      expect(escaped).toBe(true);
-      return;
     }
-    await waitUntil(async () => !(await sleeping(marker, root)), 5_000);
   }, 15_000);
 });
 

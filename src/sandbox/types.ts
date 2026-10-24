@@ -80,6 +80,13 @@ export interface ExecResult {
   durationMs: number;
   /** Staged mode (0.17, review T5): what happened to the command's changes, for the model. */
   staged?: { note: string };
+  /**
+   * macOS (0.17, IPI-04): processes that left the command's process group and that Garuda killed
+   * after the command (they would have kept running).
+   */
+  reaped?: number;
+  /** macOS (0.17, IPI-04): why Garuda could not check for such processes. */
+  reapProblem?: string;
 }
 
 export interface ExecOptions {

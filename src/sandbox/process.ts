@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { OutputCapture } from "./capture.js";
 import { DaemonManager } from "./daemon.js";
+import type { Tracker } from "./reaper.js";
 import type {
   ExecOptions,
   ExecPolicy,
@@ -34,18 +35,71 @@ export abstract class ProcessExecutor implements Executor {
   readonly daemons: DaemonManager = new DaemonManager(this);
   /** Process group ids of running commands. */
   private readonly running = new Set<number>();
+  /** Markers of commands and processes that still run (0.17, IPI-04): shutdown() reaps them. */
+  private readonly trackers = new Set<Tracker>();
 
-  /** How to start the program `argv` under `policy`. */
-  protected abstract launch(argv: string[], policy: ExecPolicy): Launch;
+  /** How to start the program `argv` under `policy`, with the tracker's profile rules. */
+  protected abstract launch(argv: string[], policy: ExecPolicy, tracker?: Tracker): Launch;
+
+  /**
+   * Markers for one command, when this executor can find the processes that leave its process
+   * group (Seatbelt with the helper). Others need none: bubblewrap's PID namespace ends them all.
+   */
+  protected track(_policy: ExecPolicy): Tracker | undefined {
+    return undefined;
+  }
+
+  /** Remove what tracking keeps (the markers folder), at shutdown. */
+  protected closeTracking(): void {}
 
   shutdown(): void {
     this.daemons.shutdown();
     for (const pid of this.running) signalGroup(pid, "SIGKILL");
     this.running.clear();
+    for (const tracker of this.trackers) {
+      try {
+        tracker.reapSync();
+      } catch {
+        // The helper failed or a marker is gone: nothing more to do at exit.
+      }
+    }
+    this.trackers.clear();
+    this.closeTracking();
+  }
+
+  /** The launch, with markers; the markers go away when the launch fails. */
+  private launchTracked(argv: string[], policy: ExecPolicy): Launch & { tracker?: Tracker } {
+    const tracker = this.track(policy);
+    try {
+      const launch = this.launch(argv, policy, tracker);
+      if (tracker === undefined) return launch;
+      this.trackers.add(tracker);
+      return { ...launch, tracker };
+    } catch (error) {
+      tracker?.dispose();
+      throw error;
+    }
+  }
+
+  /** Kill the tracked processes that still run (the command's own group is already gone). */
+  private async reap(tracker: Tracker): Promise<{ reaped?: number; reapProblem?: string }> {
+    try {
+      const n = await tracker.reap();
+      return n > 0 ? { reaped: n } : {};
+    } catch (error) {
+      return { reapProblem: (error as Error).message };
+    } finally {
+      this.trackers.delete(tracker);
+    }
+  }
+
+  private dropTracker(tracker: Tracker | undefined): void {
+    if (tracker === undefined || !this.trackers.delete(tracker)) return;
+    tracker.dispose();
   }
 
   start(argv: string[], policy: ExecPolicy, env: Record<string, string> = {}): RunningProcess {
-    const { file, args } = this.launch(argv, policy);
+    const { file, args, tracker } = this.launchTracked(argv, policy);
     const child = spawn(file, args, {
       cwd: policy.root,
       env: { ...allowedEnv(policy.envAllowlist), ...proxyEnv(policy), ...env },
@@ -62,7 +116,10 @@ export abstract class ProcessExecutor implements Executor {
         signalGroup(pid, "SIGKILL");
       }
       if (killTimer !== undefined) clearTimeout(killTimer);
+      // And processes that left the group (macOS, IPI-04).
+      if (tracker !== undefined) void this.reap(tracker);
     });
+    child.on("error", () => this.dropTracker(tracker));
     return {
       pid,
       stdin: child.stdin,
@@ -94,7 +151,7 @@ export abstract class ProcessExecutor implements Executor {
         return;
       }
 
-      const { file, args } = this.launch(["bash", "-c", command], policy);
+      const { file, args, tracker } = this.launchTracked(["bash", "-c", command], policy);
       const child = spawn(file, args, {
         cwd: policy.root,
         env: { ...allowedEnv(policy.envAllowlist), ...proxyEnv(policy), ...options.env },
@@ -137,6 +194,7 @@ export abstract class ProcessExecutor implements Executor {
       child.on("error", (error) => {
         if (finished) return;
         finished = true;
+        this.dropTracker(tracker);
         if (pid !== undefined) this.running.delete(pid);
         clearTimeout(timer);
         if (drainTimer !== undefined) clearTimeout(drainTimer);
@@ -154,7 +212,7 @@ export abstract class ProcessExecutor implements Executor {
         options.signal?.removeEventListener("abort", onAbort);
         // Background children may still hold the group. Stop them too.
         if (child.pid !== undefined) signalGroup(child.pid, "SIGKILL");
-        resolve({
+        const result: ExecResult = {
           exitCode: code,
           signal,
           stdout: stdout.result(),
@@ -162,7 +220,13 @@ export abstract class ProcessExecutor implements Executor {
           timedOut,
           aborted,
           durationMs: Date.now() - started,
-        });
+        };
+        if (tracker === undefined) {
+          resolve(result);
+          return;
+        }
+        // Processes that left the group (macOS, IPI-04): the helper finds them by their profile.
+        void this.reap(tracker).then((reaped) => resolve({ ...result, ...reaped }));
       };
 
       // When the command's own process exits, the output normally ends at once. A background
