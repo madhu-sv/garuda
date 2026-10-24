@@ -13,6 +13,9 @@
   `glob` and `grep` refuse a pattern that brace expansion makes into more than 1000 patterns or
   that nests `{…}` more than 10 deep: `braces` has no fix for GHSA-vfj7-8cjw-p6xm, and such a
   pattern ran Node out of memory. See docs/security-deps.md.
+- zod 4.6.7: GHSA-mrhx-c7xc-m3w5 (high), one oversized array could run Node out of memory
+  during validation. zod checks the model's tool input and, in the MCP SDK, the messages of MCP
+  servers. The new Audit workflow found it.
 - GitHub Actions: `actions/checkout` 7.0.1 and `actions/setup-node` 7.1.0, which run on Node 24
   (GitHub forces actions built for Node 20 onto Node 24 and warns). Still pinned to full commit
   hashes. The release job turns off setup-node's automatic dependency cache.

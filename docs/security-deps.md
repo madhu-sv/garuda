@@ -55,5 +55,8 @@ one is in `pnpm.auditConfig.ignoreGhsas` in package.json and in this table.
   (moderate, HTTP transports followed cross-origin redirects with custom headers and bodies).
   Garuda uses this transport and OAuth for remote MCP servers.
 - `undici` 7.30.0 → 7.30.1 (Garuda's Claude client).
+- `zod` 4.6.5 → 4.6.7: GHSA-mrhx-c7xc-m3w5 (high), one oversized array made one issue per element
+  and could run Node out of memory. zod checks the model's tool input and the MCP SDK's messages
+  from servers. The Audit workflow found it on its first run.
 - Build and test tools: `@modelcontextprotocol/server` 2.3.1 (tests only), vite 8.3.5, esbuild
   0.28 (override), `source-map-js` 1.2.2; the website's astro, starlight and mermaid.
