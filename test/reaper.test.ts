@@ -153,9 +153,13 @@ describe("the executor reaps after each command (0.17, IPI-04)", () => {
     const helper = fakeHelper(0);
     const executor = new TrackingExecutor(new Reaper(helper.path, temp));
     const done = executor.start(["sh", "-c", "exit 0"], policy());
+    const first = /literal "([^"]+)"/.exec(executor.launched[0]?.rules[0] ?? "")?.[1] ?? "";
     await new Promise<void>((resolve) => done.onExit(() => resolve()));
-    await waitUntil(async () => existsSync(helper.log), 5_000);
+    // The reap after the exit is done when its markers are gone (it ran the helper once).
+    await waitUntil(async () => !existsSync(first), 5_000);
+    expect(readFileSync(helper.log, "utf8").trim().split("\n")).toHaveLength(1);
     executor.start(["sleep", "30"], policy());
+    // shutdown() reaps the open tracker synchronously (an async reap may never finish at exit).
     executor.shutdown();
     expect(readFileSync(helper.log, "utf8").trim().split("\n")).toHaveLength(2);
   });
