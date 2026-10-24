@@ -35,7 +35,8 @@ With each Node.js security release (announced at
   advisory in a shipped dependency fails it; a high or critical one in a build tool or in the
   website fails it too.
 - Dependabot opens update pull requests each week for npm (package and website) and for the
-  pinned GitHub Actions. Turn on **Dependabot security updates** in the repository settings
+  pinned GitHub Actions (each pinned to a full commit hash, with the tag in a comment; all run on
+  Node 24). Turn on **Dependabot security updates** in the repository settings
   (Settings, Code security), so a security fix comes at once.
 
 ## Exceptions

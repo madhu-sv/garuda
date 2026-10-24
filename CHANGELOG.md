@@ -13,6 +13,9 @@
   `glob` and `grep` refuse a pattern that brace expansion makes into more than 1000 patterns or
   that nests `{…}` more than 10 deep: `braces` has no fix for GHSA-vfj7-8cjw-p6xm, and such a
   pattern ran Node out of memory. See docs/security-deps.md.
+- GitHub Actions: `actions/checkout` 7.0.1 and `actions/setup-node` 7.1.0, which run on Node 24
+  (GitHub forces actions built for Node 20 onto Node 24 and warns). Still pinned to full commit
+  hashes. The release job turns off setup-node's automatic dependency cache.
 - Indirect prompt injection suite (`test/ipiSuite.test.ts`): ten injected-call cases against the
   real sandbox, permission engine, tools, web_fetch, audit log and approval display, each with a
   control; `pnpm ipi:mutations` shows that every case fails without its defence. Two known gaps are
