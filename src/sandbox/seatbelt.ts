@@ -1,4 +1,5 @@
 import { type Launch, ProcessExecutor, plain } from "./process.js";
+import type { Reaper, Tracker } from "./reaper.js";
 import type { ExecPolicy } from "./types.js";
 
 export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
@@ -13,15 +14,35 @@ export class SeatbeltExecutor extends ProcessExecutor {
   readonly name = "seatbelt";
   readonly isolation = "os" as const;
 
-  protected launch(argv: string[], policy: ExecPolicy): Launch {
+  /**
+   * `reaper` (0.17, IPI-04): finds and kills the processes that leave a command's process group.
+   * Without it, such a process outlives the command (index.ts warns, or strict refuses).
+   */
+  constructor(readonly reaper?: Reaper) {
+    super();
+  }
+
+  protected override track(policy: ExecPolicy): Tracker | undefined {
+    return policy.sandbox && this.reaper !== undefined ? this.reaper.track() : undefined;
+  }
+
+  protected override closeTracking(): void {
+    this.reaper?.close();
+  }
+
+  protected launch(argv: string[], policy: ExecPolicy, tracker?: Tracker): Launch {
     if (!policy.sandbox) return plain(argv);
     // Seatbelt cannot mount a folder over another (staged mode uses a working root of its own).
     if ((policy.mounts ?? []).length > 0) throw new Error("Seatbelt cannot mount folders.");
-    return { file: SANDBOX_EXEC, args: ["-p", seatbeltProfile(policy), ...argv] };
+    return {
+      file: SANDBOX_EXEC,
+      args: ["-p", seatbeltProfile(policy, tracker?.rules), ...argv],
+    };
   }
 }
 
-export function seatbeltProfile(policy: ExecPolicy): string {
+/** The profile; `extra` (the markers of IPI-04) goes last, so it wins over the rules above. */
+export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = []): string {
   const paths = (list: readonly string[]) => list.map((p) => `(subpath ${quote(p)})`).join(" ");
   const lines = [
     "(version 1)",
@@ -57,6 +78,7 @@ export function seatbeltProfile(policy: ExecPolicy): string {
       '(allow network-bind (local ip "localhost:*"))',
     );
   }
+  lines.push(...extra);
   return lines.join("\n");
 }
 

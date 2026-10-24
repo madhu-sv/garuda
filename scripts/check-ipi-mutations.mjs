@@ -49,10 +49,19 @@ const MUTATIONS = [
       ["src/sandbox/bwrap.ts", ...unsharePid],
     ],
   ],
-  // macOS asserts the known gap in this case, and has no bubblewrap to mutate.
-  ...(process.platform === "darwin"
-    ? []
-    : [["IPI-04: a new session", [["src/sandbox/bwrap.ts", ...unsharePid]]]]),
+  // Linux: bubblewrap's PID namespace. macOS (0.17): the markers that the helper finds.
+  [
+    "IPI-04: a new session",
+    process.platform === "darwin"
+      ? [
+          [
+            "src/sandbox/seatbelt.ts",
+            "    return policy.sandbox && this.reaper !== undefined ? this.reaper.track() : undefined;",
+            "    return undefined;",
+          ],
+        ]
+      : [["src/sandbox/bwrap.ts", ...unsharePid]],
+  ],
   [
     "IPI-05",
     [

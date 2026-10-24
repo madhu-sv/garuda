@@ -16,7 +16,11 @@ In the sandbox, a command:
 - has no network (localhost works on macOS), unless you open a network allowlist (0.13, below);
 - cannot start apps on macOS (`open`, `osascript`), because an app started that way runs outside the
   sandbox (0.14);
-- sees only its own processes on Linux, not Garuda's or yours (0.14).
+- sees only its own processes on Linux, not Garuda's or yours (0.14);
+- does not outlive the call (a daemon, below, is the exception you ask for): Garuda stops the
+  command's processes when it ends, also ones that left its process group (on macOS since 0.17,
+  with the helper `garuda-reap` that the npm package holds; without it Garuda warns, and the strict
+  profile refuses sandboxed commands).
 
 Commands in the sandbox run with no approval. Deny rules still apply. When the sandbox blocks a command
 (for example `pnpm install` needs the network), the model can ask to run it outside the sandbox.

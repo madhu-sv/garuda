@@ -234,6 +234,17 @@ export function createBashTool({
           : undefined;
       if (blocked !== undefined) hints.push(blocked);
       if (result.staged !== undefined) hints.push(result.staged.note);
+      // macOS (0.17, IPI-04): processes that left the command's process group.
+      if (result.reaped !== undefined) {
+        hints.push(
+          `Garuda killed ${result.reaped} process${result.reaped === 1 ? "" : "es"} that left the command's process group and would have kept running after it.`,
+        );
+      }
+      if (result.reapProblem !== undefined) {
+        hints.push(
+          `Garuda could not check for processes that left the command's process group (${result.reapProblem}). Such a process may still run, inside the sandbox.`,
+        );
+      }
       return { ...result, hints };
     },
 

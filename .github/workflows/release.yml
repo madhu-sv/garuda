@@ -16,8 +16,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The macOS helper garuda-reap (0.17, IPI-04): built from native/garuda-reap.c on a Mac, a
+  # universal arm64 + x86_64 binary with an ad-hoc signature, handed to the publish job.
+  helper:
+    name: build the macOS helper
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          check-latest: true
+          package-manager-cache: false
+      - name: Node has the latest security fixes
+        run: node scripts/check-node.mjs
+      - name: Build garuda-reap
+        run: node scripts/build-native.mjs --require
+      - name: Check the helper
+        run: |
+          lipo -archs native/bin/garuda-reap
+          codesign --verify --verbose native/bin/garuda-reap
+          shasum -a 256 native/bin/garuda-reap
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: garuda-reap
+          path: native/bin/garuda-reap
+          if-no-files-found: error
+          retention-days: 7
+
   npm:
     name: publish to npm
+    needs: helper
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # The trusted publisher on npmjs.com names this environment. Add protection rules to it (for
@@ -30,6 +64,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: garuda-reap
+          path: native/bin
+      # An artifact loses the file mode.
+      - name: The macOS helper is a universal binary
+        run: |
+          chmod 755 native/bin/garuda-reap
+          file native/bin/garuda-reap
+          file native/bin/garuda-reap | grep -q "Mach-O universal binary"
       - name: Install bubblewrap
         run: |
           sudo apt-get update -q
@@ -61,6 +105,10 @@ jobs:
             || { echo "npm 11.5.1 or later is necessary for trusted publishing." >&2; exit 1; }
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - name: The package holds the macOS helper
+        run: |
+          npm pack --dry-run 2>&1 | tee pack.txt
+          grep -q "native/bin/garuda-reap" pack.txt || { echo "native/bin/garuda-reap is not in the package." >&2; exit 1; }
       # A version that is already on npm (for example one published by hand) is skipped, not an
       # error. See docs/release.md.
       - name: Publish

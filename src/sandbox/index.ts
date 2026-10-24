@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { BwrapExecutor } from "./bwrap.js";
 import { HostExecutor } from "./host.js";
+import { locateHelper, Reaper } from "./reaper.js";
 import { SANDBOX_EXEC, SeatbeltExecutor } from "./seatbelt.js";
 import type { Executor } from "./types.js";
 
@@ -50,7 +51,16 @@ export function createExecutor(
   }
   if (name === "host") return { executor: new HostExecutor() };
   const found = find();
-  if ("executor" in found) return { executor: found.executor };
+  if ("executor" in found) {
+    if (found.warning === undefined) return { executor: found.executor };
+    // macOS without the helper (0.17, IPI-04): strict refuses, the default profile warns.
+    if (strict) {
+      throw new StrictProfileError(
+        `The strict profile requires the macOS helper garuda-reap. ${found.warning}`,
+      );
+    }
+    return { executor: found.executor, notice: found.warning };
+  }
   if (strict) {
     throw new StrictProfileError(
       `The strict profile requires the OS sandbox, and this machine has none: ${found.problem} Garuda does not run commands on the host in this profile. ${strictFix(platform)}`,
@@ -63,10 +73,15 @@ export function createExecutor(
   };
 }
 
-export type OsSandbox = { executor: Executor } | { problem: string; fix: string };
+/** `warning`: the sandbox works, with a known weakness (macOS without the helper, 0.17). */
+export type OsSandbox = { executor: Executor; warning?: string } | { problem: string; fix: string };
 
 /** What the probe found: how to make an executor, or why there is none. */
-type Detected = { make: () => Executor } | { problem: string; fix: string };
+type Detected = { make: () => Executor; warning?: string } | { problem: string; fix: string };
+
+/** macOS without native/bin/garuda-reap (0.17, IPI-04). */
+export const HELPER_MISSING =
+  "The macOS helper garuda-reap is missing, so a process that leaves a command's process group (for example with setsid) can keep running after the command, inside the sandbox. Reinstall Garuda; in a source checkout, run `pnpm build` (it needs the Command Line Tools).";
 
 let cached: Detected | undefined;
 
@@ -77,7 +92,10 @@ let cached: Detected | undefined;
  */
 export function findOsSandbox(): OsSandbox {
   cached ??= detect(process.platform);
-  return "make" in cached ? { executor: cached.make() } : cached;
+  if (!("make" in cached)) return cached;
+  return cached.warning === undefined
+    ? { executor: cached.make() }
+    : { executor: cached.make(), warning: cached.warning };
 }
 
 function detect(platform: NodeJS.Platform): Detected {
@@ -91,7 +109,13 @@ function detect(platform: NodeJS.Platform): Detected {
       encoding: "utf8",
       timeout: 5_000,
     });
-    if (probe.status === 0) return { make: () => new SeatbeltExecutor() };
+    if (probe.status === 0) {
+      // Each executor gets its own Reaper: its markers folder goes away at its shutdown().
+      const helper = locateHelper();
+      if (helper === undefined)
+        return { make: () => new SeatbeltExecutor(), warning: HELPER_MISSING };
+      return { make: () => new SeatbeltExecutor(new Reaper(helper)) };
+    }
     const why = (probe.stderr || probe.error?.message || "unknown error").trim().split("\n")[0];
     return { problem: `sandbox-exec cannot start a sandbox here (${why}).`, fix };
   }

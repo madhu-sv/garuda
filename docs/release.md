@@ -6,8 +6,9 @@ command is `garuda`. Homebrew installs the same npm package through the tap
 
 ## The package
 
-- `package.json` `files` puts only `dist/**/*.js`, `LICENSE`, `NOTICE`, `README.md` and `SECURITY.md`
-  in the package: no source maps, tests or the standalone bundle.
+- `package.json` `files` puts only `dist/**/*.js`, `LICENSE`, `NOTICE`, `README.md`, `SECURITY.md`,
+  `CHANGELOG.md` and the macOS helper (`native/bin/garuda-reap` and its source) in the package: no
+  source maps, tests or the standalone bundle.
 - The `prepack` script runs `pnpm build`, so `npm pack` and `npm publish` always use a fresh build.
 - To see what goes in the package: `npm pack --dry-run`.
 
@@ -24,7 +25,9 @@ command is `garuda`. Homebrew installs the same npm package through the tap
    git tag -a v0.14.1 -m "Garuda 0.14.1" && git push origin v0.14.1
    ```
 
-3. The workflow `.github/workflows/release.yml` runs: it checks that the tag matches the version,
+3. The workflow `.github/workflows/release.yml` runs: a macOS job builds the helper `garuda-reap`
+   (`node scripts/build-native.mjs --require`: universal arm64 + x86_64, ad-hoc signed) and hands it
+   to the publish job, which checks that `npm pack` holds `native/bin/garuda-reap`. Then it checks that the tag matches the version,
    runs `pnpm check`, and publishes with npm trusted publishing. The repository holds no npm token.
    npm adds a provenance statement that links the package to the workflow run.
 4. Update the Homebrew formula (below).

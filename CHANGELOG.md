@@ -2,6 +2,16 @@
 
 ## 0.17.0 (unreleased)
 
+- macOS: no command process outlives the command (IPI-04). Seatbelt has no process namespace, so a
+  process could leave the command's process group (setsid, setpgid, posix_spawn with SETSID or
+  SETPGROUP, Node's detached spawn) and keep running, inside the sandbox. Each sandboxed command now
+  gets two marker files in its Seatbelt profile, and after the command a small helper,
+  `native/bin/garuda-reap` (C, universal arm64 + x86_64, ad-hoc signed, built in the release
+  workflow and shipped in the npm package), kills every process of the user with those markers. On
+  the user's Mac all four ways out were found and killed, no other process matched, and one scan took
+  12 ms. The bash tool tells the model when Garuda killed such a process. Without the helper (a
+  source checkout without the Command Line Tools, the standalone binary) Garuda warns, and the
+  strict profile refuses sandboxed commands. The IPI-04 case now expects no escape on macOS too.
 - Node and dependency security (2026-10-21): Garuda warns at start on a Node without the latest
   security fixes of its line (22.23.4, 24.22.1, 26.12.1; the Node.js security release of
   2026-10-21: TLS hostname checks, DNS, Brotli), and `engines` names those versions. CI, the
