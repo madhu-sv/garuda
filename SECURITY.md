@@ -6,7 +6,7 @@ Garuda runs commands and edits files for a model, so we take security reports se
 
 | Version | Supported |
 | --- | --- |
-| 0.16.x | Yes |
+| 0.17.x | Yes |
 | Older | No |
 
 ## Node and dependencies

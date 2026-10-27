@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.17.0 (unreleased)
+## 0.17.0 (2026-10-27)
 
 - macOS: no command process outlives the command (IPI-04). Seatbelt has no process namespace, so a
   process could leave the command's process group (setsid, setpgid, posix_spawn with SETSID or
@@ -157,12 +157,11 @@
   the OS sandbox. Without one, Garuda stops at startup with the reason; `"executor": "host"` is an
   error; the `bash` tool has no `outside_sandbox`. A project can turn it on, never off (review T7).
 
-## 0.16.2 (unreleased)
-
-- Design for 0.17 (planned, no code yet): staged commands (a command's changes ask before they
-  reach the project, opt-in), job write scopes, a strict profile, an audit checkpoint, one token
-  budget for the agent tree, and approximate labels for Java and Python references. See
-  docs/lld/bounded-changes.md.
+- Also in this release: the changes planned as 0.16.2, which was never published. Docs that say
+  "0.16.2" mean this release.
+- The design of the bounded-changes work above (staged commands, job write scopes, the strict
+  profile, the audit checkpoint, one token budget for the agent tree, approximate labels for Java
+  and Python references): docs/lld/bounded-changes.md.
 - Exact safety claims (an external review found an overclaim): edits ask first, but commands in the
   OS sandbox run with no question, inside its limits, so they can change project files (`/undo`
   restores them). The website, the blog posts, the share image, the README and the editor's mode

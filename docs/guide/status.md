@@ -29,9 +29,11 @@ What each release added, and the known limits of this version.
 | 0.17: Mixture-of-Experts subagents (opt-in), team policy and audit log (W5) | Done (0.14.0) |
 | Editors over the Agent Client Protocol (`garuda acp`: VS Code with an extension, Zed, JetBrains, Neovim, Emacs) | Done (0.15.0) |
 | `garuda setup` (model and stored key) and the editor sign-in (ACP Terminal Auth) | Done (0.16.0) |
+| Bounded changes (staged commands, opt-in; job write scopes; the strict profile; the audit checkpoint; one token budget for the agent tree), the IPI suite, no escaped processes on macOS, Sonnet 5.5 and Haiku 5.5 with the account's model list, a fixed-Node floor and a dependency audit | Done (0.17.0) |
 
 The rows labelled 0.14–0.17 are branch labels, not versions: the "0.15" and "0.16" branches (code
-intelligence, language plugins) shipped in 0.14.0. The last two rows are versions 0.15.0 and 0.16.0.
+intelligence, language plugins) shipped in 0.14.0. The last three rows are versions 0.15.0, 0.16.0
+and 0.17.0.
 
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
@@ -43,7 +45,7 @@ headings in the user guide keep the branch labels (0.14–0.17).
 Before 0.14.0, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
 permissions, tools, sandbox, audit, loop, agents), in plan mode. 0.14.1 adds the cli and extensions
 areas and fixes the open findings of all nine areas (see [CHANGELOG.md](../../CHANGELOG.md)). Known limits
-in 0.16.1:
+in 0.17.0:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Token budget: a call's reservation is an estimate (about 4 characters per token, plus the output
@@ -55,6 +57,15 @@ in 0.16.1:
 - Build tool caches that the sandbox may write (`~/.gradle/wrapper`, `jdks`, `native`, `caches`,
   `~/.m2/wrapper`) hold programs that a build runs later outside the sandbox. They stay writable, because
   `./gradlew` needs them in the sandbox; a sandboxed command could change them.
+- Sandboxed commands may write the shared package caches (`~/.npm`, `~/.cache`, pnpm's store), so a
+  command can change a cached package that a later install outside the sandbox uses (IPI-03 in
+  [the IPI suite](../quality-baseline/ipi-suite.md)).
+- On macOS, the helper `garuda-reap` (in the npm package) stops processes that leave a command's
+  process group. Without it (a source checkout without the Command Line Tools, the standalone
+  binary) such a process can outlive the command, inside the sandbox; Garuda warns, and the strict
+  profile refuses sandboxed commands.
+- Staged commands do not stage MCP servers or language servers; a hook that writes asks like a
+  command; deletions of ignored files are not shown.
 - The jdtls download is checked against the `.sha256` file of the same server, not a pinned hash.
 - Editors (`garuda acp`): Garuda's session history is not in the editor (no `session/load`), the
   editor's MCP servers are not started, Garuda reads saved files (not unsaved buffers), the terminal's

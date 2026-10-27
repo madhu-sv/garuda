@@ -7,7 +7,7 @@ Website and docs: https://madhu-sv.github.io/garuda/
 Garuda is a coding agent for the terminal, and for editors over the Agent Client Protocol. It reads
 and edits your code, runs commands in an OS sandbox, and keeps an audit log of its permission
 decisions. It works with Claude and with OpenAI-compatible models, local ones too. This is version
-0.16.1. Release notes: [CHANGELOG.md](CHANGELOG.md).
+0.17.0. Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## What Garuda does on your machine
 
@@ -21,7 +21,7 @@ decisions. It works with Claude and with OpenAI-compatible models, local ones to
 - A command outside the sandbox asks first, unless one of your allow rules covers it. The strict
   profile forbids it. Without a sandbox, each command asks first, unless one of your allow rules
   covers it.
-- With staged commands (on `main` for 0.17, not released yet; off by default), a sandboxed command
+- With staged commands (0.17, off by default), a sandboxed command
   runs in a copy of the project, and its changes reach the project only after you apply them.
 
 The details: [Sandbox, permissions and policy](docs/guide/safety.md). The known gaps:

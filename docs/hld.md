@@ -1,6 +1,6 @@
 # High-level design
 
-Version 0.16.1 (`garuda setup` and the editor sign-in; editors over ACP since 0.15.0; on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas). This document shows how the parts work together. The component documents in
+Version 0.17.0 (bounded changes: staged commands, job write scopes, the strict profile, the audit checkpoint, one token budget for the agent tree; the IPI suite and no escaped processes on macOS; a fixed-Node floor and a dependency audit; `garuda setup` and the editor sign-in since 0.16.0; editors over ACP since 0.15.0; on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas). This document shows how the parts work together. The component documents in
 [lld/](lld/) give the details.
 
 ## 1. Modes of use
