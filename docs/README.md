@@ -45,4 +45,4 @@ Low-level design documents:
 | Setup and stored keys (0.16) | `src/model/credentials.ts`, `src/model/providers.ts`, `src/cli/setupCommand.ts` | [setup.md](lld/setup.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
-The code, the tests and the commits use the same IDs. The documents describe version 0.16.1 (`garuda setup` and the editor sign-in; editors over ACP since 0.15.0; on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas).
+The code, the tests and the commits use the same IDs. The documents describe version 0.17.0 (bounded changes: staged commands, job write scopes, the strict profile, the audit checkpoint, one token budget for the agent tree; the IPI suite and no escaped processes on macOS; a fixed-Node floor and a dependency audit; on top of 0.16.1).
