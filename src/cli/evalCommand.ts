@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { compareReports, formatComparison, loadReport } from "../evals/compare.js";
 import { reportV2 } from "../evals/report.js";
 import {
   buildRepoSuite,
@@ -503,4 +504,34 @@ function garudaBiome(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** `garuda eval compare <a> <b>` (0.17, T11a): two reports of the same tasks. */
+export async function runEvalCompare(
+  pathA: string,
+  pathB: string,
+  options: { seed?: number } = {},
+): Promise<number> {
+  const seed = options.seed ?? DEFAULT_SEED;
+  if (!Number.isInteger(seed) || seed < 0) {
+    process.stderr.write("--seed must be a whole number, 0 or more.\n");
+    return 1;
+  }
+  let a: Awaited<ReturnType<typeof loadReport>>;
+  let b: Awaited<ReturnType<typeof loadReport>>;
+  try {
+    [a, b] = await Promise.all([loadReport(pathA), loadReport(pathB)]);
+  } catch (error) {
+    process.stderr.write(`garuda eval compare: ${(error as Error).message}\n`);
+    return 1;
+  }
+  const result = compareReports(a, b, { seed });
+  if ("problems" in result) {
+    process.stderr.write(
+      `garuda eval compare: these reports cannot be compared.\n${result.problems.map((p) => `  ${p}`).join("\n")}\n`,
+    );
+    return 1;
+  }
+  process.stdout.write(`${formatComparison(a, b, result.comparison)}\n`);
+  return 0;
 }

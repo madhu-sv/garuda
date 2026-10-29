@@ -43,7 +43,22 @@ and gives no rate: such a run measured nothing about the agent.
 
 `report.json` (version 2) also holds Garuda's version and commit, the model and provider, the OS,
 the seed and run order, and a hash of each task, so a later run can show that the tasks were the
-same. Compare two runs only with the same tasks and seed, and `--repeat 3` or more.
+same. With fewer than 10 tasks, or when every draw gives the same rate (all runs passed, or none),
+the report says that the interval is only a rough guide.
+
+Compare two runs of the same tasks, for example an A/B of a setting:
+
+```sh
+garuda eval -s hard --repeat 3 --shuffle --seed 7                      # arm A
+garuda eval -s hard --repeat 3 --shuffle --seed 7 --keep-thinking off  # arm B
+garuda eval compare .garuda/evals/<run-a> .garuda/evals/<run-b>
+```
+
+`compare` shows each task's passes in both arms, the difference of the pass rates (B − A, over all
+attempts) with a paired 95% interval, and each arm's cost per accepted change, unexpected changes
+and median time. It refuses two reports whose tasks differ (other task ids, or a task hash that
+changed). A difference whose interval contains 0 is "no clear difference", never a win. Use the same
+seed and `--repeat 3` or more in both arms.
 
 `--batch on` (0.7, Anthropic models) sends every model call as a batch of one: half the token price,
 but each step waits until its batch ends (usually minutes). It runs all tasks at the same time (up to 20;

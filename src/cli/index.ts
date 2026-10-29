@@ -103,7 +103,7 @@ async function main(): Promise<void> {
       process.exitCode = await start(options, program);
     });
 
-  program
+  const evalCommand = program
     .command("eval")
     .description("run the eval tasks in scratch folders and report pass/fail, steps and cost")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
@@ -169,6 +169,16 @@ async function main(): Promise<void> {
         model: options.model ?? process.env.GARUDA_MODEL,
         subagentModel: options.subagentModel ?? process.env.GARUDA_SUBAGENT_MODEL,
       });
+    });
+  evalCommand
+    .command("compare")
+    .description("compare two eval reports of the same tasks (pass rates with a paired interval)")
+    .argument("<a>", "report.json, or its run folder (.garuda/evals/<run-id>)")
+    .argument("<b>", "the second report")
+    .option("--seed <n>", "seed for the bootstrap (default 1)", (v) => Number(v))
+    .action(async (a: string, b: string, options: { seed?: number }) => {
+      const { runEvalCompare } = await import("./evalCommand.js");
+      process.exitCode = await runEvalCompare(a, b, options);
     });
 
   program

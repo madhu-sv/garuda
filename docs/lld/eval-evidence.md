@@ -1,7 +1,8 @@
 # Eval evidence (0.17, T11, design)
 
-Status: design approved (2026-10-29). Built: T11a patch 1 (unexpected changes, the stats module,
-report v2 and metadata, `--shuffle`, `--seed`); see "As built" in T11a. The rest is not built yet. The user chose: Claude
+Status: design approved (2026-10-29). Built: T11a (patch 1: unexpected changes, the stats module,
+report v2 and metadata, `--shuffle`, `--seed`; patch 2: `garuda eval compare`); see "As built" in
+T11a. T11b, T11c and T11d are not built yet. The user chose: Claude
 Code (`claude -p`) as the baseline agent; a prompt addendum file as the only thing that the
 proposer loop may edit; this design note before any code. The user's answers to the open questions
 are in "Decisions" at the end.
@@ -102,8 +103,16 @@ stays as today. For a comparison, the user runs both arms with the same seed.
 call them. Differences from the plan: the run's start state is hashed after the task files, the
 repo task's tests and the formatter's first pass, and `changed` is taken before the check, so the
 check's own output never counts. A walk stops at 50 000 files. The interval line needs two tasks
-or more. `effort` in the report is "model default": evals set none. `garuda eval compare` is
-patch 2.
+or more. `effort` in the report is "model default": evals set none.
+
+### As built (patch 2)
+
+`src/evals/compare.ts` and `garuda eval compare <a> <b> [--seed n]` (a report.json or its run
+folder). It refuses other task ids and changed hashes; a version 1 report (no hashes) compares with
+a note. The verdict is "B passes more" only when the whole interval is above 0, "B passes less"
+only when it is below 0, else "no clear difference". Notes: fewer than 10 tasks, other seeds, fewer
+than 3 runs of a task. After the user's first live run (2 tasks, all passed, "100%–100%"), the run
+report also says when every draw gave the same rate and when there are fewer than 10 tasks.
 
 ## T11b: the baseline runner (Claude Code)
 

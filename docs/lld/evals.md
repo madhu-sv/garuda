@@ -23,6 +23,7 @@ same-build A/B runs.
 | `changes.ts` | T11a (0.17): `treeState` (a hash per file, without `.git`, `.garuda` and build output), `changedPaths`, `unexpectedPaths`. |
 | `stats.ts` | T11a (0.17): `seeded` and `shuffled`; `passInterval` (cluster bootstrap over tasks), `consistency`, `spread`, `stepsSd`, `costPerPass`, `unexpectedChanges`. |
 | `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`). |
+| `compare.ts` | T11a (0.17): `garuda eval compare`: `loadReport` (version 1 and 2), `compareReports` (refuses other tasks or changed hashes; a paired bootstrap of B − A), `formatComparison`, `roughNote`. |
 
 ## Runner
 
@@ -106,6 +107,7 @@ garuda eval [-m model] [-s basic|hard|java|python|all|repo] [-t ids…] [--repea
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
             [--batch on|off] [--parallel n] [--shuffle] [--seed n]
+garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the same tasks
 garuda eval --prepare java|python
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
@@ -251,6 +253,13 @@ same interval; consistency, spread, steps deviation, cost per accepted change wi
 minimum costs; changed files without git, Garuda and build output; unexpected files and
 `allowChanges`; the runner's `changed`, `unexpected` and `attempt`; the report lines; report v2 and
 a stable task hash.
+
+`test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
+A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for
+the same or noisy results, "B passes less", the same seed; refusal of other tasks and of changed
+hashes; the note for a report without hashes, few tasks, other seeds and fewer than 3 runs; the
+printed text; reading a report or its folder; the run report's caution for 2 tasks that all
+passed.
 
 T11 (0.17, design): intervals, cost per accepted change, unexpected changes, a Claude Code baseline,
 a held-out split and a proposer loop for a prompt addendum. See [eval-evidence.md](eval-evidence.md).

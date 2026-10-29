@@ -18,6 +18,7 @@ import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { isCostIncomplete } from "../session/session.js";
 import { FileSessionStore } from "../session/store.js";
 import { changedPaths, treeState, unexpectedPaths } from "./changes.js";
+import { roughNote } from "./compare.js";
 import { writeFiles } from "./files.js";
 import { isProtectedPath } from "./projects.js";
 import { applyTests, removeTaskWorktree, taskWorktree } from "./repoTasks.js";
@@ -478,6 +479,13 @@ function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
     out.push(
       `Pass rate over all attempts: ${percent(interval.rate)} (95% interval ${percent(interval.low)}–${percent(interval.high)}; cluster bootstrap over ${interval.tasks} tasks, ${interval.draws} draws, seed ${interval.seed})`,
     );
+    // The user's first live run: 2 tasks, every run passed, "100%–100%" (correct, but no evidence).
+    if (interval.low === interval.high) {
+      out.push(
+        "  Every draw gave the same rate, so the interval shows no uncertainty: more tasks are needed to measure it.",
+      );
+    }
+    if (interval.tasks < 10) out.push(`  ${roughNote(interval.tasks)}`);
   }
   const c = consistency(results);
   if (c.repeated > 0) {

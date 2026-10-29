@@ -18,7 +18,12 @@
   with an error gives no interval ("No scored run"), a task with only error runs is not counted as
   "passed none", and an authentication error (401 or 403, for example a refused API key) stops the
   eval at the first run instead of failing every run the same way.
-- Design (T11; part 1 of T11a built, the rest not yet): eval evidence — intervals and consistency over repeated runs, cost per
+- `garuda eval compare <a> <b>` (T11a part 2): two reports of the same tasks side by side, the
+  difference of the pass rates (B − A) with a paired 95% interval, and each arm's cost per accepted
+  change, unexpected changes and median time. It refuses reports whose tasks differ, and a
+  difference whose interval contains 0 is "no clear difference". The run report now says when its
+  interval is only a rough guide (fewer than 10 tasks, or every draw gave the same rate).
+- Design (T11; T11a built, T11b–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).
 
