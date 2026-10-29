@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Biome 2.6.2 (with @inquirer/prompts 8.7.4, react 19.3.1 and smol-toml 1.9.1, from Dependabot's
+  group update). Biome 2.6 formats Markdown and YAML by default: Markdown formatting is off (the
+  docs keep their own layout), and pnpm's lockfiles are left out.
+- Dependabot: `@types/node` stays on the oldest supported Node line (no major updates); each other
+  major update comes as its own pull request.
+- The Homebrew formula in the repository names 0.17.0 and its tarball hash.
+
 ## 0.17.0 (2026-10-27)
 
 - macOS: no command process outlives the command (IPI-04). Seatbelt has no process namespace, so a

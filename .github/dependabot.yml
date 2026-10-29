@@ -8,9 +8,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Majors come one pull request each (not in the group), so each gets its own live check.
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # The types must match the oldest Node that Garuda supports (22), or code could use an API
+      # that Node 22 lacks and tsc would not see it.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /site
     schedule:
