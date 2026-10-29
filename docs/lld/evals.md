@@ -20,6 +20,9 @@ same-build A/B runs.
 | `suites.ts` | `basic`, `hard`, `java`, `python`, `all`; `requiredToolchains(tasks)`. |
 | `repoTasks.ts` | Benchmark your repo (0.12): candidate commits from git history (`skipReason`, `recentCommits`), `repoPrompt`, `taskWorktree` / `applyTests` / `removeTaskWorktree`, `buildRepoSuite`, `saveRepoSuite` / `loadRepoSuite`, `repoEvalTasks`. |
 | `runner.ts` | Runs tasks; `formatReport`. |
+| `changes.ts` | T11a (0.17): `treeState` (a hash per file, without `.git`, `.garuda` and build output), `changedPaths`, `unexpectedPaths`. |
+| `stats.ts` | T11a (0.17): `seeded` and `shuffled`; `passInterval` (cluster bootstrap over tasks), `consistency`, `spread`, `stepsSd`, `costPerPass`, `unexpectedChanges`. |
+| `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`). |
 
 ## Runner
 
@@ -29,7 +32,11 @@ For each task (and each repeat):
    worktree of the project at the commit's parent (detached, `node_modules` and venvs linked), with the
    commit's test files added.
 2. Snapshot the protected files. Default: tests (`test/`, `tests/`, `src/test/`) and build files
-   (`pom.xml`, `pyproject.toml`). A task can list its own.
+   (`pom.xml`, `pyproject.toml`). A task can list its own. Since 0.17 (T11a) also a hash of every
+   file (`treeState`): after the run and before the check, the changed files go to `changed`, and
+   the ones outside the solution files (a repo task: its commit's files, from `git diff --name-only
+   base sha`) and the task's `allowChanges` globs go to `unexpected`. An unexpected change does not
+   fail the task.
 3. `Runtime.create` with an `AutoApprover("once")`, deny rules (`rm -rf*`, `sudo*`, `git push*`, `curl*`,
    `wget*`), `mcp: false`, `hooks: false`, `web.enabled: false`, and the chosen executor and code index mode.
 4. `runTurn(prompt)` with a 10-minute limit.
@@ -39,6 +46,16 @@ For each task (and each repeat):
    (5 min for a repo task). The task self-tests run known solutions on the host. A repo task's worktree is removed
    after the run (`git worktree remove`), unless `--keep`.
 6. Copy the session file to `.garuda/evals/<run-id>/<task>.jsonl` (`-2`, `-3` … for repeats).
+7. `runEvals` numbers the repeats of each task in run order (`attempt`).
+
+The report (0.17, T11a) adds, after the totals: the pass rate over all attempts with a 95% interval
+(a cluster bootstrap over tasks: a draw takes as many tasks as the run has, with replacement, and all
+runs of each drawn task; 10 000 draws, `--seed`), the tasks that passed every run and none, the
+median and p95 of steps, tokens and time over the scored runs, the cost per accepted change (all
+attempts / passes; "unknown" or "≥" as for the cost), and the runs with unexpected changes. The mean
+row per task gets the standard deviation of steps. `report.json` is version 2 (`schema: 2`): Garuda's
+version and commit, the model spec and provider, the isolation, the OS, the seed and order, a hash
+per task, and the same evidence in `evidence`.
 
 ## Java and Python suites (0.3)
 
@@ -84,7 +101,7 @@ garuda eval [-m model] [-s basic|hard|java|python|all|repo] [-t ids…] [--repea
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
-            [--batch on|off] [--parallel n]
+            [--batch on|off] [--parallel n] [--shuffle] [--seed n]
 garuda eval --prepare java|python
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
@@ -223,6 +240,13 @@ tasks, run at the same time (`describe.concurrent`, 180 s limit each). They run 
 probe passes; otherwise they are skipped, and the test name holds the hint. So on a machine without
 Maven and JUnit in `~/.m2` (for example a cloud workspace with no access to Maven Central), `pnpm check`
 still passes and says what is missing.
+
+`test/evalEvidence.test.ts` (0.17, T11a): the seeded shuffle; the interval is a cluster bootstrap
+(task a 3/3 and task b 0/3 give 0%–100%; a bootstrap over runs fails this); the same seed gives the
+same interval; consistency, spread, steps deviation, cost per accepted change with unknown and
+minimum costs; changed files without git, Garuda and build output; unexpected files and
+`allowChanges`; the runner's `changed`, `unexpected` and `attempt`; the report lines; report v2 and
+a stable task hash.
 
 T11 (0.17, design): intervals, cost per accepted change, unexpected changes, a Claude Code baseline,
 a held-out split and a proposer loop for a prompt addendum. See [eval-evidence.md](eval-evidence.md).

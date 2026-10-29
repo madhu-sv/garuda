@@ -22,7 +22,23 @@ garuda eval --parallel 4                   # 4 tasks at the same time
 garuda eval --batch on                     # A/B: model calls through the Batch API (half price, slow)
 garuda eval -s hard --keep-thinking off    # A/B: drop Claude's thinking blocks, as before 0.9
 garuda eval -s hard --format on            # A/B: Biome formats after each edit (and --format off)
+garuda eval -s hard --repeat 3 --shuffle --seed 7  # repeats in a random order from seed 7
 ```
+
+The report (0.17) says how far one run's numbers can be trusted:
+
+- the pass rate over all attempts with a 95% interval. Repeats of one task are not independent, so
+  the interval comes from a cluster bootstrap over tasks; `--seed` (default 1) makes it repeatable;
+- with `--repeat`, the tasks that passed every run and the ones that passed none;
+- the median and p95 of steps, tokens and time;
+- the cost per accepted change: the cost of all attempts, failures and error runs too, divided by
+  the passes;
+- unexpected changes: files that a run changed but the task did not need. They do not fail a task;
+  a pass with extra edits is still a weaker result.
+
+`report.json` (version 2) also holds Garuda's version and commit, the model and provider, the OS,
+the seed and run order, and a hash of each task, so a later run can show that the tasks were the
+same. Compare two runs only with the same tasks and seed, and `--repeat 3` or more.
 
 `--batch on` (0.7, Anthropic models) sends every model call as a batch of one: half the token price,
 but each step waits until its batch ends (usually minutes). It runs all tasks at the same time (up to 20;

@@ -3,6 +3,7 @@ import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Runtime, type RuntimeOptions } from "../app/runtime.js";
+import { git } from "../jobs/git.js";
 import type { CodeIndexMode } from "../knowledge/mode.js";
 import type { AgentEvent } from "../loop/runAgent.js";
 import { type ModelInfo, totalTokens } from "../model/pricing.js";
@@ -16,9 +17,19 @@ import type { ExecutorName } from "../sandbox/index.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { isCostIncomplete } from "../session/session.js";
 import { FileSessionStore } from "../session/store.js";
+import { changedPaths, treeState, unexpectedPaths } from "./changes.js";
 import { writeFiles } from "./files.js";
 import { isProtectedPath } from "./projects.js";
 import { applyTests, removeTaskWorktree, taskWorktree } from "./repoTasks.js";
+import {
+  consistency,
+  costPerPass,
+  DEFAULT_SEED,
+  passInterval,
+  spread,
+  stepsSd,
+  unexpectedChanges,
+} from "./stats.js";
 import { TOOLCHAIN_ENV } from "./toolchains.js";
 import type { EvalResult, EvalTask } from "./types.js";
 
@@ -104,6 +115,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   if (options.format !== undefined) await formatProject(root, options.format.biome);
   const protect = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
   const before = await snapshot(root, protect);
+  // The start state for the changed files (0.17, T11a).
+  const start = await treeState(root);
 
   const settings = parseSettings({
     // With an allowlist, a host outside it is denied: nobody answers questions in an eval.
@@ -208,6 +221,13 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     }
   }
 
+  // What the run changed, before the check writes its own output (0.17, T11a).
+  result.changed = changedPaths(start, await treeState(root));
+  const expected = await expectedFiles(task, host);
+  if (expected !== undefined) {
+    result.unexpected = unexpectedPaths(result.changed, expected, task.allowChanges);
+  }
+
   if (result.reason === undefined) {
     const changed = await changedFiles(root, before);
     // A project's own test suite can take longer than a small task's check.
@@ -234,6 +254,29 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   return result;
 }
 
+/**
+ * The files that a task is expected to change: its solution files, or a repo task's commit
+ * (without its tests, which the runner adds). Undefined when git cannot list the commit.
+ */
+async function expectedFiles(task: EvalTask, host: HostExecutor): Promise<string[] | undefined> {
+  if (task.repo === undefined) return Object.keys(task.solution);
+  if (task.repo.sha === undefined) return undefined;
+  const r = await git(
+    host,
+    task.repo.root,
+    ["diff", "--name-only", task.repo.base, task.repo.sha],
+    {
+      check: false,
+    },
+  );
+  if (r.exitCode !== 0) return undefined;
+  const tests = new Set(task.repo.tests.map((t) => t.path));
+  return r.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !tests.has(line));
+}
+
 export async function runEvals(
   tasks: readonly EvalTask[],
   options: EvalOptions,
@@ -241,10 +284,18 @@ export async function runEvals(
 ): Promise<EvalResult[]> {
   // A small pool: `parallel` tasks at a time; the results keep the task order.
   const results: EvalResult[] = new Array(tasks.length);
+  // The repeats of one task are numbered in the order of the list (0.17, T11a).
+  const seen = new Map<string, number>();
+  const attempts = tasks.map((t) => {
+    const n = (seen.get(t.id) ?? 0) + 1;
+    seen.set(t.id, n);
+    return n;
+  });
   let next = 0;
   const worker = async () => {
     for (let i = next++; i < tasks.length; i = next++) {
       const result = await runEvalTask(tasks[i] as EvalTask, options);
+      result.attempt = attempts[i] as number;
       results[i] = result;
       onResult?.(result);
     }
@@ -344,7 +395,10 @@ export function summarize(results: readonly EvalResult[]): EvalSummary {
 const percent = (rate: number | undefined) =>
   rate === undefined ? "–" : `${Math.round(rate * 100)}%`;
 
-export function formatReport(results: readonly EvalResult[]): string {
+export function formatReport(
+  results: readonly EvalResult[],
+  options: { seed?: number } = {},
+): string {
   const rows = results.map((r) =>
     [
       r.passed ? "PASS" : isErrorRun(r) ? "ERR " : "FAIL",
@@ -380,11 +434,64 @@ export function formatReport(results: readonly EvalResult[]): string {
     : tokens === 0
       ? ""
       : ` · ${Math.round((cached / tokens) * 100)}% of tokens from the cache`;
-  const lines = [...rows, "", `${counted} · ${steps} steps · cost ${cost}${share}`];
+  const lines = [
+    ...rows,
+    "",
+    `${counted} · ${steps} steps · cost ${cost}${share}`,
+    ...evidenceLines(results, options.seed ?? DEFAULT_SEED),
+  ];
   const ids = [...new Set(results.map((r) => r.id))];
   // With --repeat, one run says little: show the mean per task.
   if (ids.length < results.length) lines.push("", "Mean per task:", ...meanRows(results, ids));
   return lines.join("\n");
+}
+
+/** The evidence lines (0.17, T11a): interval, consistency, spread, cost per pass, unexpected. */
+function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
+  const out: string[] = [];
+  const interval = passInterval(results, { seed });
+  if (interval !== undefined && interval.tasks >= 2) {
+    out.push(
+      `Pass rate over all attempts: ${percent(interval.rate)} (95% interval ${percent(interval.low)}–${percent(interval.high)}; cluster bootstrap over ${interval.tasks} tasks, ${interval.draws} draws, seed ${interval.seed})`,
+    );
+  }
+  const c = consistency(results);
+  if (c.repeated > 0) {
+    const none = c.nonePassed.length === 0 ? "" : ` (${c.nonePassed.join(", ")})`;
+    out.push(
+      `Consistency: ${c.allPassed.length} of ${c.repeated} repeated tasks passed every run; ${c.nonePassed.length} passed none${none}`,
+    );
+  }
+  const s = spread(results);
+  if (s !== undefined) {
+    const k = (n: number) => `${(n / 1000).toFixed(1)}k`;
+    const sec = (ms: number) => `${Math.round(ms / 1000)} s`;
+    out.push(
+      `Spread (${s.runs} scored runs): steps median ${s.steps.median.toFixed(1)}, p95 ${s.steps.p95.toFixed(1)} · tokens median ${k(s.tokens.median)}, p95 ${k(s.tokens.p95)} · time median ${sec(s.durationMs.median)}, p95 ${sec(s.durationMs.p95)}`,
+    );
+  }
+  const cost = costPerPass(results);
+  out.push(
+    cost.kind === "unknown"
+      ? "Cost per accepted change: unknown (a run's cost is unknown)"
+      : cost.kind === "none"
+        ? "Cost per accepted change: no passes"
+        : `Cost per accepted change: ${cost.minimum ? "≥ " : ""}$${cost.usd.toFixed(4)} (all attempts ${cost.minimum ? "≥ " : ""}$${cost.totalUsd.toFixed(4)} / ${cost.passes} pass${cost.passes === 1 ? "" : "es"})`,
+  );
+  const u = unexpectedChanges(results);
+  if (u.measured > 0) {
+    out.push(
+      `Unexpected changes: ${u.runs} of ${u.measured} runs, ${u.files} file${u.files === 1 ? "" : "s"}`,
+    );
+    const shown = results.filter((r) => (r.unexpected?.length ?? 0) > 0).slice(0, 5);
+    for (const r of shown) {
+      out.push(
+        `  ${r.id}${r.attempt === undefined ? "" : ` (run ${r.attempt})`}: ${(r.unexpected ?? []).join(", ")}`,
+      );
+    }
+    if (u.runs > shown.length) out.push(`  … ${u.runs - shown.length} more in report.json`);
+  }
+  return out;
 }
 
 function meanRows(results: readonly EvalResult[], ids: readonly string[]): string[] {
@@ -413,6 +520,9 @@ function meanRows(results: readonly EvalResult[], ids: readonly string[]): strin
               .toFixed(4)
               .padStart(7)}`
           : "   cost ?",
+        ...(stepsSd(runs) === undefined
+          ? []
+          : [`sd ${(stepsSd(runs) as number).toFixed(1)} steps`]),
       ].join("  ") + note
     );
   });

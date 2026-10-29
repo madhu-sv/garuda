@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { reportV2 } from "../evals/report.js";
 import {
   buildRepoSuite,
   DEFAULT_COMMITS,
@@ -10,6 +11,7 @@ import {
   saveRepoSuite,
 } from "../evals/repoTasks.js";
 import { formatReport, runEvals, summarize } from "../evals/runner.js";
+import { DEFAULT_SEED, shuffled } from "../evals/stats.js";
 import { ALL_TASKS, EVAL_SUITES, requiredToolchains } from "../evals/suites.js";
 import { checkToolchains, prepareToolchain, TOOLCHAINS, toolchainId } from "../evals/toolchains.js";
 import type { EvalTask } from "../evals/types.js";
@@ -76,6 +78,10 @@ export interface EvalCommandOptions {
   testCommand?: string;
   /** --network <entries...>: the network allowlist for sandboxed commands (0.13). */
   network?: string[];
+  /** --shuffle: the task × repeat list in a random order from --seed (0.17, T11a). */
+  shuffle?: boolean;
+  /** --seed <n>: for --shuffle and the report's bootstrap interval. Default 1. */
+  seed?: number;
 }
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
@@ -244,8 +250,15 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const chosen =
     options.task === undefined ? suiteTasks : pool.filter((t) => options.task?.includes(t.id));
   const repeat = Math.max(1, options.repeat ?? 1);
-  // Each task runs `repeat` times in a row, in a new scratch folder each time.
-  const tasks = chosen.flatMap((t) => Array.from({ length: repeat }, () => t));
+  const seed = options.seed ?? DEFAULT_SEED;
+  if (!Number.isInteger(seed) || seed < 0) {
+    process.stderr.write("--seed must be a whole number, 0 or more.\n");
+    return 1;
+  }
+  // Each task runs `repeat` times in a row, in a new scratch folder each time; --shuffle mixes the
+  // list from the seed (0.17, T11a), so a slow period of the API does not hit one task only.
+  const listed = chosen.flatMap((t) => Array.from({ length: repeat }, () => t));
+  const tasks = options.shuffle ? shuffled(listed, seed) : listed;
   if (chosen.length === 0) {
     process.stderr.write("No task matches. Use --list to see the task ids.\n");
     return 1;
@@ -300,7 +313,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   if (batchMode === "on") {
@@ -352,10 +365,10 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   );
 
   const wallMs = Date.now() - started;
-  const report = `${formatReport(results)}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
+  const report = `${formatReport(results, { seed })}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
+    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

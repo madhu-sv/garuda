@@ -1,6 +1,7 @@
 # Eval evidence (0.17, T11, design)
 
-Status: design approved (2026-10-29). Nothing in this note is built yet. The user chose: Claude
+Status: design approved (2026-10-29). Built: T11a patch 1 (unexpected changes, the stats module,
+report v2 and metadata, `--shuffle`, `--seed`); see "As built" in T11a. The rest is not built yet. The user chose: Claude
 Code (`claude -p`) as the baseline agent; a prompt addendum file as the only thing that the
 proposer loop may edit; this design note before any code. The user's answers to the open questions
 are in "Decisions" at the end.
@@ -94,6 +95,15 @@ clear difference", never as a win.
 
 `--shuffle` runs the task × attempt list in a random order from `--seed`. Without it, the order
 stays as today. For a comparison, the user runs both arms with the same seed.
+
+### As built (patch 1)
+
+`src/evals/changes.ts`, `src/evals/stats.ts`, `src/evals/report.ts`; the runner and `garuda eval`
+call them. Differences from the plan: the run's start state is hashed after the task files, the
+repo task's tests and the formatter's first pass, and `changed` is taken before the check, so the
+check's own output never counts. A walk stops at 50 000 files. The interval line needs two tasks
+or more. `effort` in the report is "model default": evals set none. `garuda eval compare` is
+patch 2.
 
 ## T11b: the baseline runner (Claude Code)
 

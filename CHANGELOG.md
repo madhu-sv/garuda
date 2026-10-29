@@ -8,7 +8,14 @@
 - Dependabot: `@types/node` stays on the oldest supported Node line (no major updates); each other
   major update comes as its own pull request.
 - The Homebrew formula in the repository names 0.17.0 and its tarball hash.
-- Design (T11, not built yet): eval evidence — intervals and consistency over repeated runs, cost per
+- Eval evidence, part 1 (T11a): the report gives the pass rate over all attempts with a 95%
+  interval (a cluster bootstrap over tasks, so repeats of one task count together), the tasks that
+  passed every run or none, the median and p95 of steps, tokens and time, the cost per accepted
+  change (all attempts divided by the passes), and unexpected changes (files that a run changed
+  but the task did not need; a new `allowChanges` field widens a task's scope). `--shuffle` and
+  `--seed` set the run order. `report.json` is version 2, with Garuda's version and commit, the
+  model, the OS, the seed, the run order and a hash of each task.
+- Design (T11; part 1 of T11a built, the rest not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).
 

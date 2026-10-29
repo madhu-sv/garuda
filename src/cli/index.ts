@@ -113,6 +113,10 @@ async function main(): Promise<void> {
     .option("--repeat <n>", "run each task n times and show the mean", (v) =>
       Number.parseInt(v, 10),
     )
+    .option("--shuffle", "run the tasks and their repeats in a random order from --seed")
+    .option("--seed <n>", "seed for --shuffle and the report's interval (default 1)", (v) =>
+      Number(v),
+    )
     .option("--index <mode>", "code index tools for the model: off (default), lookup or all")
     .option("--executor <name>", "auto (default), os or host")
     .option("--keep", "keep the scratch folders")

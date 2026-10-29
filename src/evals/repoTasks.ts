@@ -391,6 +391,6 @@ export function repoEvalTasks(suite: RepoSuite): EvalTask[] {
     check: t.check ?? suite.testCommand,
     protect: t.tests.filter((f) => f.content !== null).map((f) => f.path),
     solution: {},
-    repo: { root: suite.root, base: t.base, tests: t.tests },
+    repo: { root: suite.root, base: t.base, sha: t.sha, tests: t.tests },
   }));
 }
