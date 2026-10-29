@@ -277,10 +277,26 @@ async function expectedFiles(task: EvalTask, host: HostExecutor): Promise<string
     .filter((line) => line !== "" && !tests.has(line));
 }
 
+/**
+ * The provider refused the key or the access (401 or 403): every later run fails the same way,
+ * so the eval stops instead of spending the time of the other runs.
+ */
+export function isAuthFailure(result: EvalResult): boolean {
+  if (!isErrorRun(result) || result.reason === undefined) return false;
+  return /\b40[13]\b|authentication_error|permission_error|invalid x-api-key|invalid api key/i.test(
+    result.reason,
+  );
+}
+
+/**
+ * Run the tasks, `parallel` at a time; the results keep the task order. `stop` (0.17): when it
+ * returns true for a result, no further task starts, and the result list holds the runs that ran.
+ */
 export async function runEvals(
   tasks: readonly EvalTask[],
   options: EvalOptions,
   onResult?: (result: EvalResult) => void,
+  stop?: (result: EvalResult) => boolean,
 ): Promise<EvalResult[]> {
   // A small pool: `parallel` tasks at a time; the results keep the task order.
   const results: EvalResult[] = new Array(tasks.length);
@@ -292,17 +308,19 @@ export async function runEvals(
     return n;
   });
   let next = 0;
+  let stopped = false;
   const worker = async () => {
-    for (let i = next++; i < tasks.length; i = next++) {
+    for (let i = next++; i < tasks.length && !stopped; i = next++) {
       const result = await runEvalTask(tasks[i] as EvalTask, options);
       result.attempt = attempts[i] as number;
       results[i] = result;
       onResult?.(result);
+      if (stop?.(result)) stopped = true;
     }
   };
   const width = Math.max(1, Math.min(options.parallel ?? 1, tasks.length));
   await Promise.all(Array.from({ length: width }, worker));
-  return results;
+  return results.filter((r) => r !== undefined);
 }
 
 /**
@@ -449,6 +467,12 @@ export function formatReport(
 /** The evidence lines (0.17, T11a): interval, consistency, spread, cost per pass, unexpected. */
 function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
   const out: string[] = [];
+  // No run completed: the numbers below would describe the errors, not the agent.
+  if (results.length > 0 && results.every(isErrorRun)) {
+    return [
+      "No scored run: every run failed with an error (the reasons are above), so this run gives no evidence about the agent.",
+    ];
+  }
   const interval = passInterval(results, { seed });
   if (interval !== undefined && interval.tasks >= 2) {
     out.push(
@@ -458,8 +482,12 @@ function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
   const c = consistency(results);
   if (c.repeated > 0) {
     const none = c.nonePassed.length === 0 ? "" : ` (${c.nonePassed.join(", ")})`;
+    const errors =
+      c.onlyErrors.length === 0
+        ? ""
+        : `; ${c.onlyErrors.length} had only error runs (${c.onlyErrors.join(", ")})`;
     out.push(
-      `Consistency: ${c.allPassed.length} of ${c.repeated} repeated tasks passed every run; ${c.nonePassed.length} passed none${none}`,
+      `Consistency: ${c.allPassed.length} of ${c.repeated} repeated tasks passed every run; ${c.nonePassed.length} passed none${none}${errors}`,
     );
   }
   const s = spread(results);

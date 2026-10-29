@@ -105,17 +105,22 @@ export function passInterval(
   };
 }
 
-/** The tasks that passed every run, and the tasks that passed none (tasks with 2+ runs). */
+/**
+ * The tasks with 2+ runs that passed every run, and those that passed none. A task whose runs all
+ * failed with an error is not "passed none": the agent never ran. It is listed apart.
+ */
 export function consistency(results: readonly EvalResult[]): {
   repeated: number;
   allPassed: string[];
   nonePassed: string[];
+  onlyErrors: string[];
 } {
   const repeated = byTask(results).filter((t) => t.runs >= 2);
   return {
     repeated: repeated.length,
     allPassed: repeated.filter((t) => t.passes === t.runs).map((t) => t.id),
-    nonePassed: repeated.filter((t) => t.passes === 0).map((t) => t.id),
+    nonePassed: repeated.filter((t) => t.passes === 0 && t.errors < t.runs).map((t) => t.id),
+    onlyErrors: repeated.filter((t) => t.errors === t.runs).map((t) => t.id),
   };
 }
 

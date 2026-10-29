@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { changedPaths, treeState, unexpectedPaths } from "../src/evals/changes.js";
 import { REPORT_SCHEMA, reportV2, taskHash } from "../src/evals/report.js";
-import { formatReport, runEvals, runEvalTask } from "../src/evals/runner.js";
+import { formatReport, isAuthFailure, runEvals, runEvalTask } from "../src/evals/runner.js";
 import {
   consistency,
   costPerPass,
@@ -77,7 +77,18 @@ describe("stats", () => {
       run("b", false, { steps: 20, stopReason: "error" }),
       run("c", true),
     ];
-    expect(consistency(results)).toEqual({ repeated: 2, allPassed: ["a"], nonePassed: ["b"] });
+    expect(consistency(results)).toEqual({
+      repeated: 2,
+      allPassed: ["a"],
+      nonePassed: ["b"],
+      onlyErrors: [],
+    });
+    // A task whose runs all failed with an error never ran: it is not "passed none".
+    const err = { stopReason: "error" };
+    expect(consistency([run("x", false, err), run("x", false, err)])).toMatchObject({
+      nonePassed: [],
+      onlyErrors: ["x"],
+    });
     // Error runs are left out of the spread.
     expect(spread(results)?.runs).toBe(4);
     expect(spread(results)?.steps.median).toBe(4.5);
@@ -203,6 +214,77 @@ describe("the runner records the changes and the attempt", () => {
       ["o", 1],
       ["q", 2],
     ]);
+  });
+});
+
+// The user's run (2026-10-29): a refused key made every run an error.
+const refused = (id: string, attempt: number): EvalResult =>
+  run(id, false, {
+    attempt,
+    stopReason: "error",
+    steps: 0,
+    reason:
+      'The run failed: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}',
+  });
+
+describe("runs that never ran", () => {
+  it("a report with only error runs gives no interval and says why", () => {
+    const report = formatReport([
+      refused("a", 1),
+      refused("a", 2),
+      refused("b", 1),
+      refused("b", 2),
+    ]);
+    expect(report).toContain("No scored run: every run failed with an error");
+    expect(report).not.toContain("Pass rate over all attempts");
+    expect(report).not.toContain("passed none");
+    // One error run among real runs: the evidence stays, and the task is listed apart.
+    const mixed = formatReport([
+      run("a", true, { attempt: 1 }),
+      run("a", true, { attempt: 2 }),
+      refused("b", 1),
+      refused("b", 2),
+    ]);
+    expect(mixed).toContain("Pass rate over all attempts: 50%");
+    expect(mixed).toContain("0 passed none; 1 had only error runs (b)");
+  });
+
+  it("an authentication error stops the eval; other errors do not", async () => {
+    expect(isAuthFailure(refused("a", 1))).toBe(true);
+    expect(
+      isAuthFailure(run("a", false, { stopReason: "error", reason: "403 permission_error" })),
+    ).toBe(true);
+    expect(
+      isAuthFailure(
+        run("a", false, { stopReason: "error", reason: "The run failed: socket hang up" }),
+      ),
+    ).toBe(false);
+    // A failed check is no error run, even if its output says 401.
+    expect(isAuthFailure(run("a", false, { reason: "The check failed:\nexpected 401" }))).toBe(
+      false,
+    );
+
+    const task: EvalTask = {
+      id: "k",
+      title: "k",
+      prompt: "p",
+      files: { "a.txt": "a" },
+      check: "true",
+      solution: {},
+    };
+    const results = await runEvals(
+      [task, { ...task, id: "l" }, { ...task, id: "m" }],
+      {
+        modelId: "fake",
+        model: () => {
+          throw new Error('401 {"type":"error","error":{"type":"authentication_error"}}');
+        },
+      },
+      undefined,
+      isAuthFailure,
+    );
+    expect(results.map((r) => r.id)).toEqual(["k"]);
+    expect(results[0]?.reason).toMatch(/authentication_error/);
   });
 });
 

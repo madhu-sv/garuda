@@ -10,7 +10,7 @@ import {
   repoEvalTasks,
   saveRepoSuite,
 } from "../evals/repoTasks.js";
-import { formatReport, runEvals, summarize } from "../evals/runner.js";
+import { formatReport, isAuthFailure, runEvals, summarize } from "../evals/runner.js";
 import { DEFAULT_SEED, shuffled } from "../evals/stats.js";
 import { ALL_TASKS, EVAL_SUITES, requiredToolchains } from "../evals/suites.js";
 import { checkToolchains, prepareToolchain, TOOLCHAINS, toolchainId } from "../evals/toolchains.js";
@@ -362,9 +362,16 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       process.stderr.write(
         `${r.passed ? "✓" : "✗"} ${r.id}: ${r.passed ? "pass" : "fail"} (${r.steps} steps)${r.reason ? `\n    ${r.reason.split("\n").slice(0, 3).join("\n    ")}` : ""}\n`,
       ),
+    // A refused key fails every run: stop at the first one (0.17).
+    isAuthFailure,
   );
 
   const wallMs = Date.now() - started;
+  if (results.length < tasks.length) {
+    process.stderr.write(
+      `\nStopped after ${results.length} of ${tasks.length} run(s): the provider refused the API key or the access. Check ANTHROPIC_API_KEY (it wins over the stored key) or run \`garuda setup\`.\n`,
+    );
+  }
   const report = `${formatReport(results, { seed })}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),

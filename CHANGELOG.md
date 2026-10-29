@@ -14,7 +14,10 @@
   change (all attempts divided by the passes), and unexpected changes (files that a run changed
   but the task did not need; a new `allowChanges` field widens a task's scope). `--shuffle` and
   `--seed` set the run order. `report.json` is version 2, with Garuda's version and commit, the
-  model, the OS, the seed, the run order and a hash of each task.
+  model, the OS, the seed, the run order and a hash of each task. A run whose every attempt failed
+  with an error gives no interval ("No scored run"), a task with only error runs is not counted as
+  "passed none", and an authentication error (401 or 403, for example a refused API key) stops the
+  eval at the first run instead of failing every run the same way.
 - Design (T11; part 1 of T11a built, the rest not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).

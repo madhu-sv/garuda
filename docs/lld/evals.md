@@ -46,14 +46,18 @@ For each task (and each repeat):
    (5 min for a repo task). The task self-tests run known solutions on the host. A repo task's worktree is removed
    after the run (`git worktree remove`), unless `--keep`.
 6. Copy the session file to `.garuda/evals/<run-id>/<task>.jsonl` (`-2`, `-3` … for repeats).
-7. `runEvals` numbers the repeats of each task in run order (`attempt`).
+7. `runEvals` numbers the repeats of each task in run order (`attempt`). Its `stop` predicate
+   (0.17) ends the eval: `garuda eval` passes `isAuthFailure` (an error run whose reason names a
+   401 or 403 or an authentication or permission error), so a refused key stops after one run, and
+   the result list holds only the runs that ran.
 
 The report (0.17, T11a) adds, after the totals: the pass rate over all attempts with a 95% interval
 (a cluster bootstrap over tasks: a draw takes as many tasks as the run has, with replacement, and all
 runs of each drawn task; 10 000 draws, `--seed`), the tasks that passed every run and none, the
 median and p95 of steps, tokens and time over the scored runs, the cost per accepted change (all
 attempts / passes; "unknown" or "≥" as for the cost), and the runs with unexpected changes. The mean
-row per task gets the standard deviation of steps. `report.json` is version 2 (`schema: 2`): Garuda's
+row per task gets the standard deviation of steps. When every run is an error run, the report gives
+only "No scored run"; a task whose runs are all errors is listed apart, not as "passed none". `report.json` is version 2 (`schema: 2`): Garuda's
 version and commit, the model spec and provider, the isolation, the OS, the seed and order, a hash
 per task, and the same evidence in `evidence`.
 
