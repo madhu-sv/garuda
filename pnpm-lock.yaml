@@ -12,8 +12,8 @@ importers:
   .:
     dependencies:
       '@agentclientprotocol/sdk':
-        specifier: 1.7.0
-        version: 1.7.0(zod@4.6.7)
+        specifier: 2.0.2
+        version: 2.0.2(zod@4.6.7)
       '@anthropic-ai/sdk':
         specifier: ^0.128.0
         version: 0.128.0(zod@4.6.7)
@@ -90,10 +90,10 @@ importers:
 
 packages:
 
-  '@agentclientprotocol/sdk@1.7.0':
-    resolution: {integrity: sha512-ZORuxsuEnLjRly7t6Ad7zAsWitjWsyprswyPUHz/yycPb+tTm3DGa8XheaHhRXqX8LS9snuxaYavXSRA50TlHw==}
+  '@agentclientprotocol/sdk@2.0.2':
+    resolution: {integrity: sha512-jLywRB42hZMRMc4aUgt0uRjkY9FQnMdybv4XgLl+ddi75QuJn8Vbl0+CHcVHJDC0+WDfi1KQXRWtHaR5vp6gHw==}
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
+      zod: ^3.25.76 || ^4.0.0
 
   '@alcalzone/ansi-tokenize@0.3.1':
     resolution: {integrity: sha512-cUD0PT0YX+rImRhfn7BfMRduP/tX/Zqt/N0dHlAyn2RlcJssCb5KsCJkhln61eh9vuJDkH8wKn3L8zJzzWXPFg==}
@@ -1746,7 +1746,7 @@ packages:
 
 snapshots:
 
-  '@agentclientprotocol/sdk@1.7.0(zod@4.6.7)':
+  '@agentclientprotocol/sdk@2.0.2(zod@4.6.7)':
     dependencies:
       zod: 4.6.7
 
