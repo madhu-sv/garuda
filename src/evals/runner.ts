@@ -196,7 +196,9 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   const timeout = AbortSignal.timeout(limitMs);
   try {
     if (options.agent !== undefined) {
-      // The baseline (T11b): Claude Code in the run's sandbox, with the same limits.
+      // The baseline (T11b): Claude Code in the run's sandbox, with the same limits. The proxy
+      // for api.anthropic.com starts first (the user's first run: no proxy, ECONNREFUSED).
+      await runtime.prepareCommands(timeout);
       const { result: exec, outcome } = await runClaudeCode(
         runtime.executor,
         runtime.execPolicy(limitMs),
@@ -321,6 +323,22 @@ export function isAuthFailure(result: EvalResult): boolean {
   return /\b40[13]\b|authentication_error|permission_error|invalid x-api-key|invalid api key/i.test(
     result.reason,
   );
+}
+
+/**
+ * The API cannot be reached at all (0.17): a refused connection, an unknown host, a certificate
+ * error. The user's first baseline run retried this for 200 s in each of six runs.
+ */
+export function isConnectionFailure(result: EvalResult): boolean {
+  if (!isErrorRun(result) || result.reason === undefined) return false;
+  return /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|connection refused|self[- ]signed certificate|unable to get local issuer certificate|certificate has expired/i.test(
+    result.reason,
+  );
+}
+
+/** A failure that every later run would repeat: the eval stops at it (0.17). */
+export function isSetupFailure(result: EvalResult): boolean {
+  return isAuthFailure(result) || isConnectionFailure(result);
 }
 
 /**

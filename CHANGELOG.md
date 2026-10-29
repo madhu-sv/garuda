@@ -28,7 +28,11 @@
   Garuda against Claude Code. Claude Code runs with every tool allowed, so only in the OS sandbox,
   with network only to `api.anthropic.com`, a new config folder per run, and the API key in its
   environment only. Its turns, tokens and cost come from its JSON result. `eval compare` prints a
-  zero difference as "0 pts" and says when every draw gave the same difference.
+  zero difference as "0 pts" and says when every draw gave the same difference. The user's first
+  live baseline run found that the proxy for `api.anthropic.com` started only in a Garuda turn, so
+  Claude Code had no network: the runner now starts it first (`Runtime.prepareCommands`). An eval
+  now also stops at the first run that cannot reach the API (a refused connection, an unknown
+  host, a certificate error), as it does for a refused key.
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).

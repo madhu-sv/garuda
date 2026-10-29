@@ -43,7 +43,8 @@ For each task (and each repeat):
    `wget*`), `mcp: false`, `hooks: false`, `web.enabled: false`, and the chosen executor and code index mode.
 4. `runTurn(prompt)` with a 10-minute limit. With `agent` (T11b, the Claude Code baseline), the
    runtime is still made (the executor, the policy of bash, the proxy for `api.anthropic.com`),
-   but `runClaudeCode` runs `claude -p … --permission-mode bypassPermissions` in it instead, with
+   but `runClaudeCode` runs `claude -p … --permission-mode bypassPermissions` in it instead (after
+   `runtime.prepareCommands`, which starts the allowlist's proxy; a turn does that itself), with
    `--max-turns` = the step limit. Steps, tokens, cache reads and cost come from its JSON result;
    no JSON is an error run with an unknown cost; a time-out is "timeout". The JSON is saved as
    `<task>.claude.json`. Claude Code's `.claude` folder in the project is not a change of the task.
@@ -54,9 +55,10 @@ For each task (and each repeat):
    after the run (`git worktree remove`), unless `--keep`.
 6. Copy the session file to `.garuda/evals/<run-id>/<task>.jsonl` (`-2`, `-3` … for repeats).
 7. `runEvals` numbers the repeats of each task in run order (`attempt`). Its `stop` predicate
-   (0.17) ends the eval: `garuda eval` passes `isAuthFailure` (an error run whose reason names a
-   401 or 403 or an authentication or permission error), so a refused key stops after one run, and
-   the result list holds only the runs that ran.
+   (0.17) ends the eval: `garuda eval` passes `isSetupFailure`: `isAuthFailure` (an error run whose
+   reason names a 401 or 403 or an authentication or permission error) or `isConnectionFailure`
+   (ECONNREFUSED, ENOTFOUND, EAI_AGAIN, a certificate error). So a refused key or an unreachable API
+   stops after one run, and the result list holds only the runs that ran.
 
 The report (0.17, T11a) adds, after the totals: the pass rate over all attempts with a 95% interval
 (a cluster bootstrap over tasks: a draw takes as many tasks as the run has, with replacement, and all

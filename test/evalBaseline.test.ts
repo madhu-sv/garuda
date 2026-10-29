@@ -9,7 +9,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { Runtime } from "../src/app/runtime.js";
 import { claudeCodeAgent } from "../src/cli/evalCommand.js";
 import {
   type ClaudeCodeAgent,
@@ -17,9 +18,10 @@ import {
   parseClaudeResult,
 } from "../src/evals/agents/claudeCode.js";
 import { compareReports, formatComparison, type LoadedReport } from "../src/evals/compare.js";
-import { runEvalTask } from "../src/evals/runner.js";
-import type { EvalTask } from "../src/evals/types.js";
+import { isConnectionFailure, isSetupFailure, runEvals, runEvalTask } from "../src/evals/runner.js";
+import type { EvalResult, EvalTask } from "../src/evals/types.js";
 import { resolveModel } from "../src/model/providers.js";
+import { findOsSandbox } from "../src/sandbox/index.js";
 
 /** T11b (0.17): the Claude Code baseline on the same tasks (docs/lld/eval-evidence.md). */
 
@@ -185,6 +187,113 @@ describe("the baseline runs through the runner, with the same grading", () => {
     expect(capped.stopReason).toBe("max_steps");
   });
 });
+
+// The user's first baseline run (2026-10-29): no proxy, so every run failed after 200 s of retries.
+const REFUSED =
+  "API Error: Connection refused — a firewall or proxy may be blocking it (ECONNREFUSED)";
+
+describe("the network for the baseline (the user's first run)", () => {
+  const task: EvalTask = {
+    id: "net",
+    title: "net",
+    prompt: "p",
+    files: { "a.txt": "a" },
+    check: "true",
+    solution: {},
+  };
+
+  it("the runner starts the commands' network (the proxy) before Claude Code runs", async () => {
+    const spy = vi.spyOn(Runtime.prototype, "prepareCommands");
+    try {
+      await runEvalTask(task, {
+        modelId: "m",
+        model: () => {
+          throw new Error("no");
+        },
+        network: ["api.anthropic.com"],
+        agent: { name: "claude-code", command: fakeClaude(success()), model: "m", env: {} },
+      });
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("an unreachable API stops the eval at the first run", async () => {
+    const failed = success({ subtype: "error_during_execution", is_error: true, result: REFUSED });
+    const r = (reason: string) =>
+      ({
+        id: "a",
+        title: "a",
+        passed: false,
+        stopReason: "error",
+        steps: 1,
+        tokens: 0,
+        costUsd: 0,
+        durationMs: 1,
+        reason,
+      }) as EvalResult;
+    expect(isConnectionFailure(r(`Claude Code failed: ${REFUSED}`))).toBe(true);
+    expect(isSetupFailure(r("The run failed: getaddrinfo ENOTFOUND api.anthropic.com"))).toBe(true);
+    expect(isSetupFailure(r("The run failed: 529 overloaded"))).toBe(false);
+    const results = await runEvals(
+      [task, { ...task, id: "net2" }, { ...task, id: "net3" }],
+      {
+        modelId: "m",
+        model: () => {
+          throw new Error("no");
+        },
+        agent: { name: "claude-code", command: fakeClaude(failed), model: "m", env: {} },
+      },
+      undefined,
+      isSetupFailure,
+    );
+    expect(results.map((x) => x.id)).toEqual(["net"]);
+  });
+});
+
+const os = findOsSandbox();
+describe.runIf(process.platform === "darwin" && "executor" in os)(
+  "macOS: the baseline in Seatbelt",
+  () => {
+    it("Claude Code gets HTTPS_PROXY, and Garuda's proxy answers on that port", async () => {
+      const bin = mkdtempSync(join(temp, "proxy-"));
+      const path = join(bin, "claude");
+      writeFileSync(
+        path,
+        `#!/bin/sh
+port=\${HTTPS_PROXY##*:}
+case "$HTTPS_PROXY" in http://127.0.0.1:*) set=ok ;; *) set=missing ;; esac
+nc -z 127.0.0.1 "$port" && open=ok || open=closed
+printf 'proxy=%s listen=%s\\n' "$set" "$open" > '${bin}/seen.txt'
+printf '%s\\n' '${success()}'
+`,
+      );
+      chmodSync(path, 0o755);
+      const r = await runEvalTask(task(), {
+        modelId: "m",
+        model: () => {
+          throw new Error("no");
+        },
+        network: ["api.anthropic.com"],
+        agent: { name: "claude-code", command: path, model: "m", env: {} },
+      });
+      expect(r.reason).toBeUndefined();
+      expect(readFileSync(join(bin, "seen.txt"), "utf8")).toContain("proxy=ok listen=ok");
+    }, 60_000);
+  },
+);
+
+function task(): EvalTask {
+  return {
+    id: "proxy",
+    title: "proxy",
+    prompt: "p",
+    files: { "a.txt": "a" },
+    check: "true",
+    solution: {},
+  };
+}
 
 describe("garuda eval --agent claude-code: what it refuses", () => {
   const anthropic = resolveModel("claude-haiku-5-5");

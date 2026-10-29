@@ -163,7 +163,11 @@ the process's environment only. Claude Code's `.claude` folder in the project is
 changed files, as `.garuda` is. The JSON result is saved as `<task>.claude.json`; the cost of a
 run with no JSON is unknown. Options that change only Garuda are refused with the baseline.
 `report.json` records `agent: { name, version }`. `num_turns` counts Claude Code's turns, close to,
-but not the same as, Garuda's model calls.
+but not the same as, Garuda's model calls. The first live run (macOS, 2026-10-29) failed in every
+run with ECONNREFUSED: the runtime starts the allowlist's proxy only in a turn, and the baseline
+runs no turn, so Claude Code got no `HTTPS_PROXY`. The runner now calls `runtime.prepareCommands`
+first, a test checks the call, and a macOS test checks that the fake `claude` sees `HTTPS_PROXY`
+with a listening port in Seatbelt. A connection failure also stops the eval at the first run.
 
 ## T11c: task split and held-out tasks
 

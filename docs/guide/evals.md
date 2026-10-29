@@ -36,7 +36,8 @@ The report (0.17) says how far one run's numbers can be trusted:
 - unexpected changes: files that a run changed but the task did not need. They do not fail a task;
   a pass with extra edits is still a weaker result.
 
-When the provider refuses the API key (401 or 403), `garuda eval` stops after that run and says
+When the provider refuses the API key (401 or 403), or the API cannot be reached (a refused
+connection, an unknown host, a certificate error), `garuda eval` stops after that run and says
 so: every other run would fail the same way. Check `ANTHROPIC_API_KEY` (it wins over the stored
 key) or run `garuda setup`. A report in which every run failed with an error says "No scored run"
 and gives no rate: such a run measured nothing about the agent.
