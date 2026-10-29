@@ -60,6 +60,31 @@ and median time. It refuses two reports whose tasks differ (other task ids, or a
 changed). A difference whose interval contains 0 is "no clear difference", never a win. Use the same
 seed and `--repeat 3` or more in both arms.
 
+### Claude Code as the baseline (0.17)
+
+`--agent claude-code` runs Claude Code (`claude -p`) on the same tasks, with the same scratch
+folders, prompt, time limit and grading. Only the agent differs:
+
+```sh
+garuda eval -s hard --repeat 3 --shuffle --seed 7 -m claude-sonnet-5-5                        # Garuda
+garuda eval -s hard --repeat 3 --shuffle --seed 7 -m claude-sonnet-5-5 --agent claude-code    # baseline
+garuda eval compare .garuda/evals/<garuda-run> .garuda/evals/<baseline-run>
+```
+
+- It needs the `claude` program on PATH, a Claude model, and an API key in `ANTHROPIC_API_KEY`
+  (or one stored with `garuda setup`). A Claude subscription login is not used: the sandbox keeps
+  the Keychain closed.
+- Claude Code runs with every tool allowed (`bypassPermissions`), so Garuda runs it only in the OS
+  sandbox: it writes only in the scratch folder and temp folders, and its network goes through
+  Garuda's proxy to `api.anthropic.com` only. Without an OS sandbox the baseline is refused.
+- Each run gets a new, empty config folder, so your own `CLAUDE.md`, settings, MCP servers, hooks
+  and history do not change the result. The key reaches the process in its environment only.
+- Its turn limit is `--max-steps` (default 50). Its tokens and cost come from Claude Code's own
+  JSON result, which is saved as `<task>.claude.json` in the run folder.
+- Options that change only Garuda (`--index`, `--subagents`, `--todo`, `--lsp`, `--keep-thinking`,
+  `--format`, `--batch`, `--network`) are refused with the baseline, so the two arms differ in the
+  agent only.
+
 `--batch on` (0.7, Anthropic models) sends every model call as a batch of one: half the token price,
 but each step waits until its batch ends (usually minutes). It runs all tasks at the same time (up to 20;
 `--parallel` changes it) and gives each task 12 hours. The report shows the share of tokens from the

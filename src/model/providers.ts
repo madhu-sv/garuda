@@ -247,6 +247,14 @@ export async function keepProviderKeys(
   return stored.warning;
 }
 
+/**
+ * A provider key's value (0.17, T11b): the kept key, else the environment. For a process that
+ * needs the key in its own environment (the Claude Code baseline); never for a file or a log.
+ */
+export function providerKeyValue(name: string): string | undefined {
+  return providerKey(process.env, name);
+}
+
 function providerKey(env: NodeJS.ProcessEnv, name: string | undefined): string | undefined {
   if (name === undefined) return undefined;
   return keptKeys.get(name)?.value ?? env[name];

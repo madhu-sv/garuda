@@ -13,6 +13,8 @@ import { pathMatches } from "../permissions/rules.js";
 const IGNORED_DIRS = new Set([
   ".git",
   ".garuda",
+  // Claude Code's own project folder (the T11b baseline), as .garuda is Garuda's.
+  ".claude",
   "node_modules",
   "target",
   "build",

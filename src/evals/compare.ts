@@ -156,6 +156,11 @@ export function compareReports(
   const low = quantile(diffs, tail);
   const high = quantile(diffs, 1 - tail);
   const verdict = low > 0 ? "B passes more" : high < 0 ? "B passes less" : "no clear difference";
+  if (low === high) {
+    notes.push(
+      "Every draw gave the same difference, so the interval shows no uncertainty: more tasks, or tasks that sometimes fail, are needed to measure it.",
+    );
+  }
   if (rows.length < 10) notes.push(roughNote(rows.length));
   if (a.seed !== undefined && b.seed !== undefined && a.seed !== b.seed) {
     notes.push(
@@ -187,8 +192,11 @@ export function roughNote(tasks: number): string {
 }
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
-const signed = (x: number) =>
-  `${x > 0 ? "+" : x < 0 ? "−" : "±"}${Math.round(Math.abs(x) * 100)} pts`;
+const signed = (x: number) => {
+  const points = Math.round(Math.abs(x) * 100);
+  // The user's live run printed "±0 pts to ±0 pts": a zero has no sign.
+  return points === 0 ? "0 pts" : `${x > 0 ? "+" : "−"}${points} pts`;
+};
 
 /** The comparison as text for the terminal. */
 export function formatComparison(a: LoadedReport, b: LoadedReport, c: Comparison): string {

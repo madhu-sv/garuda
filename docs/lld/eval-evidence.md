@@ -2,7 +2,7 @@
 
 Status: design approved (2026-10-29). Built: T11a (patch 1: unexpected changes, the stats module,
 report v2 and metadata, `--shuffle`, `--seed`; patch 2: `garuda eval compare`); see "As built" in
-T11a. T11b, T11c and T11d are not built yet. The user chose: Claude
+T11a; T11b (the Claude Code baseline), see "As built" in T11b. T11c and T11d are not built yet. The user chose: Claude
 Code (`claude -p`) as the baseline agent; a prompt addendum file as the only thing that the
 proposer loop may edit; this design note before any code. The user's answers to the open questions
 are in "Decisions" at the end.
@@ -151,6 +151,19 @@ claude -p <task prompt> --output-format json --model <model id> --max-turns <max
 - Claude Code's permission rules differ from Garuda's. Both arms run with every tool allowed in a
   sandbox, which is the fairest common ground.
 - A result is valid only for the model, versions and tasks in its metadata.
+
+### As built
+
+`src/evals/agents/claudeCode.ts`, `garuda eval --agent claude-code`. As planned, with these
+details: the runner still makes a Garuda runtime for the task (its executor, the policy of bash
+and the proxy), but runs Claude Code in it in place of the turn. The new config folder holds a
+`.claude.json` with `hasCompletedOnboarding`, so print mode asks nothing; `DISABLE_AUTOUPDATER=1`
+too. The API key is read with `providerKeyValue` (the kept key, else the environment) and passed in
+the process's environment only. Claude Code's `.claude` folder in the project is left out of the
+changed files, as `.garuda` is. The JSON result is saved as `<task>.claude.json`; the cost of a
+run with no JSON is unknown. Options that change only Garuda are refused with the baseline.
+`report.json` records `agent: { name, version }`. `num_turns` counts Claude Code's turns, close to,
+but not the same as, Garuda's model calls.
 
 ## T11c: task split and held-out tasks
 

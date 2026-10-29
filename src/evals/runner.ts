@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Runtime, type RuntimeOptions } from "../app/runtime.js";
 import { git } from "../jobs/git.js";
 import type { CodeIndexMode } from "../knowledge/mode.js";
+import { DEFAULT_MAX_STEPS } from "../loop/limits.js";
 import type { AgentEvent } from "../loop/runAgent.js";
 import { type ModelInfo, totalTokens } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
@@ -17,6 +18,7 @@ import type { ExecutorName } from "../sandbox/index.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { isCostIncomplete } from "../session/session.js";
 import { FileSessionStore } from "../session/store.js";
+import { type ClaudeCodeAgent, runClaudeCode } from "./agents/claudeCode.js";
 import { changedPaths, treeState, unexpectedPaths } from "./changes.js";
 import { roughNote } from "./compare.js";
 import { writeFiles } from "./files.js";
@@ -99,6 +101,12 @@ export interface EvalOptions {
    * Garuda's proxy. Other hosts are denied (no question). Default: none, as in the product.
    */
   network?: string[];
+  /**
+   * The agent (0.17, T11b): Garuda (default) or the Claude Code baseline. The baseline runs in
+   * the run's executor with the same scratch folder, time limit and grading; the model, the
+   * settings above that change Garuda, and the session belong to Garuda only.
+   */
+  agent?: ClaudeCodeAgent;
 }
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
@@ -187,9 +195,35 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   const limitMs = options.taskTimeoutMs ?? EVAL_TASK_TIMEOUT_MS;
   const timeout = AbortSignal.timeout(limitMs);
   try {
-    const run = await runtime.runTurn(task.prompt, timeout);
-    result.stopReason = run.stopReason;
-    result.steps = run.steps;
+    if (options.agent !== undefined) {
+      // The baseline (T11b): Claude Code in the run's sandbox, with the same limits.
+      const { result: exec, outcome } = await runClaudeCode(
+        runtime.executor,
+        runtime.execPolicy(limitMs),
+        options.agent,
+        task.prompt,
+        options.maxSteps ?? DEFAULT_MAX_STEPS,
+        timeout,
+      );
+      result.stopReason = outcome.stopReason;
+      result.steps = outcome.steps;
+      result.tokens = outcome.tokens;
+      result.cacheReadTokens = outcome.cacheReadTokens;
+      result.costUsd = outcome.costUsd;
+      if (outcome.reason !== undefined) result.reason = outcome.reason;
+      if (options.outDir !== undefined) {
+        mkdirSync(options.outDir, { recursive: true });
+        let target = join(options.outDir, `${task.id}.claude.json`);
+        for (let n = 2; existsSync(target); n++)
+          target = join(options.outDir, `${task.id}-${n}.claude.json`);
+        await writeFile(target, exec.stdout.text);
+        result.sessionFile = target;
+      }
+    } else {
+      const run = await runtime.runTurn(task.prompt, timeout);
+      result.stopReason = run.stopReason;
+      result.steps = run.steps;
+    }
   } catch (error) {
     runtime.recordStop("error");
     if (timeout.aborted) {
@@ -205,7 +239,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   }
 
   const session = runtime.session;
-  if (session !== undefined) {
+  if (session !== undefined && options.agent === undefined) {
     result.tokens = totalTokens(session.usage);
     if (session.unreportedTokens > 0) result.unreportedTokens = session.unreportedTokens;
     result.costUsd = session.costUsd;

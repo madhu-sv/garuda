@@ -72,6 +72,8 @@ export interface ReportMetadata {
   isolation: string;
   seed: number;
   shuffle: boolean;
+  /** The agent (T11b): Garuda, or the Claude Code baseline with its version. */
+  agent?: { name: string; version?: string };
 }
 
 /** The version 2 fields: metadata, task hashes, the run order and the evidence. */
@@ -85,6 +87,7 @@ export async function reportV2(
     schema: REPORT_SCHEMA,
     garuda: { version: VERSION, ...(commit === undefined ? {} : { commit }) },
     spec: meta.model,
+    agent: meta.agent ?? { name: "garuda" },
     provider: meta.provider,
     // Evals set no effort: each model's default applies.
     effort: "model default",
