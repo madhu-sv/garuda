@@ -60,10 +60,36 @@ export function parseReport(data: Record<string, unknown>, path: string): Loaded
   };
 }
 
+export interface ArmRuns {
+  passes: number;
+  runs: number;
+  /** The cost of all runs; undefined when one run's cost is unknown. */
+  costUsd: number | undefined;
+  /** One run's cost is a minimum. */
+  minimum: boolean;
+}
+
 export interface TaskRow {
   id: string;
-  a: { passes: number; runs: number };
-  b: { passes: number; runs: number };
+  a: ArmRuns;
+  b: ArmRuns;
+}
+
+/**
+ * The cost per accepted change of B over A (0.17): cost of all attempts / passes, each arm over
+ * the drawn tasks, with the same paired bootstrap as the pass rate. A draw in which an arm has no
+ * pass gives no ratio and is skipped.
+ */
+export interface CostRatio {
+  value: number;
+  low: number;
+  high: number;
+  draws: number;
+  skipped: number;
+  verdict:
+    | "no clear difference"
+    | "B costs more per accepted change"
+    | "B costs less per accepted change";
 }
 
 export interface Comparison {
@@ -80,6 +106,8 @@ export interface Comparison {
     seed: number;
   };
   verdict: "no clear difference" | "B passes more" | "B passes less";
+  /** Undefined when a run's cost is unknown or an arm has no pass. */
+  costRatio?: CostRatio;
   notes: string[];
 }
 
@@ -121,11 +149,18 @@ export function compareReports(
   const rows: TaskRow[] = idsA.map((id) => {
     const ta = tasksA.get(id);
     const tb = tasksB.get(id);
-    return {
-      id,
-      a: { passes: ta?.passes ?? 0, runs: ta?.runs ?? 0 },
-      b: { passes: tb?.passes ?? 0, runs: tb?.runs ?? 0 },
+    const arm = (t: typeof ta): ArmRuns => {
+      const results = t?.results ?? [];
+      return {
+        passes: t?.passes ?? 0,
+        runs: t?.runs ?? 0,
+        costUsd: results.some((r) => r.costUsd === undefined)
+          ? undefined
+          : results.reduce((s, r) => s + (r.costUsd ?? 0), 0),
+        minimum: results.some((r) => r.costIncomplete === true),
+      };
     };
+    return { id, a: arm(ta), b: arm(tb) };
   });
   const rate = (side: "a" | "b", list: readonly TaskRow[]) =>
     list.reduce((s, r) => s + r[side].passes, 0) / list.reduce((s, r) => s + r[side].runs, 0);
@@ -167,6 +202,16 @@ export function compareReports(
       `The arms ran with different seeds (${a.seed} and ${b.seed}): their run orders differ.`,
     );
   }
+  const cost = costRatio(rows, seed, draws, level);
+  if (typeof cost === "string") notes.push(cost);
+  else if (cost.skipped > draws * 0.05) {
+    notes.push(
+      `The cost interval skipped ${cost.skipped} of ${draws} draws (an arm had no pass in them).`,
+    );
+  }
+  if (rows.some((r) => r.a.minimum || r.b.minimum)) {
+    notes.push("A run's cost is a minimum (no reported usage): the cost ratio is approximate.");
+  }
   const runsA = rows.map((r) => r.a.runs);
   const runsB = rows.map((r) => r.b.runs);
   if (Math.min(...runsA, ...runsB) < 3) {
@@ -181,8 +226,59 @@ export function compareReports(
       rateB,
       difference: { value: rateB - rateA, low, high, level, draws, seed },
       verdict,
+      ...(typeof cost === "string" ? {} : { costRatio: cost }),
       notes,
     },
+  };
+}
+
+/** The cost ratio with its paired interval, or why there is none. */
+function costRatio(
+  rows: readonly TaskRow[],
+  seed: number,
+  draws: number,
+  level: number,
+): CostRatio | string {
+  if (rows.some((r) => r.a.costUsd === undefined || r.b.costUsd === undefined)) {
+    return "A run's cost is unknown: no cost comparison.";
+  }
+  const per = (list: readonly TaskRow[], side: "a" | "b") => {
+    const passes = list.reduce((s, r) => s + r[side].passes, 0);
+    const cost = list.reduce((s, r) => s + (r[side].costUsd ?? 0), 0);
+    return passes === 0 ? undefined : cost / passes;
+  };
+  const a = per(rows, "a");
+  const b = per(rows, "b");
+  if (a === undefined || b === undefined || a === 0) {
+    return "An arm has no pass (or no cost): no cost ratio.";
+  }
+  const random = seeded(seed);
+  const ratios: number[] = [];
+  const drawn: TaskRow[] = new Array(rows.length);
+  for (let d = 0; d < draws; d++) {
+    for (let i = 0; i < rows.length; i++) {
+      drawn[i] = rows[Math.floor(random() * rows.length)] as TaskRow;
+    }
+    const ca = per(drawn, "a");
+    const cb = per(drawn, "b");
+    if (ca !== undefined && cb !== undefined && ca > 0) ratios.push(cb / ca);
+  }
+  const sorted = Float64Array.from(ratios).sort();
+  const tail = (1 - level) / 2;
+  const low = quantile(sorted, tail);
+  const high = quantile(sorted, 1 - tail);
+  return {
+    value: b / a,
+    low,
+    high,
+    draws,
+    skipped: draws - ratios.length,
+    verdict:
+      low > 1
+        ? "B costs more per accepted change"
+        : high < 1
+          ? "B costs less per accepted change"
+          : "no clear difference",
   };
 }
 
@@ -229,6 +325,12 @@ export function formatComparison(a: LoadedReport, b: LoadedReport, c: Comparison
             ? "no passes"
             : `${cost.minimum ? "≥ " : ""}$${cost.usd.toFixed(4)}`
       } · unexpected changes ${u.measured === 0 ? "not measured" : `${u.runs} of ${u.measured} runs`} · median time ${s === undefined ? "–" : `${Math.round(s.durationMs.median / 1000)} s`}`,
+    );
+  }
+  if (c.costRatio !== undefined) {
+    const x = (v: number) => `×${v.toFixed(2)}`;
+    lines.push(
+      `Cost per accepted change: B/A ${x(c.costRatio.value)} (95% paired interval ${x(c.costRatio.low)} to ${x(c.costRatio.high)}). Verdict: ${c.costRatio.verdict}${c.costRatio.verdict === "no clear difference" ? " (the interval contains ×1.00)" : ""}.`,
     );
   }
   for (const note of c.notes) lines.push(`Note: ${note}`);

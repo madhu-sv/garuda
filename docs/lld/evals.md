@@ -24,7 +24,7 @@ same-build A/B runs.
 | `stats.ts` | T11a (0.17): `seeded` and `shuffled`; `passInterval` (cluster bootstrap over tasks), `consistency`, `spread`, `stepsSd`, `costPerPass`, `unexpectedChanges`. |
 | `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`). |
 | `agents/claudeCode.ts` | T11b (0.17): the Claude Code baseline: `claudeCommand`, `parseClaudeResult` (turns, tokens, cache reads, cost, `error_max_turns`, errors), `runClaudeCode` (the run's executor and policy, a new `CLAUDE_CONFIG_DIR`, the key in the process environment only). |
-| `compare.ts` | T11a (0.17): `garuda eval compare`: `loadReport` (version 1 and 2), `compareReports` (refuses other tasks or changed hashes; a paired bootstrap of B − A), `formatComparison`, `roughNote`. |
+| `compare.ts` | T11a (0.17): `garuda eval compare`: `loadReport` (version 1 and 2), `compareReports` (refuses other tasks or changed hashes; a paired bootstrap of B − A and of the cost-per-accepted-change ratio B/A), `formatComparison`, `roughNote`. |
 
 ## Runner
 
@@ -242,6 +242,16 @@ This prevents an unmeasured run from appearing to use zero tokens or to be free.
   36.6 steps, 186k tokens, $0.130; on 15/15, 37.6 steps, 195k, $0.132; task times the same (13–31 s), so
   the warm start hid the Maven import. jdtls answered every edit in the Seatbelt sandbox (23 "No errors"
   results, no errors, no notices). Again no type errors to catch: no gain, no extra cost; off by default.
+- First Claude Code baseline (T11b, 2026-10-29, the user's Mac, Seatbelt; claude-haiku-5-5 in both
+  arms; Claude Code 2.1.312; `--repeat 3 --shuffle --seed 7`): basic suite, Garuda 30/30, 143
+  steps, $0.0258, $0.0009 per accepted change, median 17.3k tokens per run; Claude Code 30/30, 186
+  steps, $0.0666, $0.0022, median 72.5k tokens. Hard suite: Garuda 18/18, 114 steps, $0.0424,
+  $0.0024, median 41.7k; Claude Code 18/18, 120 steps, $0.0646, $0.0036, median 118.9k. Garuda was
+  cheaper on 15 of the 16 tasks (hard-rename: equal). Both arms passed every run, so the pass rates
+  measure nothing here (a ceiling); the tasks are too easy for this model. Claude Code's turns and
+  Garuda's model calls are close but not the same unit. hard-coupon's three "unexpected" changes in
+  each arm were fair parts of the feature: it now has `allowChanges`. A quality comparison needs
+  harder tasks (the held-out set, T11c).
 - The requirements doc keeps the per-task tables ("0.1 results", "0.2 results").
 
 ## Tests
@@ -270,7 +280,9 @@ Garuda-only options, no key, no `claude` on PATH); the compare polish ("0 pts", 
 
 `test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
 A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for
-the same or noisy results, "B passes less", the same seed; refusal of other tasks and of changed
+the same or noisy results, "B passes less", the same seed; the cost ratio (B at 1.2 times A on cheap
+and expensive tasks gives "B costs more"; an unpaired bootstrap fails this), equal and half costs,
+an unknown cost; refusal of other tasks and of changed
 hashes; the note for a report without hashes, few tasks, other seeds and fewer than 3 runs; the
 printed text; reading a report or its folder; the run report's caution for 2 tasks that all
 passed.

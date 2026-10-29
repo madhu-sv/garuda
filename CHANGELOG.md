@@ -33,6 +33,11 @@
   Claude Code had no network: the runner now starts it first (`Runtime.prepareCommands`). An eval
   now also stops at the first run that cannot reach the API (a refused connection, an unknown
   host, a certificate error), as it does for a refused key.
+- `garuda eval compare` also compares the cost per accepted change: the ratio B/A with a paired
+  95% interval, and a verdict ("B costs more", "B costs less" or "no clear difference"). An unknown
+  cost gives no ratio. The hard-coupon task allows changes in the coupon module and the API routes
+  (`allowChanges`): both agents made them in the first baseline runs. Its task hash changes, so
+  compare new hard-suite runs only with new ones.
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).

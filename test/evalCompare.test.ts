@@ -168,3 +168,73 @@ describe("the run report's caution (the user's first live run: 2 tasks, all pass
     expect(text).toContain("Only 2 tasks: with fewer than 10 tasks the interval is a rough guide.");
   });
 });
+
+describe("compare: the cost ratio (0.17)", () => {
+  /** Each task's runs all pass, at `costs[i]` per run. */
+  function priced(path: string, costs: number[], over: Partial<EvalResult> = {}): LoadedReport {
+    return {
+      path,
+      schema: 2,
+      model: path,
+      seed: 1,
+      tasks: Object.fromEntries(costs.map((_, i) => [`t${i}`, `h${i}`])),
+      results: costs.flatMap((c, i) =>
+        [1, 2, 3].map((k) => run(`t${i}`, true, { attempt: k, costUsd: c, ...over })),
+      ),
+    };
+  }
+
+  it("pairing: B costs 1.2 times A on every task, cheap or expensive, so B costs more", () => {
+    const a = [0.001, 0.001, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.01, 0.01];
+    const r = compareReports(
+      priced("a", a),
+      priced(
+        "b",
+        a.map((c) => c * 1.2),
+      ),
+    );
+    if ("problems" in r) throw new Error(r.problems.join(" "));
+    expect(r.comparison.costRatio?.value).toBeCloseTo(1.2);
+    expect(r.comparison.costRatio?.low).toBeGreaterThan(1);
+    expect(r.comparison.costRatio?.verdict).toBe("B costs more per accepted change");
+  });
+
+  it("equal costs: no clear difference; half the cost: B costs less; the text names it", () => {
+    const a = [0.002, 0.004, 0.003, 0.005, 0.002, 0.003, 0.004, 0.006, 0.002, 0.003];
+    const same = compareReports(priced("a", a), priced("b", a));
+    if ("problems" in same) throw new Error("refused");
+    expect(same.comparison.costRatio?.verdict).toBe("no clear difference");
+    const half = compareReports(
+      priced("a", a),
+      priced(
+        "b",
+        a.map((c) => c / 2),
+      ),
+    );
+    if ("problems" in half) throw new Error("refused");
+    expect(half.comparison.costRatio?.verdict).toBe("B costs less per accepted change");
+    expect(
+      formatComparison(
+        priced("a", a),
+        priced(
+          "b",
+          a.map((c) => c / 2),
+        ),
+        half.comparison,
+      ),
+    ).toMatch(
+      /Cost per accepted change: B\/A ×0\.50 \(95% paired interval ×0\.50 to ×0\.50\)\. Verdict: B costs less per accepted change\./,
+    );
+  });
+
+  it("an unknown cost gives no ratio, with a note; a minimum cost gets a note", () => {
+    const a = priced("a", [0.001, 0.002]);
+    const unknown = compareReports(a, priced("b", [0.001, 0.002], { costUsd: undefined }));
+    if ("problems" in unknown) throw new Error("refused");
+    expect(unknown.comparison.costRatio).toBeUndefined();
+    expect(unknown.comparison.notes.join(" ")).toMatch(/cost is unknown: no cost comparison/);
+    const minimum = compareReports(a, priced("b", [0.001, 0.002], { costIncomplete: true }));
+    if ("problems" in minimum) throw new Error("refused");
+    expect(minimum.comparison.notes.join(" ")).toMatch(/cost ratio is approximate/);
+  });
+});

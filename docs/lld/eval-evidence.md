@@ -110,7 +110,10 @@ or more. `effort` in the report is "model default": evals set none.
 `src/evals/compare.ts` and `garuda eval compare <a> <b> [--seed n]` (a report.json or its run
 folder). It refuses other task ids and changed hashes; a version 1 report (no hashes) compares with
 a note. The verdict is "B passes more" only when the whole interval is above 0, "B passes less"
-only when it is below 0, else "no clear difference". Notes: fewer than 10 tasks, other seeds, fewer
+only when it is below 0, else "no clear difference". After the first baseline runs (both arms
+passed everything, but the costs differed), `compare` also gives the ratio of the cost per
+accepted change (B/A) with the same paired bootstrap and its own verdict; a draw in which an arm
+has no pass is skipped, and an unknown cost gives no ratio. Notes: fewer than 10 tasks, other seeds, fewer
 than 3 runs of a task. After the user's first live run (2 tasks, all passed, "100%–100%"), the run
 report also says when every draw gave the same rate and when there are fewer than 10 tasks.
 

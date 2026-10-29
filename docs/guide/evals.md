@@ -56,8 +56,8 @@ garuda eval compare .garuda/evals/<run-a> .garuda/evals/<run-b>
 ```
 
 `compare` shows each task's passes in both arms, the difference of the pass rates (B − A, over all
-attempts) with a paired 95% interval, and each arm's cost per accepted change, unexpected changes
-and median time. It refuses two reports whose tasks differ (other task ids, or a task hash that
+attempts) with a paired 95% interval, the ratio of the cost per accepted change (B/A) with its own
+paired interval, and each arm's cost per accepted change, unexpected changes and median time. It refuses two reports whose tasks differ (other task ids, or a task hash that
 changed). A difference whose interval contains 0 is "no clear difference", never a win. Use the same
 seed and `--repeat 3` or more in both arms.
 

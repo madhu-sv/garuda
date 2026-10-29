@@ -106,6 +106,9 @@ export const HARD_TASKS: readonly EvalTask[] = [
   task({
     id: "hard-coupon",
     title: "Add a feature across modules",
+    // A feature across modules (0.17): a lookup in the coupon module and the API route are fair
+    // parts of it. Both agents changed them in the first baseline runs, as "unexpected" changes.
+    allowChanges: ["src/domains/coupon/**", "src/api/routes.js"],
     prompt:
       "Add coupon support to orders. When OrderService.create() gets a couponCode, find the coupon with that code and take its percent off the total (round to whole pence). An unknown code must throw a NotFoundError. test/features/coupon.test.js describes the behavior. Do not change the tests.",
     change: {
