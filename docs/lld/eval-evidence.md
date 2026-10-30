@@ -202,25 +202,36 @@ report says so.
 
 ### As built
 
-`src/evals/heldOutTasks.ts` (`HELD_OUT_TASKS`) and `chooseTasks` in `src/evals/suites.ts`. The
+`src/evals/heldOutTasks.ts` (`HELD_OUT_TASKS`), `chooseTasks` in `src/evals/suites.ts`, and the
+shared helpers for written tasks in `src/evals/taskKit.ts`. The
 held-out tasks are in no suite, so `-s all` and `ALL_TASKS` stay dev. `--split heldout` takes the
 held-out set and `-t` picks in it; `-s` with it is refused. `--split all` takes the dev tasks (`-s`
 defaults to `all`) and the held-out set. A held-out id with `-t` on the dev split is refused with
 the fix. `report.json` records `split`. The split is not part of the task hash: the hash covers
 only what decides a result, so the dev hashes did not change.
 
-| Task | Archetype | Language | What decides it |
+The held-out set, second version (the first is now the `medium` dev suite; see below). Each task
+has a trap: a quick fix that passes the visible tests, but not the hidden test or the mutation
+check.
+
+| Task | Archetype | Language | The trap |
 | --- | --- | --- | --- |
-| `ho-ledger` | multi-file defect | TypeScript | Two causes (a conversion in `convert.ts`, rounding in `ledger.ts`) behind one wrong report. |
-| `ho-scheduler` | multi-file defect | Python | A weekday index from `isoweekday` and a same-day hour test. |
-| `ho-inventory` | multi-file defect | Java | `Sku` without `equals`/`hashCode`, and `release` that does not remove. |
-| `ho-rename-option` | refactor | TypeScript | `timeoutMs` to `deadlineMs` in three modules and the flag, with a deprecation warning; the old name must leave the client and the CLI. |
-| `ho-notifier` | refactor | Java | Extract `Notifier`; `SmsNotifier.deliver` becomes `send`. |
-| `ho-tests-duration` | missing tests | Python | The agent's tests must pass, then fail on 3 mutants of the parser. |
-| `ho-tests-limiter` | missing tests | TypeScript | The same for a token bucket with an injected clock. |
-| `ho-conventions-handler` | conventions | TypeScript | `AGENTS.md`: handler file and test, a `Result` and not an exception, a route. A hidden test checks. |
-| `ho-conventions-cli` | conventions | Python | `AGENTS.md`: a command module, registered, JSON output, no `print`. A hidden test checks. |
-| `ho-export-dates` | ambiguous | TypeScript | "The CSV dates are wrong": the repository's `isoDate` decides the fix; the hidden test uses 23:30 UTC. |
+| `held-out-price-cache` | multi-file defect | TypeScript | The cache key lacks the currency. Clearing the cache when a session changes currency passes the visible test; two sessions on one service, and a price change seen in each currency, do not. |
+| `held-out-payment-retry` | multi-file defect | Python | Each retry gets a new idempotency key. No retry, or a key from the account and amount, passes the visible tests; two equal orders must be two charges, and two lost replies one charge. |
+| `held-out-invoice-split` | multi-file defect | Java | Shares do not add up, and `Money.of` reads yen with two decimals. The remainder on the last share passes the visible test; the extra units must come first, refunds too, and yen must be right. |
+| `held-out-command-registry` | refactor | TypeScript | Three hand-kept command lists become one registry. A registry for dispatch only passes the visible tests; one `register` call must reach the help and the completion, with the help unchanged to the space. |
+| `held-out-settings` | refactor | Python | Settings from three modules into one `load(env)`. The README's table decides, not the old code: `APP_BETA=0` is off, wrong values raise `SettingsError` with the name, and no module reads the environment. |
+| `held-out-tests-intervals` | missing tests | TypeScript | Tests must kill 6 subtle mutants: touching intervals, containment, empty intervals, the input copy, the sort, the covered length. |
+| `held-out-tests-csv-field` | missing tests | Python | Tests must kill 6 subtle mutants: `@` formulas, CR, quote doubling, a leading space, booleans, CRLF. |
+| `held-out-conventions-migration` | conventions | TypeScript | `AGENTS.md`: a new migration (not an edit), `due_date` in the database, an ISO string or `null` in the API, 400 for a bad date, `down` that undoes `up`. |
+| `held-out-conventions-reset` | conventions | Python | `AGENTS.md`: the same answer for an unknown address, a rate limit per address, no token in the log, 202 with `{}`. Each trap alone fails the check. |
+| `held-out-slow-search` | ambiguous | TypeScript | "Search is slow": one query per tag and a quadratic duplicate scan. A big account must take 3 queries or fewer and under 1.5 s (31 ms fixed, 7.9 s before, here), with the same hits; the batch query sorts and removes repeated ids, so its order must not leak into a hit's tags. |
+
+Prompts that have visible tests say "You may add tests, but do not change the existing ones", and
+`allowChanges` covers the test folders: the first set's live run showed that a careful agent adds
+a test. Where a hidden test decides and the prompt says nothing about tests, the visible tests are
+not protected, but the fixtures and the code under test are (`src/db.ts` in the search task, so
+that the query count stays honest; the services in the reset task; the old migrations).
 
 Details:
 
@@ -235,16 +246,23 @@ Details:
 - **TypeScript without a build.** The tasks run with Node's own type stripping (`node --test`,
   Node 22.18 or later), so their code uses only erasable syntax (no parameter properties).
 - **Hashes.** `HELD_OUT_HASHES` in `test/evals.heldout.test.ts` holds each task's hash.
-- **First live run** (2026-10-30, Haiku 5.5, `--repeat 3 --shuffle --seed 7`): 27/30, interval
-  70%–100%, about $0.002 a run. `ho-export-dates` failed 0/3, each time with the right fix: the
-  agent added a CSV test to `test/export.test.ts`, which was protected. A task whose hidden test
+- **Quick fixes.** `test/evals.heldout.test.ts` holds the traps as tests: each quick fix must fail
+  the check (14 of them, the reset task's three traps one at a time). The search task compares its
+  20 000 hits as JSON and names the first difference: `assert.deepEqual` took minutes to build the
+  diff of a wrong answer.
+- **First set's live run** (2026-10-30, Haiku 5.5, `--repeat 3 --shuffle --seed 7`): 27/30, interval
+  70%–100%, about $0.002 a run. `med-export-dates` (then in the held-out set) failed 0/3, each time
+  with the right fix: the agent added a CSV test to `test/export.test.ts`, which was protected. A task whose hidden test
   decides need not protect its visible tests, so that task protects nothing and allows changes in
   `test/**`; the two conventions tasks allow a new test (`allowChanges`). Three hashes changed. With
-  this fix the run would be 30/30: the held-out set is at its ceiling for Haiku 5.5 too, so it
-  cannot yet show a difference between two agents or two prompts.
+  this fix the run would be 30/30: the set was at its ceiling for Haiku 5.5 too, so it could not
+  show a difference between two agents or two prompts. The user chose a harder set. The first set
+  moved to the dev split as the `medium` suite (ids `med-…`), so it still guards against
+  regressions; the new set above took its place. No tuning result had been seen, so nothing was
+  invalidated.
 - **Java.** Maven Central is blocked in the cloud workspace, so the Java self-tests skip there.
-  The two Java tasks were checked with `javac` and a small JUnit stub: their tests fail before
-  the fix (one does not compile) and pass with it. On a machine with `--prepare java` they run in
+  The Java tasks were checked with `javac` and a small JUnit stub: their tests fail before the fix
+  and pass with it, and in `held-out-invoice-split` the quick fix fails 3 of 4 hidden tests. On a machine with `--prepare java` they run in
   `pnpm check`.
 
 The proposer never gets anything from the held-out set: not its names, prompts, files, results or

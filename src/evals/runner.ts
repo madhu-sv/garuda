@@ -470,10 +470,11 @@ export function formatReport(
   results: readonly EvalResult[],
   options: { seed?: number } = {},
 ): string {
+  const width = idWidth(results);
   const rows = results.map((r) =>
     [
       r.passed ? "PASS" : isErrorRun(r) ? "ERR " : "FAIL",
-      r.id.padEnd(18),
+      r.id.padEnd(width),
       `${String(r.steps).padStart(3)} steps`,
       (r.unreportedTokens ?? 0) > 0
         ? `tok ? (${r.unreportedTokens} reserved)`
@@ -582,7 +583,13 @@ function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
   return out;
 }
 
+/** The id column fits the longest id (at least 18), so the columns after it line up. */
+export function idWidth(results: readonly EvalResult[]): number {
+  return Math.max(18, ...results.map((r) => r.id.length));
+}
+
 function meanRows(results: readonly EvalResult[], ids: readonly string[]): string[] {
+  const width = idWidth(results);
   return ids.map((id) => {
     const all = results.filter((r) => r.id === id);
     const runs = all.filter((r) => !isErrorRun(r));
@@ -590,13 +597,13 @@ function meanRows(results: readonly EvalResult[], ids: readonly string[]): strin
     const passesAll = all.filter((r) => r.passed).length;
     const note =
       errors > 0 ? `  (${passesAll}/${all.length} of all attempts; ${errors} error run(s))` : "";
-    if (runs.length === 0) return `${"0/0".padEnd(4)}  ${id.padEnd(18)}${note}`;
+    if (runs.length === 0) return `${"0/0".padEnd(4)}  ${id.padEnd(width)}${note}`;
     const mean = (f: (r: EvalResult) => number) => runs.reduce((s, r) => s + f(r), 0) / runs.length;
     const passes = runs.filter((r) => r.passed).length;
     return (
       [
         `${passes}/${runs.length}`.padEnd(4),
-        id.padEnd(18),
+        id.padEnd(width),
         `${mean((r) => r.steps)
           .toFixed(1)
           .padStart(5)} steps`,

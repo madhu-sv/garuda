@@ -107,7 +107,7 @@ async function main(): Promise<void> {
     .command("eval")
     .description("run the eval tasks in scratch folders and report pass/fail, steps and cost")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
-    .option("-s, --suite <name>", "basic (default), hard, java, python, all or repo")
+    .option("-s, --suite <name>", "basic (default), hard, java, python, medium, all or repo")
     .option(
       "-t, --task <ids...>",
       "run only these tasks (from any dev suite, or the held-out set with --split)",

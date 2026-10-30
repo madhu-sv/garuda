@@ -1,6 +1,7 @@
 import { HARD_TASKS } from "./hardTasks.js";
 import { HELD_OUT_TASKS } from "./heldOutTasks.js";
 import { JAVA_TASKS } from "./javaTasks.js";
+import { MEDIUM_TASKS } from "./mediumTasks.js";
 import { PYTHON_TASKS } from "./pythonTasks.js";
 import { EVAL_TASKS } from "./tasks.js";
 import type { ToolchainId } from "./toolchains.js";
@@ -12,6 +13,8 @@ import type { EvalTask } from "./types.js";
  *   hard:   6 tasks on shopkit (about 110 files). Search across files matters.
  *   java:   5 Maven projects with JUnit 5 (0.3). Needs `garuda eval --prepare java` once.
  *   python: 5 pytest projects (0.3). Needs python3 with pytest.
+ *   medium: 10 tasks in TypeScript, Python and Java (0.17, T11c): multi-file defects, refactors,
+ *           mutation-checked tests, repository conventions, a vague request.
  * These are the dev split. The held-out split (0.17, T11c) is HELD_OUT_TASKS, outside every suite:
  * only `--split heldout` or `--split all` runs it.
  */
@@ -20,6 +23,7 @@ export const EVAL_SUITES: Readonly<Record<string, readonly EvalTask[]>> = {
   hard: HARD_TASKS,
   java: JAVA_TASKS,
   python: PYTHON_TASKS,
+  medium: MEDIUM_TASKS,
 };
 
 /** Every dev task of the built-in suites. */

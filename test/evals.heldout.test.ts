@@ -1,16 +1,10 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { unexpectedPaths } from "../src/evals/changes.js";
 import { HELD_OUT_TASKS } from "../src/evals/heldOutTasks.js";
-import { isProtectedPath } from "../src/evals/projects.js";
 import { taskHash } from "../src/evals/report.js";
-import { runCheck, writeFiles } from "../src/evals/runner.js";
+import { formatReport } from "../src/evals/runner.js";
 import { ALL_TASKS, chooseTasks, EVAL_SUITES } from "../src/evals/suites.js";
-import { checkToolchains, TOOLCHAINS, type ToolchainId } from "../src/evals/toolchains.js";
 import type { EvalTask } from "../src/evals/types.js";
-import { expectFailsThenPasses } from "./evalTasks.js";
+import { checkWith, expectFailsThenPasses, solutionWith, toolchainReadiness } from "./evalTasks.js";
 
 /** The held-out set (0.17, T11c; docs/lld/eval-evidence.md). */
 
@@ -20,27 +14,25 @@ import { expectFailsThenPasses } from "./evalTasks.js";
  * seen before the change as invalid.
  */
 const HELD_OUT_HASHES: Record<string, string> = {
-  "ho-conventions-cli": "87bba8f5d9a84b50ec726a596b3128f734a00360df840d2239909c3fcf448faf",
-  "ho-conventions-handler": "d8b9047d54923fd4a4b172c9c6f5ef0c620b6ccd81eaee97ff9c896687cd52f3",
-  "ho-export-dates": "20756cab96b74c6084a022bfb99c7e568aff9d3e082ee0e005f950bd37586fa7",
-  "ho-inventory": "61f82dab50057c9dccad097514590c0c60dd743d01611416cf33c9552bda6141",
-  "ho-ledger": "f64c4a19923ba27e61fb7cc70627736cbe8172c396b07daa48b4241108489832",
-  "ho-notifier": "c0731158ec862db593c0fc17dd496e7c19091685d416522c0e8cafef0d8c675f",
-  "ho-rename-option": "e622e1f4b2b86f84f5ce6efe9b87a9210505e02770771aa994258401ed2538ee",
-  "ho-scheduler": "0c4f18c50c88c5b489eedeeaf0cc2c237a9769780cc78374caccde1292c0fa19",
-  "ho-tests-duration": "3f27ffd4ad2eb8630f47e52a8f005c9783db6ac773e9d9b68ccd585fe885d744",
-  "ho-tests-limiter": "26d1c83fd29f6fda42442ddc12c679c28e9c3d25edac737716bb6d0c7f9d2d18",
+  "held-out-command-registry": "8876bcb2064baca566b2f431752c8dabea996fcbd3c2c6dda62a8207757600c4",
+  "held-out-conventions-migration":
+    "d10c51be4d566deb51af5e9e6c6185e2bc1e155b0e97f8e26649538cb1e58cea",
+  "held-out-conventions-reset": "2d4999e507a22973575742adf081d079fb90981158a3d33d7beafef65a640517",
+  "held-out-invoice-split": "d09f246ef788f2d199a51fd89cfa8a97a14a33d1868fb9a369e0c9e604c673c6",
+  "held-out-payment-retry": "a5d5ae43df9c118e49e02caae81dfaa1fb91545a63eeff0eb9bbabdbb3a4f18d",
+  "held-out-price-cache": "61abb0b9c002dff49ce6fb3d426b2b8db63899a230a97c82b1e4d4cc4a0e0579",
+  "held-out-settings": "8d6635aad8a1a8f2999c8d4f70fa7eb5bf1d92d1a84d956c6cbc994263283c45",
+  "held-out-slow-search": "ee0cec3a0b6bd2931ea63c36467d8299148417d8324cfba6200ec3e76a79eb9d",
+  "held-out-tests-csv-field": "ff5ad58b58d1024a8632e8cc3b39c6ca718d4f978b353c3f8174adf580dc8029",
+  "held-out-tests-intervals": "a8d2581e8ada8b001f79e62209ea127c7d7059c86c9995bfcc839e701b91c1b8",
 };
 
-const status = new Map(
-  (await checkToolchains(["pytest", "maven"])).map((s) => [s.id, s.ok === true] as const),
-);
-const ready = (task: EvalTask) => (task.requires ?? []).every((id) => status.get(id) === true);
-const skipNote = (task: EvalTask) => {
-  const missing = (task.requires ?? []).filter((id) => status.get(id) !== true);
-  return missing.length === 0
-    ? ""
-    : ` (skipped: ${missing.map((id: ToolchainId) => TOOLCHAINS[id].hint).join("; ")})`;
+const { status, ready, skipNote } = await toolchainReadiness();
+
+const task = (id: string) => {
+  const found = HELD_OUT_TASKS.find((t) => t.id === id);
+  if (found === undefined) throw new Error(`no task ${id}`);
+  return found;
 };
 
 describe("the held-out set", () => {
@@ -48,28 +40,39 @@ describe("the held-out set", () => {
     expect(HELD_OUT_TASKS).toHaveLength(10);
     const ids = HELD_OUT_TASKS.map((t) => t.id);
     expect(new Set(ids).size).toBe(10);
-    for (const task of HELD_OUT_TASKS) expect(task.split).toBe("heldout");
+    for (const t of HELD_OUT_TASKS) expect(t.split).toBe("heldout");
     const dev = new Set(ALL_TASKS.map((t) => t.id));
     expect(ids.filter((id) => dev.has(id))).toEqual([]);
     // No dev suite holds a held-out task, so a plain `garuda eval -s all` cannot run one.
     expect(ALL_TASKS.filter((t) => t.split === "heldout")).toEqual([]);
   });
 
-  it("covers the archetypes in TypeScript, Python and Java", () => {
-    const langs = (t: EvalTask) =>
+  it("is in TypeScript, Python and Java", () => {
+    const lang = (t: EvalTask) =>
       t.requires?.includes("maven") ? "java" : t.requires?.includes("pytest") ? "python" : "ts";
-    const count = (lang: string) => HELD_OUT_TASKS.filter((t) => langs(t) === lang).length;
-    expect([count("ts"), count("python"), count("java")]).toEqual([5, 3, 2]);
+    const count = (l: string) => HELD_OUT_TASKS.filter((t) => lang(t) === l).length;
+    expect([count("ts"), count("python"), count("java")]).toEqual([5, 4, 1]);
   });
 
-  it("protects every test and build file, except where a hidden test decides", () => {
-    // ho-export-dates: its hidden test decides, so the agent may add a test (the first live run).
-    for (const task of HELD_OUT_TASKS.filter((t) => t.id !== "ho-export-dates")) {
-      const protectedFiles = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
-      for (const path of Object.keys(task.files).filter(isProtectedPath)) {
-        expect(protectedFiles, `${task.id}: ${path}`).toContain(path);
+  it("protects the build files, the fixtures and the code under test", () => {
+    const protectedOf = (t: EvalTask) =>
+      t.protect ??
+      Object.keys(t.files).filter((p) =>
+        /^(test|tests|src\/test)\/|^pom\.xml$|^pyproject\.toml$/.test(p),
+      );
+    for (const t of HELD_OUT_TASKS) {
+      for (const build of ["pom.xml", "pyproject.toml"]) {
+        if (build in t.files) expect(protectedOf(t), `${t.id}: ${build}`).toContain(build);
       }
     }
+    expect(protectedOf(task("held-out-payment-retry"))).toContain("tests/fake_service.py");
+    expect(protectedOf(task("held-out-slow-search"))).toContain("src/db.ts");
+    expect(protectedOf(task("held-out-conventions-reset"))).toContain("src/app/services.py");
+    expect(protectedOf(task("held-out-conventions-migration"))).toContain(
+      "migrations/0001_create_todos.ts",
+    );
+    expect(protectedOf(task("held-out-tests-intervals"))).toContain("src/intervals.ts");
+    expect(protectedOf(task("held-out-tests-csv-field"))).toContain("src/sheets/csvfield.py");
   });
 
   it("each task's hash is the recorded one", () => {
@@ -79,120 +82,192 @@ describe("the held-out set", () => {
 });
 
 describe.concurrent("each held-out task fails before the fix and passes with the solution", () => {
-  for (const task of HELD_OUT_TASKS) {
-    it.skipIf(!ready(task))(
-      `${task.id}${skipNote(task)}`,
-      () => expectFailsThenPasses(task),
-      180_000,
-    );
+  for (const t of HELD_OUT_TASKS) {
+    it.skipIf(!ready(t))(`${t.id}${skipNote(t)}`, () => expectFailsThenPasses(t), 180_000);
   }
 });
 
-/** Run the check after the agent wrote `files` (on top of the task's own files). */
-async function checkWith(task: EvalTask, files: Record<string, string>) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), `garuda-task-${task.id}-`)));
-  try {
-    await writeFiles(root, task.files);
-    await writeFiles(root, files);
-    return await runCheck(root, task.check);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-}
-
-const task = (id: string) => {
-  const found = HELD_OUT_TASKS.find((t) => t.id === id);
-  if (found === undefined) throw new Error(`no task ${id}`);
-  return found;
-};
-
-describe.concurrent("the checks refuse weak answers", () => {
-  it("ho-tests-limiter: a test that passes on every mutant fails the mutation check", async () => {
-    const weak = {
-      "test/limiter.test.ts": [
-        'import assert from "node:assert/strict";',
-        'import { test } from "node:test";',
-        'import { TokenBucket } from "../src/limiter.ts";',
-        'test("it exists", () => { assert.ok(new TokenBucket(5, 1, () => 0)); });',
-        "",
-      ].join("\n"),
+/** Each task's trap: a quick fix that passes the visible tests must fail the check. */
+describe.concurrent("the checks refuse the quick fixes", () => {
+  it("held-out-price-cache: clearing the cache when one session changes currency", async () => {
+    const t = task("held-out-price-cache");
+    const quick = {
+      "src/session.ts": (t.files["src/session.ts"] ?? "").replace(
+        "    this.currency = currency;",
+        "    this.currency = currency;\n    (this.prices as unknown as { clear(): void }).clear();",
+      ),
+      "src/prices.ts": (t.files["src/prices.ts"] ?? "").replace(
+        "  /** The price of product",
+        "  clear(): void {\n    this.cache.deleteWhere(() => true);\n  }\n\n  /** The price of product",
+      ),
     };
-    expect((await checkWith(task("ho-tests-limiter"), weak)).ok).toBe(false);
+    expect((await checkWith(t, { ...t.files, ...quick })).ok).toBe(false);
+  });
+
+  it("held-out-price-cache: the currency in the key, but a price change still deletes by id", async () => {
+    const t = task("held-out-price-cache");
+    const quick = solutionWith(t, "src/prices.ts", [
+      [
+        'catalog.onChange((id) => this.cache.deleteWhere((key) => key.startsWith(id + "|")));',
+        "catalog.onChange((id) => this.cache.delete(id));",
+      ],
+    ]);
+    expect((await checkWith(t, quick)).ok).toBe(false);
   });
 
   it.skipIf(status.get("pytest") !== true)(
-    "ho-tests-duration: a test of seconds only misses the hour mutant",
+    "held-out-payment-retry: a key made from the account and the amount",
     async () => {
-      const weak = {
-        "tests/test_parse.py": [
-          "from durations.parse import parse_duration",
-          "",
-          "",
-          "def test_seconds():",
-          '    assert parse_duration("5s") == 5',
-          "",
-        ].join("\n"),
-      };
-      expect((await checkWith(task("ho-tests-duration"), weak)).ok).toBe(false);
+      const t = task("held-out-payment-retry");
+      const quick = solutionWith(t, "src/shop/payments.py", [
+        ["        key = str(uuid.uuid4())", '        key = account + ":" + str(amount_minor)'],
+      ]);
+      expect((await checkWith(t, quick)).ok).toBe(false);
     },
     60_000,
   );
 
-  it("ho-rename-option: the new name with the old one still in the code fails", async () => {
-    const t = task("ho-rename-option");
-    const left = Object.fromEntries(
-      Object.entries(t.solution).map(([path, text]) => [
-        path,
-        path === "src/client.ts" ? `${text}\n// timeoutMs\n` : text,
-      ]),
-    );
-    expect((await checkWith(t, left)).ok).toBe(false);
+  it("held-out-command-registry: a registry for dispatch only, the help and completion as before", async () => {
+    const t = task("held-out-command-registry");
+    const quick = {
+      ...t.solution,
+      "src/help.ts": t.files["src/help.ts"] ?? "",
+      "src/complete.ts": t.files["src/complete.ts"] ?? "",
+    };
+    expect((await checkWith(t, quick)).ok).toBe(false);
   });
 
-  it("ho-conventions-cli: a print() in the command fails, even with the right output", async () => {
-    const t = task("ho-conventions-cli");
-    const path = "src/todo_cli/commands/stats.py";
-    const solution = t.solution[path];
-    expect(solution).toBeDefined();
-    const printed = { ...t.solution, [path]: `${solution}\nprint("debug")\n` };
-    expect((await checkWith(t, printed)).ok).toBe(false);
+  it.skipIf(status.get("pytest") !== true)(
+    "held-out-settings: the old switch rules in place of the README's",
+    async () => {
+      const t = task("held-out-settings");
+      const quick = solutionWith(t, "src/app/settings.py", [
+        [
+          "def _switch(env: Mapping[str, str], name: str) -> bool:\n",
+          'def _switch(env: Mapping[str, str], name: str) -> bool:\n    return env.get(name, "") in ("1", "true")\n',
+        ],
+      ]);
+      expect((await checkWith(t, quick)).ok).toBe(false);
+    },
+    60_000,
+  );
+
+  it.skipIf(status.get("pytest") !== true)(
+    "held-out-settings: a module that still reads the environment",
+    async () => {
+      const t = task("held-out-settings");
+      const quick = solutionWith(t, "src/app/features.py", [
+        ["    return settings.debug", '    return settings.debug or os.environ.get("X") == "1"'],
+        ["from .settings import Settings", "import os\n\nfrom .settings import Settings"],
+      ]);
+      expect((await checkWith(t, quick)).ok).toBe(false);
+    },
+    60_000,
+  );
+
+  it("held-out-tests-intervals: tests of the plain cases only", async () => {
+    const t = task("held-out-tests-intervals");
+    const full = t.solution["test/intervals.test.ts"] ?? "";
+    const plain = full.slice(0, full.indexOf('test("an interval inside another'));
+    expect((await checkWith(t, { "test/intervals.test.ts": plain })).ok).toBe(false);
+  });
+
+  it.skipIf(status.get("pytest") !== true)(
+    "held-out-tests-csv-field: tests without @, CR and a leading space",
+    async () => {
+      const t = task("held-out-tests-csv-field");
+      const weak = solutionWith(t, "tests/test_csvfield.py", [
+        ['        ("cr\\rhere", \'"cr\\rhere"\'),\n', ""],
+        ['        (" lead", \'" lead"\'),\n', ""],
+        ['        ("@cmd", "\'@cmd"),\n', ""],
+      ]);
+      expect((await checkWith(t, weak)).ok).toBe(false);
+    },
+    60_000,
+  );
+
+  it("held-out-conventions-migration: a camelCase column", async () => {
+    const t = task("held-out-conventions-migration");
+    const quick = {
+      ...t.solution,
+      "migrations/0003_add_due_date.ts": (
+        t.solution["migrations/0003_add_due_date.ts"] ?? ""
+      ).replaceAll('"due_date"', '"dueDate"'),
+      "src/todos/repo.ts": (t.solution["src/todos/repo.ts"] ?? "").replaceAll(
+        "due_date",
+        "dueDate",
+      ),
+    };
+    expect((await checkWith(t, quick)).ok).toBe(false);
+  });
+
+  it("held-out-conventions-migration: no dueDate field when there is no date", async () => {
+    const t = task("held-out-conventions-migration");
+    const quick = solutionWith(t, "src/todos/repo.ts", [
+      [
+        "    dueDate: row.due_date instanceof Date ? row.due_date.toISOString() : null,",
+        "    ...(row.due_date instanceof Date ? { dueDate: row.due_date.toISOString() } : {}),",
+      ],
+    ]);
+    expect((await checkWith(t, quick)).ok).toBe(false);
+  });
+
+  for (const [name, edit] of [
+    ["the token in the log", ["redact(token)", "token"]],
+    ["no rate limit", ["    services.limiter.hit(email.lower())\n", ""]],
+    [
+      "a 404 for an unknown address",
+      [
+        '        log.info("password reset for an unknown address")\n        return',
+        '        from ..errors import NotFound\n\n        raise NotFound("no account")',
+      ],
+    ],
+  ] as const) {
+    it.skipIf(status.get("pytest") !== true)(
+      `held-out-conventions-reset: ${name}`,
+      async () => {
+        const t = task("held-out-conventions-reset");
+        const quick = solutionWith(t, "src/app/domain/password_reset.py", [[edit[0], edit[1]]]);
+        expect((await checkWith(t, quick)).ok).toBe(false);
+      },
+      60_000,
+    );
+  }
+
+  it("held-out-slow-search: one query for the tags, but in the order that query gives", async () => {
+    const t = task("held-out-slow-search");
+    const quick = solutionWith(t, "src/search.ts", [
+      [
+        '    tags: item.tagIds.map((id) => labels.get(id) ?? ""),',
+        '    tags: [...new Set(item.tagIds)].sort((a, b) => a - b).map((id) => labels.get(id) ?? ""),',
+      ],
+    ]);
+    expect((await checkWith(t, quick)).ok).toBe(false);
   });
 });
 
-describe("the checks accept a careful answer (the first live run, 2026-10-30)", () => {
-  it("ho-export-dates: the fix with a CSV test added to the visible tests passes", async () => {
-    const t = task("ho-export-dates");
-    const visible = t.files["test/export.test.ts"] ?? "";
-    const added = {
-      ...t.solution,
-      "test/export.test.ts": visible
-        .replace(
-          'import { toJson } from "../src/export/json.ts";',
-          'import { toCsv } from "../src/export/csv.ts";\nimport { toJson } from "../src/export/json.ts";',
-        )
-        .concat('test("csv", () => assert.match(toCsv(rows), /rent,950\\.00,2026-10-28/));\n'),
-    };
-    expect((await checkWith(t, added)).ok).toBe(true);
-    // Not protected, and not an unexpected change.
-    expect(t.protect).toEqual([]);
-    expect(
-      unexpectedPaths(
-        ["src/export/csv.ts", "test/export.test.ts"],
-        Object.keys(t.solution),
-        t.allowChanges,
-      ),
-    ).toEqual([]);
-  });
-
-  it("a new test for the new code is in scope in the conventions tasks", () => {
-    const scope = (id: string, path: string) => {
-      const t = task(id);
-      return unexpectedPaths([path], Object.keys(t.solution), t.allowChanges);
-    };
-    expect(scope("ho-conventions-cli", "tests/test_stats.py")).toEqual([]);
-    expect(scope("ho-conventions-handler", "test/handlers/extra.test.ts")).toEqual([]);
-    // Outside the scope it still counts.
-    expect(scope("ho-conventions-cli", "src/todo_cli/store.py")).toEqual(["src/todo_cli/store.py"]);
+describe("the report fits the long held-out ids", () => {
+  it("the columns after the id line up for a 30-character id", () => {
+    const run = (id: string) => ({
+      id,
+      title: id,
+      passed: true,
+      stopReason: "done",
+      steps: 5,
+      tokens: 1000,
+      costUsd: 0.01,
+      durationMs: 1000,
+    });
+    const long = "held-out-conventions-migration";
+    // Two runs a task, so the report has its mean rows too.
+    const text = formatReport([run(long), run(long), run("fix-add"), run("fix-add")]);
+    const at = (line: string | undefined) => line?.indexOf(" steps") ?? -1;
+    const runRows = text.split("\n").filter((l) => l.startsWith("PASS"));
+    expect(runRows).toHaveLength(4);
+    expect(at(runRows[0])).toBe(at(runRows[2]));
+    const meanRows = text.split("\n").filter((l) => l.startsWith("2/2"));
+    expect(meanRows).toHaveLength(2);
+    expect(at(meanRows[0])).toBe(at(meanRows[1]));
   });
 });
 
@@ -211,11 +286,14 @@ describe("--split chooses the tasks", () => {
   it("the default is the basic dev suite; -s all has no held-out task", () => {
     expect(ids({})).toEqual(EVAL_SUITES.basic?.map((t) => t.id));
     expect(ids({ suite: "all" }).filter((id) => heldOutIds.includes(id))).toEqual([]);
+    expect(ids({ suite: "medium" })).toEqual(EVAL_SUITES.medium?.map((t) => t.id));
   });
 
   it("heldout takes the held-out set, and -t picks within it", () => {
     expect(ids({ split: "heldout" })).toEqual(heldOutIds);
-    expect(ids({ split: "heldout", task: ["ho-ledger", "fix-add"] })).toEqual(["ho-ledger"]);
+    expect(ids({ split: "heldout", task: ["held-out-price-cache", "fix-add"] })).toEqual([
+      "held-out-price-cache",
+    ]);
     expect(problem({ split: "heldout", suite: "basic" })).toMatch(/-s picks dev suites/);
   });
 
@@ -228,8 +306,8 @@ describe("--split chooses the tasks", () => {
   });
 
   it("a held-out id on the dev split is refused with the fix, not run", () => {
-    expect(problem({ task: ["ho-ledger"] })).toBe(
-      "ho-ledger: held-out task(s). Add --split heldout to run them.",
+    expect(problem({ task: ["held-out-price-cache"] })).toBe(
+      "held-out-price-cache: held-out task(s). Add --split heldout to run them.",
     );
     expect(problem({ split: "test" })).toBe("Unknown split test. Use: dev, heldout, all.");
     expect(problem({ suite: "nope" })).toMatch(/^Unknown suite nope/);

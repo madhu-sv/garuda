@@ -17,10 +17,12 @@ same-build A/B runs.
 | `pythonTasks.ts` | Python suite (0.3): 5 pytest projects in src layout (shared mutable default, last short chunk, rename across modules, duration parser from tests, sort order of equal scores). |
 | `projects.ts` | The shared `pom.xml` (fixed plugin and JUnit versions) and `pyproject.toml`, the Java and Python check commands, and `isProtectedPath`. |
 | `toolchains.ts` | The `maven` and `pytest` toolchains: a probe project, `checkToolchains`, `prepareToolchain`. |
-| `suites.ts` | `basic`, `hard`, `java`, `python`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
-| `heldOutTasks.ts` | T11c (0.17): the held-out split, 10 tasks in no suite (multi-file defects, refactors, mutation-checked tests, repository conventions with hidden tests, one vague request). Only `--split heldout` or `all` runs them. |
+| `suites.ts` | `basic`, `hard`, `java`, `python`, `medium`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
+| `mediumTasks.ts` | T11c (0.17): the medium suite, 10 dev tasks (the first held-out set): multi-file defects, refactors, mutation-checked tests, repository conventions with hidden tests, one vague request. |
+| `heldOutTasks.ts` | T11c (0.17): the held-out split, 10 harder tasks in no suite, each with a trap that a quick fix falls into. Only `--split heldout` or `all` runs them. |
+| `taskKit.ts` | T11c (0.17): helpers for written tasks: `NODE_PKG`, `testHead`, `hiddenNode`, `hiddenPytest`, `hiddenMaven`, `mutationCheck`. |
 | `repoTasks.ts` | Benchmark your repo (0.12): candidate commits from git history (`skipReason`, `recentCommits`), `repoPrompt`, `taskWorktree` / `applyTests` / `removeTaskWorktree`, `buildRepoSuite`, `saveRepoSuite` / `loadRepoSuite`, `repoEvalTasks`. |
-| `runner.ts` | Runs tasks; `formatReport`. |
+| `runner.ts` | Runs tasks; `formatReport` (its id column fits the longest id, at least 18, since 0.17). |
 | `changes.ts` | T11a (0.17): `treeState` (a hash per file, without `.git`, `.garuda` and build output), `changedPaths`, `unexpectedPaths`. |
 | `stats.ts` | T11a (0.17): `seeded` and `shuffled`; `passInterval` (cluster bootstrap over tasks), `consistency`, `spread`, `stepsSd`, `costPerPass`, `unexpectedChanges`. |
 | `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`). |
@@ -111,7 +113,7 @@ environment list.
 ## Command
 
 ```text
-garuda eval [-m model] [-s basic|hard|java|python|all|repo] [-t ids…] [--repeat n] [--index off|lookup|all]
+garuda eval [-m model] [-s basic|hard|java|python|medium|all|repo] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
@@ -282,12 +284,14 @@ and unexpected files, `.claude` left out); no JSON and the turn limit; the refus
 Garuda-only options, no key, no `claude` on PATH); the compare polish ("0 pts", a flat interval).
 
 `test/evals.heldout.test.ts` (0.17, T11c): 10 held-out tasks, all `heldout`, none in a dev suite;
-each fails before and passes with its solution (the Java ones need Maven); each hash equals the
-recorded one; weak answers fail (a test that kills no mutant, a test of one unit only, the old
-name left in the client, a `print` in the command); `chooseTasks` for the default, `heldout`,
-`all`, `-t` in each, and the refusals; a careful answer passes (`ho-export-dates` with a CSV test
-added to the visible tests, from the first live run), and a new test is in scope in the
-conventions tasks.
+each fails before and passes with its solution (the Java one needs Maven); each hash equals the
+recorded one; the build files, fixtures and code under test are protected; each trap's quick fix
+fails the check; `chooseTasks` for the default, `medium`, `heldout`, `all`, `-t` in each, and the
+refusals.
+
+`test/evals.medium.test.ts` (0.17, T11c): the medium suite's self-tests, its weak answers (a test
+that kills no mutant, the old name left in the client, a `print` in the command) and its careful
+answers (a CSV test added to the visible tests; a new test in scope in the conventions tasks).
 
 `test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
 A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for
