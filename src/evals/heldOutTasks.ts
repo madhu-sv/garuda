@@ -836,6 +836,8 @@ const conventionsHandler: EvalTask = {
   id: "ho-conventions-handler",
   title: "Add a handler the way this repository does it",
   split: "heldout",
+  // A test for the new code is in scope (the first live run added one in each run).
+  allowChanges: ["test/**"],
   prompt: "Add a handler to delete a todo: DELETE /todos/:id.",
   files: {
     "package.json": NODE_PKG,
@@ -1019,6 +1021,8 @@ const conventionsCli: EvalTask = {
   title: "Add a CLI command the way this repository does it",
   split: "heldout",
   requires: ["pytest"],
+  // A test for the new code is in scope (the first live run added one in each run).
+  allowChanges: ["tests/**"],
   prompt: "Add a stats command that shows how many items are done and how many are open.",
   files: {
     "pyproject.toml": PYPROJECT,
@@ -1175,6 +1179,10 @@ const ambiguousDates: EvalTask = {
   title: "Resolve a vague request from the repository",
   split: "heldout",
   prompt: "Users say the dates in our exports are inconsistent. Fix it.",
+  // The hidden test decides, so the visible tests are not protected: the agent may add a test for
+  // the CSV export, as a careful engineer would (the first live run did it in each run, 0/3).
+  protect: [],
+  allowChanges: ["test/**"],
   files: {
     "package.json": NODE_PKG,
     "src/types.ts": lines("export type Row = { name: string; amount: number; date: Date };"),

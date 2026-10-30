@@ -47,6 +47,11 @@
   must change its hash on purpose, and a tuning result seen before the change is invalid.
   `report.json` records the split. `--list` shows the held-out set. The compare note now says
   "the same pass-rate difference".
+- The first held-out run (Haiku 5.5, 3 runs a task: 27/30) found a fault in one task:
+  `ho-export-dates` failed 0/3 only because the agent, with the right fix each time, added a CSV
+  test to the protected test file. Its hidden test decides, so the visible tests are no longer
+  protected, and a new test is in scope there and in the two conventions tasks. The hashes of these
+  three tasks change: compare held-out runs only with runs made after this change.
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).

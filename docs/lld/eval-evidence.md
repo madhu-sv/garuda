@@ -235,6 +235,13 @@ Details:
 - **TypeScript without a build.** The tasks run with Node's own type stripping (`node --test`,
   Node 22.18 or later), so their code uses only erasable syntax (no parameter properties).
 - **Hashes.** `HELD_OUT_HASHES` in `test/evals.heldout.test.ts` holds each task's hash.
+- **First live run** (2026-10-30, Haiku 5.5, `--repeat 3 --shuffle --seed 7`): 27/30, interval
+  70%–100%, about $0.002 a run. `ho-export-dates` failed 0/3, each time with the right fix: the
+  agent added a CSV test to `test/export.test.ts`, which was protected. A task whose hidden test
+  decides need not protect its visible tests, so that task protects nothing and allows changes in
+  `test/**`; the two conventions tasks allow a new test (`allowChanges`). Three hashes changed. With
+  this fix the run would be 30/30: the held-out set is at its ceiling for Haiku 5.5 too, so it
+  cannot yet show a difference between two agents or two prompts.
 - **Java.** Maven Central is blocked in the cloud workspace, so the Java self-tests skip there.
   The two Java tasks were checked with `javac` and a small JUnit stub: their tests fail before
   the fix (one does not compile) and pass with it. On a machine with `--prepare java` they run in
