@@ -7,6 +7,9 @@ files, checks, protected files and reference solutions remain in `src/evals/*Tas
 protection. Five trials per task is an initial sampling plan, not proof that the sample can resolve
 small differences. Go and Rust need new capability tasks.
 
+Design for T11 (variance, cost per accepted change, unexpected changes, a Claude Code baseline,
+held-out tasks and a proposer loop): [docs/lld/eval-evidence.md](../../lld/eval-evidence.md).
+
 ## Executing the selection later
 
 After agreeing model, effort, budgets and environment, use the existing CLI independently for

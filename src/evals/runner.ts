@@ -3,7 +3,9 @@ import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Runtime, type RuntimeOptions } from "../app/runtime.js";
+import { git } from "../jobs/git.js";
 import type { CodeIndexMode } from "../knowledge/mode.js";
+import { DEFAULT_MAX_STEPS } from "../loop/limits.js";
 import type { AgentEvent } from "../loop/runAgent.js";
 import { type ModelInfo, totalTokens } from "../model/pricing.js";
 import type { ModelClient } from "../model/types.js";
@@ -16,9 +18,21 @@ import type { ExecutorName } from "../sandbox/index.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { isCostIncomplete } from "../session/session.js";
 import { FileSessionStore } from "../session/store.js";
+import { type ClaudeCodeAgent, runClaudeCode } from "./agents/claudeCode.js";
+import { changedPaths, treeState, unexpectedPaths } from "./changes.js";
+import { roughNote } from "./compare.js";
 import { writeFiles } from "./files.js";
 import { isProtectedPath } from "./projects.js";
 import { applyTests, removeTaskWorktree, taskWorktree } from "./repoTasks.js";
+import {
+  consistency,
+  costPerPass,
+  DEFAULT_SEED,
+  passInterval,
+  spread,
+  stepsSd,
+  unexpectedChanges,
+} from "./stats.js";
 import { TOOLCHAIN_ENV } from "./toolchains.js";
 import type { EvalResult, EvalTask } from "./types.js";
 
@@ -87,6 +101,12 @@ export interface EvalOptions {
    * Garuda's proxy. Other hosts are denied (no question). Default: none, as in the product.
    */
   network?: string[];
+  /**
+   * The agent (0.17, T11b): Garuda (default) or the Claude Code baseline. The baseline runs in
+   * the run's executor with the same scratch folder, time limit and grading; the model, the
+   * settings above that change Garuda, and the session belong to Garuda only.
+   */
+  agent?: ClaudeCodeAgent;
 }
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
@@ -104,6 +124,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   if (options.format !== undefined) await formatProject(root, options.format.biome);
   const protect = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
   const before = await snapshot(root, protect);
+  // The start state for the changed files (0.17, T11a).
+  const start = await treeState(root);
 
   const settings = parseSettings({
     // With an allowlist, a host outside it is denied: nobody answers questions in an eval.
@@ -173,9 +195,37 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   const limitMs = options.taskTimeoutMs ?? EVAL_TASK_TIMEOUT_MS;
   const timeout = AbortSignal.timeout(limitMs);
   try {
-    const run = await runtime.runTurn(task.prompt, timeout);
-    result.stopReason = run.stopReason;
-    result.steps = run.steps;
+    if (options.agent !== undefined) {
+      // The baseline (T11b): Claude Code in the run's sandbox, with the same limits. The proxy
+      // for api.anthropic.com starts first (the user's first run: no proxy, ECONNREFUSED).
+      await runtime.prepareCommands(timeout);
+      const { result: exec, outcome } = await runClaudeCode(
+        runtime.executor,
+        runtime.execPolicy(limitMs),
+        options.agent,
+        task.prompt,
+        options.maxSteps ?? DEFAULT_MAX_STEPS,
+        timeout,
+      );
+      result.stopReason = outcome.stopReason;
+      result.steps = outcome.steps;
+      result.tokens = outcome.tokens;
+      result.cacheReadTokens = outcome.cacheReadTokens;
+      result.costUsd = outcome.costUsd;
+      if (outcome.reason !== undefined) result.reason = outcome.reason;
+      if (options.outDir !== undefined) {
+        mkdirSync(options.outDir, { recursive: true });
+        let target = join(options.outDir, `${task.id}.claude.json`);
+        for (let n = 2; existsSync(target); n++)
+          target = join(options.outDir, `${task.id}-${n}.claude.json`);
+        await writeFile(target, exec.stdout.text);
+        result.sessionFile = target;
+      }
+    } else {
+      const run = await runtime.runTurn(task.prompt, timeout);
+      result.stopReason = run.stopReason;
+      result.steps = run.steps;
+    }
   } catch (error) {
     runtime.recordStop("error");
     if (timeout.aborted) {
@@ -191,7 +241,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   }
 
   const session = runtime.session;
-  if (session !== undefined) {
+  if (session !== undefined && options.agent === undefined) {
     result.tokens = totalTokens(session.usage);
     if (session.unreportedTokens > 0) result.unreportedTokens = session.unreportedTokens;
     result.costUsd = session.costUsd;
@@ -206,6 +256,13 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       await copyFile(store.path(session.id), target);
       result.sessionFile = target;
     }
+  }
+
+  // What the run changed, before the check writes its own output (0.17, T11a).
+  result.changed = changedPaths(start, await treeState(root));
+  const expected = await expectedFiles(task, host);
+  if (expected !== undefined) {
+    result.unexpected = unexpectedPaths(result.changed, expected, task.allowChanges);
   }
 
   if (result.reason === undefined) {
@@ -234,24 +291,89 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   return result;
 }
 
+/**
+ * The files that a task is expected to change: its solution files, or a repo task's commit
+ * (without its tests, which the runner adds). Undefined when git cannot list the commit.
+ */
+async function expectedFiles(task: EvalTask, host: HostExecutor): Promise<string[] | undefined> {
+  if (task.repo === undefined) return Object.keys(task.solution);
+  if (task.repo.sha === undefined) return undefined;
+  const r = await git(
+    host,
+    task.repo.root,
+    ["diff", "--name-only", task.repo.base, task.repo.sha],
+    {
+      check: false,
+    },
+  );
+  if (r.exitCode !== 0) return undefined;
+  const tests = new Set(task.repo.tests.map((t) => t.path));
+  return r.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !tests.has(line));
+}
+
+/**
+ * The provider refused the key or the access (401 or 403): every later run fails the same way,
+ * so the eval stops instead of spending the time of the other runs.
+ */
+export function isAuthFailure(result: EvalResult): boolean {
+  if (!isErrorRun(result) || result.reason === undefined) return false;
+  return /\b40[13]\b|authentication_error|permission_error|invalid x-api-key|invalid api key/i.test(
+    result.reason,
+  );
+}
+
+/**
+ * The API cannot be reached at all (0.17): a refused connection, an unknown host, a certificate
+ * error. The user's first baseline run retried this for 200 s in each of six runs.
+ */
+export function isConnectionFailure(result: EvalResult): boolean {
+  if (!isErrorRun(result) || result.reason === undefined) return false;
+  return /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|connection refused|self[- ]signed certificate|unable to get local issuer certificate|certificate has expired/i.test(
+    result.reason,
+  );
+}
+
+/** A failure that every later run would repeat: the eval stops at it (0.17). */
+export function isSetupFailure(result: EvalResult): boolean {
+  return isAuthFailure(result) || isConnectionFailure(result);
+}
+
+/**
+ * Run the tasks, `parallel` at a time; the results keep the task order. `stop` (0.17): when it
+ * returns true for a result, no further task starts, and the result list holds the runs that ran.
+ */
 export async function runEvals(
   tasks: readonly EvalTask[],
   options: EvalOptions,
   onResult?: (result: EvalResult) => void,
+  stop?: (result: EvalResult) => boolean,
 ): Promise<EvalResult[]> {
   // A small pool: `parallel` tasks at a time; the results keep the task order.
   const results: EvalResult[] = new Array(tasks.length);
+  // The repeats of one task are numbered in the order of the list (0.17, T11a).
+  const seen = new Map<string, number>();
+  const attempts = tasks.map((t) => {
+    const n = (seen.get(t.id) ?? 0) + 1;
+    seen.set(t.id, n);
+    return n;
+  });
   let next = 0;
+  let stopped = false;
   const worker = async () => {
-    for (let i = next++; i < tasks.length; i = next++) {
+    for (let i = next++; i < tasks.length && !stopped; i = next++) {
       const result = await runEvalTask(tasks[i] as EvalTask, options);
+      result.attempt = attempts[i] as number;
       results[i] = result;
       onResult?.(result);
+      if (stop?.(result)) stopped = true;
     }
   };
   const width = Math.max(1, Math.min(options.parallel ?? 1, tasks.length));
   await Promise.all(Array.from({ length: width }, worker));
-  return results;
+  return results.filter((r) => r !== undefined);
 }
 
 /**
@@ -344,7 +466,10 @@ export function summarize(results: readonly EvalResult[]): EvalSummary {
 const percent = (rate: number | undefined) =>
   rate === undefined ? "–" : `${Math.round(rate * 100)}%`;
 
-export function formatReport(results: readonly EvalResult[]): string {
+export function formatReport(
+  results: readonly EvalResult[],
+  options: { seed?: number } = {},
+): string {
   const rows = results.map((r) =>
     [
       r.passed ? "PASS" : isErrorRun(r) ? "ERR " : "FAIL",
@@ -380,11 +505,81 @@ export function formatReport(results: readonly EvalResult[]): string {
     : tokens === 0
       ? ""
       : ` · ${Math.round((cached / tokens) * 100)}% of tokens from the cache`;
-  const lines = [...rows, "", `${counted} · ${steps} steps · cost ${cost}${share}`];
+  const lines = [
+    ...rows,
+    "",
+    `${counted} · ${steps} steps · cost ${cost}${share}`,
+    ...evidenceLines(results, options.seed ?? DEFAULT_SEED),
+  ];
   const ids = [...new Set(results.map((r) => r.id))];
   // With --repeat, one run says little: show the mean per task.
   if (ids.length < results.length) lines.push("", "Mean per task:", ...meanRows(results, ids));
   return lines.join("\n");
+}
+
+/** The evidence lines (0.17, T11a): interval, consistency, spread, cost per pass, unexpected. */
+function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
+  const out: string[] = [];
+  // No run completed: the numbers below would describe the errors, not the agent.
+  if (results.length > 0 && results.every(isErrorRun)) {
+    return [
+      "No scored run: every run failed with an error (the reasons are above), so this run gives no evidence about the agent.",
+    ];
+  }
+  const interval = passInterval(results, { seed });
+  if (interval !== undefined && interval.tasks >= 2) {
+    out.push(
+      `Pass rate over all attempts: ${percent(interval.rate)} (95% interval ${percent(interval.low)}–${percent(interval.high)}; cluster bootstrap over ${interval.tasks} tasks, ${interval.draws} draws, seed ${interval.seed})`,
+    );
+    // The user's first live run: 2 tasks, every run passed, "100%–100%" (correct, but no evidence).
+    if (interval.low === interval.high) {
+      out.push(
+        "  Every draw gave the same rate, so the interval shows no uncertainty: more tasks are needed to measure it.",
+      );
+    }
+    if (interval.tasks < 10) out.push(`  ${roughNote(interval.tasks)}`);
+  }
+  const c = consistency(results);
+  if (c.repeated > 0) {
+    const none = c.nonePassed.length === 0 ? "" : ` (${c.nonePassed.join(", ")})`;
+    const errors =
+      c.onlyErrors.length === 0
+        ? ""
+        : `; ${c.onlyErrors.length} had only error runs (${c.onlyErrors.join(", ")})`;
+    out.push(
+      `Consistency: ${c.allPassed.length} of ${c.repeated} repeated tasks passed every run; ${c.nonePassed.length} passed none${none}${errors}`,
+    );
+  }
+  const s = spread(results);
+  if (s !== undefined) {
+    const k = (n: number) => `${(n / 1000).toFixed(1)}k`;
+    const sec = (ms: number) => `${Math.round(ms / 1000)} s`;
+    out.push(
+      `Spread (${s.runs} scored runs): steps median ${s.steps.median.toFixed(1)}, p95 ${s.steps.p95.toFixed(1)} · tokens median ${k(s.tokens.median)}, p95 ${k(s.tokens.p95)} · time median ${sec(s.durationMs.median)}, p95 ${sec(s.durationMs.p95)}`,
+    );
+  }
+  const cost = costPerPass(results);
+  out.push(
+    cost.kind === "unknown"
+      ? "Cost per accepted change: unknown (a run's cost is unknown)"
+      : cost.kind === "none"
+        ? "Cost per accepted change: no passes"
+        : `Cost per accepted change: ${cost.minimum ? "≥ " : ""}$${cost.usd.toFixed(4)} (all attempts ${cost.minimum ? "≥ " : ""}$${cost.totalUsd.toFixed(4)} / ${cost.passes} pass${cost.passes === 1 ? "" : "es"})`,
+  );
+  const u = unexpectedChanges(results);
+  if (u.measured > 0) {
+    out.push(
+      `Unexpected changes: ${u.runs} of ${u.measured} runs, ${u.files} file${u.files === 1 ? "" : "s"}`,
+    );
+    const shown = results.filter((r) => (r.unexpected?.length ?? 0) > 0).slice(0, 5);
+    for (const r of shown) {
+      out.push(
+        `  ${r.id}${r.attempt === undefined ? "" : ` (run ${r.attempt})`}: ${(r.unexpected ?? []).join(", ")}`,
+      );
+    }
+    if (u.runs > shown.length) out.push(`  … ${u.runs - shown.length} more in report.json`);
+  }
+  return out;
 }
 
 function meanRows(results: readonly EvalResult[], ids: readonly string[]): string[] {
@@ -413,6 +608,9 @@ function meanRows(results: readonly EvalResult[], ids: readonly string[]): strin
               .toFixed(4)
               .padStart(7)}`
           : "   cost ?",
+        ...(stepsSd(runs) === undefined
+          ? []
+          : [`sd ${(stepsSd(runs) as number).toFixed(1)} steps`]),
       ].join("  ") + note
     );
   });

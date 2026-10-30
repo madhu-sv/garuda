@@ -26,11 +26,22 @@ export interface EvalTask {
    */
   solution: Record<string, string>;
   /**
+   * Globs of files that the task may change besides its solution files (0.17, T11a), for example
+   * `src/**` for a task that may touch any source file. A change outside both is "unexpected".
+   */
+  allowChanges?: string[];
+  /**
    * A task from the project's own history (0.12, "benchmark your repo"). The runner makes a git
    * worktree of `root` at `base` in place of writing `files`, then adds the commit's tests
    * (`content: null` deletes the file).
    */
-  repo?: { root: string; base: string; tests: { path: string; content: string | null }[] };
+  repo?: {
+    root: string;
+    base: string;
+    /** The real commit (0.17): its changed files are the task's expected files. */
+    sha?: string;
+    tests: { path: string; content: string | null }[];
+  };
 }
 
 export interface EvalResult {
@@ -52,4 +63,13 @@ export interface EvalResult {
   /** Tokens read from the prompt cache (0.7: to compare the Batch API's cache hits). */
   cacheReadTokens?: number;
   sessionFile?: string;
+  /** 1, 2, 3 … for the repeats of one task, in run order (0.17, T11a). */
+  attempt?: number;
+  /**
+   * Files that the run added, changed or deleted (0.17, T11a), relative to the task's start
+   * state; Garuda's folder, git's data and build output left out.
+   */
+  changed?: string[];
+  /** The changed files that the task did not need. Absent when its expected files are unknown. */
+  unexpected?: string[];
 }

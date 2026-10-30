@@ -8,6 +8,39 @@
 - Dependabot: `@types/node` stays on the oldest supported Node line (no major updates); each other
   major update comes as its own pull request.
 - The Homebrew formula in the repository names 0.17.0 and its tarball hash.
+- Eval evidence, part 1 (T11a): the report gives the pass rate over all attempts with a 95%
+  interval (a cluster bootstrap over tasks, so repeats of one task count together), the tasks that
+  passed every run or none, the median and p95 of steps, tokens and time, the cost per accepted
+  change (all attempts divided by the passes), and unexpected changes (files that a run changed
+  but the task did not need; a new `allowChanges` field widens a task's scope). `--shuffle` and
+  `--seed` set the run order. `report.json` is version 2, with Garuda's version and commit, the
+  model, the OS, the seed, the run order and a hash of each task. A run whose every attempt failed
+  with an error gives no interval ("No scored run"), a task with only error runs is not counted as
+  "passed none", and an authentication error (401 or 403, for example a refused API key) stops the
+  eval at the first run instead of failing every run the same way.
+- `garuda eval compare <a> <b>` (T11a part 2): two reports of the same tasks side by side, the
+  difference of the pass rates (B − A) with a paired 95% interval, and each arm's cost per accepted
+  change, unexpected changes and median time. It refuses reports whose tasks differ, and a
+  difference whose interval contains 0 is "no clear difference". The run report now says when its
+  interval is only a rough guide (fewer than 10 tasks, or every draw gave the same rate).
+- The Claude Code baseline (T11b): `garuda eval --agent claude-code` runs `claude -p` on the same
+  tasks with the same scratch folders, time limit and grading, so `garuda eval compare` can set
+  Garuda against Claude Code. Claude Code runs with every tool allowed, so only in the OS sandbox,
+  with network only to `api.anthropic.com`, a new config folder per run, and the API key in its
+  environment only. Its turns, tokens and cost come from its JSON result. `eval compare` prints a
+  zero difference as "0 pts" and says when every draw gave the same difference. The user's first
+  live baseline run found that the proxy for `api.anthropic.com` started only in a Garuda turn, so
+  Claude Code had no network: the runner now starts it first (`Runtime.prepareCommands`). An eval
+  now also stops at the first run that cannot reach the API (a refused connection, an unknown
+  host, a certificate error), as it does for a refused key.
+- `garuda eval compare` also compares the cost per accepted change: the ratio B/A with a paired
+  95% interval, and a verdict ("B costs more", "B costs less" or "no clear difference"). An unknown
+  cost gives no ratio. The hard-coupon task allows changes in the coupon module and the API routes
+  (`allowChanges`): both agents made them in the first baseline runs. Its task hash changes, so
+  compare new hard-suite runs only with new ones.
+- Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
+  accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
+  proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).
 
 ## 0.17.0 (2026-10-27)
 

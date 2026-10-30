@@ -137,7 +137,8 @@ describe("repo tasks: the parts (0.12)", () => {
         check: "npm test",
         protect: ["test/x.test.js"],
         solution: {},
-        repo: { root: "/r", base: "b", tests: suite.tasks[0]?.tests },
+        // The commit (0.17): its changed files are the expected files.
+        repo: { root: "/r", base: "b", sha: "abc1234", tests: suite.tasks[0]?.tests },
       },
     ]);
   });

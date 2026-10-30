@@ -1371,6 +1371,15 @@ export class Runtime {
     return this.modelState.setModel(ref, this.current, () => this.startFields());
   }
 
+  /**
+   * Start what sandboxed commands need before they run (0.17, T11b): the network allowlist's
+   * proxy. A turn does this itself; a caller that runs commands with `execPolicy` and no turn (the
+   * Claude Code baseline) calls it first, or its commands get no proxy and no network.
+   */
+  async prepareCommands(signal: AbortSignal): Promise<void> {
+    await this.startNetwork(signal);
+  }
+
   /** Run one turn: the user's prompt, then the loop until it stops. */
   async runTurn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
     this.lastPrompt = prompt;

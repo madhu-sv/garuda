@@ -22,7 +22,69 @@ garuda eval --parallel 4                   # 4 tasks at the same time
 garuda eval --batch on                     # A/B: model calls through the Batch API (half price, slow)
 garuda eval -s hard --keep-thinking off    # A/B: drop Claude's thinking blocks, as before 0.9
 garuda eval -s hard --format on            # A/B: Biome formats after each edit (and --format off)
+garuda eval -s hard --repeat 3 --shuffle --seed 7  # repeats in a random order from seed 7
 ```
+
+The report (0.17) says how far one run's numbers can be trusted:
+
+- the pass rate over all attempts with a 95% interval. Repeats of one task are not independent, so
+  the interval comes from a cluster bootstrap over tasks; `--seed` (default 1) makes it repeatable;
+- with `--repeat`, the tasks that passed every run and the ones that passed none;
+- the median and p95 of steps, tokens and time;
+- the cost per accepted change: the cost of all attempts, failures and error runs too, divided by
+  the passes;
+- unexpected changes: files that a run changed but the task did not need. They do not fail a task;
+  a pass with extra edits is still a weaker result.
+
+When the provider refuses the API key (401 or 403), or the API cannot be reached (a refused
+connection, an unknown host, a certificate error), `garuda eval` stops after that run and says
+so: every other run would fail the same way. Check `ANTHROPIC_API_KEY` (it wins over the stored
+key) or run `garuda setup`. A report in which every run failed with an error says "No scored run"
+and gives no rate: such a run measured nothing about the agent.
+
+`report.json` (version 2) also holds Garuda's version and commit, the model and provider, the OS,
+the seed and run order, and a hash of each task, so a later run can show that the tasks were the
+same. With fewer than 10 tasks, or when every draw gives the same rate (all runs passed, or none),
+the report says that the interval is only a rough guide.
+
+Compare two runs of the same tasks, for example an A/B of a setting:
+
+```sh
+garuda eval -s hard --repeat 3 --shuffle --seed 7                      # arm A
+garuda eval -s hard --repeat 3 --shuffle --seed 7 --keep-thinking off  # arm B
+garuda eval compare .garuda/evals/<run-a> .garuda/evals/<run-b>
+```
+
+`compare` shows each task's passes in both arms, the difference of the pass rates (B − A, over all
+attempts) with a paired 95% interval, the ratio of the cost per accepted change (B/A) with its own
+paired interval, and each arm's cost per accepted change, unexpected changes and median time. It refuses two reports whose tasks differ (other task ids, or a task hash that
+changed). A difference whose interval contains 0 is "no clear difference", never a win. Use the same
+seed and `--repeat 3` or more in both arms.
+
+### Claude Code as the baseline (0.17)
+
+`--agent claude-code` runs Claude Code (`claude -p`) on the same tasks, with the same scratch
+folders, prompt, time limit and grading. Only the agent differs:
+
+```sh
+garuda eval -s hard --repeat 3 --shuffle --seed 7 -m claude-sonnet-5-5                        # Garuda
+garuda eval -s hard --repeat 3 --shuffle --seed 7 -m claude-sonnet-5-5 --agent claude-code    # baseline
+garuda eval compare .garuda/evals/<garuda-run> .garuda/evals/<baseline-run>
+```
+
+- It needs the `claude` program on PATH, a Claude model, and an API key in `ANTHROPIC_API_KEY`
+  (or one stored with `garuda setup`). A Claude subscription login is not used: the sandbox keeps
+  the Keychain closed.
+- Claude Code runs with every tool allowed (`bypassPermissions`), so Garuda runs it only in the OS
+  sandbox: it writes only in the scratch folder and temp folders, and its network goes through
+  Garuda's proxy to `api.anthropic.com` only. Without an OS sandbox the baseline is refused.
+- Each run gets a new, empty config folder, so your own `CLAUDE.md`, settings, MCP servers, hooks
+  and history do not change the result. The key reaches the process in its environment only.
+- Its turn limit is `--max-steps` (default 50). Its tokens and cost come from Claude Code's own
+  JSON result, which is saved as `<task>.claude.json` in the run folder.
+- Options that change only Garuda (`--index`, `--subagents`, `--todo`, `--lsp`, `--keep-thinking`,
+  `--format`, `--batch`, `--network`) are refused with the baseline, so the two arms differ in the
+  agent only.
 
 `--batch on` (0.7, Anthropic models) sends every model call as a batch of one: half the token price,
 but each step waits until its batch ends (usually minutes). It runs all tasks at the same time (up to 20;

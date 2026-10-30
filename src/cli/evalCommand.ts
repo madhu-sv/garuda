@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
+import type { ClaudeCodeAgent } from "../evals/agents/claudeCode.js";
+import { compareReports, formatComparison, loadReport } from "../evals/compare.js";
+import { reportV2 } from "../evals/report.js";
 import {
   buildRepoSuite,
   DEFAULT_COMMITS,
@@ -9,7 +12,14 @@ import {
   repoEvalTasks,
   saveRepoSuite,
 } from "../evals/repoTasks.js";
-import { formatReport, runEvals, summarize } from "../evals/runner.js";
+import {
+  formatReport,
+  isAuthFailure,
+  isSetupFailure,
+  runEvals,
+  summarize,
+} from "../evals/runner.js";
+import { DEFAULT_SEED, shuffled } from "../evals/stats.js";
 import { ALL_TASKS, EVAL_SUITES, requiredToolchains } from "../evals/suites.js";
 import { checkToolchains, prepareToolchain, TOOLCHAINS, toolchainId } from "../evals/toolchains.js";
 import type { EvalTask } from "../evals/types.js";
@@ -26,6 +36,7 @@ import {
   keepProviderKeys,
   loadModelsConfig,
   NO_MODEL,
+  providerKeyValue,
   type ResolvedModel,
   resolveModel,
 } from "../model/providers.js";
@@ -76,6 +87,12 @@ export interface EvalCommandOptions {
   testCommand?: string;
   /** --network <entries...>: the network allowlist for sandboxed commands (0.13). */
   network?: string[];
+  /** --shuffle: the task × repeat list in a random order from --seed (0.17, T11a). */
+  shuffle?: boolean;
+  /** --seed <n>: for --shuffle and the report's bootstrap interval. Default 1. */
+  seed?: number;
+  /** --agent garuda|claude-code (0.17, T11b): the Claude Code baseline on the same tasks. */
+  agent?: string;
 }
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
@@ -230,6 +247,21 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     "ANTHROPIC_API_KEY",
   ]);
   if (credentialsWarning !== undefined) process.stderr.write(`${credentialsWarning}\n`);
+  const agentName = options.agent ?? "garuda";
+  let baseline: ClaudeCodeAgent | undefined;
+  if (agentName === "claude-code") {
+    const made = await claudeCodeAgent(options, resolved);
+    if (typeof made === "string") {
+      process.stderr.write(`--agent claude-code: ${made}\n`);
+      return 1;
+    }
+    baseline = made;
+    // Only Anthropic's API, through Garuda's proxy: the baseline's commands have no other network.
+    network = ["api.anthropic.com"];
+  } else if (agentName !== "garuda") {
+    process.stderr.write(`Unknown agent ${options.agent}. Use: garuda, claude-code.\n`);
+    return 1;
+  }
   const suite = options.suite ?? "basic";
   const suiteTasks =
     suite === "all" ? ALL_TASKS : suite === "repo" ? repoTasks : EVAL_SUITES[suite];
@@ -244,8 +276,15 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const chosen =
     options.task === undefined ? suiteTasks : pool.filter((t) => options.task?.includes(t.id));
   const repeat = Math.max(1, options.repeat ?? 1);
-  // Each task runs `repeat` times in a row, in a new scratch folder each time.
-  const tasks = chosen.flatMap((t) => Array.from({ length: repeat }, () => t));
+  const seed = options.seed ?? DEFAULT_SEED;
+  if (!Number.isInteger(seed) || seed < 0) {
+    process.stderr.write("--seed must be a whole number, 0 or more.\n");
+    return 1;
+  }
+  // Each task runs `repeat` times in a row, in a new scratch folder each time; --shuffle mixes the
+  // list from the seed (0.17, T11a), so a slow period of the API does not hit one task only.
+  const listed = chosen.flatMap((t) => Array.from({ length: repeat }, () => t));
+  const tasks = options.shuffle ? shuffled(listed, seed) : listed;
   if (chosen.length === 0) {
     process.stderr.write("No task matches. Use --list to see the task ids.\n");
     return 1;
@@ -269,6 +308,13 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
 
   const { executor, notice } = createExecutor(options.executor ?? "auto");
   if (notice !== undefined) process.stderr.write(`${notice}\n`);
+  // bypassPermissions is safe only inside Garuda's OS sandbox (T11b).
+  if (baseline !== undefined && executor.isolation === "none") {
+    process.stderr.write(
+      "--agent claude-code needs the OS sandbox: Claude Code runs with every tool allowed, so Garuda runs it only inside the sandbox.\n",
+    );
+    return 1;
+  }
   if (lspMode === "on") {
     // An A/B run with no server would compare nothing: check before any model call.
     if (executor.isolation === "none") {
@@ -300,7 +346,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   process.stderr.write(
-    `Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `${baseline === undefined ? "" : `Baseline: Claude Code ${baseline.version ?? ""} (claude -p, every tool allowed, in the sandbox, network only to api.anthropic.com).\n`}Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   if (batchMode === "on") {
@@ -329,6 +375,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       lsp: lspMode === "on",
       keepThinking: thinkingMode === "on",
       ...(network === undefined ? {} : { network }),
+      ...(baseline === undefined ? {} : { agent: baseline }),
       ...(biome === undefined ? {} : { format: { on: formatMode === "on", biome } }),
       ...(sub === undefined
         ? {}
@@ -349,13 +396,23 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       process.stderr.write(
         `${r.passed ? "✓" : "✗"} ${r.id}: ${r.passed ? "pass" : "fail"} (${r.steps} steps)${r.reason ? `\n    ${r.reason.split("\n").slice(0, 3).join("\n    ")}` : ""}\n`,
       ),
+    // A refused key or an unreachable API fails every run: stop at the first one (0.17).
+    isSetupFailure,
   );
 
   const wallMs = Date.now() - started;
-  const report = `${formatReport(results)}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
+  if (results.length < tasks.length) {
+    const last = results[results.length - 1];
+    process.stderr.write(
+      last !== undefined && isAuthFailure(last)
+        ? `\nStopped after ${results.length} of ${tasks.length} run(s): the provider refused the API key or the access. Check ANTHROPIC_API_KEY (it wins over the stored key) or run \`garuda setup\`.\n`
+        : `\nStopped after ${results.length} of ${tasks.length} run(s): the API could not be reached (see the reason above), so every other run would fail the same way.\n`,
+    );
+  }
+  const report = `${formatReport(results, { seed })}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
+    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true, agent: baseline === undefined ? { name: "garuda" } : { name: "claude-code", ...(baseline.version === undefined ? {} : { version: baseline.version }) } }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;
@@ -483,4 +540,98 @@ function garudaBiome(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** `garuda eval compare <a> <b>` (0.17, T11a): two reports of the same tasks. */
+export async function runEvalCompare(
+  pathA: string,
+  pathB: string,
+  options: { seed?: number } = {},
+): Promise<number> {
+  const seed = options.seed ?? DEFAULT_SEED;
+  if (!Number.isInteger(seed) || seed < 0) {
+    process.stderr.write("--seed must be a whole number, 0 or more.\n");
+    return 1;
+  }
+  let a: Awaited<ReturnType<typeof loadReport>>;
+  let b: Awaited<ReturnType<typeof loadReport>>;
+  try {
+    [a, b] = await Promise.all([loadReport(pathA), loadReport(pathB)]);
+  } catch (error) {
+    process.stderr.write(`garuda eval compare: ${(error as Error).message}\n`);
+    return 1;
+  }
+  const result = compareReports(a, b, { seed });
+  if ("problems" in result) {
+    process.stderr.write(
+      `garuda eval compare: these reports cannot be compared.\n${result.problems.map((p) => `  ${p}`).join("\n")}\n`,
+    );
+    return 1;
+  }
+  process.stdout.write(`${formatComparison(a, b, result.comparison)}\n`);
+  return 0;
+}
+
+/**
+ * The Claude Code baseline (0.17, T11b): a Claude model, the `claude` program on PATH, and
+ * ANTHROPIC_API_KEY. Options that change only Garuda are refused, so both arms differ in the agent
+ * only. Returns the agent or the reason.
+ */
+export async function claudeCodeAgent(
+  options: EvalCommandOptions,
+  resolved: ResolvedModel,
+): Promise<ClaudeCodeAgent | string> {
+  if (resolved.provider !== "anthropic") {
+    return `the baseline needs a Claude model; ${resolved.spec} is not one.`;
+  }
+  const garudaOnly: [string, unknown][] = [
+    ["--index", options.index],
+    ["--subagents", options.subagents],
+    ["--subagent-model", options.subagentModel],
+    ["--todo", options.todo],
+    ["--lsp", options.lsp],
+    ["--keep-thinking", options.keepThinking],
+    ["--format", options.format],
+    ["--batch", options.batch],
+    ["--network", options.network],
+  ];
+  const set = garudaOnly.filter(([, value]) => value !== undefined).map(([name]) => name);
+  if (set.length > 0) {
+    return `${set.join(", ")} change${set.length === 1 ? "s" : ""} Garuda only; leave ${set.length === 1 ? "it" : "them"} out of the baseline run.`;
+  }
+  const key = providerKeyValue("ANTHROPIC_API_KEY");
+  if (key === undefined || key === "") {
+    return "set ANTHROPIC_API_KEY (or store a key with `garuda setup`). A Claude subscription login is not used: the sandbox keeps the Keychain closed.";
+  }
+  const command = onPath("claude");
+  if (command === undefined) {
+    return "the `claude` program is not on PATH. Install Claude Code: npm install -g @anthropic-ai/claude-code";
+  }
+  const probe = await new HostExecutor().run(`'${command.replace(/'/g, "'\\''")}' --version`, {
+    root: process.cwd(),
+    sandbox: false,
+    writePaths: [],
+    denyWritePaths: [],
+    denyReadPaths: [],
+    network: false,
+    envAllowlist: ["PATH", "HOME"],
+    timeoutMs: 20_000,
+    maxOutputBytes: 2_000,
+  });
+  const version = probe.exitCode === 0 ? probe.stdout.text.trim().split("\n")[0] : undefined;
+  return {
+    name: "claude-code",
+    command,
+    model: resolved.model,
+    ...(version === undefined || version === "" ? {} : { version }),
+    env: { ANTHROPIC_API_KEY: key },
+  };
+}
+
+function onPath(program: string): string | undefined {
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    const path = join(dir, program);
+    if (dir !== "" && existsSync(path)) return path;
+  }
+  return undefined;
 }

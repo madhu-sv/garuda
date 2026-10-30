@@ -20,6 +20,11 @@ same-build A/B runs.
 | `suites.ts` | `basic`, `hard`, `java`, `python`, `all`; `requiredToolchains(tasks)`. |
 | `repoTasks.ts` | Benchmark your repo (0.12): candidate commits from git history (`skipReason`, `recentCommits`), `repoPrompt`, `taskWorktree` / `applyTests` / `removeTaskWorktree`, `buildRepoSuite`, `saveRepoSuite` / `loadRepoSuite`, `repoEvalTasks`. |
 | `runner.ts` | Runs tasks; `formatReport`. |
+| `changes.ts` | T11a (0.17): `treeState` (a hash per file, without `.git`, `.garuda` and build output), `changedPaths`, `unexpectedPaths`. |
+| `stats.ts` | T11a (0.17): `seeded` and `shuffled`; `passInterval` (cluster bootstrap over tasks), `consistency`, `spread`, `stepsSd`, `costPerPass`, `unexpectedChanges`. |
+| `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`). |
+| `agents/claudeCode.ts` | T11b (0.17): the Claude Code baseline: `claudeCommand`, `parseClaudeResult` (turns, tokens, cache reads, cost, `error_max_turns`, errors), `runClaudeCode` (the run's executor and policy, a new `CLAUDE_CONFIG_DIR`, the key in the process environment only). |
+| `compare.ts` | T11a (0.17): `garuda eval compare`: `loadReport` (version 1 and 2), `compareReports` (refuses other tasks or changed hashes; a paired bootstrap of B − A and of the cost-per-accepted-change ratio B/A), `formatComparison`, `roughNote`. |
 
 ## Runner
 
@@ -29,16 +34,41 @@ For each task (and each repeat):
    worktree of the project at the commit's parent (detached, `node_modules` and venvs linked), with the
    commit's test files added.
 2. Snapshot the protected files. Default: tests (`test/`, `tests/`, `src/test/`) and build files
-   (`pom.xml`, `pyproject.toml`). A task can list its own.
+   (`pom.xml`, `pyproject.toml`). A task can list its own. Since 0.17 (T11a) also a hash of every
+   file (`treeState`): after the run and before the check, the changed files go to `changed`, and
+   the ones outside the solution files (a repo task: its commit's files, from `git diff --name-only
+   base sha`) and the task's `allowChanges` globs go to `unexpected`. An unexpected change does not
+   fail the task.
 3. `Runtime.create` with an `AutoApprover("once")`, deny rules (`rm -rf*`, `sudo*`, `git push*`, `curl*`,
    `wget*`), `mcp: false`, `hooks: false`, `web.enabled: false`, and the chosen executor and code index mode.
-4. `runTurn(prompt)` with a 10-minute limit.
+4. `runTurn(prompt)` with a 10-minute limit. With `agent` (T11b, the Claude Code baseline), the
+   runtime is still made (the executor, the policy of bash, the proxy for `api.anthropic.com`),
+   but `runClaudeCode` runs `claude -p … --permission-mode bypassPermissions` in it instead (after
+   `runtime.prepareCommands`, which starts the allowlist's proxy; a turn does that itself), with
+   `--max-turns` = the step limit. Steps, tokens, cache reads and cost come from its JSON result;
+   no JSON is an error run with an unknown cost; a time-out is "timeout". The JSON is saved as
+   `<task>.claude.json`. Claude Code's `.claude` folder in the project is not a change of the task.
 5. Pass when the protected files are unchanged and the check command (for example `node --test`) exits 0.
    The check runs code that the agent wrote, so it runs in the run's OS sandbox with the policy of
    bash (0.14.1, review; on the host only with `--executor host` or no sandbox), with a 120 s limit
    (5 min for a repo task). The task self-tests run known solutions on the host. A repo task's worktree is removed
    after the run (`git worktree remove`), unless `--keep`.
 6. Copy the session file to `.garuda/evals/<run-id>/<task>.jsonl` (`-2`, `-3` … for repeats).
+7. `runEvals` numbers the repeats of each task in run order (`attempt`). Its `stop` predicate
+   (0.17) ends the eval: `garuda eval` passes `isSetupFailure`: `isAuthFailure` (an error run whose
+   reason names a 401 or 403 or an authentication or permission error) or `isConnectionFailure`
+   (ECONNREFUSED, ENOTFOUND, EAI_AGAIN, a certificate error). So a refused key or an unreachable API
+   stops after one run, and the result list holds only the runs that ran.
+
+The report (0.17, T11a) adds, after the totals: the pass rate over all attempts with a 95% interval
+(a cluster bootstrap over tasks: a draw takes as many tasks as the run has, with replacement, and all
+runs of each drawn task; 10 000 draws, `--seed`), the tasks that passed every run and none, the
+median and p95 of steps, tokens and time over the scored runs, the cost per accepted change (all
+attempts / passes; "unknown" or "≥" as for the cost), and the runs with unexpected changes. The mean
+row per task gets the standard deviation of steps. When every run is an error run, the report gives
+only "No scored run"; a task whose runs are all errors is listed apart, not as "passed none". `report.json` is version 2 (`schema: 2`): Garuda's
+version and commit, the model spec and provider, the isolation, the OS, the seed and order, a hash
+per task, and the same evidence in `evidence`.
 
 ## Java and Python suites (0.3)
 
@@ -84,7 +114,8 @@ garuda eval [-m model] [-s basic|hard|java|python|all|repo] [-t ids…] [--repea
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
-            [--batch on|off] [--parallel n]
+            [--batch on|off] [--parallel n] [--shuffle] [--seed n] [--agent garuda|claude-code]
+garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the same tasks
 garuda eval --prepare java|python
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
@@ -211,6 +242,16 @@ This prevents an unmeasured run from appearing to use zero tokens or to be free.
   36.6 steps, 186k tokens, $0.130; on 15/15, 37.6 steps, 195k, $0.132; task times the same (13–31 s), so
   the warm start hid the Maven import. jdtls answered every edit in the Seatbelt sandbox (23 "No errors"
   results, no errors, no notices). Again no type errors to catch: no gain, no extra cost; off by default.
+- First Claude Code baseline (T11b, 2026-10-29, the user's Mac, Seatbelt; claude-haiku-5-5 in both
+  arms; Claude Code 2.1.312; `--repeat 3 --shuffle --seed 7`): basic suite, Garuda 30/30, 143
+  steps, $0.0258, $0.0009 per accepted change, median 17.3k tokens per run; Claude Code 30/30, 186
+  steps, $0.0666, $0.0022, median 72.5k tokens. Hard suite: Garuda 18/18, 114 steps, $0.0424,
+  $0.0024, median 41.7k; Claude Code 18/18, 120 steps, $0.0646, $0.0036, median 118.9k. Garuda was
+  cheaper on 15 of the 16 tasks (hard-rename: equal). Both arms passed every run, so the pass rates
+  measure nothing here (a ceiling); the tasks are too easy for this model. Claude Code's turns and
+  Garuda's model calls are close but not the same unit. hard-coupon's three "unexpected" changes in
+  each arm were fair parts of the feature: it now has `allowChanges`. A quality comparison needs
+  harder tasks (the held-out set, T11c).
 - The requirements doc keeps the per-task tables ("0.1 results", "0.2 results").
 
 ## Tests
@@ -223,3 +264,28 @@ tasks, run at the same time (`describe.concurrent`, 180 s limit each). They run 
 probe passes; otherwise they are skipped, and the test name holds the hint. So on a machine without
 Maven and JUnit in `~/.m2` (for example a cloud workspace with no access to Maven Central), `pnpm check`
 still passes and says what is missing.
+
+`test/evalEvidence.test.ts` (0.17, T11a): the seeded shuffle; the interval is a cluster bootstrap
+(task a 3/3 and task b 0/3 give 0%–100%; a bootstrap over runs fails this); the same seed gives the
+same interval; consistency, spread, steps deviation, cost per accepted change with unknown and
+minimum costs; changed files without git, Garuda and build output; unexpected files and
+`allowChanges`; the runner's `changed`, `unexpected` and `attempt`; the report lines; report v2 and
+a stable task hash.
+
+`test/evalBaseline.test.ts` (0.17, T11b): the command line and the parsed result; through the
+runner with a fake `claude`: the flags, a new config folder that is gone after the run, the key in
+the process environment and never in the result or the saved JSON, the same grading (pass, changed
+and unexpected files, `.claude` left out); no JSON and the turn limit; the refusals (not Claude,
+Garuda-only options, no key, no `claude` on PATH); the compare polish ("0 pts", a flat interval).
+
+`test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
+A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for
+the same or noisy results, "B passes less", the same seed; the cost ratio (B at 1.2 times A on cheap
+and expensive tasks gives "B costs more"; an unpaired bootstrap fails this), equal and half costs,
+an unknown cost; refusal of other tasks and of changed
+hashes; the note for a report without hashes, few tasks, other seeds and fewer than 3 runs; the
+printed text; reading a report or its folder; the run report's caution for 2 tasks that all
+passed.
+
+T11 (0.17, design): intervals, cost per accepted change, unexpected changes, a Claude Code baseline,
+a held-out split and a proposer loop for a prompt addendum. See [eval-evidence.md](eval-evidence.md).
