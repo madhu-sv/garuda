@@ -932,7 +932,7 @@ const commandRegistry: EvalTask = {
       '  assert.equal(dispatch(["nope"], todos), "unknown command: nope (try: todo help)");',
       "});",
     ),
-    "! grep -q 'case \"' src/cli.ts && ! grep -q '\"remove\"' src/complete.ts src/help.ts && ",
+    "{ ! grep -q 'case \"' src/cli.ts || { echo 'check: src/cli.ts still has a switch over the command names'; false; }; } && { ! grep -q '\"remove\"' src/complete.ts src/help.ts || { echo 'check: src/help.ts or src/complete.ts still lists the command names'; false; }; } && ",
   ),
   solution: {
     "src/cli.ts": lines(
@@ -1157,7 +1157,7 @@ const settings: EvalTask = {
       '    assert server.bind_address(settings) == "127.0.0.1:8080"',
       "    assert features.debug(settings) is False",
     ),
-    "test -z \"$(grep -rlE 'os[.]environ|getenv' src/app | grep -v '^src/app/settings[.]py$')\" && ",
+    "{ test -z \"$(grep -rlE 'os[.]environ|getenv' src/app | grep -v '^src/app/settings[.]py$')\" || { echo 'check: a module other than src/app/settings.py still reads the environment'; false; }; } && ",
   ),
   solution: {
     "src/app/db.py": lines(
@@ -1451,7 +1451,7 @@ const conventionsMigration: EvalTask = {
   title: "Add a field the way this repository's AGENTS.md says",
   split: "heldout",
   prompt:
-    "Todos need an optional due date: a client can set it when it creates a todo, and gets it back from the API. Add it.",
+    "Todos need an optional due date, `dueDate` in the API: a client can set it when it creates a todo, and gets it back. Add it.",
   protect: [
     "migrations/0001_create_todos.ts",
     "migrations/0002_add_created_at.ts",
@@ -1724,7 +1724,7 @@ const conventionsMigration: EvalTask = {
       "  assert.equal((getTodo(db, 1).body as Record<string, unknown>).dueDate, null);",
       "});",
     ),
-    "grep -rqE 'dueDate|due_date' test/ && ",
+    "{ grep -rqE 'dueDate|due_date' test/ || { echo 'check: no test in test/ mentions the due date (AGENTS.md: every change of behaviour has a test)'; false; }; } && ",
   ),
   solution: {
     "migrations/0003_add_due_date.ts": lines(
@@ -2113,7 +2113,7 @@ const conventionsReset: EvalTask = {
       "    [token] = s.tokens.issued",
       "    assert token not in caplog.text",
     ),
-    "! grep -rq 'print(' src/app && ",
+    "{ ! grep -rq 'print(' src/app || { echo 'check: src/app has a print() (AGENTS.md: never print)'; false; }; } && ",
   ),
   solution: {
     "src/app/domain/password_reset.py": lines(

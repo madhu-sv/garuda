@@ -20,9 +20,9 @@ same-build A/B runs.
 | `suites.ts` | `basic`, `hard`, `java`, `python`, `medium`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
 | `mediumTasks.ts` | T11c (0.17): the medium suite, 10 dev tasks (the first held-out set): multi-file defects, refactors, mutation-checked tests, repository conventions with hidden tests, one vague request. |
 | `heldOutTasks.ts` | T11c (0.17): the held-out split, 10 harder tasks in no suite, each with a trap that a quick fix falls into. Only `--split heldout` or `all` runs them. |
-| `taskKit.ts` | T11c (0.17): helpers for written tasks: `NODE_PKG`, `testHead`, `hiddenNode`, `hiddenPytest`, `hiddenMaven`, `mutationCheck`. |
+| `taskKit.ts` | T11c (0.17): helpers for written tasks: `NODE_PKG`, `testHead`, `hiddenNode`, `hiddenPytest`, `hiddenMaven`, `mutationCheck`, `guard` (a check step that prints why it stops). |
 | `repoTasks.ts` | Benchmark your repo (0.12): candidate commits from git history (`skipReason`, `recentCommits`), `repoPrompt`, `taskWorktree` / `applyTests` / `removeTaskWorktree`, `buildRepoSuite`, `saveRepoSuite` / `loadRepoSuite`, `repoEvalTasks`. |
-| `runner.ts` | Runs tasks; `formatReport` (its id column fits the longest id, at least 18, since 0.17). |
+| `runner.ts` | Runs tasks; `runCheck` (a silent failure reports its exit code, 0.17); `formatReport` (its id column fits the longest id, at least 18, since 0.17). |
 | `changes.ts` | T11a (0.17): `treeState` (a hash per file, without `.git`, `.garuda` and build output), `changedPaths`, `unexpectedPaths`. |
 | `stats.ts` | T11a (0.17): `seeded` and `shuffled`; `passInterval` (cluster bootstrap over tasks), `consistency`, `spread`, `stepsSd`, `costPerPass`, `unexpectedChanges`. |
 | `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`). |

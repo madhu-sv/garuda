@@ -61,6 +61,12 @@
   keep every result). Their ids start with `held-out-`. The tests prove each trap. Compare
   held-out runs only with runs made after this change. The run report's id column now fits the
   longest id, so the columns after it line up.
+- The second held-out run (Haiku 5.5, 3 runs a task: 28/30) found two faults, both in the checks.
+  `held-out-conventions-migration` failed 2/3 with correct work: the agent named the field
+  `dueAt` (as `created_at` suggests), and the hidden test read `dueDate`, which the prompt never
+  named. The prompt now names it. The report gave "The check failed:" with nothing after it: a
+  guard stopped the check with no output. Each guard now prints what is missing, and a check with
+  no output reports its exit code. Four held-out hashes change.
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).

@@ -260,6 +260,16 @@ Details:
   moved to the dev split as the `medium` suite (ids `med-…`), so it still guards against
   regressions; the new set above took its place. No tuning result had been seen, so nothing was
   invalidated.
+- **Second live run** (2026-10-30, the new set, Haiku 5.5, `--repeat 3 --shuffle --seed 7`):
+  28/30, interval 80%–100%, $0.0038 per accepted change, no unexpected changes; steps median 7
+  (p95 12), against 5 in the first set. Both failures were `held-out-conventions-migration`, with
+  correct work: the agent called the field `dueAt` and the column `due_at`, and the hidden test
+  read `dueDate`, a name the prompt did not give. A hidden test may check only what the prompt,
+  the repository or its `AGENTS.md` decide; the prompt now names `dueDate` (`due_date` then
+  follows from the snake_case rule). The report's reason was empty, because a guard
+  (`grep … test/ &&`) stopped the check with no output. Guards now use `guard(test, message)`
+  (`taskKit.ts`), which prints the message, and `runCheck` reports "(no output; exit code N)"
+  for a silent failure. With these fixes the run would be 30/30: Haiku 5.5 passes this set too.
 - **Java.** Maven Central is blocked in the cloud workspace, so the Java self-tests skip there.
   The Java tasks were checked with `javac` and a small JUnit stub: their tests fail before the fix
   and pass with it, and in `held-out-invoice-split` the quick fix fails 3 of 4 hidden tests. On a machine with `--prepare java` they run in

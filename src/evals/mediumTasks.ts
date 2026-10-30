@@ -1,5 +1,5 @@
 import { lines, MAVEN_CHECK, MAVEN_POM, PYPROJECT, PYTEST_CHECK } from "./projects.js";
-import { hiddenNode, hiddenPytest, mutationCheck, NODE_PKG, testHead } from "./taskKit.js";
+import { guard, hiddenNode, hiddenPytest, mutationCheck, NODE_PKG, testHead } from "./taskKit.js";
 import type { EvalTask } from "./types.js";
 
 /**
@@ -912,7 +912,11 @@ const conventionsHandler: EvalTask = {
         "});",
       ),
     ),
-    "test -f src/handlers/deleteTodo.ts && test -f test/handlers/deleteTodo.test.ts && ",
+    guard("test -f src/handlers/deleteTodo.ts", "no src/handlers/deleteTodo.ts (AGENTS.md)") +
+      guard(
+        "test -f test/handlers/deleteTodo.test.ts",
+        "no test/handlers/deleteTodo.test.ts (AGENTS.md)",
+      ),
   ),
   solution: {
     "src/handlers/deleteTodo.ts": lines(
@@ -1073,7 +1077,10 @@ const conventionsCli: EvalTask = {
       "    assert code == 0",
       '    assert "2" in text and "1" in text and "done" in text and "open" in text',
     ),
-    '! grep -q "print(" src/todo_cli/commands/stats.py && ',
+    guard(
+      '! grep -q "print(" src/todo_cli/commands/stats.py',
+      "stats.py has a print() (AGENTS.md: never print)",
+    ),
   ),
   solution: {
     "src/todo_cli/commands/stats.py": lines(

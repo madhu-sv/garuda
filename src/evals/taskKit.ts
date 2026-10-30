@@ -59,3 +59,10 @@ export function shellWord(text: string): string {
 /** A hidden JUnit test, written into the project's test sources, then Maven runs every test. */
 export const hiddenMaven = (path: string, body: string) =>
   `mkdir -p "$(dirname ${path})" && cat > ${path} <<'GARUDA_HIDDEN'\n${body}GARUDA_HIDDEN\n${MAVEN_CHECK}`;
+
+/**
+ * A guard before a check's test command: when `test` fails, the check stops with `message`, so
+ * the report says why (a bare `test -f … &&` stops with no output).
+ */
+export const guard = (test: string, message: string) =>
+  `{ ${test} || { echo ${shellWord(`check: ${message}`)}; false; }; } && `;
