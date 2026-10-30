@@ -25,7 +25,7 @@ same-build A/B runs.
 | `runner.ts` | Runs tasks; `runCheck` (a silent failure reports its exit code, 0.17); `formatReport` (its id column fits the longest id, at least 18, since 0.17). |
 | `changes.ts` | T11a (0.17): `treeState` (a hash per file, without `.git`, `.garuda` and build output), `changedPaths`, `unexpectedPaths`. |
 | `stats.ts` | T11a (0.17): `seeded` and `shuffled`; `passInterval` (cluster bootstrap over tasks), `consistency`, `spread`, `stepsSd`, `costPerPass`, `unexpectedChanges`. |
-| `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`). |
+| `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`; `buildFields` and `staleBuildNote`: the commit of the build that ran, and a warning when the checkout is newer). |
 | `agents/claudeCode.ts` | T11b (0.17): the Claude Code baseline: `claudeCommand`, `parseClaudeResult` (turns, tokens, cache reads, cost, `error_max_turns`, errors), `runClaudeCode` (the run's executor and policy, a new `CLAUDE_CONFIG_DIR`, the key in the process environment only). |
 | `compare.ts` | T11a (0.17): `garuda eval compare`: `loadReport` (version 1 and 2), `compareReports` (refuses other tasks or changed hashes; a paired bootstrap of B − A and of the cost-per-accepted-change ratio B/A), `formatComparison`, `roughNote`. |
 

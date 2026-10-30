@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { delimiter, dirname, join } from "node:path";
+import { BUILD_COMMIT } from "../buildInfo.js";
 import type { ClaudeCodeAgent } from "../evals/agents/claudeCode.js";
 import { compareReports, formatComparison, loadReport } from "../evals/compare.js";
-import { reportV2 } from "../evals/report.js";
+import { garudaCommit, reportV2, staleBuildNote } from "../evals/report.js";
 import {
   buildRepoSuite,
   DEFAULT_COMMITS,
@@ -356,6 +357,9 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   );
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
+  // A build older than the checkout runs old tasks and code (the user's second held-out run).
+  const stale = staleBuildNote(BUILD_COMMIT, await garudaCommit());
+  if (stale !== undefined) process.stderr.write(`Warning: ${stale}\n\n`);
   process.stderr.write(
     `${baseline === undefined ? "" : `Baseline: Claude Code ${baseline.version ?? ""} (claude -p, every tool allowed, in the sandbox, network only to api.anthropic.com).\n`}Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
