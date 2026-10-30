@@ -262,7 +262,7 @@ This prevents an unmeasured run from appearing to use zero tokens or to be free.
 ## Tests
 
 `test/evals.test.ts`: every basic and hard task's check fails before the fix and passes with a reference
-solution; the runner passes a solved task and reports steps, tokens and cost.
+solution (60 s each: a hard task writes about 110 files and runs its tests twice); the runner passes a solved task and reports steps, tokens and cost.
 
 `test/evals.java.test.ts` and `test/evals.python.test.ts`: the same self-test for the Java and Python
 tasks, run at the same time (`describe.concurrent`, 180 s limit each). They run only when the toolchain
