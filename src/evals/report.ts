@@ -72,6 +72,8 @@ export interface ReportMetadata {
   isolation: string;
   seed: number;
   shuffle: boolean;
+  /** --split (T11c): dev, heldout or all. A held-out score is only valid with unchanged hashes. */
+  split?: string;
   /** The agent (T11b): Garuda, or the Claude Code baseline with its version. */
   agent?: { name: string; version?: string };
 }
@@ -95,6 +97,7 @@ export async function reportV2(
     os: { platform: platform(), release: release(), arch: arch(), node: process.versions.node },
     seed: meta.seed,
     shuffle: meta.shuffle,
+    split: meta.split ?? "dev",
     order: results.map((r) => ({ id: r.id, attempt: r.attempt ?? 1 })),
     tasks: Object.fromEntries(tasks.map((t) => [t.id, taskHash(t)])),
     evidence: {

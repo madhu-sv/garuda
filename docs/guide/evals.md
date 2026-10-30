@@ -23,6 +23,7 @@ garuda eval --batch on                     # A/B: model calls through the Batch 
 garuda eval -s hard --keep-thinking off    # A/B: drop Claude's thinking blocks, as before 0.9
 garuda eval -s hard --format on            # A/B: Biome formats after each edit (and --format off)
 garuda eval -s hard --repeat 3 --shuffle --seed 7  # repeats in a random order from seed 7
+garuda eval --split heldout --repeat 3             # the held-out set (10 harder tasks)
 ```
 
 The report (0.17) says how far one run's numbers can be trusted:
@@ -60,6 +61,23 @@ attempts) with a paired 95% interval, the ratio of the cost per accepted change 
 paired interval, and each arm's cost per accepted change, unexpected changes and median time. It refuses two reports whose tasks differ (other task ids, or a task hash that
 changed). A difference whose interval contains 0 is "no clear difference", never a win. Use the same
 seed and `--repeat 3` or more in both arms.
+
+### The held-out set (0.17)
+
+The suites above are the dev split: use them to try changes. The held-out set is 10 harder tasks
+in TypeScript, Python and Java, kept apart to measure a result once, at the end. A plain
+`garuda eval` never runs it:
+
+```sh
+garuda eval --split heldout --repeat 3 --shuffle --seed 7   # only the held-out tasks
+garuda eval --split heldout -t ho-ledger ho-export-dates    # some of them
+garuda eval --split all                                      # every dev task and the held-out set
+```
+
+The tasks need more than one edit: the cause of a failure is in another file, a rename spans
+modules, written tests must catch planted bugs, the repository's `AGENTS.md` sets conventions that a
+hidden test checks, or the request is vague. Do not tune Garuda (or your `GARUDA.md`) on their
+results: then they stop measuring. The Python tasks need pytest and the Java ones `--prepare java`.
 
 ### Claude Code as the baseline (0.17)
 

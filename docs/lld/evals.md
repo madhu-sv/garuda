@@ -17,7 +17,8 @@ same-build A/B runs.
 | `pythonTasks.ts` | Python suite (0.3): 5 pytest projects in src layout (shared mutable default, last short chunk, rename across modules, duration parser from tests, sort order of equal scores). |
 | `projects.ts` | The shared `pom.xml` (fixed plugin and JUnit versions) and `pyproject.toml`, the Java and Python check commands, and `isProtectedPath`. |
 | `toolchains.ts` | The `maven` and `pytest` toolchains: a probe project, `checkToolchains`, `prepareToolchain`. |
-| `suites.ts` | `basic`, `hard`, `java`, `python`, `all`; `requiredToolchains(tasks)`. |
+| `suites.ts` | `basic`, `hard`, `java`, `python`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
+| `heldOutTasks.ts` | T11c (0.17): the held-out split, 10 tasks in no suite (multi-file defects, refactors, mutation-checked tests, repository conventions with hidden tests, one vague request). Only `--split heldout` or `all` runs them. |
 | `repoTasks.ts` | Benchmark your repo (0.12): candidate commits from git history (`skipReason`, `recentCommits`), `repoPrompt`, `taskWorktree` / `applyTests` / `removeTaskWorktree`, `buildRepoSuite`, `saveRepoSuite` / `loadRepoSuite`, `repoEvalTasks`. |
 | `runner.ts` | Runs tasks; `formatReport`. |
 | `changes.ts` | T11a (0.17): `treeState` (a hash per file, without `.git`, `.garuda` and build output), `changedPaths`, `unexpectedPaths`. |
@@ -115,12 +116,14 @@ garuda eval [-m model] [-s basic|hard|java|python|all|repo] [-t ids…] [--repea
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
             [--batch on|off] [--parallel n] [--shuffle] [--seed n] [--agent garuda|claude-code]
+            [--split dev|heldout|all]
 garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the same tasks
 garuda eval --prepare java|python
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
 
-`--list` shows the toolchains that each suite needs, and the repo suite when the project has one.
+`--list` shows the toolchains that each suite needs, the repo suite when the project has one, and
+the held-out set (0.17, T11c), which runs only with `--split heldout` or `all`.
 
 ## Benchmark your repo (0.12, W3)
 
@@ -277,6 +280,12 @@ runner with a fake `claude`: the flags, a new config folder that is gone after t
 the process environment and never in the result or the saved JSON, the same grading (pass, changed
 and unexpected files, `.claude` left out); no JSON and the turn limit; the refusals (not Claude,
 Garuda-only options, no key, no `claude` on PATH); the compare polish ("0 pts", a flat interval).
+
+`test/evals.heldout.test.ts` (0.17, T11c): 10 held-out tasks, all `heldout`, none in a dev suite;
+each fails before and passes with its solution (the Java ones need Maven); each hash equals the
+recorded one; weak answers fail (a test that kills no mutant, a test of one unit only, the old
+name left in the client, a `print` in the command); `chooseTasks` for the default, `heldout`,
+`all`, `-t` in each, and the refusals.
 
 `test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
 A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for
