@@ -1,7 +1,10 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HELD_OUT_TASKS } from "../src/evals/heldOutTasks.js";
 import { taskHash } from "../src/evals/report.js";
-import { formatReport } from "../src/evals/runner.js";
+import { formatReport, runCheck } from "../src/evals/runner.js";
 import { ALL_TASKS, chooseTasks, EVAL_SUITES } from "../src/evals/suites.js";
 import type { EvalTask } from "../src/evals/types.js";
 import { checkWith, expectFailsThenPasses, solutionWith, toolchainReadiness } from "./evalTasks.js";
@@ -14,14 +17,14 @@ import { checkWith, expectFailsThenPasses, solutionWith, toolchainReadiness } fr
  * seen before the change as invalid.
  */
 const HELD_OUT_HASHES: Record<string, string> = {
-  "held-out-command-registry": "8876bcb2064baca566b2f431752c8dabea996fcbd3c2c6dda62a8207757600c4",
+  "held-out-command-registry": "a594f1385f0e36bfd09f2599af26094f0387d20720e470be0d0a3e464a6caf5f",
   "held-out-conventions-migration":
-    "d10c51be4d566deb51af5e9e6c6185e2bc1e155b0e97f8e26649538cb1e58cea",
-  "held-out-conventions-reset": "2d4999e507a22973575742adf081d079fb90981158a3d33d7beafef65a640517",
+    "c11f910481c90c63b7f15a22c63825a31ca38101ef86d30430265bdb02ea49d8",
+  "held-out-conventions-reset": "edb029113a55761738605c8c116e2748e9632d074ed36e553bbd9467719bc66b",
   "held-out-invoice-split": "d09f246ef788f2d199a51fd89cfa8a97a14a33d1868fb9a369e0c9e604c673c6",
   "held-out-payment-retry": "a5d5ae43df9c118e49e02caae81dfaa1fb91545a63eeff0eb9bbabdbb3a4f18d",
   "held-out-price-cache": "61abb0b9c002dff49ce6fb3d426b2b8db63899a230a97c82b1e4d4cc4a0e0579",
-  "held-out-settings": "8d6635aad8a1a8f2999c8d4f70fa7eb5bf1d92d1a84d956c6cbc994263283c45",
+  "held-out-settings": "09c1ec61bfc8ce718aed374dc86632faa416787b11243eb85349d049a779eae7",
   "held-out-slow-search": "ee0cec3a0b6bd2931ea63c36467d8299148417d8324cfba6200ec3e76a79eb9d",
   "held-out-tests-csv-field": "ff5ad58b58d1024a8632e8cc3b39c6ca718d4f978b353c3f8174adf580dc8029",
   "held-out-tests-intervals": "a8d2581e8ada8b001f79e62209ea127c7d7059c86c9995bfcc839e701b91c1b8",
@@ -243,6 +246,32 @@ describe.concurrent("the checks refuse the quick fixes", () => {
       ],
     ]);
     expect((await checkWith(t, quick)).ok).toBe(false);
+  });
+});
+
+describe("a failed check says why (the second held-out run, 2026-10-30)", () => {
+  it("a guard names what is missing", async () => {
+    const t = task("held-out-conventions-migration");
+    const { "test/dueDate.test.ts": _test, ...noTest } = t.solution;
+    const r = await checkWith(t, noTest);
+    expect(r.ok).toBe(false);
+    expect(r.output).toContain("check: no test in test/ mentions the due date");
+  });
+
+  it("a check with no output gives its exit code", async () => {
+    const root = mkdtempSync(join(tmpdir(), "garuda-check-"));
+    try {
+      expect(await runCheck(root, "exit 3")).toEqual({
+        ok: false,
+        output: "(no output; exit code 3)",
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("the prompt names the field that the hidden test reads", () => {
+    expect(task("held-out-conventions-migration").prompt).toContain("`dueDate`");
   });
 });
 

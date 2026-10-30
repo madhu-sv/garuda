@@ -407,7 +407,10 @@ export async function runCheck(
           timeoutMs,
           maxOutputBytes: 4_000,
         });
-  const output = `${r.stdout.text}${r.stderr.text}`.trim();
+  const text = `${r.stdout.text}${r.stderr.text}`.trim();
+  // A check that fails silently still says how it ended (the user's held-out run: an empty reason).
+  const output =
+    text !== "" ? text : `(no output; ${r.timedOut ? "timed out" : `exit code ${r.exitCode}`})`;
   return { ok: r.exitCode === 0 && !r.timedOut, output };
 }
 
