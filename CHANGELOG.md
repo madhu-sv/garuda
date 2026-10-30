@@ -94,6 +94,10 @@
   when the arms' servers differ, and `report.json` records the server and the command. A server
   that does not start, or a failed prepare command, stops the eval at the first run. The Claude
   Code baseline refuses both options.
+- The prepare command now runs before the agent's runtime starts, so a note that it writes into
+  `GARUDA.md` reaches the agent (the user's first Graphify run: the agent never called the server,
+  and a note written later would not have been read). A `~/.garuda/mcp.json` whose `"servers"` is a
+  list now gets a message that shows the right form, not "expected record, received array".
 
 ## 0.17.0 (2026-10-27)
 

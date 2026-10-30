@@ -126,8 +126,10 @@ garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-comm
 
 `--mcp <server>` (0.17): the runtime gets `mcp: { home, only: server }`, so it loads that one
 server from the user's own file (`chooseMcp` refuses an unknown or disabled one, and
-`--mcp-prepare` alone). `--mcp-prepare` runs through `runCheck` in the run's executor (2 minutes)
-before the start state is taken; a failure skips the agent. The runner counts `tool_call` events
+`--mcp-prepare` alone). `--mcp-prepare` runs through `runCheck` (2 minutes) in the executor of a
+first runtime without the server, before the agent's runtime starts (it reads `GARUDA.md` at its
+start, so a note written by the command reaches the agent) and before the start state is taken;
+a failure skips the agent. The runner counts `tool_call` events
 whose name starts with `mcp__` (`EvalResult.mcpCalls`) and reads the server's status before the
 runtime closes: `failed` makes the run an error. `isMcpFailure` joins `isSetupFailure`, so both
 stop the eval. `report.json` gets `mcp: { server, prepare } | null`; `mcpUse` (stats.ts) gives the
@@ -304,8 +306,8 @@ answers (a CSV test added to the visible tests; a new test in scope in the conve
 
 `test/evalMcp.test.ts` (0.17): with the fixture MCP server in a fake home: only the named server's
 tools reach the model, and their calls are counted; without `--mcp` no server starts; the prepare
-command's files are not changes; a failed prepare skips the agent and stops the eval; a server
-that does not start fails the run and stops the eval; `chooseMcp`; the baseline refuses `--mcp`;
+command's files are not changes; its note in `GARUDA.md` reaches the model; a failed prepare skips the agent and stops the eval; a server
+that does not start fails the run and stops the eval; `chooseMcp`, and its message for a `servers` list; the baseline refuses `--mcp`;
 the report and compare lines. Checked by hand with Graphify 0.9.97: `graphify update .` in the
 prepare step, `query_graph` through `mcp__graphify__query_graph`, `graphify-out/` not a change.
 

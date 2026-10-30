@@ -110,6 +110,13 @@ export async function loadMcpConfig(
       problems.push(`${file}: invalid JSON: ${(error as Error).message}`);
       return [];
     }
+    if (Array.isArray((json as { servers?: unknown } | null)?.servers)) {
+      // The user's first try (0.17): a list of one-server objects. Zod says only "expected record".
+      problems.push(
+        `${file}: "servers" must be an object of name → server, not a list: { "servers": { "graphify": { "command": "…" }, "linear": { "url": "…" } } }`,
+      );
+      return [];
+    }
     const parsed = fileSchema.safeParse(json);
     if (!parsed.success) {
       problems.push(`${file}: ${z.prettifyError(parsed.error)}`);

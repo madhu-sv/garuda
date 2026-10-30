@@ -92,28 +92,34 @@ allows one server from your own `~/.garuda/mcp.json` (not a project's), to measu
 `--mcp-prepare <command>` runs in each scratch folder before the agent starts, in the sandbox with
 no network; what it writes does not count as a change of the agent.
 
-For [Graphify](https://pypi.org/project/graphifyy/), a code knowledge graph (`pipx install
-"graphifyy[mcp]"`, which installs its MCP extra too), add the server to `~/.garuda/mcp.json`:
+For [Graphify](https://pypi.org/project/graphifyy/), a code knowledge graph, install it with
+pipx (`brew install pipx`, then `pipx install "graphifyy[mcp]"`; it needs Python 3.10 or later)
+and add its server to `~/.garuda/mcp.json`. `"servers"` is an object, one key per server:
 
 ```json
-{ "servers": { "graphify": {
-  "command": "/path/to/graphify-venv/bin/python",
-  "args": ["-m", "graphify.serve", "graphify-out/graph.json"] } } }
+{ "servers": {
+  "graphify": { "command": "/Users/you/.local/bin/graphify-mcp", "args": ["graphify-out/graph.json"] }
+} }
 ```
 
-Use the Python of the environment that has Graphify: the first line of `$(which graphify)` names
-it (`head -1 "$(which graphify)"`). Then run both arms with the same seed, and compare:
+(`which graphify-mcp` gives the path.) The prepare command builds the graph, and can also write
+the note that tells the agent about it, as a user would in `GARUDA.md`: the agent reads it at the
+start of the run. Without a note, the agent may never call the server.
 
 ```sh
-garuda eval --split heldout --repeat 3 --shuffle --seed 7                      # arm A
-garuda eval --split heldout --repeat 3 --shuffle --seed 7 \
-  --mcp graphify --mcp-prepare "graphify update ."                             # arm B
+NOTE='This project has a code knowledge graph (graphify-out/). Use the graphify tools (query_graph, get_neighbors, shortest_path) to find code before you search files.'
+garuda eval -s hard --repeat 3 --shuffle --seed 7                               # arm A
+garuda eval -s hard --repeat 3 --shuffle --seed 7 \
+  --mcp graphify --mcp-prepare "graphify update . && echo '$NOTE' >> GARUDA.md"  # arm B
 garuda eval compare .garuda/evals/<arm-a> .garuda/evals/<arm-b>
 ```
 
-`graphify update .` builds the code graph with tree-sitter: no model and no API key. The report
-gives the MCP tool calls; when the agent never used the server, the A/B measured nothing. A server
-that does not start, or a prepare command that fails, stops the eval at the first run.
+`graphify update .` builds the graph with tree-sitter: no model and no API key. A graph helps in a
+large repository; on a task of a few files the agent reads them all, so use the hard suite (about
+110 files) or your repo suite (`-s repo`). Arm A gets no note: the A/B measures the server and the
+note together, as a user would set them up. The report gives the MCP tool calls; when the agent
+never used the server, the A/B measured nothing. A server that does not start, or a prepare
+command that fails, stops the eval at the first run.
 
 ### Claude Code as the baseline (0.17)
 

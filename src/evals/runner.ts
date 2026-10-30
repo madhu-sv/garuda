@@ -168,29 +168,59 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   });
   const store = new FileSessionStore(root);
   let mcpCalls = 0;
-  const runtime = await Runtime.create({
-    root,
-    modelId: options.modelId,
-    model: async () => options.model(),
-    ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo }),
-    ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
-    ...(options.subagentModel === undefined ? {} : { subagentModel: options.subagentModel }),
-    approver: new AutoApprover("once"),
-    store,
-    settings,
-    // The user's own MCP servers must not change eval results; `--mcp` allows one by name.
-    mcp: options.mcp === undefined ? false : { home: options.mcp.home, only: options.mcp.server },
-    hooks: false,
-    ...(options.policy === undefined ? {} : { policy: options.policy }),
-    commands: false,
-    // The list comes from the eval command line: the user typed it.
-    ...(options.network === undefined ? {} : { network: { approved: true } }),
-    ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
-    onEvent: (event: AgentEvent) => {
-      if (event.type === "tool_call" && event.call.name.startsWith("mcp__")) mcpCalls++;
-      options.onEvent?.(task.id, event);
-    },
-  });
+  // `prepare`: a runtime only for the `--mcp-prepare` command, without the MCP server.
+  const createRuntime = (prepare: boolean) =>
+    Runtime.create({
+      root,
+      modelId: options.modelId,
+      model: async () => options.model(),
+      ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo }),
+      ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
+      ...(options.subagentModel === undefined ? {} : { subagentModel: options.subagentModel }),
+      approver: new AutoApprover("once"),
+      store,
+      settings,
+      // The user's own MCP servers must not change eval results; `--mcp` allows one by name.
+      mcp:
+        options.mcp === undefined || prepare
+          ? false
+          : { home: options.mcp.home, only: options.mcp.server },
+      hooks: false,
+      ...(options.policy === undefined ? {} : { policy: options.policy }),
+      commands: false,
+      // The list comes from the eval command line: the user typed it.
+      ...(options.network === undefined ? {} : { network: { approved: true } }),
+      ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
+      onEvent: (event: AgentEvent) => {
+        if (event.type === "tool_call" && event.call.name.startsWith("mcp__")) mcpCalls++;
+        options.onEvent?.(task.id, event);
+      },
+    });
+
+  // The MCP server's preparation (`--mcp-prepare`) runs first, in the run's sandbox: the runtime
+  // reads the instruction files when it starts, so a note that the command writes into GARUDA.md
+  // (how a user tells the agent about the server) reaches the agent. What the command writes is
+  // in the start state, so it is not a change of the agent.
+  let prepareFailure: string | undefined;
+  const prepare = options.mcp?.prepare;
+  if (prepare !== undefined) {
+    const prep = await createRuntime(true);
+    try {
+      const prepared = await runCheck(
+        root,
+        prepare,
+        MCP_PREPARE_TIMEOUT_MS,
+        prep.executor.isolation === "none"
+          ? undefined
+          : { executor: prep.executor, policy: prep.execPolicy(MCP_PREPARE_TIMEOUT_MS) },
+      );
+      if (!prepared.ok) prepareFailure = `${MCP_PREPARE_FAILED}\n${prepared.output}`;
+    } finally {
+      await prep.close();
+      prep.executor.shutdown();
+    }
+  }
+  const runtime = await createRuntime(false);
 
   const result: EvalResult = {
     id: task.id,
@@ -203,20 +233,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     durationMs: 0,
   };
 
-  // The MCP server's preparation (`--mcp-prepare`), in the run's sandbox, before the start state:
-  // what it writes (Graphify's graphify-out/) is not a change of the agent.
-  const prepare = options.mcp?.prepare;
-  if (prepare !== undefined) {
-    const prepared = await runCheck(
-      root,
-      prepare,
-      MCP_PREPARE_TIMEOUT_MS,
-      runtime.executor.isolation === "none"
-        ? undefined
-        : { executor: runtime.executor, policy: runtime.execPolicy(MCP_PREPARE_TIMEOUT_MS) },
-    );
-    if (!prepared.ok) result.reason = `${MCP_PREPARE_FAILED}\n${prepared.output}`;
-  }
+  if (prepareFailure !== undefined) result.reason = prepareFailure;
   // The start state for the changed files (0.17, T11a).
   const start = await treeState(root);
 

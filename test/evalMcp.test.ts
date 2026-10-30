@@ -86,6 +86,19 @@ describe("the runner with one MCP server", () => {
     expect(result.changed).toEqual([]);
   }, 60_000);
 
+  it("a note that the prepare command writes into GARUDA.md reaches the agent", async () => {
+    // How a user tells the agent about the server (the user's first Graphify run: 0 calls).
+    const h = home({ fake: fixture });
+    const model = echoThenStop();
+    const result = await runEvalTask(task, {
+      modelId: "fake",
+      model: () => model,
+      mcp: { server: "fake", home: h, prepare: "echo 'Ask the fake server first.' >> GARUDA.md" },
+    });
+    expect(model.requests[0]?.system).toContain("Ask the fake server first.");
+    expect(result.changed).toEqual([]);
+  }, 60_000);
+
   it("a failed prepare command stops the run before the agent, and the eval", async () => {
     const h = home({ fake: fixture });
     const model = echoThenStop();
@@ -131,6 +144,18 @@ describe("choosing the server", () => {
     );
     expect(await chooseMcp({ mcp: "off" }, h)).toMatch(/is disabled/);
     expect(await chooseMcp({ mcpPrepare: "x" }, h)).toBe("--mcp-prepare needs --mcp <server>.");
+  });
+
+  it("a list of servers gets a message that shows the right form", async () => {
+    // The user's first ~/.garuda/mcp.json (0.17): "expected record, received array".
+    const h = home({});
+    writeFileSync(
+      join(h, ".garuda", "mcp.json"),
+      JSON.stringify({ servers: [{ graphify: fixture }] }),
+    );
+    expect(await chooseMcp({ mcp: "graphify" }, h)).toContain(
+      '"servers" must be an object of name → server, not a list: { "servers": { "graphify":',
+    );
   });
 
   it("the Claude Code baseline refuses --mcp: it changes Garuda only", async () => {
