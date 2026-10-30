@@ -22,9 +22,24 @@ describe("eval tasks (N5)", () => {
     expect(new Set(ALL_TASKS.map((t) => t.id)).size).toBe(ALL_TASKS.length);
   });
 
-  // Java and Python tasks have their own test files (evals.java.test.ts, evals.python.test.ts).
-  for (const task of ALL_TASKS.filter((t) => t.requires === undefined)) {
-    it(`${task.id}: the check fails before the fix and passes with the solution`, async () => {
+  // The basic and hard suites. The Java, Python, medium and held-out tasks have their own test
+  // files (evals.java, evals.python, evals.medium, evals.heldout), so no task runs twice.
+  const SELF_TESTED = [...EVAL_TASKS, ...HARD_TASKS];
+
+  it("self-tests the basic and hard suites only", () => {
+    expect(SELF_TESTED.map((t) => t.id)).toEqual(
+      ALL_TASKS.filter((t) => t.requires === undefined && !t.id.startsWith("med-")).map(
+        (t) => t.id,
+      ),
+    );
+  });
+
+  for (const task of SELF_TESTED) {
+    // A hard task writes a 110-file repo and runs its tests twice: more than vitest's default 5 s
+    // on a busy machine (the user's pnpm check, 0.17: hard-rounding at 5007 ms).
+    it(`${task.id}: the check fails before the fix and passes with the solution`, {
+      timeout: 60_000,
+    }, async () => {
       const root = realpathSync(mkdtempSync(join(tmpdir(), `garuda-task-${task.id}-`)));
       try {
         await writeFiles(root, task.files);

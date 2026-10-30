@@ -67,6 +67,8 @@
   named. The prompt now names it. The report gave "The check failed:" with nothing after it: a
   guard stopped the check with no output. Each guard now prints what is missing, and a check with
   no output reports its exit code. Four held-out hashes change.
+- Tests: `test/evals.test.ts` self-tests the basic and hard suites only (the medium tasks ran twice
+  there), with 60 s for each task. The user's `pnpm check` timed out on `hard-rounding` at 5 s.
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).

@@ -56,7 +56,7 @@ const task = (id: string) => {
   return found;
 };
 
-describe.concurrent("the checks refuse weak answers", () => {
+describe.concurrent("the checks refuse weak answers", { timeout: 120_000 }, () => {
   it("med-tests-limiter: a test that passes on every mutant fails the mutation check", async () => {
     const weak = {
       "test/limiter.test.ts": [
@@ -109,7 +109,9 @@ describe.concurrent("the checks refuse weak answers", () => {
   });
 });
 
-describe("the checks accept a careful answer (the first live run, 2026-10-30)", () => {
+describe("the checks accept a careful answer (the first live run, 2026-10-30)", {
+  timeout: 120_000,
+}, () => {
   it("med-export-dates: the fix with a CSV test added to the visible tests passes", async () => {
     const t = task("med-export-dates");
     const visible = t.files["test/export.test.ts"] ?? "";

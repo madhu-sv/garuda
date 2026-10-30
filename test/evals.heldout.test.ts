@@ -91,7 +91,7 @@ describe.concurrent("each held-out task fails before the fix and passes with the
 });
 
 /** Each task's trap: a quick fix that passes the visible tests must fail the check. */
-describe.concurrent("the checks refuse the quick fixes", () => {
+describe.concurrent("the checks refuse the quick fixes", { timeout: 120_000 }, () => {
   it("held-out-price-cache: clearing the cache when one session changes currency", async () => {
     const t = task("held-out-price-cache");
     const quick = {
@@ -249,7 +249,9 @@ describe.concurrent("the checks refuse the quick fixes", () => {
   });
 });
 
-describe("a failed check says why (the second held-out run, 2026-10-30)", () => {
+describe("a failed check says why (the second held-out run, 2026-10-30)", {
+  timeout: 120_000,
+}, () => {
   it("a guard names what is missing", async () => {
     const t = task("held-out-conventions-migration");
     const { "test/dueDate.test.ts": _test, ...noTest } = t.solution;
