@@ -17,6 +17,7 @@ garuda eval -s hard --repeat 3             # each task 3 times, with a mean row 
 garuda eval -s hard --repeat 3 --index lookup  # the same, with find_symbol and find_references (A/B)
 garuda eval -s java                        # 5 Maven projects with JUnit 5
 garuda eval -s python                      # 5 pytest projects
+garuda eval -s medium                      # 10 harder tasks in TypeScript, Python and Java
 garuda eval -s hard --repeat 3 --subagents on   # A/B: the same, with the explore subagent
 garuda eval --parallel 4                   # 4 tasks at the same time
 garuda eval --batch on                     # A/B: model calls through the Batch API (half price, slow)
@@ -69,15 +70,17 @@ in TypeScript, Python and Java, kept apart to measure a result once, at the end.
 `garuda eval` never runs it:
 
 ```sh
-garuda eval --split heldout --repeat 3 --shuffle --seed 7   # only the held-out tasks
-garuda eval --split heldout -t ho-ledger ho-export-dates    # some of them
-garuda eval --split all                                      # every dev task and the held-out set
+garuda eval --split heldout --repeat 3 --shuffle --seed 7                  # only the held-out tasks
+garuda eval --split heldout -t held-out-price-cache held-out-slow-search  # some of them
+garuda eval --split all                                                   # every dev task and the held-out set
 ```
 
-The tasks need more than one edit: the cause of a failure is in another file, a rename spans
-modules, written tests must catch planted bugs, the repository's `AGENTS.md` sets conventions that a
-hidden test checks, or the request is vague. Do not tune Garuda (or your `GARUDA.md`) on their
-results: then they stop measuring. The Python tasks need pytest and the Java ones `--prepare java`.
+Each task has a trap: a quick fix that passes the visible tests but not the hidden test that the
+check adds after the run. The cause is in another file than the symptom, a refactor must keep the
+output to the space, written tests must catch subtle planted bugs, the repository's `AGENTS.md`
+sets rules (for example: never show whether an account exists), or the request is vague ("search
+is slow") and the fix must keep every result. Do not tune Garuda (or your `GARUDA.md`) on their
+results: then they stop measuring. The Python tasks need pytest and the Java one `--prepare java`.
 
 ### Claude Code as the baseline (0.17)
 

@@ -121,7 +121,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     for (const [suite, tasks] of suites) {
       const needs = requiredToolchains(tasks).map((id) => TOOLCHAINS[id].title);
       process.stdout.write(`${suite}:${needs.length > 0 ? ` (needs ${needs.join(", ")})` : ""}\n`);
-      for (const task of tasks) process.stdout.write(`  ${task.id.padEnd(22)} ${task.title}\n`);
+      for (const task of tasks) process.stdout.write(`  ${task.id.padEnd(32)} ${task.title}\n`);
     }
     // The held-out split (T11c): listed so the user knows it is there; it runs only on request.
     const needs = requiredToolchains(HELD_OUT_TASKS).map((id) => TOOLCHAINS[id].title);
@@ -129,7 +129,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       `\nheld-out split (runs only with --split heldout or all; needs ${needs.join(", ")} for some):\n`,
     );
     for (const task of HELD_OUT_TASKS) {
-      process.stdout.write(`  ${task.id.padEnd(22)} ${task.title}\n`);
+      process.stdout.write(`  ${task.id.padEnd(32)} ${task.title}\n`);
     }
     return 0;
   }

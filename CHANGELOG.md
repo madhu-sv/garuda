@@ -48,10 +48,19 @@
   `report.json` records the split. `--list` shows the held-out set. The compare note now says
   "the same pass-rate difference".
 - The first held-out run (Haiku 5.5, 3 runs a task: 27/30) found a fault in one task:
-  `ho-export-dates` failed 0/3 only because the agent, with the right fix each time, added a CSV
+  the export-dates task (now `med-export-dates`) failed 0/3 only because the agent, with the right fix each time, added a CSV
   test to the protected test file. Its hidden test decides, so the visible tests are no longer
   protected, and a new test is in scope there and in the two conventions tasks. The hashes of these
   three tasks change: compare held-out runs only with runs made after this change.
+- A harder held-out set (T11c, second version). The first set was at its ceiling for Haiku 5.5,
+  so it is now a dev suite, `-s medium` (ids `med-…`), and 10 new tasks took its place. Each has a
+  trap: a quick fix that passes the visible tests fails the hidden test or the mutation check (a
+  cache key without the currency, a new idempotency key per retry, invoice shares and yen, a
+  command registry with unchanged output, settings by the README's rules, 6 subtle mutants in two
+  test-writing tasks, a migration and a reset endpoint by `AGENTS.md`, and a slow search that must
+  keep every result). Their ids start with `held-out-`. The tests prove each trap. Compare
+  held-out runs only with runs made after this change. The run report's id column now fits the
+  longest id, so the columns after it line up.
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).
