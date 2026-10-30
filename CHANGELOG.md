@@ -71,6 +71,16 @@
   there), with 60 s for each task. The user's `pnpm check` timed out on `hard-rounding` at 5 s,
   then on the LSP reference sample. `vitest.config.ts` now gives every test 30 s, the limit that
   the release checks used, so `pnpm check` agrees with them.
+- The third held-out run, with the Claude Code baseline, ran an old build: `dist/` was older than
+  the checkout, so the old tasks ran, and `report.json` named the checkout's commit, not the
+  build's. A build now records the commit it came from (tsup sets it), `report.json` gives it as
+  `garuda.commit` and adds `garuda.checkout` when the checkout differs, and `garuda eval` warns
+  at the start: "This build is from commit …, but the checkout is at …: run pnpm build first."
+- Held-out prompts with visible tests now say "You may add tests in new files, but do not change
+  the existing test files": in the same run the agent appended a correct test to a protected test
+  file after "do not change the existing ones". Five held-out hashes change.
+- Same run, same (old) tasks, Haiku 5.5: Garuda 26/30, Claude Code 27/30, no clear difference in
+  the pass rate; Claude Code cost ×1.50 per accepted change (paired interval ×1.35 to ×1.71).
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).

@@ -82,6 +82,9 @@ sets rules (for example: never show whether an account exists), or the request i
 is slow") and the fix must keep every result. Do not tune Garuda (or your `GARUDA.md`) on their
 results: then they stop measuring. The Python tasks need pytest and the Java one `--prepare java`.
 
+From a source checkout, run `pnpm build` after you apply a change: `garuda eval` runs the build
+in `dist/`, and it warns when that build is older than the checkout.
+
 ### Claude Code as the baseline (0.17)
 
 `--agent claude-code` runs Claude Code (`claude -p`) on the same tasks, with the same scratch

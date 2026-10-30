@@ -25,7 +25,7 @@ const priceCache: EvalTask = {
   title: "Fix stale prices from a shared cache",
   split: "heldout",
   prompt:
-    "Customers report that after they change currency, some prices still show in the old currency. Fix it. The tests in test/ must pass. You may add tests, but do not change the existing ones.",
+    "Customers report that after they change currency, some prices still show in the old currency. Fix it. The tests in test/ must pass. You may add tests in new files, but do not change the existing test files.",
   allowChanges: ["src/**", "test/**"],
   files: {
     "package.json": NODE_PKG,
@@ -241,7 +241,7 @@ const paymentRetry: EvalTask = {
   split: "heldout",
   requires: ["pytest"],
   prompt:
-    "Some customers were charged twice for one order. It seems to happen when the payment service is slow. Fix it. The tests in tests/ must pass. You may add tests, but do not change the existing ones.",
+    "Some customers were charged twice for one order. It seems to happen when the payment service is slow. Fix it. The tests in tests/ must pass. You may add tests in new files, but do not change the existing test files.",
   allowChanges: ["src/shop/**", "tests/**"],
   files: {
     "pyproject.toml": PYPROJECT,
@@ -454,7 +454,7 @@ const invoiceSplit: EvalTask = {
   split: "heldout",
   requires: ["maven"],
   prompt:
-    "When an invoice is shared between people, the shares sometimes do not add up to the total, and a customer in Japan reports wrong amounts. Fix it. The tests in src/test/ must pass. You may add tests, but do not change the existing ones.",
+    "When an invoice is shared between people, the shares sometimes do not add up to the total, and a customer in Japan reports wrong amounts. Fix it. The tests in src/test/ must pass. You may add tests in new files, but do not change the existing test files.",
   allowChanges: ["src/main/**", "src/test/**"],
   files: {
     "pom.xml": MAVEN_POM,
@@ -750,7 +750,7 @@ const commandRegistry: EvalTask = {
   title: "Replace three hand-kept command lists with one registry",
   split: "heldout",
   prompt:
-    "Adding a command to this CLI means editing src/cli.ts, src/help.ts and src/complete.ts, and they drift apart. Add src/registry.ts with `register(command)` and `commands()`, where a command is { name, aliases?, summary, run(args, todos) }, and make dispatch, the help text and the completion all come from it, so that a new command needs one register call. Register the built-in commands in this order: list, add, remove, help. The output of every command, the help and the completion must not change. The tests in test/ must pass. You may add tests, but do not change the existing ones.",
+    "Adding a command to this CLI means editing src/cli.ts, src/help.ts and src/complete.ts, and they drift apart. Add src/registry.ts with `register(command)` and `commands()`, where a command is { name, aliases?, summary, run(args, todos) }, and make dispatch, the help text and the completion all come from it, so that a new command needs one register call. Register the built-in commands in this order: list, add, remove, help. The output of every command, the help and the completion must not change. The tests in test/ must pass. You may add tests in new files, but do not change the existing test files.",
   allowChanges: ["src/**", "test/**"],
   files: {
     "package.json": NODE_PKG,
@@ -1021,7 +1021,7 @@ const settings: EvalTask = {
   split: "heldout",
   requires: ["pytest"],
   prompt:
-    "Settings are read from os.environ in server.py, db.py and features.py, each in its own way. Move them into src/app/settings.py: a frozen dataclass Settings and `load(env)`, which reads the given mapping and follows the table in README.md, with a SettingsError for a wrong value. Then each function in server.py, db.py and features.py takes the Settings as its only argument and does not read the environment. The tests in tests/ must pass. You may add tests, but do not change the existing ones.",
+    "Settings are read from os.environ in server.py, db.py and features.py, each in its own way. Move them into src/app/settings.py: a frozen dataclass Settings and `load(env)`, which reads the given mapping and follows the table in README.md, with a SettingsError for a wrong value. Then each function in server.py, db.py and features.py takes the Settings as its only argument and does not read the environment. The tests in tests/ must pass. You may add tests in new files, but do not change the existing test files.",
   allowChanges: ["src/app/**", "tests/**"],
   files: {
     "README.md": lines(

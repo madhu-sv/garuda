@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HELD_OUT_TASKS } from "../src/evals/heldOutTasks.js";
-import { taskHash } from "../src/evals/report.js";
+import { buildFields, staleBuildNote, taskHash } from "../src/evals/report.js";
 import { formatReport, runCheck } from "../src/evals/runner.js";
 import { ALL_TASKS, chooseTasks, EVAL_SUITES } from "../src/evals/suites.js";
 import type { EvalTask } from "../src/evals/types.js";
@@ -17,14 +17,14 @@ import { checkWith, expectFailsThenPasses, solutionWith, toolchainReadiness } fr
  * seen before the change as invalid.
  */
 const HELD_OUT_HASHES: Record<string, string> = {
-  "held-out-command-registry": "a594f1385f0e36bfd09f2599af26094f0387d20720e470be0d0a3e464a6caf5f",
+  "held-out-command-registry": "fd57a5a3dbd6da59476af02c59a740bf3e4426a54f6e4cb2e1261f846c7872dd",
   "held-out-conventions-migration":
     "c11f910481c90c63b7f15a22c63825a31ca38101ef86d30430265bdb02ea49d8",
   "held-out-conventions-reset": "edb029113a55761738605c8c116e2748e9632d074ed36e553bbd9467719bc66b",
-  "held-out-invoice-split": "d09f246ef788f2d199a51fd89cfa8a97a14a33d1868fb9a369e0c9e604c673c6",
-  "held-out-payment-retry": "a5d5ae43df9c118e49e02caae81dfaa1fb91545a63eeff0eb9bbabdbb3a4f18d",
-  "held-out-price-cache": "61abb0b9c002dff49ce6fb3d426b2b8db63899a230a97c82b1e4d4cc4a0e0579",
-  "held-out-settings": "09c1ec61bfc8ce718aed374dc86632faa416787b11243eb85349d049a779eae7",
+  "held-out-invoice-split": "515369fdacc82b98bf0acd46fd08b201187dd4159e2ccfa8bce1dcea4f905dd5",
+  "held-out-payment-retry": "63884a2a5560fec965a083f4e086fce038891e7d28b00458ae4e133930a3966a",
+  "held-out-price-cache": "c88c6eee852124b9a30c6a0c26b8929c6cae38633b1ac64e622a3ab05717b15e",
+  "held-out-settings": "a361ac99c6fad64aa5844a2ca3058f7108f8747dd1a1e5114701eeef80e95ab2",
   "held-out-slow-search": "ee0cec3a0b6bd2931ea63c36467d8299148417d8324cfba6200ec3e76a79eb9d",
   "held-out-tests-csv-field": "ff5ad58b58d1024a8632e8cc3b39c6ca718d4f978b353c3f8174adf580dc8029",
   "held-out-tests-intervals": "a8d2581e8ada8b001f79e62209ea127c7d7059c86c9995bfcc839e701b91c1b8",
@@ -274,6 +274,34 @@ describe("a failed check says why (the second held-out run, 2026-10-30)", {
 
   it("the prompt names the field that the hidden test reads", () => {
     expect(task("held-out-conventions-migration").prompt).toContain("`dueDate`");
+  });
+});
+
+describe("the report names the code that ran (the third held-out run, 2026-10-30)", () => {
+  const a = "a".repeat(40);
+  const b = "b".repeat(40);
+
+  it("a build records its own commit, and the checkout's when it differs", () => {
+    expect(buildFields(a, b)).toMatchObject({ commit: a, checkout: b });
+    expect(buildFields(a, a)).not.toHaveProperty("checkout");
+    expect(buildFields(undefined, b)).toMatchObject({ commit: b });
+    expect(buildFields(undefined, b)).not.toHaveProperty("checkout");
+  });
+
+  it("an eval warns when the build is older than the checkout", () => {
+    expect(staleBuildNote(a, b)).toBe(
+      "This build is from commit aaaaaaa, but the checkout is at bbbbbbb. The tasks and the code that run are the older ones: run pnpm build first.",
+    );
+    expect(staleBuildNote(a, a)).toBeUndefined();
+    expect(staleBuildNote(undefined, b)).toBeUndefined();
+  });
+
+  it("a prompt with visible tests says where new tests go", () => {
+    for (const t of HELD_OUT_TASKS.filter((x) => x.prompt.includes("must pass"))) {
+      expect(t.prompt, t.id).toContain(
+        "You may add tests in new files, but do not change the existing test files.",
+      );
+    }
   });
 });
 

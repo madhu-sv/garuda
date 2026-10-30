@@ -270,6 +270,17 @@ Details:
   (`grep … test/ &&`) stopped the check with no output. Guards now use `guard(test, message)`
   (`taskKit.ts`), which prints the message, and `runCheck` reports "(no output; exit code N)"
   for a silent failure. With these fixes the run would be 30/30: Haiku 5.5 passes this set too.
+- **Third live run** (2026-10-30, Haiku 5.5, Garuda and the Claude Code baseline): both ran a
+  `dist/` built before 0240, so the old tasks ran, and the reports named the checkout's HEAD. On
+  those (same) tasks: Garuda 26/30, Claude Code 27/30, B − A +3 pts (paired interval 0 to +10):
+  no clear difference; cost per accepted change $0.0039 and $0.0059, B/A ×1.50 (×1.35 to ×1.71):
+  Claude Code costs more, with median tokens 142k against 49k. The migration task failed 0/3 in
+  both (the old prompt). One Garuda run of the payment task appended a correct test to the
+  protected `tests/test_checkout.py`: the prompt's "do not change the existing ones" read as
+  "the existing tests". The prompts now say "in new files … the existing test files".
+  `src/buildInfo.ts` holds the build's commit (tsup's `define`; undefined in the tests);
+  `buildFields` puts it in `report.json` with the checkout's HEAD when that differs, and
+  `staleBuildNote` warns at the start of an eval.
 - **Java.** Maven Central is blocked in the cloud workspace, so the Java self-tests skip there.
   The Java tasks were checked with `javac` and a small JUnit stub: their tests fail before the fix
   and pass with it, and in `held-out-invoice-split` the quick fix fails 3 of 4 hidden tests. On a machine with `--prepare java` they run in
