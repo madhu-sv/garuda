@@ -38,6 +38,49 @@
   cost gives no ratio. The hard-coupon task allows changes in the coupon module and the API routes
   (`allowChanges`): both agents made them in the first baseline runs. Its task hash changes, so
   compare new hard-suite runs only with new ones.
+- A held-out set (T11c): 10 new, harder tasks in TypeScript, Python and Java, apart from every
+  suite. `--split heldout` runs them, `--split all` runs them with the dev tasks, and a plain
+  `garuda eval` never does (a held-out id with `-t` is refused with the fix). They cover a defect
+  whose cause is in another file (3), a refactor across modules (2), tests that a mutation check
+  must find good enough (2), conventions from the repository's `AGENTS.md` that a hidden test
+  checks (2), and a vague request (1). Each task's hash is recorded in the tests: a changed task
+  must change its hash on purpose, and a tuning result seen before the change is invalid.
+  `report.json` records the split. `--list` shows the held-out set. The compare note now says
+  "the same pass-rate difference".
+- The first held-out run (Haiku 5.5, 3 runs a task: 27/30) found a fault in one task:
+  the export-dates task (now `med-export-dates`) failed 0/3 only because the agent, with the right fix each time, added a CSV
+  test to the protected test file. Its hidden test decides, so the visible tests are no longer
+  protected, and a new test is in scope there and in the two conventions tasks. The hashes of these
+  three tasks change: compare held-out runs only with runs made after this change.
+- A harder held-out set (T11c, second version). The first set was at its ceiling for Haiku 5.5,
+  so it is now a dev suite, `-s medium` (ids `med-…`), and 10 new tasks took its place. Each has a
+  trap: a quick fix that passes the visible tests fails the hidden test or the mutation check (a
+  cache key without the currency, a new idempotency key per retry, invoice shares and yen, a
+  command registry with unchanged output, settings by the README's rules, 6 subtle mutants in two
+  test-writing tasks, a migration and a reset endpoint by `AGENTS.md`, and a slow search that must
+  keep every result). Their ids start with `held-out-`. The tests prove each trap. Compare
+  held-out runs only with runs made after this change. The run report's id column now fits the
+  longest id, so the columns after it line up.
+- The second held-out run (Haiku 5.5, 3 runs a task: 28/30) found two faults, both in the checks.
+  `held-out-conventions-migration` failed 2/3 with correct work: the agent named the field
+  `dueAt` (as `created_at` suggests), and the hidden test read `dueDate`, which the prompt never
+  named. The prompt now names it. The report gave "The check failed:" with nothing after it: a
+  guard stopped the check with no output. Each guard now prints what is missing, and a check with
+  no output reports its exit code. Four held-out hashes change.
+- Tests: `test/evals.test.ts` self-tests the basic and hard suites only (the medium tasks ran twice
+  there), with 60 s for each task. The user's `pnpm check` timed out on `hard-rounding` at 5 s,
+  then on the LSP reference sample. `vitest.config.ts` now gives every test 30 s, the limit that
+  the release checks used, so `pnpm check` agrees with them.
+- The third held-out run, with the Claude Code baseline, ran an old build: `dist/` was older than
+  the checkout, so the old tasks ran, and `report.json` named the checkout's commit, not the
+  build's. A build now records the commit it came from (tsup sets it), `report.json` gives it as
+  `garuda.commit` and adds `garuda.checkout` when the checkout differs, and `garuda eval` warns
+  at the start: "This build is from commit …, but the checkout is at …: run pnpm build first."
+- Held-out prompts with visible tests now say "You may add tests in new files, but do not change
+  the existing test files": in the same run the agent appended a correct test to a protected test
+  file after "do not change the existing ones". Five held-out hashes change.
+- Same run, same (old) tasks, Haiku 5.5: Garuda 26/30, Claude Code 27/30, no clear difference in
+  the pass rate; Claude Code cost ×1.50 per accepted change (paired interval ×1.35 to ×1.71).
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).

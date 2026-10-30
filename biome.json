@@ -38,7 +38,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/sandbox/**", "scripts/**"],
+      "includes": ["src/sandbox/**", "scripts/**", "tsup.config.ts"],
       "linter": {
         "rules": {
           "style": {

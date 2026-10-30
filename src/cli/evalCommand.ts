@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { delimiter, dirname, join } from "node:path";
+import { BUILD_COMMIT } from "../buildInfo.js";
 import type { ClaudeCodeAgent } from "../evals/agents/claudeCode.js";
 import { compareReports, formatComparison, loadReport } from "../evals/compare.js";
-import { reportV2 } from "../evals/report.js";
+import { garudaCommit, reportV2, staleBuildNote } from "../evals/report.js";
 import {
   buildRepoSuite,
   DEFAULT_COMMITS,
@@ -20,7 +21,7 @@ import {
   summarize,
 } from "../evals/runner.js";
 import { DEFAULT_SEED, shuffled } from "../evals/stats.js";
-import { ALL_TASKS, EVAL_SUITES, requiredToolchains } from "../evals/suites.js";
+import { chooseTasks, EVAL_SUITES, HELD_OUT_TASKS, requiredToolchains } from "../evals/suites.js";
 import { checkToolchains, prepareToolchain, TOOLCHAINS, toolchainId } from "../evals/toolchains.js";
 import type { EvalTask } from "../evals/types.js";
 import { git } from "../jobs/git.js";
@@ -93,6 +94,8 @@ export interface EvalCommandOptions {
   seed?: number;
   /** --agent garuda|claude-code (0.17, T11b): the Claude Code baseline on the same tasks. */
   agent?: string;
+  /** --split dev|heldout|all (0.17, T11c). Default dev: the held-out set never runs by accident. */
+  split?: string;
 }
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
@@ -119,7 +122,15 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     for (const [suite, tasks] of suites) {
       const needs = requiredToolchains(tasks).map((id) => TOOLCHAINS[id].title);
       process.stdout.write(`${suite}:${needs.length > 0 ? ` (needs ${needs.join(", ")})` : ""}\n`);
-      for (const task of tasks) process.stdout.write(`  ${task.id.padEnd(18)} ${task.title}\n`);
+      for (const task of tasks) process.stdout.write(`  ${task.id.padEnd(32)} ${task.title}\n`);
+    }
+    // The held-out split (T11c): listed so the user knows it is there; it runs only on request.
+    const needs = requiredToolchains(HELD_OUT_TASKS).map((id) => TOOLCHAINS[id].title);
+    process.stdout.write(
+      `\nheld-out split (runs only with --split heldout or all; needs ${needs.join(", ")} for some):\n`,
+    );
+    for (const task of HELD_OUT_TASKS) {
+      process.stdout.write(`  ${task.id.padEnd(32)} ${task.title}\n`);
     }
     return 0;
   }
@@ -184,7 +195,8 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       options.suite === "java" ||
       options.suite === "python" ||
       options.suite === "all" ||
-      options.suite === "repo"
+      options.suite === "repo" ||
+      (options.split !== undefined && options.split !== "dev")
     ) {
       process.stderr.write("--format works with the JS suites: basic and hard.\n");
       return 1;
@@ -262,19 +274,19 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     process.stderr.write(`Unknown agent ${options.agent}. Use: garuda, claude-code.\n`);
     return 1;
   }
-  const suite = options.suite ?? "basic";
-  const suiteTasks =
-    suite === "all" ? ALL_TASKS : suite === "repo" ? repoTasks : EVAL_SUITES[suite];
-  if (suiteTasks === undefined) {
-    process.stderr.write(
-      `Unknown suite ${suite}. Use: ${[...Object.keys(EVAL_SUITES), "all", "repo"].join(", ")}.\n`,
-    );
+  const split = options.split ?? "dev";
+  const suite = options.suite ?? (split === "dev" ? "basic" : split === "all" ? "all" : "heldout");
+  const choice = chooseTasks({
+    suite: options.suite,
+    split,
+    task: options.task,
+    repoTasks,
+  });
+  if ("problem" in choice) {
+    process.stderr.write(`${choice.problem}\n`);
     return 1;
   }
-  // --task picks from every built-in suite; with -s repo, from the repo suite.
-  const pool = suite === "repo" ? suiteTasks : ALL_TASKS;
-  const chosen =
-    options.task === undefined ? suiteTasks : pool.filter((t) => options.task?.includes(t.id));
+  const chosen = choice.tasks;
   const repeat = Math.max(1, options.repeat ?? 1);
   const seed = options.seed ?? DEFAULT_SEED;
   if (!Number.isInteger(seed) || seed < 0) {
@@ -345,6 +357,9 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   );
   const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
+  // A build older than the checkout runs old tasks and code (the user's second held-out run).
+  const stale = staleBuildNote(BUILD_COMMIT, await garudaCommit());
+  if (stale !== undefined) process.stderr.write(`Warning: ${stale}\n\n`);
   process.stderr.write(
     `${baseline === undefined ? "" : `Baseline: Claude Code ${baseline.version ?? ""} (claude -p, every tool allowed, in the sandbox, network only to api.anthropic.com).\n`}Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
@@ -412,7 +427,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = `${formatReport(results, { seed })}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true, agent: baseline === undefined ? { name: "garuda" } : { name: "claude-code", ...(baseline.version === undefined ? {} : { version: baseline.version }) } }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
+    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true, split, agent: baseline === undefined ? { name: "garuda" } : { name: "claude-code", ...(baseline.version === undefined ? {} : { version: baseline.version }) } }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

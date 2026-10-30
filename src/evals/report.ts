@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { arch, platform, release } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { BUILD_COMMIT } from "../buildInfo.js";
 import { git } from "../jobs/git.js";
 import { HostExecutor } from "../sandbox/host.js";
 import { VERSION } from "../version.js";
@@ -72,8 +73,30 @@ export interface ReportMetadata {
   isolation: string;
   seed: number;
   shuffle: boolean;
+  /** --split (T11c): dev, heldout or all. A held-out score is only valid with unchanged hashes. */
+  split?: string;
   /** The agent (T11b): Garuda, or the Claude Code baseline with its version. */
   agent?: { name: string; version?: string };
+}
+
+/**
+ * The report's `garuda` field (0.17): the version, and the commit of the code that ran. A build
+ * records the commit it was built from; the checkout's HEAD is added when it differs, because the
+ * user's second held-out run reported HEAD while an older build ran.
+ */
+export function buildFields(build: string | undefined, checkout: string | undefined) {
+  const commit = build ?? checkout;
+  return {
+    version: VERSION,
+    ...(commit === undefined ? {} : { commit }),
+    ...(build !== undefined && checkout !== undefined && checkout !== build ? { checkout } : {}),
+  };
+}
+
+/** A warning when the build is older than the checkout: run pnpm build first. */
+export function staleBuildNote(build: string | undefined, checkout: string | undefined) {
+  if (build === undefined || checkout === undefined || build === checkout) return undefined;
+  return `This build is from commit ${build.slice(0, 7)}, but the checkout is at ${checkout.slice(0, 7)}. The tasks and the code that run are the older ones: run pnpm build first.`;
 }
 
 /** The version 2 fields: metadata, task hashes, the run order and the evidence. */
@@ -82,10 +105,9 @@ export async function reportV2(
   tasks: readonly EvalTask[],
   results: readonly EvalResult[],
 ): Promise<Record<string, unknown>> {
-  const commit = await garudaCommit();
   return {
     schema: REPORT_SCHEMA,
-    garuda: { version: VERSION, ...(commit === undefined ? {} : { commit }) },
+    garuda: buildFields(BUILD_COMMIT, await garudaCommit()),
     spec: meta.model,
     agent: meta.agent ?? { name: "garuda" },
     provider: meta.provider,
@@ -95,6 +117,7 @@ export async function reportV2(
     os: { platform: platform(), release: release(), arch: arch(), node: process.versions.node },
     seed: meta.seed,
     shuffle: meta.shuffle,
+    split: meta.split ?? "dev",
     order: results.map((r) => ({ id: r.id, attempt: r.attempt ?? 1 })),
     tasks: Object.fromEntries(tasks.map((t) => [t.id, taskHash(t)])),
     evidence: {

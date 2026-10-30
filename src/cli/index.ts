@@ -107,13 +107,20 @@ async function main(): Promise<void> {
     .command("eval")
     .description("run the eval tasks in scratch folders and report pass/fail, steps and cost")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
-    .option("-s, --suite <name>", "basic (default), hard, java, python, all or repo")
-    .option("-t, --task <ids...>", "run only these tasks (from any suite)")
+    .option("-s, --suite <name>", "basic (default), hard, java, python, medium, all or repo")
+    .option(
+      "-t, --task <ids...>",
+      "run only these tasks (from any dev suite, or the held-out set with --split)",
+    )
     .option("--max-steps <n>", "step limit per task", (v) => Number.parseInt(v, 10))
     .option("--repeat <n>", "run each task n times and show the mean", (v) =>
       Number.parseInt(v, 10),
     )
     .option("--agent <name>", "garuda (default) or claude-code: the baseline on the same tasks")
+    .option(
+      "--split <name>",
+      "dev (default), heldout or all: the held-out tasks run only on request",
+    )
     .option("--shuffle", "run the tasks and their repeats in a random order from --seed")
     .option("--seed <n>", "seed for --shuffle and the report's interval (default 1)", (v) =>
       Number(v),

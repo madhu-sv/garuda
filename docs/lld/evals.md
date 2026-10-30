@@ -17,12 +17,15 @@ same-build A/B runs.
 | `pythonTasks.ts` | Python suite (0.3): 5 pytest projects in src layout (shared mutable default, last short chunk, rename across modules, duration parser from tests, sort order of equal scores). |
 | `projects.ts` | The shared `pom.xml` (fixed plugin and JUnit versions) and `pyproject.toml`, the Java and Python check commands, and `isProtectedPath`. |
 | `toolchains.ts` | The `maven` and `pytest` toolchains: a probe project, `checkToolchains`, `prepareToolchain`. |
-| `suites.ts` | `basic`, `hard`, `java`, `python`, `all`; `requiredToolchains(tasks)`. |
+| `suites.ts` | `basic`, `hard`, `java`, `python`, `medium`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
+| `mediumTasks.ts` | T11c (0.17): the medium suite, 10 dev tasks (the first held-out set): multi-file defects, refactors, mutation-checked tests, repository conventions with hidden tests, one vague request. |
+| `heldOutTasks.ts` | T11c (0.17): the held-out split, 10 harder tasks in no suite, each with a trap that a quick fix falls into. Only `--split heldout` or `all` runs them. |
+| `taskKit.ts` | T11c (0.17): helpers for written tasks: `NODE_PKG`, `testHead`, `hiddenNode`, `hiddenPytest`, `hiddenMaven`, `mutationCheck`, `guard` (a check step that prints why it stops). |
 | `repoTasks.ts` | Benchmark your repo (0.12): candidate commits from git history (`skipReason`, `recentCommits`), `repoPrompt`, `taskWorktree` / `applyTests` / `removeTaskWorktree`, `buildRepoSuite`, `saveRepoSuite` / `loadRepoSuite`, `repoEvalTasks`. |
-| `runner.ts` | Runs tasks; `formatReport`. |
+| `runner.ts` | Runs tasks; `runCheck` (a silent failure reports its exit code, 0.17); `formatReport` (its id column fits the longest id, at least 18, since 0.17). |
 | `changes.ts` | T11a (0.17): `treeState` (a hash per file, without `.git`, `.garuda` and build output), `changedPaths`, `unexpectedPaths`. |
 | `stats.ts` | T11a (0.17): `seeded` and `shuffled`; `passInterval` (cluster bootstrap over tasks), `consistency`, `spread`, `stepsSd`, `costPerPass`, `unexpectedChanges`. |
-| `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`). |
+| `report.ts` | T11a (0.17): report.json version 2 (`reportV2`, `taskHash`, `garudaCommit`; `buildFields` and `staleBuildNote`: the commit of the build that ran, and a warning when the checkout is newer). |
 | `agents/claudeCode.ts` | T11b (0.17): the Claude Code baseline: `claudeCommand`, `parseClaudeResult` (turns, tokens, cache reads, cost, `error_max_turns`, errors), `runClaudeCode` (the run's executor and policy, a new `CLAUDE_CONFIG_DIR`, the key in the process environment only). |
 | `compare.ts` | T11a (0.17): `garuda eval compare`: `loadReport` (version 1 and 2), `compareReports` (refuses other tasks or changed hashes; a paired bootstrap of B − A and of the cost-per-accepted-change ratio B/A), `formatComparison`, `roughNote`. |
 
@@ -110,17 +113,19 @@ environment list.
 ## Command
 
 ```text
-garuda eval [-m model] [-s basic|hard|java|python|all|repo] [-t ids…] [--repeat n] [--index off|lookup|all]
+garuda eval [-m model] [-s basic|hard|java|python|medium|all|repo] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
             [--batch on|off] [--parallel n] [--shuffle] [--seed n] [--agent garuda|claude-code]
+            [--split dev|heldout|all]
 garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the same tasks
 garuda eval --prepare java|python
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
 
-`--list` shows the toolchains that each suite needs, and the repo suite when the project has one.
+`--list` shows the toolchains that each suite needs, the repo suite when the project has one, and
+the held-out set (0.17, T11c), which runs only with `--split heldout` or `all`.
 
 ## Benchmark your repo (0.12, W3)
 
@@ -257,7 +262,7 @@ This prevents an unmeasured run from appearing to use zero tokens or to be free.
 ## Tests
 
 `test/evals.test.ts`: every basic and hard task's check fails before the fix and passes with a reference
-solution; the runner passes a solved task and reports steps, tokens and cost.
+solution (60 s each: a hard task writes about 110 files and runs its tests twice); the runner passes a solved task and reports steps, tokens and cost.
 
 `test/evals.java.test.ts` and `test/evals.python.test.ts`: the same self-test for the Java and Python
 tasks, run at the same time (`describe.concurrent`, 180 s limit each). They run only when the toolchain
@@ -277,6 +282,16 @@ runner with a fake `claude`: the flags, a new config folder that is gone after t
 the process environment and never in the result or the saved JSON, the same grading (pass, changed
 and unexpected files, `.claude` left out); no JSON and the turn limit; the refusals (not Claude,
 Garuda-only options, no key, no `claude` on PATH); the compare polish ("0 pts", a flat interval).
+
+`test/evals.heldout.test.ts` (0.17, T11c): 10 held-out tasks, all `heldout`, none in a dev suite;
+each fails before and passes with its solution (the Java one needs Maven); each hash equals the
+recorded one; the build files, fixtures and code under test are protected; each trap's quick fix
+fails the check; `chooseTasks` for the default, `medium`, `heldout`, `all`, `-t` in each, and the
+refusals.
+
+`test/evals.medium.test.ts` (0.17, T11c): the medium suite's self-tests, its weak answers (a test
+that kills no mutant, the old name left in the client, a `print` in the command) and its careful
+answers (a CSV test added to the visible tests; a new test in scope in the conventions tasks).
 
 `test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
 A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for

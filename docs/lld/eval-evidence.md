@@ -2,7 +2,8 @@
 
 Status: design approved (2026-10-29). Built: T11a (patch 1: unexpected changes, the stats module,
 report v2 and metadata, `--shuffle`, `--seed`; patch 2: `garuda eval compare`); see "As built" in
-T11a; T11b (the Claude Code baseline), see "As built" in T11b. T11c and T11d are not built yet. The user chose: Claude
+T11a; T11b (the Claude Code baseline), see "As built" in T11b; T11c (the split and the held-out
+set), see "As built" in T11c. T11d is not built yet. The user chose: Claude
 Code (`claude -p`) as the baseline agent; a prompt addendum file as the only thing that the
 proposer loop may edit; this design note before any code. The user's answers to the open questions
 are in "Decisions" at the end.
@@ -198,6 +199,92 @@ Each task has a solution, a check that fails before and passes after (unit tests
 protected files, as the current tasks have. A held-out task's version hash is recorded when it is
 added. A held-out task that changes after a tuning result was seen makes that result invalid; the
 report says so.
+
+### As built
+
+`src/evals/heldOutTasks.ts` (`HELD_OUT_TASKS`), `chooseTasks` in `src/evals/suites.ts`, and the
+shared helpers for written tasks in `src/evals/taskKit.ts`. The
+held-out tasks are in no suite, so `-s all` and `ALL_TASKS` stay dev. `--split heldout` takes the
+held-out set and `-t` picks in it; `-s` with it is refused. `--split all` takes the dev tasks (`-s`
+defaults to `all`) and the held-out set. A held-out id with `-t` on the dev split is refused with
+the fix. `report.json` records `split`. The split is not part of the task hash: the hash covers
+only what decides a result, so the dev hashes did not change.
+
+The held-out set, second version (the first is now the `medium` dev suite; see below). Each task
+has a trap: a quick fix that passes the visible tests, but not the hidden test or the mutation
+check.
+
+| Task | Archetype | Language | The trap |
+| --- | --- | --- | --- |
+| `held-out-price-cache` | multi-file defect | TypeScript | The cache key lacks the currency. Clearing the cache when a session changes currency passes the visible test; two sessions on one service, and a price change seen in each currency, do not. |
+| `held-out-payment-retry` | multi-file defect | Python | Each retry gets a new idempotency key. No retry, or a key from the account and amount, passes the visible tests; two equal orders must be two charges, and two lost replies one charge. |
+| `held-out-invoice-split` | multi-file defect | Java | Shares do not add up, and `Money.of` reads yen with two decimals. The remainder on the last share passes the visible test; the extra units must come first, refunds too, and yen must be right. |
+| `held-out-command-registry` | refactor | TypeScript | Three hand-kept command lists become one registry. A registry for dispatch only passes the visible tests; one `register` call must reach the help and the completion, with the help unchanged to the space. |
+| `held-out-settings` | refactor | Python | Settings from three modules into one `load(env)`. The README's table decides, not the old code: `APP_BETA=0` is off, wrong values raise `SettingsError` with the name, and no module reads the environment. |
+| `held-out-tests-intervals` | missing tests | TypeScript | Tests must kill 6 subtle mutants: touching intervals, containment, empty intervals, the input copy, the sort, the covered length. |
+| `held-out-tests-csv-field` | missing tests | Python | Tests must kill 6 subtle mutants: `@` formulas, CR, quote doubling, a leading space, booleans, CRLF. |
+| `held-out-conventions-migration` | conventions | TypeScript | `AGENTS.md`: a new migration (not an edit), `due_date` in the database, an ISO string or `null` in the API, 400 for a bad date, `down` that undoes `up`. |
+| `held-out-conventions-reset` | conventions | Python | `AGENTS.md`: the same answer for an unknown address, a rate limit per address, no token in the log, 202 with `{}`. Each trap alone fails the check. |
+| `held-out-slow-search` | ambiguous | TypeScript | "Search is slow": one query per tag and a quadratic duplicate scan. A big account must take 3 queries or fewer and under 1.5 s (31 ms fixed, 7.9 s before, here), with the same hits; the batch query sorts and removes repeated ids, so its order must not leak into a hit's tags. |
+
+Prompts that have visible tests say "You may add tests, but do not change the existing ones", and
+`allowChanges` covers the test folders: the first set's live run showed that a careful agent adds
+a test. Where a hidden test decides and the prompt says nothing about tests, the visible tests are
+not protected, but the fixtures and the code under test are (`src/db.ts` in the search task, so
+that the query count stays honest; the services in the reset task; the old migrations).
+
+Details:
+
+- **Hidden tests.** The check writes them into `.check/` after the run's changed files are taken,
+  so the agent never sees them and they are not its changes. The file is written first: a heredoc
+  ends a shell line, so a guard before it (`test -f … &&`) would not stop the test command after
+  it. The self-test found this: the conventions task passed before the fix.
+- **Mutation checks.** Each mutant is a `sed` expression on a copy of the project; the check fails
+  when a mutant does not change the file, so a mutant that stops matching is found. One planned
+  mutant (`if not text:` to `if False:`) was equivalent, because the parser refuses empty text
+  later as well; it was replaced by one that drops the end-of-text test.
+- **TypeScript without a build.** The tasks run with Node's own type stripping (`node --test`,
+  Node 22.18 or later), so their code uses only erasable syntax (no parameter properties).
+- **Hashes.** `HELD_OUT_HASHES` in `test/evals.heldout.test.ts` holds each task's hash.
+- **Quick fixes.** `test/evals.heldout.test.ts` holds the traps as tests: each quick fix must fail
+  the check (14 of them, the reset task's three traps one at a time). The search task compares its
+  20 000 hits as JSON and names the first difference: `assert.deepEqual` took minutes to build the
+  diff of a wrong answer.
+- **First set's live run** (2026-10-30, Haiku 5.5, `--repeat 3 --shuffle --seed 7`): 27/30, interval
+  70%–100%, about $0.002 a run. `med-export-dates` (then in the held-out set) failed 0/3, each time
+  with the right fix: the agent added a CSV test to `test/export.test.ts`, which was protected. A task whose hidden test
+  decides need not protect its visible tests, so that task protects nothing and allows changes in
+  `test/**`; the two conventions tasks allow a new test (`allowChanges`). Three hashes changed. With
+  this fix the run would be 30/30: the set was at its ceiling for Haiku 5.5 too, so it could not
+  show a difference between two agents or two prompts. The user chose a harder set. The first set
+  moved to the dev split as the `medium` suite (ids `med-…`), so it still guards against
+  regressions; the new set above took its place. No tuning result had been seen, so nothing was
+  invalidated.
+- **Second live run** (2026-10-30, the new set, Haiku 5.5, `--repeat 3 --shuffle --seed 7`):
+  28/30, interval 80%–100%, $0.0038 per accepted change, no unexpected changes; steps median 7
+  (p95 12), against 5 in the first set. Both failures were `held-out-conventions-migration`, with
+  correct work: the agent called the field `dueAt` and the column `due_at`, and the hidden test
+  read `dueDate`, a name the prompt did not give. A hidden test may check only what the prompt,
+  the repository or its `AGENTS.md` decide; the prompt now names `dueDate` (`due_date` then
+  follows from the snake_case rule). The report's reason was empty, because a guard
+  (`grep … test/ &&`) stopped the check with no output. Guards now use `guard(test, message)`
+  (`taskKit.ts`), which prints the message, and `runCheck` reports "(no output; exit code N)"
+  for a silent failure. With these fixes the run would be 30/30: Haiku 5.5 passes this set too.
+- **Third live run** (2026-10-30, Haiku 5.5, Garuda and the Claude Code baseline): both ran a
+  `dist/` built before 0240, so the old tasks ran, and the reports named the checkout's HEAD. On
+  those (same) tasks: Garuda 26/30, Claude Code 27/30, B − A +3 pts (paired interval 0 to +10):
+  no clear difference; cost per accepted change $0.0039 and $0.0059, B/A ×1.50 (×1.35 to ×1.71):
+  Claude Code costs more, with median tokens 142k against 49k. The migration task failed 0/3 in
+  both (the old prompt). One Garuda run of the payment task appended a correct test to the
+  protected `tests/test_checkout.py`: the prompt's "do not change the existing ones" read as
+  "the existing tests". The prompts now say "in new files … the existing test files".
+  `src/buildInfo.ts` holds the build's commit (tsup's `define`; undefined in the tests);
+  `buildFields` puts it in `report.json` with the checkout's HEAD when that differs, and
+  `staleBuildNote` warns at the start of an eval.
+- **Java.** Maven Central is blocked in the cloud workspace, so the Java self-tests skip there.
+  The Java tasks were checked with `javac` and a small JUnit stub: their tests fail before the fix
+  and pass with it, and in `held-out-invoice-split` the quick fix fails 3 of 4 hidden tests. On a machine with `--prepare java` they run in
+  `pnpm check`.
 
 The proposer never gets anything from the held-out set: not its names, prompts, files, results or
 traces. The held-out tasks are in the repository, but the proposer is a separate model request
