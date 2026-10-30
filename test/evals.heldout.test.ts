@@ -2,6 +2,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { unexpectedPaths } from "../src/evals/changes.js";
 import { HELD_OUT_TASKS } from "../src/evals/heldOutTasks.js";
 import { isProtectedPath } from "../src/evals/projects.js";
 import { taskHash } from "../src/evals/report.js";
@@ -19,9 +20,9 @@ import { expectFailsThenPasses } from "./evalTasks.js";
  * seen before the change as invalid.
  */
 const HELD_OUT_HASHES: Record<string, string> = {
-  "ho-conventions-cli": "257ab4cd181cc91db4bd58809365702d599fc427cb3c801f23f6ecbadbd0d40b",
-  "ho-conventions-handler": "610fb59dba6257095c533cbcd7a75d629bba5e30678be58b48ff0ec08cecfb2d",
-  "ho-export-dates": "07d93636e4ceb3953a82148c0afe3e497997d2fcefc04abd673972db7dcbad8b",
+  "ho-conventions-cli": "87bba8f5d9a84b50ec726a596b3128f734a00360df840d2239909c3fcf448faf",
+  "ho-conventions-handler": "d8b9047d54923fd4a4b172c9c6f5ef0c620b6ccd81eaee97ff9c896687cd52f3",
+  "ho-export-dates": "20756cab96b74c6084a022bfb99c7e568aff9d3e082ee0e005f950bd37586fa7",
   "ho-inventory": "61f82dab50057c9dccad097514590c0c60dd743d01611416cf33c9552bda6141",
   "ho-ledger": "f64c4a19923ba27e61fb7cc70627736cbe8172c396b07daa48b4241108489832",
   "ho-notifier": "c0731158ec862db593c0fc17dd496e7c19091685d416522c0e8cafef0d8c675f",
@@ -61,8 +62,9 @@ describe("the held-out set", () => {
     expect([count("ts"), count("python"), count("java")]).toEqual([5, 3, 2]);
   });
 
-  it("protects every test and build file", () => {
-    for (const task of HELD_OUT_TASKS) {
+  it("protects every test and build file, except where a hidden test decides", () => {
+    // ho-export-dates: its hidden test decides, so the agent may add a test (the first live run).
+    for (const task of HELD_OUT_TASKS.filter((t) => t.id !== "ho-export-dates")) {
       const protectedFiles = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
       for (const path of Object.keys(task.files).filter(isProtectedPath)) {
         expect(protectedFiles, `${task.id}: ${path}`).toContain(path);
@@ -154,6 +156,43 @@ describe.concurrent("the checks refuse weak answers", () => {
     expect(solution).toBeDefined();
     const printed = { ...t.solution, [path]: `${solution}\nprint("debug")\n` };
     expect((await checkWith(t, printed)).ok).toBe(false);
+  });
+});
+
+describe("the checks accept a careful answer (the first live run, 2026-10-30)", () => {
+  it("ho-export-dates: the fix with a CSV test added to the visible tests passes", async () => {
+    const t = task("ho-export-dates");
+    const visible = t.files["test/export.test.ts"] ?? "";
+    const added = {
+      ...t.solution,
+      "test/export.test.ts": visible
+        .replace(
+          'import { toJson } from "../src/export/json.ts";',
+          'import { toCsv } from "../src/export/csv.ts";\nimport { toJson } from "../src/export/json.ts";',
+        )
+        .concat('test("csv", () => assert.match(toCsv(rows), /rent,950\\.00,2026-10-28/));\n'),
+    };
+    expect((await checkWith(t, added)).ok).toBe(true);
+    // Not protected, and not an unexpected change.
+    expect(t.protect).toEqual([]);
+    expect(
+      unexpectedPaths(
+        ["src/export/csv.ts", "test/export.test.ts"],
+        Object.keys(t.solution),
+        t.allowChanges,
+      ),
+    ).toEqual([]);
+  });
+
+  it("a new test for the new code is in scope in the conventions tasks", () => {
+    const scope = (id: string, path: string) => {
+      const t = task(id);
+      return unexpectedPaths([path], Object.keys(t.solution), t.allowChanges);
+    };
+    expect(scope("ho-conventions-cli", "tests/test_stats.py")).toEqual([]);
+    expect(scope("ho-conventions-handler", "test/handlers/extra.test.ts")).toEqual([]);
+    // Outside the scope it still counts.
+    expect(scope("ho-conventions-cli", "src/todo_cli/store.py")).toEqual(["src/todo_cli/store.py"]);
   });
 });
 

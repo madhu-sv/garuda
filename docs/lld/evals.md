@@ -285,7 +285,9 @@ Garuda-only options, no key, no `claude` on PATH); the compare polish ("0 pts", 
 each fails before and passes with its solution (the Java ones need Maven); each hash equals the
 recorded one; weak answers fail (a test that kills no mutant, a test of one unit only, the old
 name left in the client, a `print` in the command); `chooseTasks` for the default, `heldout`,
-`all`, `-t` in each, and the refusals.
+`all`, `-t` in each, and the refusals; a careful answer passes (`ho-export-dates` with a CSV test
+added to the visible tests, from the first live run), and a new test is in scope in the
+conventions tasks.
 
 `test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
 A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for
