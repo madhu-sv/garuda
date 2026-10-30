@@ -98,6 +98,8 @@
   `GARUDA.md` reaches the agent (the user's first Graphify run: the agent never called the server,
   and a note written later would not have been read). A `~/.garuda/mcp.json` whose `"servers"` is a
   list now gets a message that shows the right form, not "expected record, received array".
+- Tests: `waitUntil` waits up to 20 s by default (it was 5 s), under the 30 s test limit. The
+  user's `pnpm check` failed the M5 Ctrl-C test on a busy machine.
 
 ## 0.17.0 (2026-10-27)
 

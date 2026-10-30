@@ -117,7 +117,17 @@ export async function shellRunning(marker: string, root: string): Promise<boolea
   return r.stdout.text.trim() === "yes";
 }
 
-export async function waitUntil(check: () => Promise<boolean>, timeoutMs = 5_000): Promise<void> {
+/**
+ * How long waitUntil waits by default: 20 s, under the 30 s test limit (vitest.config.ts). 5 s
+ * was too short when the eval self-tests keep the machine busy (the user's pnpm check, 0.17:
+ * the M5 Ctrl-C test).
+ */
+export const WAIT_UNTIL_MS = 20_000;
+
+export async function waitUntil(
+  check: () => Promise<boolean>,
+  timeoutMs = WAIT_UNTIL_MS,
+): Promise<void> {
   const end = Date.now() + timeoutMs;
   while (!(await check())) {
     if (Date.now() > end) throw new Error("waitUntil timed out");
