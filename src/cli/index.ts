@@ -121,6 +121,11 @@ async function main(): Promise<void> {
       "--split <name>",
       "dev (default), heldout or all: the held-out tasks run only on request",
     )
+    .option("--mcp <server>", "allow this one server from ~/.garuda/mcp.json (an MCP A/B)")
+    .option(
+      "--mcp-prepare <command>",
+      "with --mcp: run this in each scratch folder before the agent (e.g. graphify update .)",
+    )
     .option("--shuffle", "run the tasks and their repeats in a random order from --seed")
     .option("--seed <n>", "seed for --shuffle and the report's interval (default 1)", (v) =>
       Number(v),

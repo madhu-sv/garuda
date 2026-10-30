@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { BUILD_COMMIT } from "../buildInfo.js";
 import type { ClaudeCodeAgent } from "../evals/agents/claudeCode.js";
@@ -16,6 +17,7 @@ import {
 import {
   formatReport,
   isAuthFailure,
+  isMcpFailure,
   isSetupFailure,
   runEvals,
   summarize,
@@ -96,6 +98,10 @@ export interface EvalCommandOptions {
   agent?: string;
   /** --split dev|heldout|all (0.17, T11c). Default dev: the held-out set never runs by accident. */
   split?: string;
+  /** --mcp <server> (0.17): allow this one server from ~/.garuda/mcp.json, for an MCP A/B. */
+  mcp?: string;
+  /** --mcp-prepare <command> (0.17): run in each scratch folder before the agent starts. */
+  mcpPrepare?: string;
 }
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
@@ -318,6 +324,12 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     return 1;
   }
 
+  const mcp = await chooseMcp(options, homedir());
+  if (typeof mcp === "string") {
+    process.stderr.write(`${mcp}\n`);
+    return 1;
+  }
+
   const { executor, notice } = createExecutor(options.executor ?? "auto");
   if (notice !== undefined) process.stderr.write(`${notice}\n`);
   // bypassPermissions is safe only inside Garuda's OS sandbox (T11b).
@@ -361,7 +373,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const stale = staleBuildNote(BUILD_COMMIT, await garudaCommit());
   if (stale !== undefined) process.stderr.write(`Warning: ${stale}\n\n`);
   process.stderr.write(
-    `${baseline === undefined ? "" : `Baseline: Claude Code ${baseline.version ?? ""} (claude -p, every tool allowed, in the sandbox, network only to api.anthropic.com).\n`}Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `${baseline === undefined ? "" : `Baseline: Claude Code ${baseline.version ?? ""} (claude -p, every tool allowed, in the sandbox, network only to api.anthropic.com).\n`}Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, mcp ${mcp === undefined ? "off" : `${mcp.server}${mcp.prepare === undefined ? "" : `, prepared with \`${mcp.prepare}\``}`}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   if (batchMode === "on") {
@@ -391,6 +403,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       keepThinking: thinkingMode === "on",
       ...(network === undefined ? {} : { network }),
       ...(baseline === undefined ? {} : { agent: baseline }),
+      ...(mcp === undefined ? {} : { mcp }),
       ...(biome === undefined ? {} : { format: { on: formatMode === "on", biome } }),
       ...(sub === undefined
         ? {}
@@ -421,13 +434,15 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     process.stderr.write(
       last !== undefined && isAuthFailure(last)
         ? `\nStopped after ${results.length} of ${tasks.length} run(s): the provider refused the API key or the access. Check ANTHROPIC_API_KEY (it wins over the stored key) or run \`garuda setup\`.\n`
-        : `\nStopped after ${results.length} of ${tasks.length} run(s): the API could not be reached (see the reason above), so every other run would fail the same way.\n`,
+        : last !== undefined && isMcpFailure(last)
+          ? `\nStopped after ${results.length} of ${tasks.length} run(s): the --mcp server or its prepare command failed (see the reason above), so every other run would fail the same way.\n`
+          : `\nStopped after ${results.length} of ${tasks.length} run(s): the API could not be reached (see the reason above), so every other run would fail the same way.\n`,
     );
   }
   const report = `${formatReport(results, { seed })}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true, split, agent: baseline === undefined ? { name: "garuda" } : { name: "claude-code", ...(baseline.version === undefined ? {} : { version: baseline.version }) } }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
+    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true, split, ...(mcp === undefined ? {} : { mcp }), agent: baseline === undefined ? { name: "garuda" } : { name: "claude-code", ...(baseline.version === undefined ? {} : { version: baseline.version }) } }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;
@@ -609,6 +624,8 @@ export async function claudeCodeAgent(
     ["--format", options.format],
     ["--batch", options.batch],
     ["--network", options.network],
+    ["--mcp", options.mcp],
+    ["--mcp-prepare", options.mcpPrepare],
   ];
   const set = garudaOnly.filter(([, value]) => value !== undefined).map(([name]) => name);
   if (set.length > 0) {
@@ -649,4 +666,34 @@ function onPath(program: string): string | undefined {
     if (dir !== "" && existsSync(path)) return path;
   }
   return undefined;
+}
+
+/**
+ * The `--mcp` server (0.17): a server in the user's own ~/.garuda/mcp.json, enabled. A project's
+ * servers are not offered: the A/B is of a server the user chose. Returns undefined without
+ * `--mcp`, or the reason it cannot run.
+ */
+export async function chooseMcp(
+  options: Pick<EvalCommandOptions, "mcp" | "mcpPrepare">,
+  home: string,
+): Promise<{ server: string; home: string; prepare?: string } | string | undefined> {
+  if (options.mcp === undefined) {
+    return options.mcpPrepare === undefined ? undefined : "--mcp-prepare needs --mcp <server>.";
+  }
+  const { loadMcpConfig } = await import("../mcp/config.js");
+  const { servers, problems } = await loadMcpConfig({ home, root: home });
+  const own = servers.filter((s) => s.source === "user");
+  const server = own.find((s) => s.name === options.mcp);
+  if (server === undefined) {
+    const names = own.map((s) => s.name);
+    return `--mcp ${options.mcp}: no server of that name in ~/.garuda/mcp.json${names.length === 0 ? "" : ` (yours: ${names.join(", ")})`}.${problems.length === 0 ? "" : `\n${problems.join("\n")}`}`;
+  }
+  if (!server.def.enabled) {
+    return `--mcp ${options.mcp}: the server is disabled ("enabled": false) in ~/.garuda/mcp.json.`;
+  }
+  return {
+    server: server.name,
+    home,
+    ...(options.mcpPrepare === undefined ? {} : { prepare: options.mcpPrepare }),
+  };
 }

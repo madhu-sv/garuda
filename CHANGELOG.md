@@ -85,6 +85,16 @@
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).
 
+- An eval A/B of one MCP server: `garuda eval --mcp <server>` allows that one server from your
+  own `~/.garuda/mcp.json` (no other server, and none from a project file), and
+  `--mcp-prepare <command>` runs a command in each scratch folder, in the sandbox, before the agent
+  starts; what it writes is not counted as the agent's change. For Graphify:
+  `--mcp graphify --mcp-prepare "graphify update ."`. Each run records its MCP tool calls; the
+  report and `eval compare` show them ("the agent never used the server" when none), compare notes
+  when the arms' servers differ, and `report.json` records the server and the command. A server
+  that does not start, or a failed prepare command, stops the eval at the first run. The Claude
+  Code baseline refuses both options.
+
 ## 0.17.0 (2026-10-27)
 
 - macOS: no command process outlives the command (IPI-04). Seatbelt has no process namespace, so a

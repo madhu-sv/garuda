@@ -75,6 +75,8 @@ export interface ReportMetadata {
   shuffle: boolean;
   /** --split (T11c): dev, heldout or all. A held-out score is only valid with unchanged hashes. */
   split?: string;
+  /** The `--mcp` server and its prepare command (0.17); absent without one. */
+  mcp?: { server: string; prepare?: string };
   /** The agent (T11b): Garuda, or the Claude Code baseline with its version. */
   agent?: { name: string; version?: string };
 }
@@ -118,6 +120,13 @@ export async function reportV2(
     seed: meta.seed,
     shuffle: meta.shuffle,
     split: meta.split ?? "dev",
+    mcp:
+      meta.mcp === undefined
+        ? null
+        : {
+            server: meta.mcp.server,
+            ...(meta.mcp.prepare === undefined ? {} : { prepare: meta.mcp.prepare }),
+          },
     order: results.map((r) => ({ id: r.id, attempt: r.attempt ?? 1 })),
     tasks: Object.fromEntries(tasks.map((t) => [t.id, taskHash(t)])),
     evidence: {

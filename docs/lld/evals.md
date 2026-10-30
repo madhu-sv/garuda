@@ -118,11 +118,20 @@ garuda eval [-m model] [-s basic|hard|java|python|medium|all|repo] [-t ids…] [
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
             [--batch on|off] [--parallel n] [--shuffle] [--seed n] [--agent garuda|claude-code]
-            [--split dev|heldout|all]
+            [--split dev|heldout|all] [--mcp server [--mcp-prepare command]]
 garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the same tasks
 garuda eval --prepare java|python
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
+
+`--mcp <server>` (0.17): the runtime gets `mcp: { home, only: server }`, so it loads that one
+server from the user's own file (`chooseMcp` refuses an unknown or disabled one, and
+`--mcp-prepare` alone). `--mcp-prepare` runs through `runCheck` in the run's executor (2 minutes)
+before the start state is taken; a failure skips the agent. The runner counts `tool_call` events
+whose name starts with `mcp__` (`EvalResult.mcpCalls`) and reads the server's status before the
+runtime closes: `failed` makes the run an error. `isMcpFailure` joins `isSetupFailure`, so both
+stop the eval. `report.json` gets `mcp: { server, prepare } | null`; `mcpUse` (stats.ts) gives the
+report's and compare's "MCP tool calls" line; compare notes when the arms' servers differ.
 
 `--list` shows the toolchains that each suite needs, the repo suite when the project has one, and
 the held-out set (0.17, T11c), which runs only with `--split heldout` or `all`.
@@ -292,6 +301,13 @@ refusals.
 `test/evals.medium.test.ts` (0.17, T11c): the medium suite's self-tests, its weak answers (a test
 that kills no mutant, the old name left in the client, a `print` in the command) and its careful
 answers (a CSV test added to the visible tests; a new test in scope in the conventions tasks).
+
+`test/evalMcp.test.ts` (0.17): with the fixture MCP server in a fake home: only the named server's
+tools reach the model, and their calls are counted; without `--mcp` no server starts; the prepare
+command's files are not changes; a failed prepare skips the agent and stops the eval; a server
+that does not start fails the run and stops the eval; `chooseMcp`; the baseline refuses `--mcp`;
+the report and compare lines. Checked by hand with Graphify 0.9.97: `graphify update .` in the
+prepare step, `query_graph` through `mcp__graphify__query_graph`, `graphify-out/` not a change.
 
 `test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
 A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for

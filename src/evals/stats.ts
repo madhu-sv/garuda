@@ -202,3 +202,21 @@ export function quantile(sorted: ArrayLike<number>, q: number): number {
   const b = sorted[hi] as number;
   return a + (b - a) * (pos - lo);
 }
+
+/** How a run set used the `--mcp` server (0.17): undefined when it ran without one. */
+export function mcpUse(
+  results: readonly EvalResult[],
+): { calls: number; runs: number; measured: number } | undefined {
+  const measured = results.filter((r) => r.mcpCalls !== undefined);
+  if (measured.length === 0) return undefined;
+  return {
+    calls: measured.reduce((sum, r) => sum + (r.mcpCalls ?? 0), 0),
+    runs: measured.filter((r) => (r.mcpCalls ?? 0) > 0).length,
+    measured: measured.length,
+  };
+}
+
+/** "12 in 5 of 30 runs": a server that the agent never calls measures nothing. */
+export function mcpUseText(use: { calls: number; runs: number; measured: number }): string {
+  return `${use.calls} in ${use.runs} of ${use.measured} runs${use.runs === 0 ? " (the agent never used the server)" : ""}`;
+}

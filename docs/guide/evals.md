@@ -85,6 +85,36 @@ results: then they stop measuring. The Python tasks need pytest and the Java one
 From a source checkout, run `pnpm build` after you apply a change: `garuda eval` runs the build
 in `dist/`, and it warns when that build is older than the checkout.
 
+### One MCP server: an A/B (0.17)
+
+Evals run without your MCP servers, so your setup does not change the results. `--mcp <server>`
+allows one server from your own `~/.garuda/mcp.json` (not a project's), to measure what it adds.
+`--mcp-prepare <command>` runs in each scratch folder before the agent starts, in the sandbox with
+no network; what it writes does not count as a change of the agent.
+
+For [Graphify](https://pypi.org/project/graphifyy/), a code knowledge graph (`pipx install
+"graphifyy[mcp]"`, which installs its MCP extra too), add the server to `~/.garuda/mcp.json`:
+
+```json
+{ "servers": { "graphify": {
+  "command": "/path/to/graphify-venv/bin/python",
+  "args": ["-m", "graphify.serve", "graphify-out/graph.json"] } } }
+```
+
+Use the Python of the environment that has Graphify: the first line of `$(which graphify)` names
+it (`head -1 "$(which graphify)"`). Then run both arms with the same seed, and compare:
+
+```sh
+garuda eval --split heldout --repeat 3 --shuffle --seed 7                      # arm A
+garuda eval --split heldout --repeat 3 --shuffle --seed 7 \
+  --mcp graphify --mcp-prepare "graphify update ."                             # arm B
+garuda eval compare .garuda/evals/<arm-a> .garuda/evals/<arm-b>
+```
+
+`graphify update .` builds the code graph with tree-sitter: no model and no API key. The report
+gives the MCP tool calls; when the agent never used the server, the A/B measured nothing. A server
+that does not start, or a prepare command that fails, stops the eval at the first run.
+
 ### Claude Code as the baseline (0.17)
 
 `--agent claude-code` runs Claude Code (`claude -p`) on the same tasks, with the same scratch

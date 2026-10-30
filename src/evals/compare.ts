@@ -5,6 +5,8 @@ import {
   byTask,
   costPerPass,
   DEFAULT_SEED,
+  mcpUse,
+  mcpUseText,
   quantile,
   seeded,
   spread,
@@ -29,6 +31,8 @@ export interface LoadedReport {
   /** Task id → hash (version 2 only). */
   tasks: Record<string, string> | undefined;
   results: EvalResult[];
+  /** The `--mcp` server of the run (0.17); undefined without one. */
+  mcp?: string | undefined;
 }
 
 /** Read a report: a report.json file, or the run folder that holds one. */
@@ -57,7 +61,14 @@ export function parseReport(data: Record<string, unknown>, path: string): Loaded
     seed: typeof data.seed === "number" ? data.seed : undefined,
     tasks,
     results: data.results as EvalResult[],
+    mcp: mcpServerOf(data.mcp),
   };
+}
+
+function mcpServerOf(value: unknown): string | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const server = (value as { server?: unknown }).server;
+  return typeof server === "string" ? server : undefined;
 }
 
 export interface ArmRuns {
@@ -202,6 +213,11 @@ export function compareReports(
       `The arms ran with different seeds (${a.seed} and ${b.seed}): their run orders differ.`,
     );
   }
+  if (a.mcp !== b.mcp) {
+    notes.push(
+      `The arms differ in the MCP server: A ${a.mcp ?? "none"}, B ${b.mcp ?? "none"}. For an MCP A/B, keep every other option the same.`,
+    );
+  }
   const cost = costRatio(rows, seed, draws, level);
   if (typeof cost === "string") notes.push(cost);
   else if (cost.skipped > draws * 0.05) {
@@ -317,6 +333,7 @@ export function formatComparison(a: LoadedReport, b: LoadedReport, c: Comparison
     const cost = costPerPass(report.results);
     const u = unexpectedChanges(report.results);
     const s = spread(report.results);
+    const mcp = mcpUse(report.results);
     lines.push(
       `${name}: cost per accepted change ${
         cost.kind === "unknown"
@@ -324,7 +341,7 @@ export function formatComparison(a: LoadedReport, b: LoadedReport, c: Comparison
           : cost.kind === "none"
             ? "no passes"
             : `${cost.minimum ? "≥ " : ""}$${cost.usd.toFixed(4)}`
-      } · unexpected changes ${u.measured === 0 ? "not measured" : `${u.runs} of ${u.measured} runs`} · median time ${s === undefined ? "–" : `${Math.round(s.durationMs.median / 1000)} s`}`,
+      } · unexpected changes ${u.measured === 0 ? "not measured" : `${u.runs} of ${u.measured} runs`} · median time ${s === undefined ? "–" : `${Math.round(s.durationMs.median / 1000)} s`}${mcp === undefined ? "" : ` · MCP tool calls ${mcpUseText(mcp)}`}`,
     );
   }
   if (c.costRatio !== undefined) {

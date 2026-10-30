@@ -28,6 +28,8 @@ import {
   consistency,
   costPerPass,
   DEFAULT_SEED,
+  mcpUse,
+  mcpUseText,
   passInterval,
   spread,
   stepsSd,
@@ -107,7 +109,16 @@ export interface EvalOptions {
    * settings above that change Garuda, and the session belong to Garuda only.
    */
   agent?: ClaudeCodeAgent;
+  /**
+   * One MCP server for the run (0.17, `--mcp`): its name in the user's own ~/.garuda/mcp.json
+   * under `home`, and an optional command that prepares the scratch folder for it before the
+   * agent starts (for Graphify: `graphify update .`, which builds the code graph).
+   */
+  mcp?: { server: string; home: string; prepare?: string };
 }
+
+/** Time limit of an MCP prepare command (`--mcp-prepare`). */
+export const MCP_PREPARE_TIMEOUT_MS = 120_000;
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
   const started = Date.now();
@@ -124,8 +135,6 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   if (options.format !== undefined) await formatProject(root, options.format.biome);
   const protect = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
   const before = await snapshot(root, protect);
-  // The start state for the changed files (0.17, T11a).
-  const start = await treeState(root);
 
   const settings = parseSettings({
     // With an allowlist, a host outside it is denied: nobody answers questions in an eval.
@@ -158,6 +167,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       : { thinking: { keepBlocks: options.keepThinking } }),
   });
   const store = new FileSessionStore(root);
+  let mcpCalls = 0;
   const runtime = await Runtime.create({
     root,
     modelId: options.modelId,
@@ -168,17 +178,18 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     approver: new AutoApprover("once"),
     store,
     settings,
-    // The user's own MCP servers must not change eval results.
-    mcp: false,
+    // The user's own MCP servers must not change eval results; `--mcp` allows one by name.
+    mcp: options.mcp === undefined ? false : { home: options.mcp.home, only: options.mcp.server },
     hooks: false,
     ...(options.policy === undefined ? {} : { policy: options.policy }),
     commands: false,
     // The list comes from the eval command line: the user typed it.
     ...(options.network === undefined ? {} : { network: { approved: true } }),
     ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
-    ...(options.onEvent === undefined
-      ? {}
-      : { onEvent: (event: AgentEvent) => options.onEvent?.(task.id, event) }),
+    onEvent: (event: AgentEvent) => {
+      if (event.type === "tool_call" && event.call.name.startsWith("mcp__")) mcpCalls++;
+      options.onEvent?.(task.id, event);
+    },
   });
 
   const result: EvalResult = {
@@ -192,10 +203,29 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     durationMs: 0,
   };
 
+  // The MCP server's preparation (`--mcp-prepare`), in the run's sandbox, before the start state:
+  // what it writes (Graphify's graphify-out/) is not a change of the agent.
+  const prepare = options.mcp?.prepare;
+  if (prepare !== undefined) {
+    const prepared = await runCheck(
+      root,
+      prepare,
+      MCP_PREPARE_TIMEOUT_MS,
+      runtime.executor.isolation === "none"
+        ? undefined
+        : { executor: runtime.executor, policy: runtime.execPolicy(MCP_PREPARE_TIMEOUT_MS) },
+    );
+    if (!prepared.ok) result.reason = `${MCP_PREPARE_FAILED}\n${prepared.output}`;
+  }
+  // The start state for the changed files (0.17, T11a).
+  const start = await treeState(root);
+
   const limitMs = options.taskTimeoutMs ?? EVAL_TASK_TIMEOUT_MS;
   const timeout = AbortSignal.timeout(limitMs);
   try {
-    if (options.agent !== undefined) {
+    if (result.reason !== undefined) {
+      // The preparation failed: the agent does not run.
+    } else if (options.agent !== undefined) {
       // The baseline (T11b): Claude Code in the run's sandbox, with the same limits. The proxy
       // for api.anthropic.com starts first (the user's first run: no proxy, ECONNREFUSED).
       await runtime.prepareCommands(timeout);
@@ -236,6 +266,15 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       result.reason = `The run failed: ${(error as Error).message}`;
     }
   } finally {
+    if (options.mcp !== undefined) {
+      result.mcpCalls = mcpCalls;
+      // A server that did not start makes the run an A/B of nothing: say so, and stop the eval.
+      const status = runtime.mcpStatus().find((m) => m.name === options.mcp?.server);
+      if (result.reason === undefined && status !== undefined && status.state === "failed") {
+        result.stopReason = "error";
+        result.reason = `${MCP_NOT_STARTED} "${options.mcp.server}": ${status.message ?? "no reason given"}`;
+      }
+    }
     await runtime.close();
     runtime.executor.shutdown();
   }
@@ -336,9 +375,20 @@ export function isConnectionFailure(result: EvalResult): boolean {
   );
 }
 
+export const MCP_PREPARE_FAILED = "The MCP prepare command failed:";
+export const MCP_NOT_STARTED = "The MCP server did not start:";
+
+/** The `--mcp` server or its preparation failed (0.17): every later run would fail the same way. */
+export function isMcpFailure(result: EvalResult): boolean {
+  return (
+    result.reason !== undefined &&
+    (result.reason.startsWith(MCP_PREPARE_FAILED) || result.reason.startsWith(MCP_NOT_STARTED))
+  );
+}
+
 /** A failure that every later run would repeat: the eval stops at it (0.17). */
 export function isSetupFailure(result: EvalResult): boolean {
-  return isAuthFailure(result) || isConnectionFailure(result);
+  return isAuthFailure(result) || isConnectionFailure(result) || isMcpFailure(result);
 }
 
 /**
@@ -583,6 +633,8 @@ function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
     }
     if (u.runs > shown.length) out.push(`  … ${u.runs - shown.length} more in report.json`);
   }
+  const mcp = mcpUse(results);
+  if (mcp !== undefined) out.push(`MCP tool calls: ${mcpUseText(mcp)}`);
   return out;
 }
 
