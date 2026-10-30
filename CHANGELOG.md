@@ -38,6 +38,15 @@
   cost gives no ratio. The hard-coupon task allows changes in the coupon module and the API routes
   (`allowChanges`): both agents made them in the first baseline runs. Its task hash changes, so
   compare new hard-suite runs only with new ones.
+- A held-out set (T11c): 10 new, harder tasks in TypeScript, Python and Java, apart from every
+  suite. `--split heldout` runs them, `--split all` runs them with the dev tasks, and a plain
+  `garuda eval` never does (a held-out id with `-t` is refused with the fix). They cover a defect
+  whose cause is in another file (3), a refactor across modules (2), tests that a mutation check
+  must find good enough (2), conventions from the repository's `AGENTS.md` that a hidden test
+  checks (2), and a vague request (1). Each task's hash is recorded in the tests: a changed task
+  must change its hash on purpose, and a tuning result seen before the change is invalid.
+  `report.json` records the split. `--list` shows the held-out set. The compare note now says
+  "the same pass-rate difference".
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).

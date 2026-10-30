@@ -31,6 +31,11 @@ export interface EvalTask {
    */
   allowChanges?: string[];
   /**
+   * Which set the task is in (0.17, T11c). Default `dev`. A `heldout` task runs only with
+   * `--split heldout` or `all`, and the tuning loop (T11d) never shows it to the proposer.
+   */
+  split?: "dev" | "heldout";
+  /**
    * A task from the project's own history (0.12, "benchmark your repo"). The runner makes a git
    * worktree of `root` at `base` in place of writing `files`, then adds the commit's tests
    * (`content: null` deletes the file).

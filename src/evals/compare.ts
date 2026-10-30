@@ -193,7 +193,7 @@ export function compareReports(
   const verdict = low > 0 ? "B passes more" : high < 0 ? "B passes less" : "no clear difference";
   if (low === high) {
     notes.push(
-      "Every draw gave the same difference, so the interval shows no uncertainty: more tasks, or tasks that sometimes fail, are needed to measure it.",
+      "Every draw gave the same pass-rate difference, so the interval shows no uncertainty: more tasks, or tasks that sometimes fail, are needed to measure it.",
     );
   }
   if (rows.length < 10) notes.push(roughNote(rows.length));

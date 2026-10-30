@@ -2,7 +2,8 @@
 
 Status: design approved (2026-10-29). Built: T11a (patch 1: unexpected changes, the stats module,
 report v2 and metadata, `--shuffle`, `--seed`; patch 2: `garuda eval compare`); see "As built" in
-T11a; T11b (the Claude Code baseline), see "As built" in T11b. T11c and T11d are not built yet. The user chose: Claude
+T11a; T11b (the Claude Code baseline), see "As built" in T11b; T11c (the split and the held-out
+set), see "As built" in T11c. T11d is not built yet. The user chose: Claude
 Code (`claude -p`) as the baseline agent; a prompt addendum file as the only thing that the
 proposer loop may edit; this design note before any code. The user's answers to the open questions
 are in "Decisions" at the end.
@@ -198,6 +199,46 @@ Each task has a solution, a check that fails before and passes after (unit tests
 protected files, as the current tasks have. A held-out task's version hash is recorded when it is
 added. A held-out task that changes after a tuning result was seen makes that result invalid; the
 report says so.
+
+### As built
+
+`src/evals/heldOutTasks.ts` (`HELD_OUT_TASKS`) and `chooseTasks` in `src/evals/suites.ts`. The
+held-out tasks are in no suite, so `-s all` and `ALL_TASKS` stay dev. `--split heldout` takes the
+held-out set and `-t` picks in it; `-s` with it is refused. `--split all` takes the dev tasks (`-s`
+defaults to `all`) and the held-out set. A held-out id with `-t` on the dev split is refused with
+the fix. `report.json` records `split`. The split is not part of the task hash: the hash covers
+only what decides a result, so the dev hashes did not change.
+
+| Task | Archetype | Language | What decides it |
+| --- | --- | --- | --- |
+| `ho-ledger` | multi-file defect | TypeScript | Two causes (a conversion in `convert.ts`, rounding in `ledger.ts`) behind one wrong report. |
+| `ho-scheduler` | multi-file defect | Python | A weekday index from `isoweekday` and a same-day hour test. |
+| `ho-inventory` | multi-file defect | Java | `Sku` without `equals`/`hashCode`, and `release` that does not remove. |
+| `ho-rename-option` | refactor | TypeScript | `timeoutMs` to `deadlineMs` in three modules and the flag, with a deprecation warning; the old name must leave the client and the CLI. |
+| `ho-notifier` | refactor | Java | Extract `Notifier`; `SmsNotifier.deliver` becomes `send`. |
+| `ho-tests-duration` | missing tests | Python | The agent's tests must pass, then fail on 3 mutants of the parser. |
+| `ho-tests-limiter` | missing tests | TypeScript | The same for a token bucket with an injected clock. |
+| `ho-conventions-handler` | conventions | TypeScript | `AGENTS.md`: handler file and test, a `Result` and not an exception, a route. A hidden test checks. |
+| `ho-conventions-cli` | conventions | Python | `AGENTS.md`: a command module, registered, JSON output, no `print`. A hidden test checks. |
+| `ho-export-dates` | ambiguous | TypeScript | "The CSV dates are wrong": the repository's `isoDate` decides the fix; the hidden test uses 23:30 UTC. |
+
+Details:
+
+- **Hidden tests.** The check writes them into `.check/` after the run's changed files are taken,
+  so the agent never sees them and they are not its changes. The file is written first: a heredoc
+  ends a shell line, so a guard before it (`test -f … &&`) would not stop the test command after
+  it. The self-test found this: the conventions task passed before the fix.
+- **Mutation checks.** Each mutant is a `sed` expression on a copy of the project; the check fails
+  when a mutant does not change the file, so a mutant that stops matching is found. One planned
+  mutant (`if not text:` to `if False:`) was equivalent, because the parser refuses empty text
+  later as well; it was replaced by one that drops the end-of-text test.
+- **TypeScript without a build.** The tasks run with Node's own type stripping (`node --test`,
+  Node 22.18 or later), so their code uses only erasable syntax (no parameter properties).
+- **Hashes.** `HELD_OUT_HASHES` in `test/evals.heldout.test.ts` holds each task's hash.
+- **Java.** Maven Central is blocked in the cloud workspace, so the Java self-tests skip there.
+  The two Java tasks were checked with `javac` and a small JUnit stub: their tests fail before
+  the fix (one does not compile) and pass with it. On a machine with `--prepare java` they run in
+  `pnpm check`.
 
 The proposer never gets anything from the held-out set: not its names, prompts, files, results or
 traces. The held-out tasks are in the repository, but the proposer is a separate model request

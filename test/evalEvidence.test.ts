@@ -342,6 +342,8 @@ describe("the report", () => {
       provider: "anthropic",
       seed: 4,
       shuffle: true,
+      // T11c: a report without a split is a dev run.
+      split: "dev",
       order: [
         { id: "t", attempt: 1 },
         { id: "t", attempt: 2 },

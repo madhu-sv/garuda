@@ -359,7 +359,7 @@ describe("compare polish (the user's live run)", () => {
     expect(text).toContain("B − A 0 pts (95% paired interval 0 pts to 0 pts;");
     expect(text).not.toContain("±");
     expect(text).toContain(
-      "Every draw gave the same difference, so the interval shows no uncertainty",
+      "Every draw gave the same pass-rate difference, so the interval shows no uncertainty",
     );
   });
 });
