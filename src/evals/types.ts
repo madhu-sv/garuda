@@ -79,4 +79,6 @@ export interface EvalResult {
   unexpected?: string[];
   /** Calls of the `--mcp` server's tools in the run (0.17). Absent without `--mcp`. */
   mcpCalls?: number;
+  /** The names of the tools the agent called, in order (0.17, T11d: the proposer's input). */
+  tools?: string[];
 }

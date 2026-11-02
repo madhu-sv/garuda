@@ -105,6 +105,16 @@
 - Tests: `waitUntil` waits up to 20 s by default (it was 5 s), under the 30 s test limit. The
   user's `pnpm check` failed the M5 Ctrl-C test on a busy machine.
 
+- The proposer loop (T11d): `garuda eval tune --addendum <file>` improves a prompt addendum. A
+  proposer model (default `claude-opus-5-5`) reads the dev runs that failed, or each task's cost
+  when all passed, and writes a new version; it stays when no task goes from all runs to none and
+  it passes 2 more runs (`--margin`) or as many at a clearly lower cost per accepted change (the
+  user's rule). Texts that ask to skip or edit tests or checks, or to leave the sandbox, are
+  refused before a run; the proposer never sees the held-out tasks; `--max-cost` (default $20)
+  stops before a round that would pass it. At the end the held-out set compares no addendum with
+  the final one. Garuda never edits the file: the versions, inputs, reports and history go to
+  `.garuda/evals/tune-<id>/`. `garuda eval --addendum <file>` runs any suite with an addendum.
+
 ## 0.17.0 (2026-10-27)
 
 - macOS: no command process outlives the command (IPI-04). Seatbelt has no process namespace, so a

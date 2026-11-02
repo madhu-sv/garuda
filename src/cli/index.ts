@@ -121,6 +121,7 @@ async function main(): Promise<void> {
       "--split <name>",
       "dev (default), heldout or all: the held-out tasks run only on request",
     )
+    .option("--addendum <file>", "add this text (4000 characters at most) to the system prompt")
     .option("--mcp <server>", "allow this one server from ~/.garuda/mcp.json (an MCP A/B)")
     .option(
       "--mcp-prepare <command>",
@@ -181,6 +182,34 @@ async function main(): Promise<void> {
         ...options,
         model: options.model ?? process.env.GARUDA_MODEL,
         subagentModel: options.subagentModel ?? process.env.GARUDA_SUBAGENT_MODEL,
+      });
+    });
+  evalCommand
+    .command("tune")
+    .description(
+      "improve a prompt addendum: a proposer model edits it, an edit stays when the dev score improves, the held-out set is measured once",
+    )
+    .requiredOption(
+      "--addendum <file>",
+      "the starting addendum (a missing file starts empty); never edited",
+    )
+    .option("--proposer <model>", "the model that proposes edits (default claude-opus-5-5)")
+    .option("-m, --model <id>", "the agent's model (or set GARUDA_MODEL)")
+    .option("-s, --suite <names...>", "dev suites (default: basic hard medium)")
+    .option("--rounds <n>", "proposals (default 5)", (v) => Number(v))
+    .option("--repeat <n>", "runs of each dev task per score (default 3)", (v) => Number(v))
+    .option("--heldout-repeat <n>", "runs of each held-out task (default 5)", (v) => Number(v))
+    .option("--margin <n>", "more passing runs that keep an edit (default 2)", (v) => Number(v))
+    .option("--max-cost <usd>", "stop before a round that would pass this (default 20)", (v) =>
+      Number(v),
+    )
+    .option("--seed <n>", "seed for the run order and the intervals (default 1)", (v) => Number(v))
+    .option("--yes", "start without the question")
+    .action(async (options) => {
+      const { runEvalTune } = await import("./evalTune.js");
+      process.exitCode = await runEvalTune({
+        ...options,
+        model: options.model ?? process.env.GARUDA_MODEL,
       });
     });
   evalCommand

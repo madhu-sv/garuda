@@ -3,7 +3,7 @@
 Status: design approved (2026-10-29). Built: T11a (patch 1: unexpected changes, the stats module,
 report v2 and metadata, `--shuffle`, `--seed`; patch 2: `garuda eval compare`); see "As built" in
 T11a; T11b (the Claude Code baseline), see "As built" in T11b; T11c (the split and the held-out
-set), see "As built" in T11c. T11d is not built yet. The user chose: Claude
+set), see "As built" in T11c; T11d (`--addendum` and `garuda eval tune`), see "As built" in T11d. The user chose: Claude
 Code (`claude -p`) as the baseline agent; a prompt addendum file as the only thing that the
 proposer loop may edit; this design note before any code. The user's answers to the open questions
 are in "Decisions" at the end.
@@ -352,9 +352,36 @@ comparison. Garuda changes no file outside this folder.
 ### Cost
 
 One dev round is k × (number of dev tasks) runs. The dev tasks are `-s` (default: `basic`, `hard`
-and `medium`, 26 tasks without Java or Python). With k = 3 that is 78 runs per score, two scores in
+and `medium`, 26 tasks; the medium suite's Java and Python tasks need their toolchains). With k = 3 that is 78 runs per score, two scores in
 round 1 and one per later round. The command prints this count
 and the estimated cost range before the first run and asks to continue.
+
+### As built
+
+`src/evals/tune.ts` (the loop, with the model calls as functions) and `src/cli/evalTune.ts` (the
+command). As planned, with these details:
+
+- `--addendum <file>` on `garuda eval`: `RuntimeOptions.addendum` → `buildSystemPrompt` puts it
+  after the project instructions in `<project_addendum>`; a `</project_addendum>` inside the text
+  becomes `[project_addendum]`, so the block cannot be closed from inside. `report.json` keeps the
+  file name, the size and a SHA-256 of the text, not the text. The baseline refuses it.
+- `decide`: first the k-of-k to 0-of-k rule, then `+margin` passes, then the cost rule (the
+  paired cost ratio of `compareReports`, upper end below ×1.0). An unknown cost gives no ratio.
+- `rejectReason`: empty, over 4 000 characters, or a phrase that asks to skip, weaken or edit
+  tests, checks or protected files, `outside_sandbox`, hard-coded expected values, or `.check/`.
+- `proposerInput`: the failed runs (prompt, stop reason, the last 40 lines of the reason,
+  unexpected files) or, when all passed, each task's mean steps, tokens and cost and the tool
+  names of its costliest run (`EvalResult.tools`, recorded for every Garuda run); then the history.
+- `askProposer`: one request, no tools, the answer in `<addendum>` and `<reason>`; its cost from
+  the proposer's price. An answer without the form becomes an empty text, refused before a run.
+- Before the first run the command prints the plan (runs a score, rounds, the held-out runs, the
+  rule, the budget) and asks; `--yes` skips the question, and without a terminal it is required.
+- The budget check runs before each round: the money spent plus the last score and the last
+  proposal. An unknown cost stops the loop.
+- The held-out set runs only when a version was kept: the empty addendum against the final one.
+- Output: `.garuda/evals/tune-<id>/` with `v0.md`, `vN.md`, `vN.input.md`, a run folder and
+  `report.json` per score, `history.json`, `final.md` and `heldout.txt`. The `--addendum` file is
+  never written.
 
 ## Threat model
 

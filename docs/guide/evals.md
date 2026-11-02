@@ -85,6 +85,29 @@ results: then they stop measuring. The Python tasks need pytest and the Java one
 From a source checkout, run `pnpm build` after you apply a change: `garuda eval` runs the build
 in `dist/`, and it warns when that build is older than the checkout.
 
+### Tune a prompt addendum (0.17)
+
+`garuda eval tune` improves a short text that Garuda adds to its system prompt, the addendum. A
+proposer model (default Claude Opus 5.5) reads where the agent failed, or what each task cost when
+all passed, and writes a new version; Garuda scores it on the dev suites with the same seed.
+
+```sh
+garuda eval tune --addendum my-addendum.md -m claude-haiku-5-5 --rounds 5 --max-cost 20
+```
+
+- A version stays when no task goes from all runs passing to none, and it passes at least 2 more
+  runs (`--margin`), or as many runs at a clearly lower cost per accepted change (the 95% interval
+  of the cost ratio below ×1.0). The next proposal starts from the version that stayed.
+- A text that asks the agent to skip or edit tests or checks, or to leave the sandbox, is refused
+  before it costs a run. The proposer never sees the held-out tasks.
+- At the end, if a version stayed, the held-out set runs twice (no addendum, then the final one),
+  5 runs a task. That comparison is the only number to quote.
+- Before the first run the command shows the plan and asks (`--yes` skips the question). It stops
+  before a round that would pass `--max-cost`.
+- Garuda never edits your file. The results go to `.garuda/evals/tune-<id>/`; to use the final
+  text, copy `final.md` into `GARUDA.md` yourself. `garuda eval --addendum <file>` runs any suite
+  with an addendum, for a check of your own.
+
 ### One MCP server: an A/B (0.17)
 
 Evals run without your MCP servers, so your setup does not change the results. `--mcp <server>`

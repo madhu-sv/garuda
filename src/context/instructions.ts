@@ -119,6 +119,7 @@ export function buildSystemPrompt(
     agents = false,
     search = false,
     identity,
+    addendum,
   }: {
     codeIndex?: CodeIndexMode;
     sandboxed?: boolean;
@@ -150,6 +151,11 @@ export function buildSystemPrompt(
      * model are you". Fixed for the process, like the rest (N2); /models sends a note instead.
      */
     identity?: { version: string; model: string };
+    /**
+     * The prompt addendum (0.17, T11d: `garuda eval --addendum`, the text that `eval tune` edits).
+     * It goes after the project instructions, in a <project_addendum> block.
+     */
+    addendum?: string | undefined;
   } = {},
 ): string {
   const base = [
@@ -291,6 +297,16 @@ export function buildSystemPrompt(
       "The project owner wrote these instructions. Follow them unless they conflict with the user's request.",
       "When two files disagree, the later file wins.",
       ...files.flatMap((f) => ["", `## ${f.name}`, "", f.text]),
+    );
+  }
+  const extra = addendum?.trim();
+  if (extra !== undefined && extra !== "") {
+    parts.push(
+      "",
+      "<project_addendum>",
+      // The block cannot be closed from inside.
+      extra.replace(/<\/?project_addendum>/gi, "[project_addendum]"),
+      "</project_addendum>",
     );
   }
   if (memory !== undefined) {

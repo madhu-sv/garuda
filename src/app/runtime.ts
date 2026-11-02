@@ -245,6 +245,8 @@ export interface RuntimeOptions {
          */
         only?: string;
       };
+  /** The prompt addendum (0.17, T11d): only `garuda eval --addendum` and `eval tune` set it. */
+  addendum?: string;
   /** Hooks (0.2). Default: read ~/.garuda/hooks.json and <root>/.garuda/hooks.json. false: none. */
   hooks?: false | { home?: string };
   /** The mode of the first turn (0.4). Default: build. */
@@ -799,6 +801,7 @@ export class Runtime {
         skills: skills.some((s) => s.modelInvocable),
         agents: agents.length > 0,
         identity: { version: VERSION, model: options.modelId },
+        addendum: options.addendum,
       },
     );
     const runtime = new Runtime(

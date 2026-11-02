@@ -20,6 +20,7 @@ same-build A/B runs.
 | `suites.ts` | `basic`, `hard`, `java`, `python`, `medium`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
 | `mediumTasks.ts` | T11c (0.17): the medium suite, 10 dev tasks (the first held-out set): multi-file defects, refactors, mutation-checked tests, repository conventions with hidden tests, one vague request. |
 | `heldOutTasks.ts` | T11c (0.17): the held-out split, 10 harder tasks in no suite, each with a trap that a quick fix falls into. Only `--split heldout` or `all` runs them. |
+| `tune.ts` | T11d (0.17): `garuda eval tune`: `decide` (the keep rule), `rejectReason`, `proposerInput`, `PROPOSER_SYSTEM`, `parseProposal`, `readAddendum`, `tune` (the loop; the score and proposer calls are functions). The command is `src/cli/evalTune.ts` (`askProposer`, `runEvalTune`). |
 | `taskKit.ts` | T11c (0.17): helpers for written tasks: `NODE_PKG`, `testHead`, `hiddenNode`, `hiddenPytest`, `hiddenMaven`, `mutationCheck`, `guard` (a check step that prints why it stops). |
 | `repoTasks.ts` | Benchmark your repo (0.12): candidate commits from git history (`skipReason`, `recentCommits`), `repoPrompt`, `taskWorktree` / `applyTests` / `removeTaskWorktree`, `buildRepoSuite`, `saveRepoSuite` / `loadRepoSuite`, `repoEvalTasks`. |
 | `runner.ts` | Runs tasks; `runCheck` (a silent failure reports its exit code, 0.17); `formatReport` (its id column fits the longest id, at least 18, since 0.17). |
@@ -118,8 +119,10 @@ garuda eval [-m model] [-s basic|hard|java|python|medium|all|repo] [-t ids…] [
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
             [--batch on|off] [--parallel n] [--shuffle] [--seed n] [--agent garuda|claude-code]
-            [--split dev|heldout|all] [--mcp server [--mcp-prepare command]]
+            [--split dev|heldout|all] [--mcp server [--mcp-prepare command]] [--addendum file]
 garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the same tasks
+garuda eval tune --addendum <file> [--proposer model] [-m model] [-s suites…] [--rounds n]
+                 [--repeat n] [--heldout-repeat n] [--margin n] [--max-cost usd] [--seed n] [--yes]
 garuda eval --prepare java|python
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
@@ -310,6 +313,15 @@ command's files are not changes; its note in `GARUDA.md` reaches the model; a fa
 that does not start fails the run and stops the eval; `chooseMcp`, and its message for a `servers` list; the baseline refuses `--mcp`;
 the report and compare lines. Checked by hand with Graphify 0.9.97: `graphify update .` in the
 prepare step, `query_graph` through `mcp__graphify__query_graph`, `graphify-out/` not a change.
+
+`test/evalTune.test.ts` (0.17, T11d): the keep rule (+2 kept, +1 dropped, k/k to 0/k dropped
+whatever it gains, as many passes and a clearly lower cost kept, an interval that reaches ×1.0
+dropped, fewer passes dropped even when cheaper, an unknown cost not kept by cost); refused texts;
+the answer's form; the proposer's input (failures with the end of the output; costs and tools when
+all passed); the loop with a fake proposer and score (a rejected text never runs; the proposer
+never sees a held-out task; `--max-cost` stops; no kept version, no held-out run); the addendum in
+the system prompt (after the instructions, the block cannot be closed); `readAddendum`; the report
+keeps a hash, not the text; the baseline refuses `--addendum`; `askProposer` with a fake model.
 
 `test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
 A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for

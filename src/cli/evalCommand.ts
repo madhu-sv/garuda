@@ -102,6 +102,8 @@ export interface EvalCommandOptions {
   mcp?: string;
   /** --mcp-prepare <command> (0.17): run in each scratch folder before the agent starts. */
   mcpPrepare?: string;
+  /** --addendum <file> (0.17, T11d): a prompt addendum for every run (the text eval tune edits). */
+  addendum?: string;
 }
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
@@ -329,6 +331,16 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     process.stderr.write(`${mcp}\n`);
     return 1;
   }
+  let addendum: string | undefined;
+  if (options.addendum !== undefined) {
+    const { readAddendum } = await import("../evals/tune.js");
+    const read = await readAddendum(options.addendum);
+    if ("problem" in read) {
+      process.stderr.write(`${read.problem}\n`);
+      return 1;
+    }
+    addendum = read.text;
+  }
 
   const { executor, notice } = createExecutor(options.executor ?? "auto");
   if (notice !== undefined) process.stderr.write(`${notice}\n`);
@@ -373,7 +385,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const stale = staleBuildNote(BUILD_COMMIT, await garudaCommit());
   if (stale !== undefined) process.stderr.write(`Warning: ${stale}\n\n`);
   process.stderr.write(
-    `${baseline === undefined ? "" : `Baseline: Claude Code ${baseline.version ?? ""} (claude -p, every tool allowed, in the sandbox, network only to api.anthropic.com).\n`}Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, mcp ${mcp === undefined ? "off" : `${mcp.server}${mcp.prepare === undefined ? "" : `, prepared with \`${mcp.prepare}\``}`}, batch ${batchMode}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `${baseline === undefined ? "" : `Baseline: Claude Code ${baseline.version ?? ""} (claude -p, every tool allowed, in the sandbox, network only to api.anthropic.com).\n`}Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, mcp ${mcp === undefined ? "off" : `${mcp.server}${mcp.prepare === undefined ? "" : `, prepared with \`${mcp.prepare}\``}`}, batch ${batchMode}${addendum === undefined ? "" : `, addendum ${options.addendum} (${addendum.length} characters)`}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   if (batchMode === "on") {
@@ -404,6 +416,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       ...(network === undefined ? {} : { network }),
       ...(baseline === undefined ? {} : { agent: baseline }),
       ...(mcp === undefined ? {} : { mcp }),
+      ...(addendum === undefined ? {} : { addendum }),
       ...(biome === undefined ? {} : { format: { on: formatMode === "on", biome } }),
       ...(sub === undefined
         ? {}
@@ -442,7 +455,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = `${formatReport(results, { seed })}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true, split, ...(mcp === undefined ? {} : { mcp }), agent: baseline === undefined ? { name: "garuda" } : { name: "claude-code", ...(baseline.version === undefined ? {} : { version: baseline.version }) } }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
+    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true, split, ...(mcp === undefined ? {} : { mcp }), ...(addendum === undefined ? {} : { addendum: { file: options.addendum ?? "", text: addendum } }), agent: baseline === undefined ? { name: "garuda" } : { name: "claude-code", ...(baseline.version === undefined ? {} : { version: baseline.version }) } }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;
@@ -626,6 +639,7 @@ export async function claudeCodeAgent(
     ["--network", options.network],
     ["--mcp", options.mcp],
     ["--mcp-prepare", options.mcpPrepare],
+    ["--addendum", options.addendum],
   ];
   const set = garudaOnly.filter(([, value]) => value !== undefined).map(([name]) => name);
   if (set.length > 0) {

@@ -115,6 +115,8 @@ export interface EvalOptions {
    * agent starts (for Graphify: `graphify update .`, which builds the code graph).
    */
   mcp?: { server: string; home: string; prepare?: string };
+  /** The prompt addendum (0.17, T11d): `--addendum`, and each version that `eval tune` scores. */
+  addendum?: string;
 }
 
 /** Time limit of an MCP prepare command (`--mcp-prepare`). */
@@ -168,6 +170,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   });
   const store = new FileSessionStore(root);
   let mcpCalls = 0;
+  const tools: string[] = [];
   // `prepare`: a runtime only for the `--mcp-prepare` command, without the MCP server.
   const createRuntime = (prepare: boolean) =>
     Runtime.create({
@@ -186,13 +189,17 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
           ? false
           : { home: options.mcp.home, only: options.mcp.server },
       hooks: false,
+      ...(options.addendum === undefined ? {} : { addendum: options.addendum }),
       ...(options.policy === undefined ? {} : { policy: options.policy }),
       commands: false,
       // The list comes from the eval command line: the user typed it.
       ...(options.network === undefined ? {} : { network: { approved: true } }),
       ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
       onEvent: (event: AgentEvent) => {
-        if (event.type === "tool_call" && event.call.name.startsWith("mcp__")) mcpCalls++;
+        if (event.type === "tool_call") {
+          tools.push(event.call.name);
+          if (event.call.name.startsWith("mcp__")) mcpCalls++;
+        }
         options.onEvent?.(task.id, event);
       },
     });
@@ -283,6 +290,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       result.reason = `The run failed: ${(error as Error).message}`;
     }
   } finally {
+    if (tools.length > 0) result.tools = tools;
     if (options.mcp !== undefined) {
       result.mcpCalls = mcpCalls;
       // A server that did not start makes the run an A/B of nothing: say so, and stop the eval.
