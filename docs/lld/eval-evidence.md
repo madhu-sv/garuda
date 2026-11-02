@@ -314,13 +314,22 @@ garuda eval tune --addendum <file> [--proposer claude-opus-5-5] [-m model] [--ro
 2. **Propose.** One request to the proposer model, with no tools. Input: the current addendum; for
    each failed or error dev run, the task id, prompt, stop reason, the last 40 lines of the check
    output and the unexpected files; the history of earlier proposals with their score and decision.
+   When every run passed, the input also gives each task's mean steps, tokens and cost, and the
+   tool calls (names only) of its most expensive run, so the proposer can aim at cost.
    Output: a complete new addendum and a one-paragraph reason. A text over the limit, or one that
    asks to skip or weaken checks, protected files or the sandbox, is rejected without a run (a
    fixed list of phrases, and the size limit).
 3. **Score the candidate** on the same dev tasks with the same seed.
-4. **Keep or drop.** Keep it when it passes at least `--margin` more runs over all attempts than
-   the current version (default 2), and no task goes from k of k to 0 of k. Otherwise drop it. Both
-   decisions and both scores go into the history.
+4. **Keep or drop.** Keep it when no task goes from k of k to 0 of k, and either:
+   - it passes at least `--margin` more runs over all attempts than the current version (default
+     2); or
+   - it passes at least as many runs, and its cost per accepted change is lower: the upper end of
+     the paired 95% interval of the cost ratio (candidate / current, T11a) is below ×1.0.
+
+   Otherwise drop it. Both decisions, both scores and the cost ratio go into the history. (The
+   user's decision, 2026-10-30: on the held-out set Haiku 5.5 passed 30 of 30, so a rule on passes
+   alone could never keep an edit, while cost per accepted change still told agents apart, ×1.75.
+   An unknown cost gives no cost ratio, so only the pass rule can keep that candidate.)
 5. **Feed back.** The next proposal starts from the kept version, with the candidate's failures in
    its input: the failed checks of one candidate are the next prompt.
 
@@ -342,8 +351,9 @@ comparison. Garuda changes no file outside this folder.
 
 ### Cost
 
-One dev round is k × (number of dev tasks) runs. With the 20 regression tasks and k = 3, that is
-60 runs per score, two scores in round 1 and one per later round. The command prints this count
+One dev round is k × (number of dev tasks) runs. The dev tasks are `-s` (default: `basic`, `hard`
+and `medium`, 26 tasks without Java or Python). With k = 3 that is 78 runs per score, two scores in
+round 1 and one per later round. The command prints this count
 and the estimated cost range before the first run and asks to continue.
 
 ## Threat model
@@ -368,14 +378,16 @@ and the estimated cost range before the first run and asks to continue.
 - T11c: every held-out task fails before and passes with its solution; `--split` selects; the
   default never includes held-out tasks.
 - T11d: with a fake proposer and a fake model, an edit that adds two passes is kept, one that adds
-  one is dropped, one that drops a task from k/k to 0/k is dropped; the proposer's input never
+  one is dropped, one that drops a task from k/k to 0/k is dropped, one with the same passes and
+  a clearly lower cost is kept, one with the same passes and a cost interval that reaches ×1.0 is
+  dropped; the proposer's input never
   contains a held-out task id; `--max-cost` stops the loop; a rejected phrase never runs.
 
 ## Decisions (the user, 2026-10-29)
 
 Each value is a default; every one is an option the user can change.
 
-1. **Margin:** 2 more passes over all attempts (`--margin 2`; 60 runs with 20 dev tasks × 3).
+1. **Margin:** 2 more passes over all attempts (`--margin 2`; 78 runs with 26 dev tasks × 3).
 2. **Repeats:** k = 3 in the loop (`--repeat 3`). The one held-out measurement keeps k = 5
    (`--heldout-repeat 5`), as proposed.
 3. **Models:** the proposer is a frontier model, by default Opus 5.5 (`--proposer
@@ -386,6 +398,8 @@ Each value is a default; every one is an option the user can change.
    only (the environment allowlist), never writes its value to a report, a session or the audit
    log, and the network allowlist opens only `api.anthropic.com`. A subscription login (macOS
    Keychain) stays unsupported: the sandbox denies the Keychain on purpose.
+6. **Keep rule, cost (2026-10-30):** an edit that passes as many runs also stays when its cost per
+   accepted change is clearly lower (the paired interval of the ratio below ×1.0). See "One round".
 
 ## Patch plan
 

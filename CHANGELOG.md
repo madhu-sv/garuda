@@ -98,6 +98,10 @@
   `GARUDA.md` reaches the agent (the user's first Graphify run: the agent never called the server,
   and a note written later would not have been read). A `~/.garuda/mcp.json` whose `"servers"` is a
   list now gets a message that shows the right form, not "expected record, received array".
+- Docs: Graphify as an example MCP server in the tools guide (install, `mcp.json`, the note in
+  `GARUDA.md`, and what we measured: ×1.28 cost per accepted change on the hard suite, no change in
+  passes). Garuda does not include it. The T11d design gets the user's keep rule: an edit with the
+  same passes stays when its cost per accepted change is clearly lower.
 - Tests: `waitUntil` waits up to 20 s by default (it was 5 s), under the 30 s test limit. The
   user's `pnpm check` failed the M5 Ctrl-C test on a busy machine.
 
