@@ -124,6 +124,14 @@
   during a score, so each run prints a line. Two runs of one task at the same time can no longer
   take the same session file name (also for `garuda eval --parallel`).
 
+- The system prompt tells the agent how to work in few steps: batch tool calls that do not depend
+  on each other, find before reading, no exploration with bash, all edits in one step, one narrow
+  test run, fix the code not the tests, stop when done. The rules come from the first
+  `garuda eval tune` run: on the held-out set, with every run passing, they cut the cost per
+  accepted change to ×0.81 (95% interval ×0.75 to ×0.88) with Haiku 5.5 and ×0.87 (×0.79 to
+  ×0.95) with Sonnet 5.5. The tuned text's rules against `remember` and for one-sentence answers
+  are left out: they served the evals, not users.
+
 ## 0.17.0 (2026-10-27)
 
 - macOS: no command process outlives the command (IPI-04). Seatbelt has no process namespace, so a
