@@ -382,6 +382,21 @@ command). As planned, with these details:
 - Output: `.garuda/evals/tune-<id>/` with `v0.md`, `vN.md`, `vN.input.md`, a run folder and
   `report.json` per score, `history.json`, `final.md` and `heldout.txt`. The `--addendum` file is
   never written.
+- **First live run** (2026-11-03, Haiku 5.5 agent, Opus 5.5 proposer, `--rounds 3`, $0.65,
+  about 2 hours one run at a time): v0 (empty) 78/78 on the dev suites; v1 and v3 were refused,
+  both wrongly: v1 said "never modify tests to make them pass", v3 "Skip tests you won't run,
+  READMEs, configs" (about reading). v2 (batch independent tool calls, read only what the edit
+  needs, verify once, stop when done) was kept on cost: ×0.91 (×0.85 to ×0.98). Held-out, 5 runs a
+  task: 50/50 both; cost per accepted change $0.0036 → $0.0029, ×0.81 (×0.75 to ×0.88); median
+  time 20 s → 16 s. The held-out note said the reports had no task hashes: the loop's reports
+  did not carry them.
+- After that run: a phrase after a negation in the same clause ("never", "not", "don't", "do
+  not", "no", "without"), or with one inside the match, is not refused; a clause ends at `. ; ! ?`
+  before a space or at a line end, so `.check/` stays whole. A refused text gets one more try in
+  the same round, with the reason (`vN.refused.md` keeps the first text; `refusedFirst` in the
+  history). The loop's reports carry the task hashes. `--parallel <n>` (default 4) runs a score's
+  runs at the same time, with one progress line per run; `saveUnique` names each session file
+  with an exclusive write, so two runs of one task never take the same name.
 
 ## Threat model
 

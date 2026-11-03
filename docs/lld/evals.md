@@ -122,7 +122,8 @@ garuda eval [-m model] [-s basic|hard|java|python|medium|all|repo] [-t ids…] [
             [--split dev|heldout|all] [--mcp server [--mcp-prepare command]] [--addendum file]
 garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the same tasks
 garuda eval tune --addendum <file> [--proposer model] [-m model] [-s suites…] [--rounds n]
-                 [--repeat n] [--heldout-repeat n] [--margin n] [--max-cost usd] [--seed n] [--yes]
+                 [--repeat n] [--heldout-repeat n] [--margin n] [--max-cost usd] [--seed n]
+                 [--parallel n] [--yes]
 garuda eval --prepare java|python
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
@@ -321,7 +322,9 @@ the answer's form; the proposer's input (failures with the end of the output; co
 all passed); the loop with a fake proposer and score (a rejected text never runs; the proposer
 never sees a held-out task; `--max-cost` stops; no kept version, no held-out run); the addendum in
 the system prompt (after the instructions, the block cannot be closed); `readAddendum`; the report
-keeps a hash, not the text; the baseline refuses `--addendum`; `askProposer` with a fake model.
+keeps a hash, not the text; the baseline refuses `--addendum`; `askProposer` with a fake model;
+a negation clears a phrase, and a refused text gets one retry; the held-out comparison has task
+hashes; `saveUnique` gives six runs of one task at the same time six files; the progress line.
 
 `test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
 A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for

@@ -114,6 +114,15 @@
   stops before a round that would pass it. At the end the held-out set compares no addendum with
   the final one. Garuda never edits the file: the versions, inputs, reports and history go to
   `.garuda/evals/tune-<id>/`. `garuda eval --addendum <file>` runs any suite with an addendum.
+- `eval tune` after the user's first run (Haiku 5.5 agent, Opus 5.5 proposer, $0.65): the kept
+  version cut the held-out cost per accepted change to ×0.81 (×0.75 to ×0.88), all runs passing.
+  The run also found four faults, now fixed: two of three proposals were refused for phrases in
+  rules against cheating ("never modify tests to make them pass") or about reading ("skip tests
+  you won't run"), so a negation now clears a phrase and a refused text gets one more try in the
+  round; the held-out comparison said the reports had no task hashes; runs went one at a time
+  (about 16 minutes a score), so `--parallel` (default 4) runs them together; and nothing printed
+  during a score, so each run prints a line. Two runs of one task at the same time can no longer
+  take the same session file name (also for `garuda eval --parallel`).
 
 ## 0.17.0 (2026-10-27)
 

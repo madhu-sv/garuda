@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { compareReports, formatComparison, type LoadedReport } from "./compare.js";
+import { taskHash } from "./report.js";
 import { costPerPass } from "./stats.js";
 import type { EvalResult, EvalTask } from "./types.js";
 
@@ -56,10 +57,22 @@ export function rejectReason(text: string): string | undefined {
   if (text.length > ADDENDUM_MAX_CHARS) {
     return `the addendum has ${text.length} characters; the limit is ${ADDENDUM_MAX_CHARS}`;
   }
-  const hit = REJECTED.map((r) => text.match(r)).find((m) => m !== null);
-  if (hit != null) return `the addendum asks to get around the grading ("${hit[0]}")`;
+  // A clause ends at . ; ! ? before a space, or at a line end: ".check/" stays whole.
+  for (const clause of text.split(/[.;!?](?=\s|$)|\n/)) {
+    for (const pattern of REJECTED) {
+      const hit = pattern.exec(clause);
+      // "Never modify tests to make them pass" is a rule for the agent, not a way around the
+      // grading (the user's first tune run refused it): a negation before the phrase clears it.
+      // The negation may also sit inside the match: "change without editing the tests".
+      if (hit === null || NEGATION.test(clause.slice(0, hit.index + hit[0].length))) continue;
+      return `the addendum asks to get around the grading ("${hit[0]}")`;
+    }
+  }
   return undefined;
 }
+
+/** A word that turns the rest of the clause into a prohibition. */
+const NEGATION = /\b(never|not|don't|do not|no|without)\b/i;
 
 export interface Decision {
   kept: boolean;
@@ -79,12 +92,21 @@ function groupRuns(results: readonly EvalResult[]): Map<string, EvalResult[]> {
   return out;
 }
 
-const asReport = (path: string, results: readonly EvalResult[]): LoadedReport => ({
+/**
+ * A report of one score for `compareReports`. With the tasks, it carries their hashes, so the
+ * comparison checks that both arms ran the same tasks (the first tune run's note said they had none).
+ */
+const asReport = (
+  path: string,
+  results: readonly EvalResult[],
+  tasks?: readonly EvalTask[],
+): LoadedReport => ({
   path,
   schema: 2,
   model: undefined,
   seed: undefined,
-  tasks: undefined,
+  tasks:
+    tasks === undefined ? undefined : Object.fromEntries(tasks.map((t) => [t.id, taskHash(t)])),
   results: [...results],
 });
 
@@ -160,6 +182,8 @@ export interface HistoryEntry {
   reason: string;
   decision?: Decision;
   rejected?: string;
+  /** Why the round's first text was refused, when the retry gave the scored one. */
+  refusedFirst?: string;
   costUsd: number;
 }
 
@@ -325,24 +349,43 @@ export async function tune(options: TuneOptions): Promise<TuneResult> {
       break;
     }
     const input = proposerInput(current, options.devTasks, currentResults, history);
-    const proposal = await options.propose(input);
+    const name = `v${round}`;
+    await options.save(`${name}.input.md`, input);
+    let proposal = await options.propose(input);
     if (proposal.costUsd === undefined) {
       stopped = "unknown cost";
       break;
     }
-    spent += proposal.costUsd;
-    lastProposalCost = proposal.costUsd;
-    const name = `v${round}`;
-    await options.save(`${name}.input.md`, input);
+    let proposalCost = proposal.costUsd;
+    let rejected = rejectReason(proposal.addendum);
+    let refusedFirst: string | undefined;
+    if (rejected !== undefined) {
+      // One more try in the same round, with the reason: a refused text costs a proposal, not a
+      // round (the user's first tune run lost two of three rounds to refused texts).
+      refusedFirst = rejected;
+      await options.save(`${name}.refused.md`, proposal.addendum);
+      options.log(`Round ${round}: ${name} refused (${rejected}); asking once more.`);
+      const again = await options.propose(
+        `${input}\n# Your last answer was refused\n\n${rejected}. Write the complete addendum again without that phrase. Do not tell the agent to skip, change or delete tests or checks, even as an example of what to avoid.\n`,
+      );
+      if (again.costUsd === undefined) {
+        stopped = "unknown cost";
+        break;
+      }
+      proposalCost += again.costUsd;
+      proposal = again;
+      rejected = rejectReason(proposal.addendum);
+    }
+    spent += proposalCost;
+    lastProposalCost = proposalCost;
     await options.save(`${name}.md`, proposal.addendum);
-    const rejected = rejectReason(proposal.addendum);
     if (rejected !== undefined) {
       history.push({
         round,
         version: name,
         reason: proposal.reason,
         rejected,
-        costUsd: proposal.costUsd,
+        costUsd: proposalCost,
       });
       options.log(`Round ${round}: ${name} rejected before a run: ${rejected}.`);
       continue;
@@ -370,7 +413,8 @@ export async function tune(options: TuneOptions): Promise<TuneResult> {
       version: name,
       reason: proposal.reason,
       decision,
-      costUsd: proposal.costUsd + scoreCost,
+      costUsd: proposalCost + scoreCost,
+      ...(refusedFirst === undefined ? {} : { refusedFirst }),
     });
     options.log(`Round ${round}: ${name} ${decision.reason}.`);
     if (decision.kept) {
@@ -397,8 +441,8 @@ export async function tune(options: TuneOptions): Promise<TuneResult> {
       "heldout-final",
     );
     spent += (costOf(a) ?? 0) + (costOf(b) ?? 0);
-    const ra = asReport("held-out, empty addendum", a);
-    const rb = asReport(`held-out, v${version}`, b);
+    const ra = asReport("held-out, empty addendum", a, options.heldOutTasks);
+    const rb = asReport(`held-out, v${version}`, b, options.heldOutTasks);
     const compared = compareReports(ra, rb, { seed: options.seed });
     heldOut =
       "problems" in compared

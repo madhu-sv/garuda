@@ -102,8 +102,13 @@ garuda eval tune --addendum my-addendum.md -m claude-haiku-5-5 --rounds 5 --max-
   before it costs a run. The proposer never sees the held-out tasks.
 - At the end, if a version stayed, the held-out set runs twice (no addendum, then the final one),
   5 runs a task. That comparison is the only number to quote.
+- A refused text gets one more try in the same round. A rule that forbids a shortcut ("never
+  modify tests") is not refused.
 - Before the first run the command shows the plan and asks (`--yes` skips the question). It stops
-  before a round that would pass `--max-cost`.
+  before a round that would pass `--max-cost`. `--parallel <n>` (default 4) runs that many runs at
+  a time, with a line per run.
+- The first run (Haiku 5.5, Opus 5.5 proposing, $0.65): the kept version cut the held-out cost per
+  accepted change to ×0.81 (95% interval ×0.75 to ×0.88), with every run passing in both arms.
 - Garuda never edits your file. The results go to `.garuda/evals/tune-<id>/`; to use the final
   text, copy `final.md` into `GARUDA.md` yourself. `garuda eval --addendum <file>` runs any suite
   with an addendum, for a check of your own.

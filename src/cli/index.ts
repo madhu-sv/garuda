@@ -205,6 +205,7 @@ async function main(): Promise<void> {
     )
     .option("--seed <n>", "seed for the run order and the intervals (default 1)", (v) => Number(v))
     .option("--yes", "start without the question")
+    .option("--parallel <n>", "runs at the same time in each score (default 4)", (v) => Number(v))
     .action(async (options) => {
       const { runEvalTune } = await import("./evalTune.js");
       process.exitCode = await runEvalTune({

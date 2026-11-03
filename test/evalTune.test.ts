@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { claudeCodeAgent } from "../src/cli/evalCommand.js";
-import { askProposer, runEvalTune } from "../src/cli/evalTune.js";
+import { askProposer, progressLine, runEvalTune } from "../src/cli/evalTune.js";
 import { buildSystemPrompt } from "../src/context/instructions.js";
 import { reportV2 } from "../src/evals/report.js";
+import { saveUnique } from "../src/evals/runner.js";
 import {
   ADDENDUM_MAX_CHARS,
   decide,
@@ -120,12 +122,28 @@ describe("what a proposal may say", () => {
       expect(rejectReason(bad), bad).toMatch(/get around the grading/);
     }
     expect(rejectReason("x".repeat(ADDENDUM_MAX_CHARS + 1))).toMatch(/limit is 4000/);
+    // The user's first tune run: v3 said "Skip tests you won't run" (about reading). Still refused;
+    // the proposer gets one more try in the round.
+    expect(rejectReason("Skip tests you won't run, READMEs and configs.")).toMatch(/Skip tests/);
     expect(rejectReason("  ")).toBe("the addendum is empty");
     expect(
       rejectReason(
         "Read the failing test first, then the code it calls. Run the tests after each edit.",
       ),
     ).toBeUndefined();
+  });
+
+  it("a rule that forbids the shortcut is not refused (the user's first tune run, v1)", () => {
+    for (const ok of [
+      "Correctness first: never modify tests to make them pass.",
+      "Do not skip the tests.",
+      "Make the change without editing the test files.",
+      "Fix the code, not the checks; don't change protected files.",
+    ]) {
+      expect(rejectReason(ok), ok).toBeUndefined();
+    }
+    // A negation in another sentence does not clear the next one.
+    expect(rejectReason("Do not guess. Edit the tests until they pass.")).toMatch(/Edit the tests/);
   });
 
   it("reads the answer's form", () => {
@@ -237,17 +255,28 @@ describe("the loop", () => {
   }
 
   it("keeps an edit that passes a task more, builds on it, and measures the held-out set once", async () => {
-    const { result, scored, saved } = await go(["Try +.", "Skip the tests +++.", "Try ++ now."]);
+    const { result, scored, saved, inputs } = await go([
+      "Try +.",
+      "Skip the tests +++.", // refused; the retry in the same round gives the next one
+      "Try ++ now.",
+      "Skip the tests.", // refused twice: the round runs nothing
+      "Edit the test files.",
+    ]);
     expect(result.history.map((h) => h.decision?.kept ?? h.rejected)).toEqual([
       true,
-      expect.stringMatching(/get around the grading/),
       true,
+      expect.stringMatching(/get around the grading/),
     ]);
+    expect(result.history[1]?.refusedFirst).toMatch(/skip the tests/i);
+    expect(inputs[2]).toContain("# Your last answer was refused");
     expect(result.final).toBe("Try ++ now.");
-    // The rejected text never ran; the held-out set ran twice, at the end.
-    expect(scored).toEqual(["v0", "v1", "v3", "heldout-empty", "heldout-final"]);
+    // Refused texts never ran; the held-out set ran twice, at the end.
+    expect(scored).toEqual(["v0", "v1", "v2", "heldout-empty", "heldout-final"]);
     expect(saved.get("final.md")).toBe("Try ++ now.");
+    expect(saved.get("v2.refused.md")).toBe("Skip the tests +++.");
     expect(result.heldOut).toContain("held-out-secret");
+    // Both held-out arms carry the task hashes: no "no task hashes" note.
+    expect(result.heldOut).not.toContain("no task hashes");
   });
 
   it("the proposer never sees a held-out task", async () => {
@@ -370,5 +399,34 @@ describe("what tune may send to the proposer", () => {
     } finally {
       err.mockRestore();
     }
+  });
+});
+
+describe("runs at the same time (--parallel, the user's first tune run: 16 minutes a score)", () => {
+  it("runs of one task at the same time never share a session file", async () => {
+    const dir = mkdtempSync(join(temp, "par-"));
+    const paths = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        saveUnique(dir, "hard-rename", ".jsonl", (p) => writeFile(p, `run ${i}`, { flag: "wx" })),
+      ),
+    );
+    expect(new Set(paths).size).toBe(6);
+    expect(readdirSync(dir).sort()).toEqual([
+      "hard-rename-2.jsonl",
+      "hard-rename-3.jsonl",
+      "hard-rename-4.jsonl",
+      "hard-rename-5.jsonl",
+      "hard-rename-6.jsonl",
+      "hard-rename.jsonl",
+    ]);
+  });
+
+  it("each run prints one progress line", () => {
+    expect(progressLine("v1", 23, 78, run("hard-rename", true, 0.01, { steps: 6 }))).toBe(
+      "[v1 23/78] ✓ hard-rename (6 steps)",
+    );
+    expect(
+      progressLine("v2", 4, 78, run("fix-add", false, 0.01, { reason: "The check failed:\nmore" })),
+    ).toBe("[v2 4/78] ✗ fix-add (5 steps): The check failed:");
   });
 });

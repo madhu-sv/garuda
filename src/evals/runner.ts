@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { constants as fsConstants, mkdirSync, realpathSync } from "node:fs";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -269,11 +269,9 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       if (outcome.reason !== undefined) result.reason = outcome.reason;
       if (options.outDir !== undefined) {
         mkdirSync(options.outDir, { recursive: true });
-        let target = join(options.outDir, `${task.id}.claude.json`);
-        for (let n = 2; existsSync(target); n++)
-          target = join(options.outDir, `${task.id}-${n}.claude.json`);
-        await writeFile(target, exec.stdout.text);
-        result.sessionFile = target;
+        result.sessionFile = await saveUnique(options.outDir, task.id, ".claude.json", (path) =>
+          writeFile(path, exec.stdout.text, { flag: "wx" }),
+        );
       }
     } else {
       const run = await runtime.runTurn(task.prompt, timeout);
@@ -314,11 +312,10 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     if (options.outDir !== undefined) {
       mkdirSync(options.outDir, { recursive: true });
       // With --repeat, later runs of a task get -2, -3, … in the file name.
-      let target = join(options.outDir, `${task.id}.jsonl`);
-      for (let n = 2; existsSync(target); n++)
-        target = join(options.outDir, `${task.id}-${n}.jsonl`);
-      await copyFile(store.path(session.id), target);
-      result.sessionFile = target;
+      const from = store.path(session.id);
+      result.sessionFile = await saveUnique(options.outDir, task.id, ".jsonl", (path) =>
+        copyFile(from, path, fsConstants.COPYFILE_EXCL),
+      );
     }
   }
 
@@ -398,6 +395,27 @@ export function isConnectionFailure(result: EvalResult): boolean {
   return /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|connection refused|self[- ]signed certificate|unable to get local issuer certificate|certificate has expired/i.test(
     result.reason,
   );
+}
+
+/**
+ * Write a run's file as <id><ext>, or <id>-2<ext>, -3 … when that name is taken. The write itself
+ * refuses a taken name, so runs of one task at the same time (`--parallel`) never share a file.
+ */
+export async function saveUnique(
+  dir: string,
+  id: string,
+  ext: string,
+  write: (path: string) => Promise<void>,
+): Promise<string> {
+  for (let n = 1; ; n++) {
+    const path = join(dir, `${id}${n === 1 ? "" : `-${n}`}${ext}`);
+    try {
+      await write(path);
+      return path;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
 }
 
 export const MCP_PREPARE_FAILED = "The MCP prepare command failed:";

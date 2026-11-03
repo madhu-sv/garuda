@@ -46,6 +46,16 @@ export interface EvalTuneOptions {
   suite?: string[];
   /** --yes: start without the question. */
   yes?: boolean;
+  /** --parallel <n>: runs at the same time in each score (default 4). */
+  parallel?: number;
+}
+
+/** Runs at the same time (0.17): one at a time took about 16 minutes a score in the first run. */
+export const DEFAULT_TUNE_PARALLEL = 4;
+
+/** The progress line of one run: "[v1 23/78] ✓ hard-rename (6 steps)". */
+export function progressLine(label: string, done: number, total: number, r: EvalResult): string {
+  return `[${label} ${done}/${total}] ${r.passed ? "✓" : "✗"} ${r.id} (${r.steps} steps)${r.passed ? "" : `: ${(r.reason ?? r.stopReason).split("\n")[0]}`}`;
 }
 
 export const DEFAULT_PROPOSER = "claude-opus-5-5";
@@ -92,6 +102,7 @@ export async function runEvalTune(options: EvalTuneOptions): Promise<number> {
   const heldoutRepeat = whole(options.heldoutRepeat, 5, 1);
   const margin = whole(options.margin, 2, 1);
   const seed = whole(options.seed, DEFAULT_SEED, 0);
+  const parallel = whole(options.parallel, DEFAULT_TUNE_PARALLEL, 1);
   const maxCost = options.maxCost ?? 20;
   if (
     rounds === undefined ||
@@ -99,10 +110,11 @@ export async function runEvalTune(options: EvalTuneOptions): Promise<number> {
     heldoutRepeat === undefined ||
     margin === undefined ||
     seed === undefined ||
+    parallel === undefined ||
     !(maxCost > 0)
   ) {
     process.stderr.write(
-      "--rounds, --repeat, --heldout-repeat and --margin must be whole numbers of 1 or more, --seed 0 or more, and --max-cost above 0.\n",
+      "--rounds, --repeat, --heldout-repeat, --margin and --parallel must be whole numbers of 1 or more, --seed 0 or more, and --max-cost above 0.\n",
     );
     return 1;
   }
@@ -167,7 +179,7 @@ export async function runEvalTune(options: EvalTuneOptions): Promise<number> {
   process.stderr.write(
     [
       `Tuning ${options.addendum} (${start.text.length} characters) with ${agent.spec}; ${proposer.spec} proposes.`,
-      `Dev: ${devTasks.length} task(s) from ${suites.join(", ")} × ${repeat} = ${perScore} runs a score; up to ${rounds + 1} scores.`,
+      `Dev: ${devTasks.length} task(s) from ${suites.join(", ")} × ${repeat} = ${perScore} runs a score, ${parallel} at a time; up to ${rounds + 1} scores.`,
       `Held-out: ${HELD_OUT_TASKS.length} task(s) × ${heldoutRepeat}, twice, at the end (${heldOutRuns} runs), if a version is kept.`,
       `Keep rule: +${margin} passing runs, or as many with a lower cost per accepted change (interval below ×1.0).`,
       `Budget: --max-cost $${maxCost}; the loop stops before a round that would pass it.`,
@@ -199,16 +211,25 @@ export async function runEvalTune(options: EvalTuneOptions): Promise<number> {
   ): Promise<EvalResult[]> => {
     const listed = tasks.flatMap((t) => Array.from({ length: k }, () => t));
     const outDir = join(dir, label);
-    const results = await runEvals(shuffled(listed, seed), {
-      modelId: agent.spec,
-      model: () => agent.create(),
-      modelInfo: agent.info,
-      ...(agent.maxTokens === undefined ? {} : { maxTokens: agent.maxTokens }),
-      ...(team === undefined ? {} : { policy: team.policy }),
-      outDir,
-      executor: executor.name === "host" ? "host" : "os",
-      ...(addendum === "" ? {} : { addendum }),
-    });
+    let done = 0;
+    const results = await runEvals(
+      shuffled(listed, seed),
+      {
+        parallel,
+        modelId: agent.spec,
+        model: () => agent.create(),
+        modelInfo: agent.info,
+        ...(agent.maxTokens === undefined ? {} : { maxTokens: agent.maxTokens }),
+        ...(team === undefined ? {} : { policy: team.policy }),
+        outDir,
+        executor: executor.name === "host" ? "host" : "os",
+        ...(addendum === "" ? {} : { addendum }),
+      },
+      (r) => {
+        done++;
+        process.stderr.write(`${progressLine(label, done, listed.length, r)}\n`);
+      },
+    );
     writeFileSync(
       join(outDir, "report.json"),
       `${JSON.stringify(
