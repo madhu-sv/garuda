@@ -1,0 +1,22 @@
+A: held-out, empty addendum
+B: held-out, v2
+
+Task                            A        B
+held-out-command-registry       5/5      5/5
+held-out-conventions-migration  5/5      5/5
+held-out-conventions-reset      5/5      5/5
+held-out-invoice-split          5/5      5/5
+held-out-payment-retry          5/5      5/5
+held-out-price-cache            5/5      5/5
+held-out-settings               5/5      5/5
+held-out-slow-search            5/5      5/5
+held-out-tests-csv-field        5/5      5/5
+held-out-tests-intervals        5/5      5/5
+
+Pass rate over all attempts: A 100%, B 100%; B − A 0 pts (95% paired interval 0 pts to 0 pts; 10000 draws, seed 1)
+Verdict: no clear difference (the interval contains 0).
+A: cost per accepted change $0.0036 · unexpected changes 0 of 50 runs · median time 20 s
+B: cost per accepted change $0.0029 · unexpected changes 0 of 50 runs · median time 16 s
+Cost per accepted change: B/A ×0.81 (95% paired interval ×0.75 to ×0.88). Verdict: B costs less per accepted change.
+Note: held-out, empty addendum and held-out, v2 have no task hashes (a report before 0.17): Garuda cannot check that the tasks were the same.
+Note: Every draw gave the same pass-rate difference, so the interval shows no uncertainty: more tasks, or tasks that sometimes fail, are needed to measure it.

@@ -1,0 +1,2684 @@
+{
+  "schema": 2,
+  "garuda": {
+    "version": "0.17.0",
+    "commit": "5828cf2ece658c375885606cc1372692eea93671"
+  },
+  "spec": "claude-haiku-5-5",
+  "agent": {
+    "name": "garuda"
+  },
+  "provider": "anthropic",
+  "effort": "model default",
+  "isolation": "os",
+  "os": {
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "node": "26.12.1"
+  },
+  "seed": 1,
+  "shuffle": true,
+  "split": "dev",
+  "addendum": {
+    "file": "v2.md",
+    "chars": 1739,
+    "sha256": "6b459befddf67fcb51d3e005ea9b3692c70a15cc55c96ccd00fcc6054dd3c5d8"
+  },
+  "mcp": null,
+  "order": [
+    {
+      "id": "med-inventory",
+      "attempt": 1
+    },
+    {
+      "id": "med-inventory",
+      "attempt": 2
+    },
+    {
+      "id": "med-export-dates",
+      "attempt": 1
+    },
+    {
+      "id": "config-default",
+      "attempt": 1
+    },
+    {
+      "id": "missing-await",
+      "attempt": 1
+    },
+    {
+      "id": "implement-slugify",
+      "attempt": 1
+    },
+    {
+      "id": "med-ledger",
+      "attempt": 1
+    },
+    {
+      "id": "med-rename-option",
+      "attempt": 1
+    },
+    {
+      "id": "extract-helper",
+      "attempt": 1
+    },
+    {
+      "id": "hard-coupon",
+      "attempt": 1
+    },
+    {
+      "id": "hard-event",
+      "attempt": 1
+    },
+    {
+      "id": "new-module",
+      "attempt": 1
+    },
+    {
+      "id": "off-by-one",
+      "attempt": 1
+    },
+    {
+      "id": "hard-import",
+      "attempt": 1
+    },
+    {
+      "id": "med-export-dates",
+      "attempt": 2
+    },
+    {
+      "id": "med-notifier",
+      "attempt": 1
+    },
+    {
+      "id": "extract-helper",
+      "attempt": 2
+    },
+    {
+      "id": "config-default",
+      "attempt": 2
+    },
+    {
+      "id": "csv-quotes",
+      "attempt": 1
+    },
+    {
+      "id": "missing-await",
+      "attempt": 2
+    },
+    {
+      "id": "hard-unused",
+      "attempt": 1
+    },
+    {
+      "id": "med-conventions-cli",
+      "attempt": 1
+    },
+    {
+      "id": "hard-import",
+      "attempt": 2
+    },
+    {
+      "id": "rename",
+      "attempt": 1
+    },
+    {
+      "id": "hard-rename",
+      "attempt": 1
+    },
+    {
+      "id": "med-conventions-handler",
+      "attempt": 1
+    },
+    {
+      "id": "med-export-dates",
+      "attempt": 3
+    },
+    {
+      "id": "hard-rename",
+      "attempt": 2
+    },
+    {
+      "id": "hard-event",
+      "attempt": 2
+    },
+    {
+      "id": "write-tests",
+      "attempt": 1
+    },
+    {
+      "id": "fix-add",
+      "attempt": 1
+    },
+    {
+      "id": "rename",
+      "attempt": 2
+    },
+    {
+      "id": "med-notifier",
+      "attempt": 2
+    },
+    {
+      "id": "write-tests",
+      "attempt": 2
+    },
+    {
+      "id": "new-module",
+      "attempt": 2
+    },
+    {
+      "id": "off-by-one",
+      "attempt": 2
+    },
+    {
+      "id": "hard-coupon",
+      "attempt": 2
+    },
+    {
+      "id": "med-conventions-handler",
+      "attempt": 2
+    },
+    {
+      "id": "missing-await",
+      "attempt": 3
+    },
+    {
+      "id": "rename",
+      "attempt": 3
+    },
+    {
+      "id": "med-scheduler",
+      "attempt": 1
+    },
+    {
+      "id": "med-ledger",
+      "attempt": 2
+    },
+    {
+      "id": "med-scheduler",
+      "attempt": 2
+    },
+    {
+      "id": "med-rename-option",
+      "attempt": 2
+    },
+    {
+      "id": "med-conventions-cli",
+      "attempt": 2
+    },
+    {
+      "id": "hard-event",
+      "attempt": 3
+    },
+    {
+      "id": "med-notifier",
+      "attempt": 3
+    },
+    {
+      "id": "hard-import",
+      "attempt": 3
+    },
+    {
+      "id": "med-tests-duration",
+      "attempt": 1
+    },
+    {
+      "id": "med-tests-limiter",
+      "attempt": 1
+    },
+    {
+      "id": "med-inventory",
+      "attempt": 3
+    },
+    {
+      "id": "med-tests-duration",
+      "attempt": 2
+    },
+    {
+      "id": "hard-unused",
+      "attempt": 2
+    },
+    {
+      "id": "hard-rounding",
+      "attempt": 1
+    },
+    {
+      "id": "med-rename-option",
+      "attempt": 3
+    },
+    {
+      "id": "fix-add",
+      "attempt": 2
+    },
+    {
+      "id": "implement-slugify",
+      "attempt": 2
+    },
+    {
+      "id": "csv-quotes",
+      "attempt": 2
+    },
+    {
+      "id": "hard-coupon",
+      "attempt": 3
+    },
+    {
+      "id": "config-default",
+      "attempt": 3
+    },
+    {
+      "id": "off-by-one",
+      "attempt": 3
+    },
+    {
+      "id": "med-tests-limiter",
+      "attempt": 2
+    },
+    {
+      "id": "med-tests-duration",
+      "attempt": 3
+    },
+    {
+      "id": "csv-quotes",
+      "attempt": 3
+    },
+    {
+      "id": "new-module",
+      "attempt": 3
+    },
+    {
+      "id": "implement-slugify",
+      "attempt": 3
+    },
+    {
+      "id": "hard-rounding",
+      "attempt": 2
+    },
+    {
+      "id": "hard-rounding",
+      "attempt": 3
+    },
+    {
+      "id": "med-tests-limiter",
+      "attempt": 3
+    },
+    {
+      "id": "extract-helper",
+      "attempt": 3
+    },
+    {
+      "id": "med-scheduler",
+      "attempt": 3
+    },
+    {
+      "id": "hard-unused",
+      "attempt": 3
+    },
+    {
+      "id": "write-tests",
+      "attempt": 3
+    },
+    {
+      "id": "med-conventions-handler",
+      "attempt": 3
+    },
+    {
+      "id": "med-conventions-cli",
+      "attempt": 3
+    },
+    {
+      "id": "hard-rename",
+      "attempt": 3
+    },
+    {
+      "id": "fix-add",
+      "attempt": 3
+    },
+    {
+      "id": "med-ledger",
+      "attempt": 3
+    }
+  ],
+  "tasks": {
+    "fix-add": "84ad5bd6c3572023699481519a0f10a088c52e5697205e5ee04d9e7f1d58c61b",
+    "off-by-one": "7035a627a88032e71470f5efb371c476142e801201ec4637a0c5af3bf9c43f5c",
+    "rename": "2d1ed5ac9df14f5a54460d671f41a718f4b3ca35378f53a751518619be28ad94",
+    "implement-slugify": "852add3248567fe5c1c22109a636be09c10bd979ef42c3eda434e4c0cf22a744",
+    "missing-await": "5b2a74e6b163d601708afa616a72d4cf2987e47ccafecd5e18d0fb0321bdbf28",
+    "csv-quotes": "a667218f2786492d8a1e756d9fc6dcb2dd56f5e801e41dbdaec7b53b000c76a1",
+    "write-tests": "1ceb46982c56a406b4445c6049d93d2449ef6ef5057d3f0b3298a3f4ea981e3b",
+    "config-default": "933485e93dfe384b4eebc11a5b01d9e0433d4e56676e2cc0144510c1bbf8bece",
+    "new-module": "e8d3619b35dc4b83c2dfe6689e7967c0f9bfdf424de756d8bc68653cadb88982",
+    "extract-helper": "2e71edee84657c4445a27e5046b7f49f9ff0be0465b2d3d9f202248fcbe7a926",
+    "hard-rounding": "c04a22215396a3fc8a94eb0d55ff7473108d734ec92e2a528dd232c64d851b56",
+    "hard-event": "531a9ab94368252485a1d8889face5b69092d9a2fed353a0b0b479bb9d99156e",
+    "hard-import": "efa7e1f9912d2156d6fbd034b047c6ecf8279ca91e695c6b4c048b738cddc2f3",
+    "hard-rename": "6642307e3626013902e3c1dcb3c1e942883cf611177c6686a136ea3c7ab6c9c3",
+    "hard-unused": "3cfc9eb0ffa579dd3a3cf5702beac21082f837eac618a64ca8903d370d003be8",
+    "hard-coupon": "c3390e80a41c21e1e648610716f5b13a02ae4d806e20a53aa12fb6276a424523",
+    "med-ledger": "f64c4a19923ba27e61fb7cc70627736cbe8172c396b07daa48b4241108489832",
+    "med-scheduler": "0c4f18c50c88c5b489eedeeaf0cc2c237a9769780cc78374caccde1292c0fa19",
+    "med-inventory": "61f82dab50057c9dccad097514590c0c60dd743d01611416cf33c9552bda6141",
+    "med-rename-option": "e622e1f4b2b86f84f5ce6efe9b87a9210505e02770771aa994258401ed2538ee",
+    "med-notifier": "c0731158ec862db593c0fc17dd496e7c19091685d416522c0e8cafef0d8c675f",
+    "med-tests-duration": "3f27ffd4ad2eb8630f47e52a8f005c9783db6ac773e9d9b68ccd585fe885d744",
+    "med-tests-limiter": "26d1c83fd29f6fda42442ddc12c679c28e9c3d25edac737716bb6d0c7f9d2d18",
+    "med-conventions-handler": "4a63b2899bbda70e0d8ee1098e305b6bee477073aa9282d03c1ed3a6e5f9a013",
+    "med-conventions-cli": "f83637fd3db6772560ea310aced7346ed3780872cde3c76dbbfc977bab7bfbe8",
+    "med-export-dates": "20756cab96b74c6084a022bfb99c7e568aff9d3e082ee0e005f950bd37586fa7"
+  },
+  "evidence": {
+    "interval": {
+      "rate": 1,
+      "low": 1,
+      "high": 1,
+      "level": 0.95,
+      "draws": 10000,
+      "seed": 1,
+      "tasks": 26
+    },
+    "consistency": {
+      "repeated": 26,
+      "allPassed": [
+        "med-inventory",
+        "med-export-dates",
+        "config-default",
+        "missing-await",
+        "implement-slugify",
+        "med-ledger",
+        "med-rename-option",
+        "extract-helper",
+        "hard-coupon",
+        "hard-event",
+        "new-module",
+        "off-by-one",
+        "hard-import",
+        "med-notifier",
+        "csv-quotes",
+        "hard-unused",
+        "med-conventions-cli",
+        "rename",
+        "hard-rename",
+        "med-conventions-handler",
+        "write-tests",
+        "fix-add",
+        "med-scheduler",
+        "med-tests-duration",
+        "med-tests-limiter",
+        "hard-rounding"
+      ],
+      "nonePassed": [],
+      "onlyErrors": []
+    },
+    "spread": {
+      "runs": 78,
+      "steps": {
+        "median": 5,
+        "p95": 7
+      },
+      "tokens": {
+        "median": 27863.5,
+        "p95": 48173.74999999998
+      },
+      "durationMs": {
+        "median": 9546.5,
+        "p95": 16121.64999999997
+      }
+    },
+    "stepsSd": {
+      "med-inventory": 0.5773502691896258,
+      "med-export-dates": 2.0816659994661326,
+      "config-default": 0.5773502691896258,
+      "missing-await": 0,
+      "implement-slugify": 0.5773502691896258,
+      "med-ledger": 0,
+      "med-rename-option": 0,
+      "extract-helper": 1,
+      "hard-coupon": 1.5275252316519465,
+      "hard-event": 0,
+      "new-module": 0,
+      "off-by-one": 0,
+      "hard-import": 1.1547005383792517,
+      "med-notifier": 0.5773502691896258,
+      "csv-quotes": 0.5773502691896258,
+      "hard-unused": 0.5773502691896258,
+      "med-conventions-cli": 0.5773502691896258,
+      "rename": 0.5773502691896258,
+      "hard-rename": 0,
+      "med-conventions-handler": 0.5773502691896258,
+      "write-tests": 0,
+      "fix-add": 1.1547005383792517,
+      "med-scheduler": 0.5773502691896258,
+      "med-tests-duration": 1.1547005383792517,
+      "med-tests-limiter": 0.5773502691896258,
+      "hard-rounding": 0.5773502691896258
+    },
+    "costPerAcceptedChange": {
+      "kind": "value",
+      "usd": 0.00142929608974359,
+      "minimum": false,
+      "totalUsd": 0.11148509500000002,
+      "passes": 78
+    },
+    "unexpected": {
+      "runs": 0,
+      "files": 0,
+      "measured": 78
+    }
+  },
+  "results": [
+    {
+      "id": "med-inventory",
+      "title": "Fix lost and doubled stock in reservations",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 40527,
+      "costUsd": 0.001564935,
+      "durationMs": 12658,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "glob",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 34796,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-inventory.jsonl",
+      "changed": [
+        "src/main/java/inv/Reservations.java",
+        "src/main/java/inv/Sku.java"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-inventory",
+      "title": "Fix lost and doubled stock in reservations",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 40441,
+      "costUsd": 0.0015686000000000003,
+      "durationMs": 11735,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "glob",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 34700,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-inventory-2.jsonl",
+      "changed": [
+        "src/main/java/inv/Reservations.java",
+        "src/main/java/inv/Sku.java"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "med-export-dates",
+      "title": "Resolve a vague request from the repository",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 25167,
+      "costUsd": 0.0011944500000000001,
+      "durationMs": 8205,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "grep",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20625,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-export-dates.jsonl",
+      "changed": [
+        "src/export/csv.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "config-default",
+      "title": "Add a default value",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 18384,
+      "costUsd": 0.000684275,
+      "durationMs": 4159,
+      "tools": [
+        "grep",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15465,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/config-default.jsonl",
+      "changed": [
+        "src/config.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "missing-await",
+      "title": "Fix a missing await",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 19368,
+      "costUsd": 0.00079834,
+      "durationMs": 5771,
+      "tools": [
+        "grep",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15934,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/missing-await.jsonl",
+      "changed": [
+        "src/total.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "implement-slugify",
+      "title": "Implement a function from its tests",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 25529,
+      "costUsd": 0.0009090350000000001,
+      "durationMs": 5805,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 21821,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/implement-slugify.jsonl",
+      "changed": [
+        "src/slugify.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-ledger",
+      "title": "Fix a ledger total across currencies",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 25399,
+      "costUsd": 0.0017792700000000001,
+      "durationMs": 9659,
+      "tools": [
+        "bash",
+        "grep",
+        "bash",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 17752,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-ledger.jsonl",
+      "changed": [
+        "src/convert.ts",
+        "src/ledger.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-rename-option",
+      "title": "Rename an option across modules, with a deprecation path",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 32916,
+      "costUsd": 0.001812995,
+      "durationMs": 10318,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 25792,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-rename-option.jsonl",
+      "changed": [
+        "src/cli.ts",
+        "src/client.ts",
+        "src/options.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "extract-helper",
+      "title": "Remove duplicate code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 20164,
+      "costUsd": 0.001092005,
+      "durationMs": 7372,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15788,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/extract-helper.jsonl",
+      "changed": [
+        "src/email.js",
+        "src/invite.js",
+        "src/signup.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-coupon",
+      "title": "Add a feature across modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 60745,
+      "costUsd": 0.00295034,
+      "durationMs": 15592,
+      "tools": [
+        "bash",
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 48974,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-coupon.jsonl",
+      "changed": [
+        "src/api/routes.js",
+        "src/domains/coupon/repository.js",
+        "src/domains/coupon/service.js",
+        "src/domains/order/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-event",
+      "title": "Fix a mismatch between two modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 28344,
+      "costUsd": 0.001243365,
+      "durationMs": 7692,
+      "tools": [
+        "grep",
+        "read_file",
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 22854,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-event.jsonl",
+      "changed": [
+        "src/domains/stock/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "new-module",
+      "title": "Create a new module",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 18170,
+      "costUsd": 0.000798965,
+      "durationMs": 5080,
+      "tools": [
+        "bash",
+        "glob",
+        "read_file",
+        "read_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15034,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/new-module.jsonl",
+      "changed": [
+        "src/version.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "off-by-one",
+      "title": "Fix an off-by-one error",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 21485,
+      "costUsd": 0.000660705,
+      "durationMs": 5143,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 18988,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/off-by-one.jsonl",
+      "changed": [
+        "src/range.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-import",
+      "title": "Fix a broken import in a large repo",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 47756,
+      "costUsd": 0.00163769,
+      "durationMs": 13422,
+      "tools": [
+        "bash",
+        "glob",
+        "bash",
+        "grep",
+        "read_file",
+        "glob",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 40759,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-import.jsonl",
+      "changed": [
+        "src/api/routes.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-export-dates",
+      "title": "Resolve a vague request from the repository",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 8,
+      "tokens": 45810,
+      "costUsd": 0.0018816450000000001,
+      "durationMs": 11315,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "grep",
+        "edit_file",
+        "edit_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 39522,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-export-dates-2.jsonl",
+      "changed": [
+        "src/export/csv.ts",
+        "test/export.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "med-notifier",
+      "title": "Extract an interface that two classes implement",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 35860,
+      "costUsd": 0.00194055,
+      "durationMs": 13608,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 27935,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-notifier.jsonl",
+      "changed": [
+        "src/main/java/shop/EmailNotifier.java",
+        "src/main/java/shop/Notifier.java",
+        "src/main/java/shop/OrderService.java",
+        "src/main/java/shop/ReminderService.java",
+        "src/main/java/shop/SmsNotifier.java"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "extract-helper",
+      "title": "Remove duplicate code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 24328,
+      "costUsd": 0.001015045,
+      "durationMs": 7108,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "read_file",
+        "grep",
+        "read_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20497,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/extract-helper-2.jsonl",
+      "changed": [
+        "src/email.js",
+        "src/invite.js",
+        "src/signup.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "config-default",
+      "title": "Add a default value",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 22980,
+      "costUsd": 0.0007074,
+      "durationMs": 7796,
+      "tools": [
+        "grep",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20145,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/config-default-2.jsonl",
+      "changed": [
+        "src/config.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "csv-quotes",
+      "title": "Handle quoted fields in a CSV parser",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 23956,
+      "costUsd": 0.0008628799999999999,
+      "durationMs": 5295,
+      "tools": [
+        "grep",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20568,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/csv-quotes.jsonl",
+      "changed": [
+        "src/csv.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "missing-await",
+      "title": "Fix a missing await",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 19310,
+      "costUsd": 0.000822335,
+      "durationMs": 6553,
+      "tools": [
+        "grep",
+        "read_file",
+        "bash",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15721,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/missing-await-2.jsonl",
+      "changed": [
+        "src/total.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-unused",
+      "title": "Find unused exports",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 36262,
+      "costUsd": 0.0016855099999999999,
+      "durationMs": 10073,
+      "tools": [
+        "grep",
+        "glob",
+        "grep",
+        "grep",
+        "grep",
+        "grep",
+        "write_file"
+      ],
+      "cacheReadTokens": 28731,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-unused.jsonl",
+      "changed": [
+        "unused.txt"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-conventions-cli",
+      "title": "Add a CLI command the way this repository does it",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 26051,
+      "costUsd": 0.00111275,
+      "durationMs": 6396,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 21830,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-conventions-cli.jsonl",
+      "changed": [
+        "src/todo_cli/commands/stats.py",
+        "src/todo_cli/registry.py"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-import",
+      "title": "Fix a broken import in a large repo",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 44581,
+      "costUsd": 0.0017057749999999999,
+      "durationMs": 11366,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "bash",
+        "glob",
+        "grep",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 37055,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-import-2.jsonl",
+      "changed": [
+        "src/api/routes.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "rename",
+      "title": "Rename a function in every file",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 34719,
+      "costUsd": 0.001249265,
+      "durationMs": 9434,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash",
+        "glob",
+        "grep",
+        "bash"
+      ],
+      "cacheReadTokens": 30504,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/rename.jsonl",
+      "changed": [
+        "src/admin.js",
+        "src/profile.js",
+        "src/users.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-rename",
+      "title": "Rename a shared function in every file",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 39024,
+      "costUsd": 0.002539575,
+      "durationMs": 13951,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 28725,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-rename.jsonl",
+      "changed": [
+        "src/core/money.js",
+        "src/domains/discount/service.js",
+        "src/domains/invoice/service.js",
+        "src/domains/order/service.js",
+        "src/domains/payment/service.js",
+        "src/domains/product/service.js",
+        "src/domains/refund/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-conventions-handler",
+      "title": "Add a handler the way this repository does it",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 31764,
+      "costUsd": 0.001767225,
+      "durationMs": 11423,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 24915,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-conventions-handler.jsonl",
+      "changed": [
+        "src/handlers/deleteTodo.ts",
+        "src/routes.ts",
+        "test/handlers/deleteTodo.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-export-dates",
+      "title": "Resolve a vague request from the repository",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 23168,
+      "costUsd": 0.0012701099999999999,
+      "durationMs": 7233,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 17661,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-export-dates-3.jsonl",
+      "changed": [
+        "src/export/csv.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-rename",
+      "title": "Rename a shared function in every file",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 38383,
+      "costUsd": 0.0024228649999999997,
+      "durationMs": 12510,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 28329,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-rename-2.jsonl",
+      "changed": [
+        "src/core/money.js",
+        "src/domains/discount/service.js",
+        "src/domains/invoice/service.js",
+        "src/domains/order/service.js",
+        "src/domains/payment/service.js",
+        "src/domains/product/service.js",
+        "src/domains/refund/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-event",
+      "title": "Fix a mismatch between two modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 27959,
+      "costUsd": 0.001205855,
+      "durationMs": 7419,
+      "tools": [
+        "grep",
+        "read_file",
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 22703,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-event-2.jsonl",
+      "changed": [
+        "src/domains/stock/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "write-tests",
+      "title": "Write tests for existing code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 3,
+      "tokens": 13390,
+      "costUsd": 0.000704685,
+      "durationMs": 4973,
+      "tools": [
+        "read_file",
+        "glob",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 10476,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/write-tests.jsonl",
+      "changed": [
+        "test/isPrime.test.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "fix-add",
+      "title": "Fix a wrong operator",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 28318,
+      "costUsd": 0.0009241,
+      "durationMs": 7116,
+      "tools": [
+        "bash",
+        "glob",
+        "glob",
+        "read_file",
+        "read_file",
+        "bash",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 24770,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/fix-add.jsonl",
+      "changed": [
+        "src/math.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "rename",
+      "title": "Rename a function in every file",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 29178,
+      "costUsd": 0.001190625,
+      "durationMs": 15253,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash",
+        "glob",
+        "bash"
+      ],
+      "cacheReadTokens": 25060,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/rename-2.jsonl",
+      "changed": [
+        "src/admin.js",
+        "src/profile.js",
+        "src/users.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "med-notifier",
+      "title": "Extract an interface that two classes implement",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 27388,
+      "costUsd": 0.0018647100000000001,
+      "durationMs": 11571,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 19396,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-notifier-2.jsonl",
+      "changed": [
+        "src/main/java/shop/EmailNotifier.java",
+        "src/main/java/shop/Notifier.java",
+        "src/main/java/shop/OrderService.java",
+        "src/main/java/shop/ReminderService.java",
+        "src/main/java/shop/SmsNotifier.java"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "write-tests",
+      "title": "Write tests for existing code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 3,
+      "tokens": 13334,
+      "costUsd": 0.00068779,
+      "durationMs": 4566,
+      "tools": [
+        "read_file",
+        "glob",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 10474,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/write-tests-2.jsonl",
+      "changed": [
+        "test/isPrime.test.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "new-module",
+      "title": "Create a new module",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 18170,
+      "costUsd": 0.000814805,
+      "durationMs": 5226,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15043,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/new-module-2.jsonl",
+      "changed": [
+        "src/version.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "off-by-one",
+      "title": "Fix an off-by-one error",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 21532,
+      "costUsd": 0.0006737100000000001,
+      "durationMs": 5042,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 19001,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/off-by-one-2.jsonl",
+      "changed": [
+        "src/range.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-coupon",
+      "title": "Add a feature across modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 8,
+      "tokens": 65154,
+      "costUsd": 0.0033582050000000004,
+      "durationMs": 31844,
+      "tools": [
+        "bash",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "grep",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 52828,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-coupon-2.jsonl",
+      "changed": [
+        "src/api/routes.js",
+        "src/domains/coupon/service.js",
+        "src/domains/order/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "med-conventions-handler",
+      "title": "Add a handler the way this repository does it",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 39969,
+      "costUsd": 0.002081705,
+      "durationMs": 14104,
+      "tools": [
+        "glob",
+        "read_file",
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 32168,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-conventions-handler-2.jsonl",
+      "changed": [
+        "src/handlers/deleteTodo.ts",
+        "src/routes.ts",
+        "test/handlers/deleteTodo.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "missing-await",
+      "title": "Fix a missing await",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 19410,
+      "costUsd": 0.00081141,
+      "durationMs": 5328,
+      "tools": [
+        "grep",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15941,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/missing-await-3.jsonl",
+      "changed": [
+        "src/total.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "rename",
+      "title": "Rename a function in every file",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 36574,
+      "costUsd": 0.001575195,
+      "durationMs": 11444,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash",
+        "glob",
+        "bash",
+        "grep"
+      ],
+      "cacheReadTokens": 30547,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/rename-3.jsonl",
+      "changed": [
+        "src/admin.js",
+        "src/profile.js",
+        "src/users.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-scheduler",
+      "title": "Fix the next run of a weekly schedule",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 35193,
+      "costUsd": 0.001583695,
+      "durationMs": 11283,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 29367,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-scheduler.jsonl",
+      "changed": [
+        "src/sched/schedule.py"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-ledger",
+      "title": "Fix a ledger total across currencies",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 21390,
+      "costUsd": 0.0014716199999999999,
+      "durationMs": 11207,
+      "tools": [
+        "bash",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15812,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-ledger-2.jsonl",
+      "changed": [
+        "src/convert.ts",
+        "src/ledger.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "med-scheduler",
+      "title": "Fix the next run of a weekly schedule",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 28193,
+      "costUsd": 0.00147591,
+      "durationMs": 9905,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 22471,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-scheduler-2.jsonl",
+      "changed": [
+        "src/sched/schedule.py"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "med-rename-option",
+      "title": "Rename an option across modules, with a deprecation path",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 32146,
+      "costUsd": 0.0016340349999999998,
+      "durationMs": 8958,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 25546,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-rename-option-2.jsonl",
+      "changed": [
+        "src/cli.ts",
+        "src/client.ts",
+        "src/options.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "med-conventions-cli",
+      "title": "Add a CLI command the way this repository does it",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 33634,
+      "costUsd": 0.0014044200000000002,
+      "durationMs": 9072,
+      "tools": [
+        "bash",
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 28527,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-conventions-cli-2.jsonl",
+      "changed": [
+        "src/todo_cli/commands/stats.py",
+        "src/todo_cli/registry.py"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-event",
+      "title": "Fix a mismatch between two modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 28173,
+      "costUsd": 0.001127245,
+      "durationMs": 7284,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "grep",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 23342,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-event-3.jsonl",
+      "changed": [
+        "src/domains/stock/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-notifier",
+      "title": "Extract an interface that two classes implement",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 33709,
+      "costUsd": 0.00184376,
+      "durationMs": 11488,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 26331,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-notifier-3.jsonl",
+      "changed": [
+        "src/main/java/shop/EmailNotifier.java",
+        "src/main/java/shop/Notifier.java",
+        "src/main/java/shop/OrderService.java",
+        "src/main/java/shop/ReminderService.java",
+        "src/main/java/shop/SmsNotifier.java"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-import",
+      "title": "Fix a broken import in a large repo",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 9,
+      "tokens": 56446,
+      "costUsd": 0.0017351550000000002,
+      "durationMs": 83077,
+      "tools": [
+        "glob",
+        "bash",
+        "read_file",
+        "read_file",
+        "read_file",
+        "glob",
+        "grep",
+        "grep",
+        "grep",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 50103,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-import-3.jsonl",
+      "changed": [
+        "src/api/routes.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-tests-duration",
+      "title": "Write tests that catch real bugs in a parser",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 27023,
+      "costUsd": 0.0016196600000000002,
+      "durationMs": 12172,
+      "tools": [
+        "bash",
+        "glob",
+        "bash",
+        "bash",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 21371,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-tests-duration.jsonl",
+      "changed": [
+        "tests/test_parse.py"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-tests-limiter",
+      "title": "Write tests for a rate limiter with a fake clock",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 27460,
+      "costUsd": 0.001975165,
+      "durationMs": 14557,
+      "tools": [
+        "read_file",
+        "glob",
+        "bash",
+        "bash",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20509,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-tests-limiter.jsonl",
+      "changed": [
+        "test/limiter.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-inventory",
+      "title": "Fix lost and doubled stock in reservations",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 34541,
+      "costUsd": 0.00149082,
+      "durationMs": 11729,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 28892,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-inventory-3.jsonl",
+      "changed": [
+        "src/main/java/inv/Reservations.java",
+        "src/main/java/inv/Sku.java"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-tests-duration",
+      "title": "Write tests that catch real bugs in a parser",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 27472,
+      "costUsd": 0.0017947150000000001,
+      "durationMs": 14809,
+      "tools": [
+        "read_file",
+        "glob",
+        "glob",
+        "read_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 21214,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-tests-duration-2.jsonl",
+      "changed": [
+        "tests/test_parse.py"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-unused",
+      "title": "Find unused exports",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 27310,
+      "costUsd": 0.001490315,
+      "durationMs": 8384,
+      "tools": [
+        "grep",
+        "glob",
+        "grep",
+        "grep",
+        "write_file"
+      ],
+      "cacheReadTokens": 20144,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-unused-2.jsonl",
+      "changed": [
+        "unused.txt"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-rounding",
+      "title": "Find a root cause in shared code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 38470,
+      "costUsd": 0.0015710100000000003,
+      "durationMs": 11338,
+      "tools": [
+        "glob",
+        "bash",
+        "bash",
+        "read_file",
+        "read_file",
+        "bash",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 31836,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-rounding.jsonl",
+      "changed": [
+        "src/core/money.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "med-rename-option",
+      "title": "Rename an option across modules, with a deprecation path",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 31904,
+      "costUsd": 0.001567905,
+      "durationMs": 7969,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 25483,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-rename-option-3.jsonl",
+      "changed": [
+        "src/cli.ts",
+        "src/client.ts",
+        "src/options.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "fix-add",
+      "title": "Fix a wrong operator",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 28966,
+      "costUsd": 0.000892575,
+      "durationMs": 7349,
+      "tools": [
+        "glob",
+        "bash",
+        "bash",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 25605,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/fix-add-2.jsonl",
+      "changed": [
+        "src/math.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "implement-slugify",
+      "title": "Implement a function from its tests",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 25520,
+      "costUsd": 0.0009068699999999999,
+      "durationMs": 8310,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 21817,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/implement-slugify-2.jsonl",
+      "changed": [
+        "src/slugify.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "csv-quotes",
+      "title": "Handle quoted fields in a CSV parser",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 17823,
+      "costUsd": 0.0007762299999999999,
+      "durationMs": 4638,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 14698,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/csv-quotes-2.jsonl",
+      "changed": [
+        "src/csv.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-coupon",
+      "title": "Add a feature across modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 35857,
+      "costUsd": 0.0025122999999999994,
+      "durationMs": 13916,
+      "tools": [
+        "bash",
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "grep",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 25735,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-coupon-3.jsonl",
+      "changed": [
+        "src/domains/coupon/repository.js",
+        "src/domains/coupon/service.js",
+        "src/domains/order/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "config-default",
+      "title": "Add a default value",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 22986,
+      "costUsd": 0.000708555,
+      "durationMs": 4907,
+      "tools": [
+        "grep",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20148,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/config-default-3.jsonl",
+      "changed": [
+        "src/config.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "off-by-one",
+      "title": "Fix an off-by-one error",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 21517,
+      "costUsd": 0.0006731,
+      "durationMs": 5115,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 18990,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/off-by-one-3.jsonl",
+      "changed": [
+        "src/range.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-tests-limiter",
+      "title": "Write tests for a rate limiter with a fake clock",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 27974,
+      "costUsd": 0.002106015,
+      "durationMs": 19317,
+      "tools": [
+        "read_file",
+        "glob",
+        "read_file",
+        "glob",
+        "bash",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20494,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-tests-limiter-2.jsonl",
+      "changed": [
+        "test/limiter.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "med-tests-duration",
+      "title": "Write tests that catch real bugs in a parser",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 45023,
+      "costUsd": 0.002532475,
+      "durationMs": 19123,
+      "tools": [
+        "read_file",
+        "glob",
+        "glob",
+        "bash",
+        "write_file",
+        "edit_file",
+        "bash",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 35825,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-tests-duration-3.jsonl",
+      "changed": [
+        "tests/test_parse.py"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "csv-quotes",
+      "title": "Handle quoted fields in a CSV parser",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 17899,
+      "costUsd": 0.0007913549999999999,
+      "durationMs": 4856,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 14698,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/csv-quotes-3.jsonl",
+      "changed": [
+        "src/csv.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "new-module",
+      "title": "Create a new module",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 17785,
+      "costUsd": 0.000747115,
+      "durationMs": 4754,
+      "tools": [
+        "bash",
+        "grep",
+        "read_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 14874,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/new-module-3.jsonl",
+      "changed": [
+        "src/version.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "implement-slugify",
+      "title": "Implement a function from its tests",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 20305,
+      "costUsd": 0.000918085,
+      "durationMs": 5377,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 16371,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/implement-slugify-3.jsonl",
+      "changed": [
+        "src/slugify.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-rounding",
+      "title": "Find a root cause in shared code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 44888,
+      "costUsd": 0.001881935,
+      "durationMs": 12377,
+      "tools": [
+        "bash",
+        "glob",
+        "glob",
+        "bash",
+        "read_file",
+        "read_file",
+        "grep",
+        "read_file",
+        "grep",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 36721,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-rounding-2.jsonl",
+      "changed": [
+        "src/core/money.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-rounding",
+      "title": "Find a root cause in shared code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 50541,
+      "costUsd": 0.00187603,
+      "durationMs": 12960,
+      "tools": [
+        "bash",
+        "bash",
+        "bash",
+        "bash",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 42268,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-rounding-3.jsonl",
+      "changed": [
+        "src/core/money.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-tests-limiter",
+      "title": "Write tests for a rate limiter with a fake clock",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 22928,
+      "costUsd": 0.002020915,
+      "durationMs": 13834,
+      "tools": [
+        "read_file",
+        "glob",
+        "bash",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15554,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-tests-limiter-3.jsonl",
+      "changed": [
+        "test/limiter.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "extract-helper",
+      "title": "Remove duplicate code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 31290,
+      "costUsd": 0.001337675,
+      "durationMs": 8899,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "read_file",
+        "glob",
+        "read_file",
+        "bash",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 26465,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/extract-helper-3.jsonl",
+      "changed": [
+        "src/email.js",
+        "src/invite.js",
+        "src/signup.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-scheduler",
+      "title": "Fix the next run of a weekly schedule",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 27768,
+      "costUsd": 0.0013121699999999999,
+      "durationMs": 10132,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 22572,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-scheduler-3.jsonl",
+      "changed": [
+        "src/sched/schedule.py"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-unused",
+      "title": "Find unused exports",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 27101,
+      "costUsd": 0.001466495,
+      "durationMs": 10510,
+      "tools": [
+        "grep",
+        "glob",
+        "grep",
+        "grep",
+        "write_file"
+      ],
+      "cacheReadTokens": 20062,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-unused-3.jsonl",
+      "changed": [
+        "unused.txt"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "write-tests",
+      "title": "Write tests for existing code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 3,
+      "tokens": 13645,
+      "costUsd": 0.00078029,
+      "durationMs": 4873,
+      "tools": [
+        "read_file",
+        "glob",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 10474,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/write-tests-3.jsonl",
+      "changed": [
+        "test/isPrime.test.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-conventions-handler",
+      "title": "Add a handler the way this repository does it",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 43835,
+      "costUsd": 0.002079725,
+      "durationMs": 10439,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 35595,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-conventions-handler-3.jsonl",
+      "changed": [
+        "src/handlers/deleteTodo.ts",
+        "src/routes.ts",
+        "test/handlers/deleteTodo.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-conventions-cli",
+      "title": "Add a CLI command the way this repository does it",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 26109,
+      "costUsd": 0.0011269600000000002,
+      "durationMs": 6895,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 21851,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-conventions-cli-3.jsonl",
+      "changed": [
+        "src/todo_cli/commands/stats.py",
+        "src/todo_cli/registry.py"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-rename",
+      "title": "Rename a shared function in every file",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 38749,
+      "costUsd": 0.0024151399999999996,
+      "durationMs": 10553,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 28719,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/hard-rename-3.jsonl",
+      "changed": [
+        "src/core/money.js",
+        "src/domains/discount/service.js",
+        "src/domains/invoice/service.js",
+        "src/domains/order/service.js",
+        "src/domains/payment/service.js",
+        "src/domains/product/service.js",
+        "src/domains/refund/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "fix-add",
+      "title": "Fix a wrong operator",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 19036,
+      "costUsd": 0.0008037850000000001,
+      "durationMs": 6637,
+      "tools": [
+        "bash",
+        "glob",
+        "read_file",
+        "read_file",
+        "bash",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15591,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/fix-add-3.jsonl",
+      "changed": [
+        "src/math.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "med-ledger",
+      "title": "Fix a ledger total across currencies",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 21600,
+      "costUsd": 0.001463175,
+      "durationMs": 9724,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15980,
+      "sessionFile": ".garuda/evals/tune-20261103-104958-be20/v2/med-ledger-3.jsonl",
+      "changed": [
+        "src/convert.ts",
+        "src/ledger.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    }
+  ]
+}

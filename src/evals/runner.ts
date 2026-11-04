@@ -338,8 +338,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
         ? undefined
         : { executor: runtime.executor, policy: runtime.execPolicy(checkMs) },
     );
-    if (changed.length > 0)
-      result.reason = `The agent changed protected files: ${changed.join(", ")}.`;
+    if (changed.length > 0) result.reason = `${PROTECTED_FILES_CHANGED} ${changed.join(", ")}.`;
     else if (!check.ok) result.reason = `The check failed:\n${check.output}`;
     else result.passed = true;
   }
@@ -418,6 +417,7 @@ export async function saveUnique(
   }
 }
 
+export const PROTECTED_FILES_CHANGED = "The agent changed protected files:";
 export const MCP_PREPARE_FAILED = "The MCP prepare command failed:";
 export const MCP_NOT_STARTED = "The MCP server did not start:";
 
@@ -432,6 +432,106 @@ export function isMcpFailure(result: EvalResult): boolean {
 /** A failure that every later run would repeat: the eval stops at it (0.17). */
 export function isSetupFailure(result: EvalResult): boolean {
   return isAuthFailure(result) || isConnectionFailure(result) || isMcpFailure(result);
+}
+
+/**
+ * Why a run failed, in a few fixed kinds (0.18.1; a dev.to reader asked for failure categories).
+ * A limit or a timeout wins over the check: the agent did not finish, so the check failing says
+ * less than the reason it stopped.
+ */
+export type FailureKind =
+  | "setup"
+  | "error"
+  | "timeout"
+  | "step-limit"
+  | "token-limit"
+  | "repeated-calls"
+  | "refusal"
+  | "protected-files"
+  | "check";
+
+export const FAILURE_KINDS: readonly FailureKind[] = [
+  "check",
+  "protected-files",
+  "step-limit",
+  "token-limit",
+  "repeated-calls",
+  "refusal",
+  "timeout",
+  "error",
+  "setup",
+];
+
+/** The kind of a failed run; undefined for a pass. */
+export function failureKind(result: EvalResult): FailureKind | undefined {
+  if (result.passed) return undefined;
+  if (isErrorRun(result)) return isSetupFailure(result) ? "setup" : "error";
+  switch (result.stopReason) {
+    case "timeout":
+      return "timeout";
+    case "max_steps":
+      return "step-limit";
+    case "token_budget":
+    case "max_tokens":
+      return "token-limit";
+    case "repeated_calls":
+      return "repeated-calls";
+    case "refusal":
+      return "refusal";
+  }
+  if (result.reason?.startsWith(PROTECTED_FILES_CHANGED) === true) return "protected-files";
+  return "check";
+}
+
+/** One failed run, with what it spent: enough to see whether failures come late in long runs. */
+export interface FailedRun {
+  id: string;
+  attempt: number;
+  kind: FailureKind;
+  steps: number;
+  tokens: number;
+  durationMs: number;
+}
+
+/** The failures of a run set by kind, and each failed run (report.json `evidence.failures`). */
+export function failureSummary(results: readonly EvalResult[]): {
+  total: number;
+  byKind: Partial<Record<FailureKind, number>>;
+  runs: FailedRun[];
+} {
+  const runs: FailedRun[] = [];
+  for (const r of results) {
+    const kind = failureKind(r);
+    if (kind === undefined) continue;
+    runs.push({
+      id: r.id,
+      attempt: r.attempt ?? 1,
+      kind,
+      steps: r.steps,
+      tokens: r.tokens,
+      durationMs: r.durationMs,
+    });
+  }
+  const byKind: Partial<Record<FailureKind, number>> = {};
+  for (const kind of FAILURE_KINDS) {
+    const n = runs.filter((f) => f.kind === kind).length;
+    if (n > 0) byKind[kind] = n;
+  }
+  return { total: runs.length, byKind, runs };
+}
+
+/** "check 2 (a run 1, b run 3) · timeout 1 (c run 2)"; at most 3 runs named per kind. */
+export function failureLine(results: readonly EvalResult[]): string | undefined {
+  const s = failureSummary(results);
+  if (s.total === 0) return undefined;
+  const parts = FAILURE_KINDS.flatMap((kind) => {
+    const runs = s.runs.filter((f) => f.kind === kind);
+    if (runs.length === 0) return [];
+    const named = runs.slice(0, 3).map((f) => `${f.id} run ${f.attempt}`);
+    if (runs.length > 3) named.push(`${runs.length - 3} more`);
+    return [`${kind} ${runs.length} (${named.join(", ")})`];
+  });
+  return `Failures by kind: ${parts.join(" · ")}`;
 }
 
 /**
@@ -678,6 +778,8 @@ function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
   }
   const mcp = mcpUse(results);
   if (mcp !== undefined) out.push(`MCP tool calls: ${mcpUseText(mcp)}`);
+  const failures = failureLine(results);
+  if (failures !== undefined) out.push(failures);
   return out;
 }
 

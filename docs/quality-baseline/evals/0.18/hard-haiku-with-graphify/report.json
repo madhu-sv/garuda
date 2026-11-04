@@ -1,0 +1,537 @@
+{
+  "schema": 2,
+  "garuda": {
+    "version": "0.17.0",
+    "commit": "051c3ed7efddaf79a1be7e09baa05e96ff37f613"
+  },
+  "spec": "claude-haiku-5-5",
+  "agent": {
+    "name": "garuda"
+  },
+  "provider": "anthropic",
+  "effort": "model default",
+  "isolation": "os",
+  "os": {
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "node": "26.12.1"
+  },
+  "seed": 7,
+  "shuffle": true,
+  "split": "dev",
+  "mcp": {
+    "server": "graphify",
+    "prepare": "graphify update . && echo 'This project has a code knowledge graph (graphify-out/). Use the graphify tools (query_graph, get_neighbors, shortest_path) to find code before you search files.' >> GARUDA.md"
+  },
+  "order": [
+    {
+      "id": "hard-rename",
+      "attempt": 1
+    },
+    {
+      "id": "hard-event",
+      "attempt": 1
+    },
+    {
+      "id": "hard-import",
+      "attempt": 1
+    },
+    {
+      "id": "hard-coupon",
+      "attempt": 1
+    },
+    {
+      "id": "hard-unused",
+      "attempt": 1
+    },
+    {
+      "id": "hard-event",
+      "attempt": 2
+    },
+    {
+      "id": "hard-coupon",
+      "attempt": 2
+    },
+    {
+      "id": "hard-unused",
+      "attempt": 2
+    },
+    {
+      "id": "hard-import",
+      "attempt": 2
+    },
+    {
+      "id": "hard-rename",
+      "attempt": 2
+    },
+    {
+      "id": "hard-rounding",
+      "attempt": 1
+    },
+    {
+      "id": "hard-unused",
+      "attempt": 3
+    },
+    {
+      "id": "hard-event",
+      "attempt": 3
+    },
+    {
+      "id": "hard-import",
+      "attempt": 3
+    },
+    {
+      "id": "hard-rename",
+      "attempt": 3
+    },
+    {
+      "id": "hard-coupon",
+      "attempt": 3
+    },
+    {
+      "id": "hard-rounding",
+      "attempt": 2
+    },
+    {
+      "id": "hard-rounding",
+      "attempt": 3
+    }
+  ],
+  "tasks": {
+    "hard-rounding": "c04a22215396a3fc8a94eb0d55ff7473108d734ec92e2a528dd232c64d851b56",
+    "hard-event": "531a9ab94368252485a1d8889face5b69092d9a2fed353a0b0b479bb9d99156e",
+    "hard-import": "efa7e1f9912d2156d6fbd034b047c6ecf8279ca91e695c6b4c048b738cddc2f3",
+    "hard-rename": "6642307e3626013902e3c1dcb3c1e942883cf611177c6686a136ea3c7ab6c9c3",
+    "hard-unused": "3cfc9eb0ffa579dd3a3cf5702beac21082f837eac618a64ca8903d370d003be8",
+    "hard-coupon": "c3390e80a41c21e1e648610716f5b13a02ae4d806e20a53aa12fb6276a424523"
+  },
+  "evidence": {
+    "interval": {
+      "rate": 1,
+      "low": 1,
+      "high": 1,
+      "level": 0.95,
+      "draws": 10000,
+      "seed": 7,
+      "tasks": 6
+    },
+    "consistency": {
+      "repeated": 6,
+      "allPassed": [
+        "hard-rename",
+        "hard-event",
+        "hard-import",
+        "hard-coupon",
+        "hard-unused",
+        "hard-rounding"
+      ],
+      "nonePassed": [],
+      "onlyErrors": []
+    },
+    "spread": {
+      "runs": 18,
+      "steps": {
+        "median": 6,
+        "p95": 9
+      },
+      "tokens": {
+        "median": 78630.5,
+        "p95": 133772
+      },
+      "durationMs": {
+        "median": 15226,
+        "p95": 27023.5
+      }
+    },
+    "stepsSd": {
+      "hard-rename": 0.5773502691896258,
+      "hard-event": 0.5773502691896258,
+      "hard-import": 0.5773502691896258,
+      "hard-coupon": 0.5773502691896257,
+      "hard-unused": 0.5773502691896258,
+      "hard-rounding": 1
+    },
+    "costPerAcceptedChange": {
+      "kind": "value",
+      "usd": 0.002987608055555556,
+      "minimum": false,
+      "totalUsd": 0.05377694500000001,
+      "passes": 18
+    },
+    "unexpected": {
+      "runs": 0,
+      "files": 0,
+      "measured": 18
+    }
+  },
+  "model": "claude-haiku-5-5",
+  "suite": "hard",
+  "repeat": 3,
+  "codeIndex": "off",
+  "subagents": "off",
+  "todo": "off",
+  "lsp": "off",
+  "keepThinking": "on",
+  "format": "off",
+  "network": "off",
+  "batch": "off",
+  "parallel": 1,
+  "wallMs": 302298,
+  "executor": "seatbelt",
+  "summary": {
+    "attempted": 18,
+    "errors": 0,
+    "scored": 18,
+    "passed": 18,
+    "scoredRate": 1,
+    "attemptedRate": 1
+  },
+  "results": [
+    {
+      "id": "hard-rename",
+      "title": "Rename a shared function in every file",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 84940,
+      "costUsd": 0.0041715,
+      "durationMs": 18344,
+      "mcpCalls": 0,
+      "cacheReadTokens": 65965,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-rename.jsonl",
+      "changed": [
+        "src/core/money.js",
+        "src/domains/discount/service.js",
+        "src/domains/invoice/service.js",
+        "src/domains/order/service.js",
+        "src/domains/payment/service.js",
+        "src/domains/product/service.js",
+        "src/domains/refund/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-event",
+      "title": "Fix a mismatch between two modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 72321,
+      "costUsd": 0.002359515,
+      "durationMs": 12164,
+      "mcpCalls": 1,
+      "cacheReadTokens": 62149,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-event.jsonl",
+      "changed": [
+        "src/domains/stock/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-import",
+      "title": "Fix a broken import in a large repo",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 54860,
+      "costUsd": 0.001812605,
+      "durationMs": 12130,
+      "mcpCalls": 0,
+      "cacheReadTokens": 47058,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-import.jsonl",
+      "changed": [
+        "src/api/routes.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-coupon",
+      "title": "Add a feature across modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 9,
+      "tokens": 133355,
+      "costUsd": 0.004287725000000001,
+      "durationMs": 21634,
+      "mcpCalls": 1,
+      "cacheReadTokens": 117060,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-coupon.jsonl",
+      "changed": [
+        "src/domains/coupon/service.js",
+        "src/domains/order/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-unused",
+      "title": "Find unused exports",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 60473,
+      "costUsd": 0.002340725,
+      "durationMs": 13724,
+      "mcpCalls": 1,
+      "cacheReadTokens": 51570,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-unused.jsonl",
+      "changed": [
+        "unused.txt"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-event",
+      "title": "Fix a mismatch between two modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 71792,
+      "costUsd": 0.002431685,
+      "durationMs": 13321,
+      "mcpCalls": 1,
+      "cacheReadTokens": 61041,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-event-2.jsonl",
+      "changed": [
+        "src/domains/stock/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-coupon",
+      "title": "Add a feature across modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 8,
+      "tokens": 113291,
+      "costUsd": 0.00423579,
+      "durationMs": 27559,
+      "mcpCalls": 1,
+      "cacheReadTokens": 97099,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-coupon-2.jsonl",
+      "changed": [
+        "src/domains/coupon/service.js",
+        "src/domains/order/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-unused",
+      "title": "Find unused exports",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 65347,
+      "costUsd": 0.002352335,
+      "durationMs": 14620,
+      "mcpCalls": 1,
+      "cacheReadTokens": 55456,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-unused-2.jsonl",
+      "changed": [
+        "unused.txt"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-import",
+      "title": "Fix a broken import in a large repo",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 49707,
+      "costUsd": 0.00171376,
+      "durationMs": 10244,
+      "mcpCalls": 1,
+      "cacheReadTokens": 42356,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-import-2.jsonl",
+      "changed": [
+        "src/api/routes.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-rename",
+      "title": "Rename a shared function in every file",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 85210,
+      "costUsd": 0.0035366900000000003,
+      "durationMs": 17066,
+      "mcpCalls": 0,
+      "cacheReadTokens": 71609,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-rename-2.jsonl",
+      "changed": [
+        "src/core/money.js",
+        "src/domains/discount/service.js",
+        "src/domains/invoice/service.js",
+        "src/domains/order/service.js",
+        "src/domains/payment/service.js",
+        "src/domains/product/service.js",
+        "src/domains/refund/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-rounding",
+      "title": "Find a root cause in shared code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 8,
+      "tokens": 108061,
+      "costUsd": 0.0031360699999999995,
+      "durationMs": 15832,
+      "mcpCalls": 1,
+      "cacheReadTokens": 95127,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-rounding.jsonl",
+      "changed": [
+        "src/core/money.js"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "hard-unused",
+      "title": "Find unused exports",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 45262,
+      "costUsd": 0.00175094,
+      "durationMs": 12343,
+      "mcpCalls": 0,
+      "cacheReadTokens": 38124,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-unused-3.jsonl",
+      "changed": [
+        "unused.txt"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-event",
+      "title": "Fix a mismatch between two modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 58022,
+      "costUsd": 0.00215971,
+      "durationMs": 11274,
+      "mcpCalls": 1,
+      "cacheReadTokens": 48051,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-event-3.jsonl",
+      "changed": [
+        "src/domains/stock/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-import",
+      "title": "Fix a broken import in a large repo",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 61710,
+      "costUsd": 0.00196697,
+      "durationMs": 12470,
+      "mcpCalls": 1,
+      "cacheReadTokens": 53882,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-import-3.jsonl",
+      "changed": [
+        "src/api/routes.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-rename",
+      "title": "Rename a shared function in every file",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 119010,
+      "costUsd": 0.005010145,
+      "durationMs": 26929,
+      "mcpCalls": 1,
+      "cacheReadTokens": 96462,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-rename-3.jsonl",
+      "changed": [
+        "src/core/money.js",
+        "src/domains/discount/service.js",
+        "src/domains/invoice/service.js",
+        "src/domains/order/service.js",
+        "src/domains/payment/service.js",
+        "src/domains/product/service.js",
+        "src/domains/refund/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-coupon",
+      "title": "Add a feature across modules",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 9,
+      "tokens": 136135,
+      "costUsd": 0.004459215,
+      "durationMs": 25046,
+      "mcpCalls": 1,
+      "cacheReadTokens": 119484,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-coupon-3.jsonl",
+      "changed": [
+        "src/api/routes.js",
+        "src/domains/order/service.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "hard-rounding",
+      "title": "Find a root cause in shared code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 9,
+      "tokens": 112443,
+      "costUsd": 0.00314602,
+      "durationMs": 19129,
+      "mcpCalls": 1,
+      "cacheReadTokens": 100752,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-rounding-2.jsonl",
+      "changed": [
+        "src/core/money.js"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "hard-rounding",
+      "title": "Find a root cause in shared code",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 89672,
+      "costUsd": 0.002905545,
+      "durationMs": 18386,
+      "mcpCalls": 1,
+      "cacheReadTokens": 77832,
+      "sessionFile": ".garuda/evals/20261030-183120-6398/hard-rounding-3.jsonl",
+      "changed": [
+        "src/core/money.js"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    }
+  ]
+}

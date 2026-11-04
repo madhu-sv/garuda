@@ -3,7 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HARD_TASKS } from "../src/evals/hardTasks.js";
-import { formatReport, runCheck, runEvalTask, summarize, writeFiles } from "../src/evals/runner.js";
+import {
+  failureKind,
+  formatReport,
+  runCheck,
+  runEvalTask,
+  summarize,
+  writeFiles,
+} from "../src/evals/runner.js";
 import { ALL_TASKS } from "../src/evals/suites.js";
 import { EVAL_TASKS } from "../src/evals/tasks.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
@@ -139,6 +146,7 @@ describe("eval runner (N5)", () => {
     });
     expect(result.passed).toBe(false);
     expect(result.reason).toMatch(/changed protected files: test\/math\.test\.js/);
+    expect(failureKind(result)).toBe("protected-files");
     expect(result.costUsd).toBeUndefined();
   });
 

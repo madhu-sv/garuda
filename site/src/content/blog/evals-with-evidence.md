@@ -108,5 +108,8 @@ garuda eval --split heldout --repeat 3 --shuffle --seed 7 -m claude-haiku-5-5 --
 garuda eval compare .garuda/evals/<garuda-run> .garuda/evals/<claude-code-run>
 ```
 
-The method is in the [evals guide](/garuda/docs/guide/evals/). If your numbers differ from mine, I
-want to know.
+The method is in the [evals guide](/garuda/docs/guide/evals/). The `report.json` of every run in
+this post is in the repository, under
+[docs/quality-baseline/evals/0.18](https://github.com/madhu-sv/garuda/tree/main/docs/quality-baseline/evals/0.18),
+with the seeds, the task hashes, each run's result and the `compare` commands that give the
+numbers above. If your numbers differ from mine, I want to know.

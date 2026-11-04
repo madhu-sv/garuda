@@ -37,6 +37,10 @@ The report (0.17) says how far one run's numbers can be trusted:
   the passes;
 - unexpected changes: files that a run changed but the task did not need. They do not fail a task;
   a pass with extra edits is still a weaker result.
+- failures by kind (0.18.1): `check` (the check failed after the agent stopped), `protected-files`
+  (the agent changed the task's tests), `step-limit`, `token-limit`, `repeated-calls`, `refusal`,
+  `timeout`, `error`, and `setup` (the key, the connection or the MCP server). A limit or a timeout
+  wins over the check that failed after it. Up to three runs of each kind are named.
 
 When the provider refuses the API key (401 or 403), or the API cannot be reached (a refused
 connection, an unknown host, a certificate error), `garuda eval` stops after that run and says
@@ -46,7 +50,9 @@ and gives no rate: such a run measured nothing about the agent.
 
 `report.json` (version 2) also holds Garuda's version and commit, the model and provider, the OS,
 the seed and run order, and a hash of each task, so a later run can show that the tasks were the
-same. With fewer than 10 tasks, or when every draw gives the same rate (all runs passed, or none),
+same. Its `evidence.failures` lists each failed run with its kind, steps, tokens and time. The
+reports of the 0.18 blog post are in
+[docs/quality-baseline/evals/0.18](https://github.com/madhu-sv/garuda/tree/main/docs/quality-baseline/evals/0.18). With fewer than 10 tasks, or when every draw gives the same rate (all runs passed, or none),
 the report says that the interval is only a rough guide.
 
 Compare two runs of the same tasks, for example an A/B of a setting:

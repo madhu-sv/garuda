@@ -4,7 +4,17 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { changedPaths, treeState, unexpectedPaths } from "../src/evals/changes.js";
 import { REPORT_SCHEMA, reportV2, taskHash } from "../src/evals/report.js";
-import { formatReport, isAuthFailure, runEvals, runEvalTask } from "../src/evals/runner.js";
+import {
+  failureKind,
+  failureLine,
+  failureSummary,
+  formatReport,
+  isAuthFailure,
+  MCP_NOT_STARTED,
+  PROTECTED_FILES_CHANGED,
+  runEvals,
+  runEvalTask,
+} from "../src/evals/runner.js";
 import {
   consistency,
   costPerPass,
@@ -288,6 +298,62 @@ describe("runs that never ran", () => {
   });
 });
 
+describe("failure kinds (0.18.1)", () => {
+  it("gives each failed run one kind, and none to a pass", () => {
+    expect(failureKind(run("a", true))).toBeUndefined();
+    expect(failureKind(run("a", false, { reason: "The check failed:\nx" }))).toBe("check");
+    expect(
+      failureKind(run("a", false, { reason: `${PROTECTED_FILES_CHANGED} test/a.test.js.` })),
+    ).toBe("protected-files");
+    expect(failureKind(run("a", false, { stopReason: "timeout" }))).toBe("timeout");
+    expect(failureKind(run("a", false, { stopReason: "token_budget" }))).toBe("token-limit");
+    expect(failureKind(run("a", false, { stopReason: "max_tokens" }))).toBe("token-limit");
+    expect(failureKind(run("a", false, { stopReason: "repeated_calls" }))).toBe("repeated-calls");
+    expect(failureKind(run("a", false, { stopReason: "refusal" }))).toBe("refusal");
+    expect(failureKind(run("a", false, { stopReason: "error", reason: "socket hang up" }))).toBe(
+      "error",
+    );
+    expect(
+      failureKind(run("a", false, { stopReason: "error", reason: "401 authentication_error" })),
+    ).toBe("setup");
+    expect(
+      failureKind(run("a", false, { stopReason: "error", reason: `${MCP_NOT_STARTED} "g": x` })),
+    ).toBe("setup");
+  });
+
+  it("a step limit wins over the check that failed after it", () => {
+    // The agent did not finish: the check failing is a result of the limit, not a wrong fix.
+    const r = run("a", false, { stopReason: "max_steps", reason: "The check failed:\nx" });
+    expect(failureKind(r)).toBe("step-limit");
+  });
+
+  it("counts the kinds, lists each failed run with what it spent, and prints one line", () => {
+    const results = [
+      run("a", true, { attempt: 1 }),
+      run("a", false, { attempt: 2, reason: "The check failed:\nx", steps: 9, tokens: 5000 }),
+      run("b", false, { attempt: 1, stopReason: "timeout", durationMs: 600_000 }),
+      ...[1, 2, 3, 4].map((n) => run("c", false, { attempt: n, reason: "The check failed:" })),
+    ];
+    const s = failureSummary(results);
+    expect(s.total).toBe(6);
+    expect(s.byKind).toEqual({ check: 5, timeout: 1 });
+    expect(s.runs[0]).toEqual({
+      id: "a",
+      attempt: 2,
+      kind: "check",
+      steps: 9,
+      tokens: 5000,
+      durationMs: 1000,
+    });
+    expect(failureLine(results)).toBe(
+      "Failures by kind: check 5 (a run 2, c run 1, c run 2, 2 more) · timeout 1 (b run 1)",
+    );
+    expect(formatReport(results)).toContain("Failures by kind: check 5");
+    expect(failureLine([run("a", true)])).toBeUndefined();
+    expect(formatReport([run("a", true)])).not.toContain("Failures by kind");
+  });
+});
+
 describe("the report", () => {
   it("prints the interval, consistency, spread, cost per accepted change and unexpected changes", () => {
     const results = [
@@ -352,6 +418,11 @@ describe("the report", () => {
     });
     expect(REPORT_SCHEMA).toBe(2);
     expect((v2.garuda as { version: string }).version).toMatch(/^\d+\.\d+\.\d+/);
+    expect((v2.evidence as { failures: unknown }).failures).toEqual({
+      total: 1,
+      byKind: { check: 1 },
+      runs: [{ id: "t", attempt: 2, kind: "check", steps: 5, tokens: 1000, durationMs: 1000 }],
+    });
     expect((v2.evidence as { costPerAcceptedChange: unknown }).costPerAcceptedChange).toMatchObject(
       {
         kind: "value",

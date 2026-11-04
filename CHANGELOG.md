@@ -6,6 +6,16 @@
   baseline, the faults the live runs found in the tasks, the Graphify A/B, the tuned prompt, and
   the limits.
 - The Homebrew formula in the repository names 0.18.0 and its tarball hash.
+- Failure kinds: the eval report gives one line, "Failures by kind", that counts the failed runs
+  as `check` (the check failed), `protected-files`, `step-limit`, `token-limit`,
+  `repeated-calls`, `refusal`, `timeout`, `error` or `setup` (the key, the connection or the MCP
+  server), and names up to three runs of each kind. A limit or a timeout wins over the check that
+  failed after it. `report.json` has the same in `evidence.failures`, with each failed run's
+  steps, tokens and time.
+- The reports of the runs in the blog post are in `docs/quality-baseline/evals/0.18/`, with a
+  README that maps each run to the post and gives the `eval compare` commands. Local paths are
+  removed. A test checks that the files hold no local path and that `compare` gives the post's
+  numbers. The post links to them. Biome and the docs site leave the folder out.
 
 ## 0.18.0 (2026-11-04)
 
