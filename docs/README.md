@@ -45,4 +45,4 @@ Low-level design documents:
 | Setup and stored keys (0.16) | `src/model/credentials.ts`, `src/model/providers.ts`, `src/cli/setupCommand.ts` | [setup.md](lld/setup.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
-The code, the tests and the commits use the same IDs. The documents describe version 0.17.0 (bounded changes: staged commands, job write scopes, the strict profile, the audit checkpoint, one token budget for the agent tree; the IPI suite and no escaped processes on macOS; a fixed-Node floor and a dependency audit; on top of 0.16.1).
+The code, the tests and the commits use the same IDs. The documents describe version 0.18.0 (eval evidence: repeated runs with intervals, cost per accepted change, unexpected changes, `eval compare`; the Claude Code baseline; a held-out set and a medium suite; an A/B of one MCP server; `eval tune`, the prompt-tuning loop; few-steps rules in the system prompt; on top of 0.17.0).

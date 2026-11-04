@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.0 (2026-11-04)
 
 - Biome 2.6.2 (with @inquirer/prompts 8.7.4, react 19.3.1 and smol-toml 1.9.1, from Dependabot's
   group update). Biome 2.6 formats Markdown and YAML by default: Markdown formatting is off (the
@@ -130,7 +130,10 @@
   `garuda eval tune` run: on the held-out set, with every run passing, they cut the cost per
   accepted change to ×0.81 (95% interval ×0.75 to ×0.88) with Haiku 5.5 and ×0.87 (×0.79 to
   ×0.95) with Sonnet 5.5. The tuned text's rules against `remember` and for one-sentence answers
-  are left out: they served the evals, not users.
+  are left out: they served the evals, not users. The prompt's own wording, measured against
+  0.17.0's prompt on the held-out set (3 runs a task, seed 7): with Sonnet 5.5, 30/30 both and
+  ×0.90 (×0.84 to ×0.96); with Haiku 5.5, 30/30 and 29/30 (one miss of the invoice refund trap)
+  and ×0.88 (×0.79 to ×1.02), so the Haiku saving is likely but not shown with confidence.
 
 ## 0.17.0 (2026-10-27)
 
