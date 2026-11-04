@@ -103,7 +103,9 @@
   passes). Garuda does not include it. The T11d design gets the user's keep rule: an edit with the
   same passes stays when its cost per accepted change is clearly lower.
 - Tests: `waitUntil` waits up to 20 s by default (it was 5 s), under the 30 s test limit. The
-  user's `pnpm check` failed the M5 Ctrl-C test on a busy machine.
+  user's `pnpm check` failed the M5 Ctrl-C test on a busy machine. Two test files had their own
+  copy with 4 or 5 s (a second M5 Ctrl-C test then failed the same way); they use `waitUntil`
+  now, and a test refuses a new copy.
 
 - The proposer loop (T11d): `garuda eval tune --addendum <file>` improves a prompt addendum. A
   proposer model (default `claude-opus-5-5`) reads the dev runs that failed, or each task's cost

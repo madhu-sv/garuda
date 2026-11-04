@@ -240,7 +240,7 @@ describe("M5 acceptance", () => {
       throw new Error("exit");
     };
     const turn = runTurnInTerminal(runtime, replApprover, renderer, "wait", exitNow);
-    await waitFor(() => existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() !== "");
+    await waitUntil(() => existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() !== "");
     // Hold the abort open: send both signals before the loop can react.
     const listeners = process.listeners("SIGINT");
     expect(listeners).toHaveLength(1);
@@ -294,11 +294,3 @@ describe("M5 acceptance", () => {
     expect(readdirSync(dir).filter((f) => f.includes(".garuda-"))).toEqual([]);
   });
 });
-
-async function waitFor(check: () => boolean, timeoutMs = 5_000): Promise<void> {
-  const end = Date.now() + timeoutMs;
-  while (!check()) {
-    if (Date.now() > end) throw new Error("waitFor timed out");
-    await new Promise((r) => setTimeout(r, 20));
-  }
-}

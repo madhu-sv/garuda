@@ -125,7 +125,7 @@ export async function shellRunning(marker: string, root: string): Promise<boolea
 export const WAIT_UNTIL_MS = 20_000;
 
 export async function waitUntil(
-  check: () => Promise<boolean>,
+  check: () => boolean | Promise<boolean>,
   timeoutMs = WAIT_UNTIL_MS,
 ): Promise<void> {
   const end = Date.now() + timeoutMs;
