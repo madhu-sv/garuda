@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Homebrew formula in the repository names 0.18.0 and its tarball hash.
+
 ## 0.18.0 (2026-11-04)
 
 - Biome 2.6.2 (with @inquirer/prompts 8.7.4, react 19.3.1 and smol-toml 1.9.1, from Dependabot's
