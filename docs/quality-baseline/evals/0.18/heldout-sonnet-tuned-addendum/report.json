@@ -1,0 +1,1190 @@
+{
+  "schema": 2,
+  "garuda": {
+    "version": "0.17.0",
+    "commit": "e38cc2464d66e0b0dfcb495de8bb0ec5089467a8"
+  },
+  "spec": "claude-sonnet-5-5",
+  "agent": {
+    "name": "garuda"
+  },
+  "provider": "anthropic",
+  "effort": "model default",
+  "isolation": "os",
+  "os": {
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "node": "26.12.1"
+  },
+  "seed": 7,
+  "shuffle": true,
+  "split": "heldout",
+  "addendum": {
+    "file": ".garuda/evals/tune-20261103-104958-be20/final.md",
+    "chars": 1739,
+    "sha256": "6b459befddf67fcb51d3e005ea9b3692c70a15cc55c96ccd00fcc6054dd3c5d8"
+  },
+  "mcp": null,
+  "order": [
+    {
+      "id": "held-out-tests-intervals",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-settings",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-migration",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-command-registry",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-migration",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-slow-search",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-tests-intervals",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-slow-search",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-invoice-split",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-reset",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-reset",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-tests-csv-field",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-invoice-split",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-payment-retry",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-tests-csv-field",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-payment-retry",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-invoice-split",
+      "attempt": 3
+    },
+    {
+      "id": "held-out-conventions-reset",
+      "attempt": 3
+    },
+    {
+      "id": "held-out-price-cache",
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-migration",
+      "attempt": 3
+    },
+    {
+      "id": "held-out-tests-intervals",
+      "attempt": 3
+    },
+    {
+      "id": "held-out-settings",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-payment-retry",
+      "attempt": 3
+    },
+    {
+      "id": "held-out-command-registry",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-command-registry",
+      "attempt": 3
+    },
+    {
+      "id": "held-out-settings",
+      "attempt": 3
+    },
+    {
+      "id": "held-out-tests-csv-field",
+      "attempt": 3
+    },
+    {
+      "id": "held-out-slow-search",
+      "attempt": 3
+    },
+    {
+      "id": "held-out-price-cache",
+      "attempt": 2
+    },
+    {
+      "id": "held-out-price-cache",
+      "attempt": 3
+    }
+  ],
+  "tasks": {
+    "held-out-price-cache": "c88c6eee852124b9a30c6a0c26b8929c6cae38633b1ac64e622a3ab05717b15e",
+    "held-out-payment-retry": "63884a2a5560fec965a083f4e086fce038891e7d28b00458ae4e133930a3966a",
+    "held-out-invoice-split": "515369fdacc82b98bf0acd46fd08b201187dd4159e2ccfa8bce1dcea4f905dd5",
+    "held-out-command-registry": "fd57a5a3dbd6da59476af02c59a740bf3e4426a54f6e4cb2e1261f846c7872dd",
+    "held-out-settings": "a361ac99c6fad64aa5844a2ca3058f7108f8747dd1a1e5114701eeef80e95ab2",
+    "held-out-tests-intervals": "a8d2581e8ada8b001f79e62209ea127c7d7059c86c9995bfcc839e701b91c1b8",
+    "held-out-tests-csv-field": "ff5ad58b58d1024a8632e8cc3b39c6ca718d4f978b353c3f8174adf580dc8029",
+    "held-out-conventions-migration": "c11f910481c90c63b7f15a22c63825a31ca38101ef86d30430265bdb02ea49d8",
+    "held-out-conventions-reset": "edb029113a55761738605c8c116e2748e9632d074ed36e553bbd9467719bc66b",
+    "held-out-slow-search": "ee0cec3a0b6bd2931ea63c36467d8299148417d8324cfba6200ec3e76a79eb9d"
+  },
+  "evidence": {
+    "interval": {
+      "rate": 1,
+      "low": 1,
+      "high": 1,
+      "level": 0.95,
+      "draws": 10000,
+      "seed": 7,
+      "tasks": 10
+    },
+    "consistency": {
+      "repeated": 10,
+      "allPassed": [
+        "held-out-tests-intervals",
+        "held-out-settings",
+        "held-out-conventions-migration",
+        "held-out-command-registry",
+        "held-out-slow-search",
+        "held-out-invoice-split",
+        "held-out-conventions-reset",
+        "held-out-tests-csv-field",
+        "held-out-payment-retry",
+        "held-out-price-cache"
+      ],
+      "nonePassed": [],
+      "onlyErrors": []
+    },
+    "spread": {
+      "runs": 30,
+      "steps": {
+        "median": 5,
+        "p95": 6.549999999999997
+      },
+      "tokens": {
+        "median": 28529,
+        "p95": 47310.29999999999
+      },
+      "durationMs": {
+        "median": 18404,
+        "p95": 26127.799999999996
+      }
+    },
+    "stepsSd": {
+      "held-out-tests-intervals": 0.5773502691896258,
+      "held-out-settings": 1.1547005383792517,
+      "held-out-conventions-migration": 1,
+      "held-out-command-registry": 0.5773502691896258,
+      "held-out-slow-search": 1.1547005383792517,
+      "held-out-invoice-split": 1,
+      "held-out-conventions-reset": 1,
+      "held-out-tests-csv-field": 0.5773502691896258,
+      "held-out-payment-retry": 0.5773502691896258,
+      "held-out-price-cache": 0.5773502691896258
+    },
+    "costPerAcceptedChange": {
+      "kind": "value",
+      "usd": 0.03818322666666666,
+      "minimum": false,
+      "totalUsd": 1.1454967999999999,
+      "passes": 30
+    },
+    "unexpected": {
+      "runs": 0,
+      "files": 0,
+      "measured": 30
+    }
+  },
+  "model": "claude-sonnet-5-5",
+  "suite": "heldout",
+  "repeat": 3,
+  "codeIndex": "off",
+  "subagents": "off",
+  "todo": "off",
+  "lsp": "off",
+  "keepThinking": "on",
+  "format": "off",
+  "network": "off",
+  "batch": "off",
+  "parallel": 4,
+  "wallMs": 141641,
+  "executor": "seatbelt",
+  "summary": {
+    "attempted": 30,
+    "errors": 0,
+    "scored": 30,
+    "passed": 30,
+    "scoredRate": 1,
+    "attemptedRate": 1
+  },
+  "results": [
+    {
+      "id": "held-out-tests-intervals",
+      "title": "Write tests for interval merging that catch subtle bugs",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 26944,
+      "costUsd": 0.035019999999999996,
+      "durationMs": 19931,
+      "tools": [
+        "read_file",
+        "glob",
+        "read_file",
+        "bash",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20235,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-tests-intervals.jsonl",
+      "changed": [
+        "test/intervals.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-settings",
+      "title": "Move settings from three modules into one, as the README says",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 57271,
+      "costUsd": 0.06168380000000001,
+      "durationMs": 25162,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 45793,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-settings.jsonl",
+      "changed": [
+        "src/app/db.py",
+        "src/app/features.py",
+        "src/app/server.py",
+        "src/app/settings.py",
+        "tests/test_settings_load.py"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-migration",
+      "title": "Add a field the way this repository's AGENTS.md says",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 28121,
+      "costUsd": 0.0493269,
+      "durationMs": 18844,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 17969,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-conventions-migration.jsonl",
+      "changed": [
+        "migrations/0003_add_due_date.ts",
+        "migrations/index.ts",
+        "src/api/todos.ts",
+        "src/todos/repo.ts",
+        "test/todos.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-command-registry",
+      "title": "Replace three hand-kept command lists with one registry",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 26480,
+      "costUsd": 0.0466392,
+      "durationMs": 23701,
+      "tools": [
+        "glob",
+        "bash",
+        "bash",
+        "bash"
+      ],
+      "cacheReadTokens": 17367,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-command-registry.jsonl",
+      "changed": [
+        "src/builtins.ts",
+        "src/cli.ts",
+        "src/complete.ts",
+        "src/help.ts",
+        "src/registry.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-migration",
+      "title": "Add a field the way this repository's AGENTS.md says",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 35916,
+      "costUsd": 0.0520269,
+      "durationMs": 20327,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 25229,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-conventions-migration-2.jsonl",
+      "changed": [
+        "migrations/0003_add_due_date.ts",
+        "migrations/index.ts",
+        "src/api/todos.ts",
+        "src/todos/repo.ts",
+        "test/todos.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-slow-search",
+      "title": "Make search fast for big accounts without changing its results",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 7,
+      "tokens": 42048,
+      "costUsd": 0.0363859,
+      "durationMs": 19390,
+      "tools": [
+        "grep",
+        "read_file",
+        "grep",
+        "bash",
+        "edit_file",
+        "edit_file",
+        "bash",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 34964,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-slow-search-2.jsonl",
+      "changed": [
+        "src/page.ts",
+        "src/search.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-tests-intervals",
+      "title": "Write tests for interval merging that catch subtle bugs",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 21629,
+      "costUsd": 0.0314223,
+      "durationMs": 15224,
+      "tools": [
+        "read_file",
+        "glob",
+        "read_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15498,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-tests-intervals-2.jsonl",
+      "changed": [
+        "test/intervals.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-slow-search",
+      "title": "Make search fast for big accounts without changing its results",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 25881,
+      "costUsd": 0.0245184,
+      "durationMs": 14010,
+      "tools": [
+        "grep",
+        "read_file",
+        "grep",
+        "bash",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20669,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-slow-search.jsonl",
+      "changed": [
+        "src/search.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-invoice-split",
+      "title": "Make invoice shares add up, in every currency",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 25431,
+      "costUsd": 0.037151199999999995,
+      "durationMs": 20496,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 17587,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-invoice-split.jsonl",
+      "changed": [
+        "src/main/java/billing/Money.java",
+        "src/main/java/billing/Splitter.java",
+        "src/test/java/billing/SplitterTest.java"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-reset",
+      "title": "Add an endpoint the way this repository's AGENTS.md says",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 36644,
+      "costUsd": 0.043955,
+      "durationMs": 18607,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 27610,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-conventions-reset.jsonl",
+      "changed": [
+        "src/app/domain/password_reset.py",
+        "src/app/http/password_reset.py",
+        "src/app/http/routes.py",
+        "tests/test_password_reset.py"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-reset",
+      "title": "Add an endpoint the way this repository's AGENTS.md says",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 49221,
+      "costUsd": 0.05908460000000001,
+      "durationMs": 23732,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "edit_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 37841,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-conventions-reset-2.jsonl",
+      "changed": [
+        "src/app/domain/password_reset.py",
+        "src/app/http/password_reset.py",
+        "src/app/http/routes.py",
+        "tests/test_password_reset.py"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-tests-csv-field",
+      "title": "Write tests for a CSV field writer that catch subtle bugs",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 21198,
+      "costUsd": 0.025601199999999998,
+      "durationMs": 13775,
+      "tools": [
+        "read_file",
+        "glob",
+        "bash",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 16137,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-tests-csv-field.jsonl",
+      "changed": [
+        "tests/test_csvfield.py"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-invoice-split",
+      "title": "Make invoice shares add up, in every currency",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 38107,
+      "costUsd": 0.0358458,
+      "durationMs": 18947,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "glob",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 30678,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-invoice-split-2.jsonl",
+      "changed": [
+        "src/main/java/billing/Money.java",
+        "src/main/java/billing/Splitter.java",
+        "src/test/java/billing/SplitterTest.java"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-payment-retry",
+      "title": "Stop double charges when a reply is lost",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 31370,
+      "costUsd": 0.0273941,
+      "durationMs": 11869,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 25276,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-payment-retry.jsonl",
+      "changed": [
+        "src/shop/payments.py"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-tests-csv-field",
+      "title": "Write tests for a CSV field writer that catch subtle bugs",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 27006,
+      "costUsd": 0.0257478,
+      "durationMs": 15753,
+      "tools": [
+        "read_file",
+        "glob",
+        "bash",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 22038,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-tests-csv-field-2.jsonl",
+      "changed": [
+        "tests/test_csvfield.py"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-payment-retry",
+      "title": "Stop double charges when a reply is lost",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 22707,
+      "costUsd": 0.025541499999999998,
+      "durationMs": 12481,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 16990,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-payment-retry-2.jsonl",
+      "changed": [
+        "src/shop/payments.py"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-invoice-split",
+      "title": "Make invoice shares add up, in every currency",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 31987,
+      "costUsd": 0.030681399999999998,
+      "durationMs": 17993,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash",
+        "bash"
+      ],
+      "cacheReadTokens": 25249,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-invoice-split-3.jsonl",
+      "changed": [
+        "src/main/java/billing/Money.java",
+        "src/main/java/billing/Splitter.java"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "held-out-conventions-reset",
+      "title": "Add an endpoint the way this repository's AGENTS.md says",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 27933,
+      "costUsd": 0.0429835,
+      "durationMs": 18698,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 18935,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-conventions-reset-3.jsonl",
+      "changed": [
+        "src/app/domain/password_reset.py",
+        "src/app/http/password_reset.py",
+        "src/app/http/routes.py",
+        "tests/test_password_reset.py"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "held-out-price-cache",
+      "title": "Fix stale prices from a shared cache",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 26224,
+      "costUsd": 0.0194878,
+      "durationMs": 11689,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "bash",
+        "bash"
+      ],
+      "cacheReadTokens": 21838,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-price-cache.jsonl",
+      "changed": [
+        "src/prices.ts"
+      ],
+      "unexpected": [],
+      "attempt": 1
+    },
+    {
+      "id": "held-out-conventions-migration",
+      "title": "Add a field the way this repository's AGENTS.md says",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 44975,
+      "costUsd": 0.0501103,
+      "durationMs": 20653,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 34798,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-conventions-migration-3.jsonl",
+      "changed": [
+        "migrations/0003_add_due_date.ts",
+        "migrations/index.ts",
+        "src/api/todos.ts",
+        "src/todos/repo.ts",
+        "test/todos.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "held-out-tests-intervals",
+      "title": "Write tests for interval merging that catch subtle bugs",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 21836,
+      "costUsd": 0.032277600000000004,
+      "durationMs": 16139,
+      "tools": [
+        "read_file",
+        "glob",
+        "read_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 15501,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-tests-intervals-3.jsonl",
+      "changed": [
+        "test/intervals.test.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "held-out-settings",
+      "title": "Move settings from three modules into one, as the README says",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 38552,
+      "costUsd": 0.0585431,
+      "durationMs": 24805,
+      "tools": [
+        "glob",
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "bash",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 27241,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-settings-2.jsonl",
+      "changed": [
+        "src/app/db.py",
+        "src/app/features.py",
+        "src/app/server.py",
+        "src/app/settings.py",
+        "tests/test_settings_load.py"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-payment-retry",
+      "title": "Stop double charges when a reply is lost",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 28937,
+      "costUsd": 0.0260162,
+      "durationMs": 12115,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 23297,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-payment-retry-3.jsonl",
+      "changed": [
+        "src/shop/payments.py",
+        "tests/test_retry_idempotency.py"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "held-out-command-registry",
+      "title": "Replace three hand-kept command lists with one registry",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 38219,
+      "costUsd": 0.0659978,
+      "durationMs": 29322,
+      "tools": [
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 25913,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-command-registry-3.jsonl",
+      "changed": [
+        "src/cli.ts",
+        "src/complete.ts",
+        "src/help.ts",
+        "src/registry.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-command-registry",
+      "title": "Replace three hand-kept command lists with one registry",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 25406,
+      "costUsd": 0.039711899999999994,
+      "durationMs": 18201,
+      "tools": [
+        "glob",
+        "bash",
+        "bash",
+        "bash"
+      ],
+      "cacheReadTokens": 17394,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-command-registry-2.jsonl",
+      "changed": [
+        "src/builtins.ts",
+        "src/cli.ts",
+        "src/complete.ts",
+        "src/help.ts",
+        "src/registry.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "held-out-settings",
+      "title": "Move settings from three modules into one, as the README says",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 39147,
+      "costUsd": 0.0612822,
+      "durationMs": 26918,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "write_file",
+        "bash",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 27357,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-settings-3.jsonl",
+      "changed": [
+        "src/app/db.py",
+        "src/app/features.py",
+        "src/app/server.py",
+        "src/app/settings.py",
+        "tests/test_settings_load.py"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "held-out-tests-csv-field",
+      "title": "Write tests for a CSV field writer that catch subtle bugs",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 4,
+      "tokens": 21434,
+      "costUsd": 0.028076999999999998,
+      "durationMs": 14687,
+      "tools": [
+        "read_file",
+        "glob",
+        "read_file",
+        "write_file",
+        "bash"
+      ],
+      "cacheReadTokens": 16070,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-tests-csv-field-3.jsonl",
+      "changed": [
+        "tests/test_csvfield.py"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "held-out-slow-search",
+      "title": "Make search fast for big accounts without changing its results",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 5,
+      "tokens": 26292,
+      "costUsd": 0.025323,
+      "durationMs": 14640,
+      "tools": [
+        "grep",
+        "read_file",
+        "grep",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "cacheReadTokens": 20840,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-slow-search-3.jsonl",
+      "changed": [
+        "src/search.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    },
+    {
+      "id": "held-out-price-cache",
+      "title": "Fix stale prices from a shared cache",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 32799,
+      "costUsd": 0.023665400000000003,
+      "durationMs": 13658,
+      "tools": [
+        "grep",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "edit_file",
+        "bash",
+        "bash",
+        "bash"
+      ],
+      "cacheReadTokens": 27824,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-price-cache-2.jsonl",
+      "changed": [
+        "src/prices.ts"
+      ],
+      "unexpected": [],
+      "attempt": 2
+    },
+    {
+      "id": "held-out-price-cache",
+      "title": "Fix stale prices from a shared cache",
+      "passed": true,
+      "stopReason": "done",
+      "steps": 6,
+      "tokens": 33350,
+      "costUsd": 0.023995,
+      "durationMs": 14500,
+      "tools": [
+        "grep",
+        "glob",
+        "read_file",
+        "read_file",
+        "read_file",
+        "edit_file",
+        "bash",
+        "bash",
+        "bash"
+      ],
+      "cacheReadTokens": 28295,
+      "sessionFile": ".garuda/evals/20261103-164523-2b32/held-out-price-cache-3.jsonl",
+      "changed": [
+        "src/prices.ts"
+      ],
+      "unexpected": [],
+      "attempt": 3
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import { BUILD_COMMIT } from "../buildInfo.js";
 import { git } from "../jobs/git.js";
 import { HostExecutor } from "../sandbox/host.js";
 import { VERSION } from "../version.js";
+import { failureSummary } from "./runner.js";
 import {
   byTask,
   consistency,
@@ -146,6 +147,7 @@ export async function reportV2(
       stepsSd: Object.fromEntries(byTask(results).map((t) => [t.id, stepsSd(t.results) ?? null])),
       costPerAcceptedChange: costPerPass(results),
       unexpected: unexpectedChanges(results),
+      failures: failureSummary(results),
     },
   };
 }

@@ -398,6 +398,26 @@ command). As planned, with these details:
   runs at the same time, with one progress line per run; `saveUnique` names each session file
   with an exclusive write, so two runs of one task never take the same name.
 
+## After T11 (0.18.1): failure kinds and published reports
+
+**Failure kinds.** `failureKind(result)` in `src/evals/runner.ts` gives each failed run one kind,
+in this order: an error run is `setup` (`isSetupFailure`: key, connection, MCP server) or `error`;
+then the stop reason: `timeout`, `step-limit` (`max_steps`), `token-limit` (`token_budget`,
+`max_tokens`), `repeated-calls`, `refusal`; then the reason: `protected-files` (it starts with
+`PROTECTED_FILES_CHANGED`); else `check`. A limit wins over the check that failed after it,
+because the agent did not finish. `failureSummary` gives `{ total, byKind, runs }`, where each run
+has its id, attempt, kind, steps, tokens and time (to see whether failures come in long runs).
+`formatReport` prints "Failures by kind" with up to three runs per kind; report.json has it in
+`evidence.failures`. The schema stays 2: the field is new and optional for readers.
+
+**Published reports.** The reports of the 0.18 blog post are in
+`docs/quality-baseline/evals/0.18/`, one folder per run, with a README. Two string changes only:
+the checkout path before `sessionFile` is removed, and the macOS temp folder is `<tmp>/`.
+Session files are not published. `test/publishedEvals.test.ts` checks that no file holds a home
+path, a temp path or a key, and that `compareReports` on the six pairs gives the post's cost
+ratios and intervals. Biome and the site's doc sync leave the folder out, so the files stay as
+Garuda wrote them.
+
 ## Threat model
 
 | Threat | Control |
@@ -408,6 +428,7 @@ command). As planned, with these details:
 | The proposer writes an addendum that tells the agent to skip checks or edit tests. | Protected files and checks still decide the score; a text with such phrases is rejected before a run; the user reviews the final text. |
 | Noise looks like an improvement. | The margin, the "no k-of-k to 0-of-k" rule, the fixed seed, and the held-out measurement with an interval. |
 | Tasks change between runs that are compared. | Task hashes in each report; `compare` refuses different hashes. |
+| A published report leaks a local path, a user name or a key. | Paths are cut to the checkout or `<tmp>/`; session files stay private; a test scans every published file. |
 
 ## Tests
 
