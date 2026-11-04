@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { constants as fsConstants, mkdirSync, realpathSync } from "node:fs";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,6 +28,8 @@ import {
   consistency,
   costPerPass,
   DEFAULT_SEED,
+  mcpUse,
+  mcpUseText,
   passInterval,
   spread,
   stepsSd,
@@ -107,7 +109,18 @@ export interface EvalOptions {
    * settings above that change Garuda, and the session belong to Garuda only.
    */
   agent?: ClaudeCodeAgent;
+  /**
+   * One MCP server for the run (0.17, `--mcp`): its name in the user's own ~/.garuda/mcp.json
+   * under `home`, and an optional command that prepares the scratch folder for it before the
+   * agent starts (for Graphify: `graphify update .`, which builds the code graph).
+   */
+  mcp?: { server: string; home: string; prepare?: string };
+  /** The prompt addendum (0.17, T11d): `--addendum`, and each version that `eval tune` scores. */
+  addendum?: string;
 }
+
+/** Time limit of an MCP prepare command (`--mcp-prepare`). */
+export const MCP_PREPARE_TIMEOUT_MS = 120_000;
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
   const started = Date.now();
@@ -124,8 +137,6 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   if (options.format !== undefined) await formatProject(root, options.format.biome);
   const protect = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
   const before = await snapshot(root, protect);
-  // The start state for the changed files (0.17, T11a).
-  const start = await treeState(root);
 
   const settings = parseSettings({
     // With an allowlist, a host outside it is denied: nobody answers questions in an eval.
@@ -158,28 +169,65 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       : { thinking: { keepBlocks: options.keepThinking } }),
   });
   const store = new FileSessionStore(root);
-  const runtime = await Runtime.create({
-    root,
-    modelId: options.modelId,
-    model: async () => options.model(),
-    ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo }),
-    ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
-    ...(options.subagentModel === undefined ? {} : { subagentModel: options.subagentModel }),
-    approver: new AutoApprover("once"),
-    store,
-    settings,
-    // The user's own MCP servers must not change eval results.
-    mcp: false,
-    hooks: false,
-    ...(options.policy === undefined ? {} : { policy: options.policy }),
-    commands: false,
-    // The list comes from the eval command line: the user typed it.
-    ...(options.network === undefined ? {} : { network: { approved: true } }),
-    ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
-    ...(options.onEvent === undefined
-      ? {}
-      : { onEvent: (event: AgentEvent) => options.onEvent?.(task.id, event) }),
-  });
+  let mcpCalls = 0;
+  const tools: string[] = [];
+  // `prepare`: a runtime only for the `--mcp-prepare` command, without the MCP server.
+  const createRuntime = (prepare: boolean) =>
+    Runtime.create({
+      root,
+      modelId: options.modelId,
+      model: async () => options.model(),
+      ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo }),
+      ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
+      ...(options.subagentModel === undefined ? {} : { subagentModel: options.subagentModel }),
+      approver: new AutoApprover("once"),
+      store,
+      settings,
+      // The user's own MCP servers must not change eval results; `--mcp` allows one by name.
+      mcp:
+        options.mcp === undefined || prepare
+          ? false
+          : { home: options.mcp.home, only: options.mcp.server },
+      hooks: false,
+      ...(options.addendum === undefined ? {} : { addendum: options.addendum }),
+      ...(options.policy === undefined ? {} : { policy: options.policy }),
+      commands: false,
+      // The list comes from the eval command line: the user typed it.
+      ...(options.network === undefined ? {} : { network: { approved: true } }),
+      ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
+      onEvent: (event: AgentEvent) => {
+        if (event.type === "tool_call") {
+          tools.push(event.call.name);
+          if (event.call.name.startsWith("mcp__")) mcpCalls++;
+        }
+        options.onEvent?.(task.id, event);
+      },
+    });
+
+  // The MCP server's preparation (`--mcp-prepare`) runs first, in the run's sandbox: the runtime
+  // reads the instruction files when it starts, so a note that the command writes into GARUDA.md
+  // (how a user tells the agent about the server) reaches the agent. What the command writes is
+  // in the start state, so it is not a change of the agent.
+  let prepareFailure: string | undefined;
+  const prepare = options.mcp?.prepare;
+  if (prepare !== undefined) {
+    const prep = await createRuntime(true);
+    try {
+      const prepared = await runCheck(
+        root,
+        prepare,
+        MCP_PREPARE_TIMEOUT_MS,
+        prep.executor.isolation === "none"
+          ? undefined
+          : { executor: prep.executor, policy: prep.execPolicy(MCP_PREPARE_TIMEOUT_MS) },
+      );
+      if (!prepared.ok) prepareFailure = `${MCP_PREPARE_FAILED}\n${prepared.output}`;
+    } finally {
+      await prep.close();
+      prep.executor.shutdown();
+    }
+  }
+  const runtime = await createRuntime(false);
 
   const result: EvalResult = {
     id: task.id,
@@ -192,10 +240,16 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     durationMs: 0,
   };
 
+  if (prepareFailure !== undefined) result.reason = prepareFailure;
+  // The start state for the changed files (0.17, T11a).
+  const start = await treeState(root);
+
   const limitMs = options.taskTimeoutMs ?? EVAL_TASK_TIMEOUT_MS;
   const timeout = AbortSignal.timeout(limitMs);
   try {
-    if (options.agent !== undefined) {
+    if (result.reason !== undefined) {
+      // The preparation failed: the agent does not run.
+    } else if (options.agent !== undefined) {
       // The baseline (T11b): Claude Code in the run's sandbox, with the same limits. The proxy
       // for api.anthropic.com starts first (the user's first run: no proxy, ECONNREFUSED).
       await runtime.prepareCommands(timeout);
@@ -215,11 +269,9 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       if (outcome.reason !== undefined) result.reason = outcome.reason;
       if (options.outDir !== undefined) {
         mkdirSync(options.outDir, { recursive: true });
-        let target = join(options.outDir, `${task.id}.claude.json`);
-        for (let n = 2; existsSync(target); n++)
-          target = join(options.outDir, `${task.id}-${n}.claude.json`);
-        await writeFile(target, exec.stdout.text);
-        result.sessionFile = target;
+        result.sessionFile = await saveUnique(options.outDir, task.id, ".claude.json", (path) =>
+          writeFile(path, exec.stdout.text, { flag: "wx" }),
+        );
       }
     } else {
       const run = await runtime.runTurn(task.prompt, timeout);
@@ -236,6 +288,16 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       result.reason = `The run failed: ${(error as Error).message}`;
     }
   } finally {
+    if (tools.length > 0) result.tools = tools;
+    if (options.mcp !== undefined) {
+      result.mcpCalls = mcpCalls;
+      // A server that did not start makes the run an A/B of nothing: say so, and stop the eval.
+      const status = runtime.mcpStatus().find((m) => m.name === options.mcp?.server);
+      if (result.reason === undefined && status !== undefined && status.state === "failed") {
+        result.stopReason = "error";
+        result.reason = `${MCP_NOT_STARTED} "${options.mcp.server}": ${status.message ?? "no reason given"}`;
+      }
+    }
     await runtime.close();
     runtime.executor.shutdown();
   }
@@ -250,11 +312,10 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     if (options.outDir !== undefined) {
       mkdirSync(options.outDir, { recursive: true });
       // With --repeat, later runs of a task get -2, -3, … in the file name.
-      let target = join(options.outDir, `${task.id}.jsonl`);
-      for (let n = 2; existsSync(target); n++)
-        target = join(options.outDir, `${task.id}-${n}.jsonl`);
-      await copyFile(store.path(session.id), target);
-      result.sessionFile = target;
+      const from = store.path(session.id);
+      result.sessionFile = await saveUnique(options.outDir, task.id, ".jsonl", (path) =>
+        copyFile(from, path, fsConstants.COPYFILE_EXCL),
+      );
     }
   }
 
@@ -336,9 +397,41 @@ export function isConnectionFailure(result: EvalResult): boolean {
   );
 }
 
+/**
+ * Write a run's file as <id><ext>, or <id>-2<ext>, -3 … when that name is taken. The write itself
+ * refuses a taken name, so runs of one task at the same time (`--parallel`) never share a file.
+ */
+export async function saveUnique(
+  dir: string,
+  id: string,
+  ext: string,
+  write: (path: string) => Promise<void>,
+): Promise<string> {
+  for (let n = 1; ; n++) {
+    const path = join(dir, `${id}${n === 1 ? "" : `-${n}`}${ext}`);
+    try {
+      await write(path);
+      return path;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+}
+
+export const MCP_PREPARE_FAILED = "The MCP prepare command failed:";
+export const MCP_NOT_STARTED = "The MCP server did not start:";
+
+/** The `--mcp` server or its preparation failed (0.17): every later run would fail the same way. */
+export function isMcpFailure(result: EvalResult): boolean {
+  return (
+    result.reason !== undefined &&
+    (result.reason.startsWith(MCP_PREPARE_FAILED) || result.reason.startsWith(MCP_NOT_STARTED))
+  );
+}
+
 /** A failure that every later run would repeat: the eval stops at it (0.17). */
 export function isSetupFailure(result: EvalResult): boolean {
-  return isAuthFailure(result) || isConnectionFailure(result);
+  return isAuthFailure(result) || isConnectionFailure(result) || isMcpFailure(result);
 }
 
 /**
@@ -583,6 +676,8 @@ function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
     }
     if (u.runs > shown.length) out.push(`  … ${u.runs - shown.length} more in report.json`);
   }
+  const mcp = mcpUse(results);
+  if (mcp !== undefined) out.push(`MCP tool calls: ${mcpUseText(mcp)}`);
   return out;
 }
 

@@ -10,7 +10,16 @@ Parts, in order:
 1. Base rules (a `<garuda_note>` in a user message comes from Garuda, for example about plan mode or MCP
    servers): who Garuda is, the working root, "look before you answer", which tools to use for files
    (not bash), edit rules (read first), bash rules (no `cd` to the root, no pipes into head/tail), what
-   to do when the user denies a call, what to save with `remember`, and brevity.
+   to do when the user denies a call, how to work in few steps (0.17, `WORK_IN_FEW_STEPS`), what
+   to save with `remember`, and brevity.
+   The few-steps rules (0.17) come from `garuda eval tune`'s first kept version (Haiku 5.5 agent,
+   Opus 5.5 proposer): batch calls that do not depend on each other, find before reading, no
+   exploration with bash, all edits in one step, one narrow test run, fix the code not the tests,
+   stop when done. On the held-out set it cut the cost per accepted change to ×0.81 (×0.75 to ×0.88)
+   with Haiku 5.5 and ×0.87 (×0.79 to ×0.95) with Sonnet 5.5, every run passing in both arms. Two
+   of its rules served the evals only and are left out: "do not call remember" (memory is a
+   feature) and "a one- or two-sentence answer" (users often need to see what changed). The text in
+   the prompt is a rewrite in Garuda's style, so it is measured again before a release.
    With `identity` (0.16.2; the runtime always gives it): "This is Garuda <version>, and the model is
    <start model>", and to give these when the user asks. Both values pass `visible()` (visible ASCII,
    no `<` or `>`), so a model spec from a job file cannot add lines or markers. The start model stays

@@ -85,6 +85,53 @@
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).
 
+- An eval A/B of one MCP server: `garuda eval --mcp <server>` allows that one server from your
+  own `~/.garuda/mcp.json` (no other server, and none from a project file), and
+  `--mcp-prepare <command>` runs a command in each scratch folder, in the sandbox, before the agent
+  starts; what it writes is not counted as the agent's change. For Graphify:
+  `--mcp graphify --mcp-prepare "graphify update ."`. Each run records its MCP tool calls; the
+  report and `eval compare` show them ("the agent never used the server" when none), compare notes
+  when the arms' servers differ, and `report.json` records the server and the command. A server
+  that does not start, or a failed prepare command, stops the eval at the first run. The Claude
+  Code baseline refuses both options.
+- The prepare command now runs before the agent's runtime starts, so a note that it writes into
+  `GARUDA.md` reaches the agent (the user's first Graphify run: the agent never called the server,
+  and a note written later would not have been read). A `~/.garuda/mcp.json` whose `"servers"` is a
+  list now gets a message that shows the right form, not "expected record, received array".
+- Docs: Graphify as an example MCP server in the tools guide (install, `mcp.json`, the note in
+  `GARUDA.md`, and what we measured: ×1.28 cost per accepted change on the hard suite, no change in
+  passes). Garuda does not include it. The T11d design gets the user's keep rule: an edit with the
+  same passes stays when its cost per accepted change is clearly lower.
+- Tests: `waitUntil` waits up to 20 s by default (it was 5 s), under the 30 s test limit. The
+  user's `pnpm check` failed the M5 Ctrl-C test on a busy machine.
+
+- The proposer loop (T11d): `garuda eval tune --addendum <file>` improves a prompt addendum. A
+  proposer model (default `claude-opus-5-5`) reads the dev runs that failed, or each task's cost
+  when all passed, and writes a new version; it stays when no task goes from all runs to none and
+  it passes 2 more runs (`--margin`) or as many at a clearly lower cost per accepted change (the
+  user's rule). Texts that ask to skip or edit tests or checks, or to leave the sandbox, are
+  refused before a run; the proposer never sees the held-out tasks; `--max-cost` (default $20)
+  stops before a round that would pass it. At the end the held-out set compares no addendum with
+  the final one. Garuda never edits the file: the versions, inputs, reports and history go to
+  `.garuda/evals/tune-<id>/`. `garuda eval --addendum <file>` runs any suite with an addendum.
+- `eval tune` after the user's first run (Haiku 5.5 agent, Opus 5.5 proposer, $0.65): the kept
+  version cut the held-out cost per accepted change to ×0.81 (×0.75 to ×0.88), all runs passing.
+  The run also found four faults, now fixed: two of three proposals were refused for phrases in
+  rules against cheating ("never modify tests to make them pass") or about reading ("skip tests
+  you won't run"), so a negation now clears a phrase and a refused text gets one more try in the
+  round; the held-out comparison said the reports had no task hashes; runs went one at a time
+  (about 16 minutes a score), so `--parallel` (default 4) runs them together; and nothing printed
+  during a score, so each run prints a line. Two runs of one task at the same time can no longer
+  take the same session file name (also for `garuda eval --parallel`).
+
+- The system prompt tells the agent how to work in few steps: batch tool calls that do not depend
+  on each other, find before reading, no exploration with bash, all edits in one step, one narrow
+  test run, fix the code not the tests, stop when done. The rules come from the first
+  `garuda eval tune` run: on the held-out set, with every run passing, they cut the cost per
+  accepted change to ×0.81 (95% interval ×0.75 to ×0.88) with Haiku 5.5 and ×0.87 (×0.79 to
+  ×0.95) with Sonnet 5.5. The tuned text's rules against `remember` and for one-sentence answers
+  are left out: they served the evals, not users.
+
 ## 0.17.0 (2026-10-27)
 
 - macOS: no command process outlives the command (IPI-04). Seatbelt has no process namespace, so a

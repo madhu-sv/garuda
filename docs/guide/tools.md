@@ -56,7 +56,38 @@ Security:
   characters), limited in size, and marked as untrusted for the model (`<mcp_result>`).
 - Garuda offers no sampling, roots or elicitation, so a server cannot make model calls or ask
   you questions through Garuda.
-- The evals never start MCP servers.
+- The evals start no MCP server, except the one that `garuda eval --mcp <server>` names (an A/B of
+  that server; see [Evals](evals.md)).
+
+### Example: Graphify, a code knowledge graph
+
+[Graphify](https://pypi.org/project/graphifyy/) builds a graph of your code with tree-sitter (no
+model, no API key) and serves it over MCP. Garuda does not include it; add it if it helps you.
+
+```sh
+brew install pipx && pipx install "graphifyy[mcp]"   # Python 3.10 or later
+graphify update .                                    # builds graphify-out/ in your project
+which graphify-mcp                                   # the path for mcp.json
+```
+
+```json
+{ "servers": {
+  "graphify": { "command": "/Users/you/.local/bin/graphify-mcp", "args": ["graphify-out/graph.json"] }
+} }
+```
+
+Tell the agent about the graph in `GARUDA.md`, for example: "This project has a code knowledge
+graph (graphify-out/). Use the graphify tools to find code before you search files." Without a
+note the agent may never use it. Run `graphify update .` again after large changes: the graph does
+not follow your edits. Add `graphify-out/` to `.gitignore` if you do not want it in the repository.
+
+What we measured (0.17, Claude Haiku 5.5, 3 runs a task): on the hard eval suite (6 tasks, a
+repository of about 110 files) every run passed with and without Graphify; the agent used it in 14
+of 18 runs, and it cost ×1.28 per accepted change (95% interval ×1.19 to ×1.38). The agent already
+finds code with `grep` and Garuda's code index, and the graph's tools and results add tokens to
+every request. A graph may pay off in a much larger repository, or for questions about the code
+rather than edits. Measure it on your own repository before you keep it:
+`garuda eval -s repo --mcp graphify --mcp-prepare "graphify update ."` (see [Evals](evals.md)).
 
 ## Web fetch
 

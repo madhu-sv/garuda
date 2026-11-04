@@ -235,7 +235,18 @@ export interface RuntimeOptions {
    */
   mcp?:
     | false
-    | { home?: string; env?: NodeJS.ProcessEnv; openBrowser?: (url: URL) => Promise<void> };
+    | {
+        home?: string;
+        env?: NodeJS.ProcessEnv;
+        openBrowser?: (url: URL) => Promise<void>;
+        /**
+         * Only this server, and only from the user's own file (0.17, `garuda eval --mcp`): an
+         * eval A/B of one server must not depend on the rest of the user's setup.
+         */
+        only?: string;
+      };
+  /** The prompt addendum (0.17, T11d): only `garuda eval --addendum` and `eval tune` set it. */
+  addendum?: string;
   /** Hooks (0.2). Default: read ~/.garuda/hooks.json and <root>/.garuda/hooks.json. false: none. */
   hooks?: false | { home?: string };
   /** The mode of the first turn (0.4). Default: build. */
@@ -733,7 +744,11 @@ export class Runtime {
         home: options.mcp?.home ?? homedir(),
         root: options.root,
       });
-      mcpServers = loaded.servers;
+      const only = options.mcp?.only;
+      mcpServers =
+        only === undefined
+          ? loaded.servers
+          : loaded.servers.filter((s) => s.source === "user" && s.name === only);
       for (const problem of loaded.problems) options.onNotice?.(problem);
     }
     let hookConfig = { user: [] as Hook[], project: [] as Hook[], home: homedir() };
@@ -786,6 +801,7 @@ export class Runtime {
         skills: skills.some((s) => s.modelInvocable),
         agents: agents.length > 0,
         identity: { version: VERSION, model: options.modelId },
+        addendum: options.addendum,
       },
     );
     const runtime = new Runtime(
