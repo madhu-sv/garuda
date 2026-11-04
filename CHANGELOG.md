@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Blog: "Garuda against Claude Code, with intervals": the eval method, the Claude Code
+  baseline, the faults the live runs found in the tasks, the Graphify A/B, the tuned prompt, and
+  the limits.
 - The Homebrew formula in the repository names 0.18.0 and its tarball hash.
 
 ## 0.18.0 (2026-11-04)
