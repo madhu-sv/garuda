@@ -21,6 +21,10 @@ export interface UndoPoint {
   prompt: string;
   /** The files that the turn changed, from its receipt (UX U1): a kept change when above 0. */
   changedFiles?: number;
+  /** The turn's cost, from its receipt (UX U6: the /rewind list). */
+  costUsd?: number;
+  /** When the turn started, in ms since 1970 (UX U6). */
+  at?: number;
 }
 
 export interface RedoEntry {

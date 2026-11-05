@@ -123,7 +123,15 @@ export function addSnapshot(
   const messages = session.messages.length;
   pushPoint(session.undo, tree, messages, prompt);
   const point = session.undo.points.at(-1) as UndoPoint;
-  session.journal?.write({ type: "snapshot", tree, messages, prompt: point.prompt, durationMs });
+  point.at = Date.now();
+  session.journal?.write({
+    type: "snapshot",
+    tree,
+    messages,
+    prompt: point.prompt,
+    durationMs,
+    at: point.at,
+  });
 }
 
 /** /undo (0.4): take the last turn out of the conversation. The caller restores the files. */

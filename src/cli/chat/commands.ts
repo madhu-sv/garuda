@@ -21,6 +21,7 @@ import type { Renderer } from "../renderer.js";
 import { budgetNote, formatTokens } from "../report.js";
 import type { PaletteEntry } from "./palette.js";
 import { modeText } from "./plan.js";
+import { rewindList } from "./rewind.js";
 
 /** Chat commands (F2). The plain chat and the Ink chat share them. */
 
@@ -55,6 +56,7 @@ export const HELP = [
   "  /build     build mode: change files and run commands (the default); /build <task> runs it",
   "  /undo      take back the last turn: its file changes and its messages",
   "  /redo      bring back the last undone turn",
+  "  /rewind    the turns of this session; /rewind <n> goes back to turn n, /rewind fork <n> forks",
   "  /init      set up this folder: AGENTS.md, and files from other agents (Claude Code, OpenCode …)",
   "  /editor    write the next prompt in $VISUAL or $EDITOR (also Ctrl-G)",
   "  /details   show or hide the result line under each tool call; /details on|off",
@@ -210,6 +212,23 @@ export async function runCommand(
     await expertsCommand(runtime, renderer);
   } else if (command === "/audit") {
     await auditCommand(runtime, renderer, text.slice(command.length).trim());
+  } else if (command === "/rewind") {
+    // UX U6: the list, a rewind to turn n, or a fork from turn n.
+    const args = text
+      .slice(command.length)
+      .trim()
+      .split(/\s+/)
+      .filter((a) => a !== "");
+    const signal = new AbortController().signal;
+    const fork = args[0] === "fork";
+    const number = fork ? args[1] : args[0];
+    if (number === undefined && !fork) renderer.info(rewindList(runtime.rewindPoints));
+    else if (number === undefined || !/^\d+$/.test(number) || args.length > (fork ? 2 : 1)) {
+      renderer.info("Use: /rewind, /rewind <n> or /rewind fork <n>.");
+    } else {
+      const turn = Number(number);
+      renderer.info(await (fork ? runtime.fork(turn, signal) : runtime.rewind(turn, signal)));
+    }
   } else if (command === "/undo" || command === "/redo") {
     const signal = new AbortController().signal;
     renderer.info(await (command === "/undo" ? runtime.undo(signal) : runtime.redo(signal)));
@@ -872,6 +891,7 @@ const RUN_AT_ONCE = new Set([
   "build",
   "undo",
   "redo",
+  "rewind",
   "init",
   "editor",
   "details",

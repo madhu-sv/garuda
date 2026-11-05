@@ -99,6 +99,12 @@ export function sessionMarkdown(records: readonly SessionRecord[], sessionId: st
       case "compaction":
         out.push("_The conversation was compacted here to fit the context window._", "");
         break;
+      case "fork":
+        out.push(
+          `_This session starts as a fork of session ${record.from.sessionId}, at turn ${record.from.turn}._`,
+          "",
+        );
+        break;
       case "receipt":
         // UX U1: the receipt of a turn that changed files or ran commands, as plain lines.
         if (hasReceipt(record.receipt)) {

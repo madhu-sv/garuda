@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- UX, patch 4 (docs/lld/ux.md U6): `/rewind` lists the turns that undo can reach (files, cost, age).
+  `/rewind <n>` goes back to the start of turn n in one step, with one question; `/redo` brings the
+  turns back one at a time. `/rewind fork <n>` starts a new session with the conversation up to
+  turn n and the files as they were then; the old session does not change. A new `fork` record
+  starts such a session.
 - UX, patch 3 (docs/lld/ux.md U4): in the chat, calls of one read-only tool in a row become one
   line, for example `● Read 5 files  docs/architecture.md, SECURITY.md, +3`; a lone call keeps its
   line and its result. Edits, commands and failed calls always keep a line of their own. Ctrl-O

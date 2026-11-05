@@ -7,7 +7,7 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
 `garuda` with no task starts a chat. Each line is one task; the conversation carries over.
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
-  (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
+  (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/rewind` (see Undo), `/lsp` (language servers),
   `/init` (set up this folder, see [Init](projects.md#init-set-up-a-folder)), `/editor`, `/compact`, `/details`, `/thinking`, `/diff` (see Undo), `/schedule` and `/jobs` (see
   [Scheduled jobs](jobs.md)), `/exit`. Your custom commands and
   skills run with `/name`.
@@ -203,6 +203,12 @@ forgets it. `/redo` brings it back.
   the diff (300 lines; Ctrl-O shows all). `/diff last` shows only the last turn; `/diff <path>` or
   `/diff last <path>` limits it to one file or folder. It compares with the files now, so your own changes
   count too. It uses the undo snapshots, so it is off when undo is off.
+- `/rewind` (0.18.1) lists the turns that undo can reach, newest first, with the files each changed,
+  its cost and its age. `/rewind <n>` goes back to the start of turn n in one step: one question,
+  then the files and the messages of turn n and every later turn go back. `/redo` brings them back
+  one at a time. `/rewind fork <n>` starts a new session with the conversation up to turn n and the
+  files as they were then; the old session stays as it is, and `/sessions` opens it again. A turn
+  before a compaction can rewind its files but cannot start a fork. Tab completes the turn numbers.
 
 ## Todo list (opt-in)
 

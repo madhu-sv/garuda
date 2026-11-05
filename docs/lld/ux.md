@@ -1,7 +1,7 @@
 # UX: show the trust and the evidence (design)
 
 Status: design approved (2026-11-05: the user took every suggested default, D1–D10). Built: patch 1
-(U1, U3, U10), patch 2 (U2) and patch 3 (U4); see "As built" at the end.
+(U1, U3, U10), patch 2 (U2), patch 3 (U4) and patch 4 (U6); see "As built" at the end.
 
 ## Purpose
 
@@ -422,6 +422,14 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   group.
 - **Plan.** A `todo_write` result sets `state.plan` (✔ green, ▶ yellow, ○ dim) above the input;
   `end()` prints the last plan once. The marks are the existing ✔ ▶ ○, not the mock-up's ✓ ◐ ○.
+
+## As built (patch 4)
+
+- **U6.** `/rewind` prints the list; `/rewind <n>` and `/rewind fork <n>` act, each after one
+  question. The mock-up's picker (↑↓, Enter, f) became a numbered list with arguments, as
+  `/sessions` has: it works in the plain chat too, and Tab completes the numbers with each turn's
+  prompt as the hint. The details are in [undo.md](undo.md). A fork's new session starts at cost 0;
+  `/export` of it says where it came from but does not repeat the old messages.
 
 ## Also built: the start screen (0.18.1)
 

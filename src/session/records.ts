@@ -95,6 +95,8 @@ export interface SnapshotRecord extends Base {
   messages: number;
   prompt: string;
   durationMs: number;
+  /** When the turn started, in ms (UX U6); older records have only `t`. */
+  at?: number;
 }
 
 /** /undo (0.4): the last turn went back; `after` is the snapshot of the files before the undo. */
@@ -180,7 +182,15 @@ export type SessionRecord =
   | ChildDebitRecord
   | SideUsageRecord
   | ReceiptRecord
+  | ForkRecord
   | EndRecord;
+
+/** UX U6: the first record after `start` of a forked session: the messages it starts with. */
+export interface ForkRecord extends Base {
+  type: "fork";
+  from: { sessionId: string; turn: number };
+  messages: Message[];
+}
 
 /** After a turn (UX U1): its receipt. Resume reads the kept changes and the last test count. */
 export interface ReceiptRecord extends Base {

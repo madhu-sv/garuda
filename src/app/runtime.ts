@@ -90,6 +90,7 @@ import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { FileTracker } from "../session/fileTracker.js";
 import type { SessionSummary } from "../session/list.js";
+import { cleanTitle } from "../session/list.js";
 import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
 import {
@@ -104,6 +105,7 @@ import {
   type Session,
 } from "../session/session.js";
 import { newSessionId, type SessionStore } from "../session/store.js";
+import type { UndoPoint } from "../session/undo.js";
 import { loadSkills, type Skill, skillConsent } from "../skills/load.js";
 import { createSkillTool, skillText } from "../skills/tool.js";
 import { StagingError } from "../staging/copy.js";
@@ -1564,6 +1566,9 @@ export class Runtime {
         }
       }
       if (files !== undefined) point.changedFiles = files.length;
+      if (session.costUsd !== undefined && before.cost !== undefined) {
+        point.costUsd = session.costUsd - before.cost;
+      }
     }
     const costIncomplete =
       session.unreportedTokens > before.unreported ||
@@ -2417,6 +2422,39 @@ export class Runtime {
    */
   async undo(signal: AbortSignal): Promise<string> {
     return this.undoCoordinator.undo(this.current, this.pendingNotes, signal);
+  }
+
+  /** The undo points of this session, oldest first (UX U6: the /rewind list). */
+  get rewindPoints(): readonly UndoPoint[] {
+    return this.current?.undo.points ?? [];
+  }
+
+  /** /rewind <n> (UX U6): back to the start of turn n (1-based in the list). */
+  async rewind(turn: number, signal: AbortSignal): Promise<string> {
+    return this.undoCoordinator.rewind(this.current, turn - 1, this.pendingNotes, signal);
+  }
+
+  /**
+   * /rewind fork <n> (UX U6): a new session with the conversation up to the start of turn n, and
+   * the files as they were then. The old session stays on disk as it is.
+   */
+  async fork(turn: number, signal: AbortSignal): Promise<string> {
+    const old = this.current;
+    if (old === undefined) return "No turn has run in this session yet.";
+    const restored = await this.undoCoordinator.restoreForFork(old, turn - 1, signal);
+    if (!restored.ok) return restored.text;
+    const point = old.undo.points[turn - 1] as UndoPoint;
+    const messages = structuredClone(old.messages.slice(0, point.messages));
+    this.newSession();
+    const fresh = this.ensureSession();
+    fresh.messages = messages;
+    fresh.turns = turn - 1;
+    fresh.journal?.write({ type: "fork", from: { sessionId: old.id, turn }, messages });
+    fresh.journal?.write({
+      type: "title",
+      title: cleanTitle(`Fork of turn ${turn}: ${point.prompt}`),
+    });
+    return `New session ${fresh.id}: the conversation up to turn ${turn} ("${point.prompt}"), and the files as they were then. The old session ${old.id} stays as it was: /sessions opens it.`;
   }
 
   /** /redo (0.4): bring back the last undone turn: its files and its messages. */

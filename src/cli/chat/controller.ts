@@ -207,6 +207,15 @@ export class CommandArgs {
         return (first === "cancel" || first === "delete") && second === undefined ? this.jobs : [];
       case "diff":
         return first === undefined ? words("last") : [];
+      case "rewind": {
+        // UX U6: the turn numbers, with each turn's prompt as the hint.
+        const turns = this.runtime.rewindPoints.map((p, i) => ({
+          value: String(i + 1),
+          hint: p.prompt,
+        }));
+        if (first === undefined) return [...words("fork"), ...turns];
+        return first === "fork" && second === undefined ? turns : [];
+      }
       case "mcp":
         if (first === undefined) return words("logout");
         return first === "logout" && second === undefined
