@@ -58,6 +58,10 @@ export interface Session {
   undo: UndoState;
   /** The last /thinking choice of this session (0.9), from its records on resume. */
   thinking?: ThinkingChoice;
+  /** Turns so far (UX U1: the receipt's number). */
+  turns?: number;
+  /** The last test count of a receipt (UX U1: "was 121"). */
+  lastTestTotal?: number;
 }
 
 export function createSession(

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Receipt } from "../app/receipt.js";
 import type { AgentEvent, AgentStopReason } from "../loop/runAgent.js";
 import type { McpState } from "../mcp/manager.js";
 import type { ModelResponse, Usage } from "../model/types.js";
@@ -55,6 +56,49 @@ export interface ResultInfo {
   maxOutputTokens: number;
   /** The stop message for an early stop (errors[]). */
   stopMessage?: string | undefined;
+  /** UX U1: the turn's receipt, as `receipt` (snake_case keys). */
+  receipt?: Receipt | undefined;
+}
+
+/** The receipt in the JSON result (UX U1): the same facts, with snake_case keys. */
+export function receiptJson(r: Receipt): Record<string, unknown> {
+  return {
+    turn: r.turn,
+    stop_reason: r.stopReason,
+    steps: r.steps,
+    duration_ms: r.durationMs,
+    ...(r.costUsd === undefined ? { cost_is_unknown: true } : { cost_usd: r.costUsd }),
+    ...(r.costIncomplete === true ? { cost_is_incomplete: true } : {}),
+    files:
+      r.files === undefined
+        ? null
+        : r.files.map((f) => ({
+            path: f.path,
+            ...(f.added === undefined ? { binary: true } : { added: f.added, removed: f.removed }),
+          })),
+    ...(r.tests === undefined
+      ? {}
+      : {
+          tests: {
+            command: r.tests.command,
+            passed: r.tests.passed,
+            ...(r.tests.timedOut === true ? { timed_out: true } : {}),
+            ...(r.tests.total === undefined
+              ? {}
+              : { total: r.tests.total, failed: r.tests.failed }),
+            ...(r.tests.previousTotal === undefined
+              ? {}
+              : { previous_total: r.tests.previousTotal }),
+          },
+        }),
+    commands: {
+      sandboxed: r.commands.sandboxed,
+      outside: r.commands.outside,
+      blocked_hosts: r.commands.blockedHosts,
+    },
+    context_percent: r.contextPercent,
+    ...(r.keptChanges === undefined ? {} : { kept_changes: r.keptChanges }),
+  };
 }
 
 export interface PermissionDenial {
@@ -344,5 +388,6 @@ export function resultLine(
     permission_denials: info.denials,
     ...(errors === undefined ? {} : { errors }),
     ...(stop?.terminal === undefined ? {} : { terminal_reason: stop.terminal }),
+    ...(info.receipt === undefined ? {} : { receipt: receiptJson(info.receipt) }),
   };
 }

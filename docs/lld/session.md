@@ -40,6 +40,7 @@ One JSON object per line, each with `t` (ISO time) and `type`:
 | `compaction` | stage, before and after tokens, the new messages, the summary response and its cost (stage 2) |
 | `snapshot` | tree (the undo snapshot of the files before the turn), messages (the count before the turn), prompt (one short line), durationMs (0.4) |
 | `undo` | after (the snapshot of the files at the undo) (0.4) |
+| `receipt` | receipt (UX U1): turn, stop reason, steps, time, cost, files with their lines (absent when undo is off), the last test run, the commands by sandbox, blocked hosts, context, session cost, kept changes. Resume sets the last undo point's `changedFiles` and the last test count from it; `/export` prints it. |
 | `redo` | – (0.4) |
 | `title` | title (0.8, `/sessions rename`; the last one wins; resume ignores it) |
 | `thinking` | choice (0.9, `/thinking`; the last one wins; a resume brings it back) |

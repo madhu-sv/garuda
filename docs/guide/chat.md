@@ -67,8 +67,10 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   back into the input line; press Enter to send it. The plain chat also joins lines that end with `\`.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
 - On a terminal, the chat uses Ink (0.2): model text streams, and each finished paragraph gets
-  basic markdown styles. A spinner shows running tools. The footer shows the model, the sandbox,
-  the context use and the cost.
+  basic markdown styles. A spinner shows running tools. The footer shows the model, the sandbox (⛨),
+  the context use as a bar and a number (yellow from 70%, red from 80%, where compaction starts)
+  and the cost. The key hints show in the first 5 chats (counted in `~/.garuda/ui.json`); after
+  that the footer says `? keys`, and `?` on an empty input line lists every key.
 - Type-ahead: type during a task and press Enter to queue the next task.
   Keys typed before the chat is ready are kept too.
 - Ctrl-O prints the full output of the last tool call. ↑ and ↓ browse earlier inputs.
@@ -104,7 +106,29 @@ garuda --resume 20260923-201500-a1b2 -p "…"     # continue a given session
 garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no tools run
 ```
 
-- After each turn Garuda prints steps, tokens (with cache reads), cost, context use and the session total.
+- After a turn that changed files or ran commands, Garuda prints a receipt (0.18.1):
+
+  ```
+  ╭─ Turn 4 · done · 7 steps · 38 s ─────────────────────────── $0.0041 ─╮
+  │ Files    src/cart.ts +12 −4 · src/price.ts +3 −1 · 1 more            │
+  │ Tests    pnpm test ✓ passed (124 tests, was 121)                     │
+  │ Sandbox  ⛨ 6 commands in the sandbox · 0 outside                     │
+  │ Undo     /undo puts back 3 files                                     │
+  ╰─ context 34% · session $0.02 · 4 kept changes · $0.0043 each ────────╯
+  ```
+
+  Files come from the undo snapshots (with undo off: "no file list"). Tests: the last command of
+  the turn that ran the project's test command or a known runner (vitest, jest, node:test, pytest,
+  Maven, Gradle, go test, cargo test); the count comes from the runner's summary line when Garuda
+  knows it. Sandbox: the turn's commands by where they ran, and a Network row for hosts that the
+  allowlist's proxy blocked. A kept change is a turn that changed files and was not undone; "each"
+  is the session cost divided by them. Under 60 columns, in a pipe and with
+  `GARUDA_SCREEN_READER=1`, the receipt is plain lines. `-p --json` has it as `receipt` in the result.
+- After a turn that only answered, Garuda prints steps, tokens (with cache reads), cost, context use
+  and the session total, as before.
+- At the step limit, the chat asks how to go on (0.18.1): go on for as many steps again, summarise
+  what is done and what is left, or stop. Enter takes the first. After the same tool call 3 times,
+  type a hint as your next message.
 - A run stops at 50 steps, at the session token budget (20M tokens), or after the same tool call
   3 times in a row. Garuda says why. The budget holds for the whole turn (0.17): each model call
   reserves its request and its output limit first, and stops when they do not fit; subagents,

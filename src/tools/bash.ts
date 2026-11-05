@@ -33,7 +33,14 @@ type Input = z.infer<typeof input>;
 
 /** The command result plus short notes for the model about how it used bash. */
 export type BashOutput =
-  | (ExecResult & { hints: string[]; daemon?: undefined })
+  | (ExecResult & {
+      hints: string[];
+      daemon?: undefined;
+      /** It ran in the OS sandbox (UX U1). */
+      sandboxed?: boolean;
+      /** Hosts that the network proxy blocked during the command (UX U1). */
+      blockedHosts?: string[];
+    })
   | {
       daemon: {
         id: string;
@@ -224,9 +231,8 @@ export function createBashTool({
 
       const result = await executor.run(run, policy, { signal });
       const hints = commandHints(run, stripped);
-      const network = sandboxed
-        ? networkHint(permissions.takeNetworkBlocks?.() ?? [], strict)
-        : undefined;
+      const blocks = sandboxed ? (permissions.takeNetworkBlocks?.() ?? []) : [];
+      const network = sandboxed ? networkHint(blocks, strict) : undefined;
       if (network !== undefined) hints.push(network);
       const blocked =
         sandboxed && network === undefined
@@ -245,7 +251,22 @@ export function createBashTool({
           `Garuda could not check for processes that left the command's process group (${result.reapProblem}). Such a process may still run, inside the sandbox.`,
         );
       }
-      return { ...result, hints };
+      return {
+        ...result,
+        hints,
+        sandboxed,
+        blockedHosts: [...new Set(blocks.map((b) => b.host))],
+      };
+    },
+
+    commandFacts(result) {
+      if ("daemon" in result && result.daemon !== undefined) return undefined;
+      return {
+        exitCode: result.exitCode,
+        timedOut: result.timedOut,
+        sandboxed: result.sandboxed ?? false,
+        blockedHosts: result.blockedHosts ?? [],
+      };
     },
 
     toText(result) {

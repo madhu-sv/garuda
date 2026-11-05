@@ -1,3 +1,4 @@
+import type { Receipt } from "../app/receipt.js";
 import type { ThinkingChoice } from "../model/thinking.js";
 import type { Message, ModelResponse, Usage } from "../model/types.js";
 
@@ -178,7 +179,14 @@ export type SessionRecord =
   | UnreportedRecord
   | ChildDebitRecord
   | SideUsageRecord
+  | ReceiptRecord
   | EndRecord;
+
+/** After a turn (UX U1): its receipt. Resume reads the kept changes and the last test count. */
+export interface ReceiptRecord extends Base {
+  type: "receipt";
+  receipt: Receipt;
+}
 
 /** A record before the journal adds the time. */
 export type NewRecord = SessionRecord extends infer R

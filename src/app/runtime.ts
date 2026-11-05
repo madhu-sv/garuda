@@ -99,6 +99,8 @@ import {
   budgetSpent,
   closeOpenToolCalls,
   createSession,
+  isCostIncomplete,
+  pendingChildTokens,
   type Session,
 } from "../session/session.js";
 import { newSessionId, type SessionStore } from "../session/store.js";
@@ -123,6 +125,7 @@ import {
 import { attachMentions } from "./mentions.js";
 import { ModelState, modelFacts } from "./modelState.js";
 import { networkConsent, networkHash, networkNote, nodeBinary } from "./network.js";
+import { type Receipt, ReceiptCollector } from "./receipt.js";
 import { deleteSession, findSession, listSessions, renameSession } from "./sessionManager.js";
 import { SnapshotError, UndoCoordinator } from "./undoCoordinator.js";
 
@@ -448,6 +451,8 @@ export class Runtime {
   private readonly startModel: string;
   /** The prompt of the turn that runs or ran last (0.9: the note after a stopped turn). */
   private lastPrompt: string | undefined;
+  /** The receipt of the last turn (UX U1); undefined before a turn ends, or after a failed one. */
+  private receipt: Receipt | undefined;
   /** LSP diagnostics after edits are on (0.4). */
   readonly lspEnabled: boolean;
   private readonly lspOptions: NonNullable<RuntimeOptions["lsp"]>;
@@ -1398,6 +1403,8 @@ export class Runtime {
 
   /** Run one turn: the user's prompt, then the loop until it stops. */
   async runTurn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
+    const started = Date.now();
+    this.receipt = undefined;
     this.lastPrompt = prompt;
     this.turnSignal = signal;
     await this.startHooks(signal);
@@ -1433,6 +1440,22 @@ export class Runtime {
     // open calls only when the last message is the assistant's, so close them before the new user
     // message (0.14, review): else the API refused every later request of the chat.
     closeOpenToolCalls(session);
+    session.turns = (session.turns ?? 0) + 1;
+    const before = {
+      cost: session.costUsd,
+      unreported: session.unreportedTokens,
+      pending: pendingChildTokens(session),
+      incomplete: session.costIncomplete,
+    };
+    const collector = new ReceiptCollector(detectTestCommand(this.root, this.profiles));
+    let changesFiles = false;
+    const onEvent = (event: AgentEvent) => {
+      collector.onEvent(event);
+      if (event.type === "tool_call" && !this.tools.isReadOnly(event.call.name)) {
+        changesFiles = true;
+      }
+      this.onEvent?.(event);
+    };
     addUserMessage(
       session,
       prompt,
@@ -1461,9 +1484,15 @@ export class Runtime {
       ...this.outputTokens(),
       contextWindow: this.limits.contextWindow,
       ...(this.price === undefined ? {} : { price: this.price }),
-      ...(this.onEvent === undefined ? {} : { onEvent: this.onEvent }),
+      onEvent,
       ...(this.settings.thinking?.keepBlocks === false ? { keepThinking: false } : {}),
       ...(this.thinkingParams === undefined ? {} : { thinking: this.thinkingParams }),
+      signal,
+    });
+    this.receipt = await this.makeReceipt(session, result, collector, {
+      ...before,
+      started,
+      changesFiles,
       signal,
     });
     // A finished plan (0.7): /schedule turns it into a job.
@@ -1472,6 +1501,86 @@ export class Runtime {
       if (plan !== "") this.plan = { request: prompt, plan, sessionId: session.id };
     }
     return result;
+  }
+
+  /** The receipt of the last turn (UX U1), or undefined. */
+  get lastReceipt(): Receipt | undefined {
+    return this.receipt;
+  }
+
+  /**
+   * The turn's receipt (UX U1; docs/lld/ux.md): the files from a snapshot at the end of the turn
+   * (only when a tool that can change files ran), the commands' facts, and the costs.
+   */
+  private async makeReceipt(
+    session: Session,
+    result: AgentResult,
+    collector: ReceiptCollector,
+    before: {
+      cost: number | undefined;
+      unreported: number;
+      pending: number;
+      incomplete: boolean;
+      started: number;
+      changesFiles: boolean;
+      signal: AbortSignal;
+    },
+  ): Promise<Receipt> {
+    const store = this.undoCoordinator.store;
+    const point = session.undo.points.at(-1);
+    let files: Receipt["files"];
+    if (store !== undefined && point !== undefined) {
+      files = [];
+      if (before.changesFiles) {
+        try {
+          const end = await store.take(before.signal);
+          files = (await store.stats(point.tree, end, before.signal)).map((f) => ({
+            path: f.path,
+            ...(f.added === undefined ? {} : { added: f.added, removed: f.removed ?? 0 }),
+          }));
+        } catch (error) {
+          if (before.signal.aborted) throw error;
+          files = undefined;
+        }
+      }
+      if (files !== undefined) point.changedFiles = files.length;
+    }
+    const costIncomplete =
+      session.unreportedTokens > before.unreported ||
+      pendingChildTokens(session) > before.pending ||
+      (session.costIncomplete && !before.incomplete);
+    const tests = collector.tests;
+    if (tests !== undefined && session.lastTestTotal !== undefined) {
+      tests.previousTotal = session.lastTestTotal;
+    }
+    if (tests?.total !== undefined) session.lastTestTotal = tests.total;
+    const receipt: Receipt = {
+      turn: session.turns ?? 1,
+      stopReason: result.stopReason,
+      steps: result.steps,
+      durationMs: Date.now() - before.started,
+      ...(session.costUsd === undefined || before.cost === undefined
+        ? {}
+        : { costUsd: session.costUsd - before.cost }),
+      ...(costIncomplete ? { costIncomplete: true } : {}),
+      ...(files === undefined ? {} : { files }),
+      ...(tests === undefined ? {} : { tests }),
+      commands: {
+        sandboxed: collector.sandboxed,
+        outside: collector.outside,
+        blockedHosts: [...collector.blockedHosts],
+      },
+      contextPercent: Math.round((session.contextTokens / this.limits.contextWindow) * 100),
+      ...(session.costUsd === undefined ? {} : { sessionCostUsd: session.costUsd }),
+      ...(isCostIncomplete(session) ? { sessionCostIncomplete: true } : {}),
+      ...(store === undefined
+        ? {}
+        : {
+            keptChanges: session.undo.points.filter((p) => (p.changedFiles ?? 0) > 0).length,
+          }),
+    };
+    session.journal?.write({ type: "receipt", receipt });
+    return receipt;
   }
 
   /** The last finished plan of this process, for /schedule (0.7). */

@@ -27,8 +27,10 @@ export async function runInkChat(
   notifier?: Notifier,
   /** Focus reporting (0.6): the chat turns it on and feeds the tracker. */
   focus?: FocusTracker,
+  /** UX U10: the footer shows the key hints (the first chats). */
+  keyHints = true,
 ): Promise<void> {
-  const store = new ChatStore(statusOf(runtime));
+  const store = new ChatStore(statusOf(runtime), { keyHints });
   store.print(banner);
   if (firstInput !== undefined) store.enqueue(firstInput);
   approver.current = store;

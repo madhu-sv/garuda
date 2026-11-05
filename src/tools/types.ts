@@ -152,6 +152,8 @@ export interface Tool<I = unknown, O = string> {
   isError?(output: O): boolean;
   /** For a subagent tool: the usage of the child run, for the session totals. */
   report?(output: O): SubagentReport | undefined;
+  /** For a tool that runs a command: how it ended and where it ran (UX U1). */
+  commandFacts?(output: O): CommandFacts | undefined;
 }
 
 /** What the loop needs from a tool set. ToolRegistry implements it; replay uses a recorded one. */
@@ -172,6 +174,18 @@ export interface ToolOutcome {
   denied?: boolean;
   /** Set by subagent tools: the loop adds the child's usage to the session. */
   subagent?: SubagentReport;
+  /** Set by tools that run a command (bash): the facts for the turn's receipt (UX U1). */
+  command?: CommandFacts;
+}
+
+/** How one command ended and where it ran (UX U1). Never sent to the model. */
+export interface CommandFacts {
+  exitCode: number | null;
+  timedOut: boolean;
+  /** False when it ran outside the OS sandbox (approved, or no sandbox on this machine). */
+  sandboxed: boolean;
+  /** Hosts that Garuda's network proxy blocked during the command. */
+  blockedHosts: string[];
 }
 
 /** A tool with its generic types erased, as the registry stores it. */

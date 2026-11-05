@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- UX, patch 1 (docs/lld/ux.md): a receipt after each turn that changed files or ran commands: the
+  files with their lines (from the undo snapshots), the last test run with its count for vitest,
+  jest, node:test, pytest, Maven and `go test -v`, the commands in and outside the sandbox, blocked
+  hosts, what `/undo` puts back, and the session's cost per kept change. A turn that only answered
+  keeps the usage line. The session records the receipt (`receipt`), `/export` shows it, and
+  `-p --json` has it as `receipt`. Under 60 columns, in a pipe and with `GARUDA_SCREEN_READER=1` it
+  is plain lines.
+- The chat asks how to go on after the step limit: go on for as many steps again, summarise what is
+  left, or stop. After the same tool call 3 times it says to type a hint, and no longer names
+  `--resume`.
+- The chat's footer shows the context as a bar and a number (yellow from 70%, red from 80%). The key
+  hints show in the first 5 chats; then the footer says `? keys`, and `?` on an empty line lists them.
 - Design: the UX note (docs/lld/ux.md), with mock-ups and no code yet. A receipt after each
   turn (files, tests, sandbox, undo, cost per kept change), a blocked host as a one-key fix,
   next steps after a stop, a live plan, better diffs, rewind and fork, a morning brief from the

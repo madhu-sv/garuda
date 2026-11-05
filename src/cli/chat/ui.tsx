@@ -1,6 +1,7 @@
 import { Box, Static, Text, useInput, usePaste } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { focusEvent } from "../focus.js";
+import { contextBar, contextLevel } from "../uiState.js";
 import type { HunkStagingState } from "./hunkStaging.js";
 import { PALETTE_ROWS, type PaletteState, paletteWindow } from "./palette.js";
 import type { ChatState, ChatStore, Item } from "./store.js";
@@ -206,12 +207,8 @@ function InputLine({ state }: { state: ChatState }) {
 
 function Footer({ state }: { state: ChatState }) {
   const { model, sandbox, contextPercent, costUsd, mode } = state.status;
-  const parts = [model, sandbox];
-  if (contextPercent !== undefined) parts.push(`context ${contextPercent}%`);
-  if (costUsd !== undefined) parts.push(`$${costUsd.toFixed(costUsd < 0.01 ? 4 : 2)}`);
-  const keys = state.busy
-    ? "Esc stop · Ctrl-O output"
-    : "\\ then Enter: new line · Ctrl-G editor · Ctrl-P commands";
+  const keys = footerKeys(state.busy, state.keyHints);
+  const level = contextPercent === undefined ? "ok" : contextLevel(contextPercent);
   return (
     <Text>
       {mode === "plan" ? (
@@ -219,12 +216,33 @@ function Footer({ state }: { state: ChatState }) {
           PLAN{" "}
         </Text>
       ) : null}
+      <Text dimColor>{`${model} · ${sandbox === "no sandbox" ? sandbox : `⛨ ${sandbox}`}`}</Text>
+      {contextPercent !== undefined && (
+        <>
+          <Text dimColor> · </Text>
+          {/* UX U10: the number is always there; the color is only a second signal. */}
+          <Text
+            {...(level === "ok"
+              ? { dimColor: true }
+              : { color: level === "full" ? "red" : "yellow" })}
+          >
+            {`${contextBar(contextPercent)} ${contextPercent}%`}
+          </Text>
+        </>
+      )}
       <Text dimColor>
-        {parts.join(" · ")} {"  "}
+        {costUsd === undefined ? "" : ` · $${costUsd.toFixed(costUsd < 0.01 ? 4 : 2)}`}
+        {"  "}
         {keys}
       </Text>
     </Text>
   );
+}
+
+/** The footer's key text (UX U10): full hints in the first chats, then "? keys". */
+export function footerKeys(busy: boolean, hints: boolean): string {
+  if (busy) return "Esc stop · Ctrl-O output";
+  return hints ? "\\ then Enter: new line · Ctrl-G editor · Ctrl-P commands · ? keys" : "? keys";
 }
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -349,7 +367,11 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     if (key.shift) store.toggleMode();
     else store.completeLine();
   } else if (/[\r\n]/.test(input)) typeAhead(store, input);
-  else if (input !== "" && !key.meta) store.editLine({ type: "insert", text: input });
+  // UX U10: "?" on an empty input line shows every key, and is not typed.
+  // The live state: keys typed fast arrive before the view draws again.
+  else if (input === "?" && store.getState().editor.text === "" && !store.getState().busy) {
+    store.showKeys();
+  } else if (input !== "" && !key.meta) store.editLine({ type: "insert", text: input });
 }
 
 /**

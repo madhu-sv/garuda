@@ -1,9 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { hasReceipt } from "../app/receipt.js";
 import { serverCallText, serverResultSummary } from "../model/serverTools.js";
 import type { ToolUseBlock } from "../model/types.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
 import type { SessionRecord } from "../session/records.js";
+import { receiptText } from "./receiptView.js";
 import { summariseCall, summariseResult } from "./renderer.js";
 
 /**
@@ -96,6 +98,17 @@ export function sessionMarkdown(records: readonly SessionRecord[], sessionId: st
       }
       case "compaction":
         out.push("_The conversation was compacted here to fit the context window._", "");
+        break;
+      case "receipt":
+        // UX U1: the receipt of a turn that changed files or ran commands, as plain lines.
+        if (hasReceipt(record.receipt)) {
+          out.push(
+            ...receiptText(record.receipt)
+              .split("\n")
+              .map((line) => `> ${line}`),
+            "",
+          );
+        }
         break;
       case "model":
         out.push(`_The model changed to ${record.model}._`, "");

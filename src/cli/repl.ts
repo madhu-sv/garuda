@@ -5,6 +5,7 @@ import { runCommand } from "./chat/commands.js";
 import { complete, rootFiles, rootLister } from "./chat/complete.js";
 import { CommandArgs, commandNames } from "./chat/controller.js";
 import { BUILD_PROMPT, planHandoff } from "./chat/plan.js";
+import { CONTINUE_PROMPT, SUMMARY_PROMPT, stopHandoff } from "./chat/stop.js";
 import type { Notifier } from "./notify.js";
 import type { Renderer } from "./renderer.js";
 import type { Interruptible } from "./turn.js";
@@ -124,7 +125,20 @@ export async function runRepl(
         prompt,
         exitNow,
         notifier,
+        { chat: true },
       );
+      // The step limit (UX U3): ask how to go on.
+      if (outcome.kind === "done" && outcome.result.stopReason === "max_steps") {
+        const next = await stopHandoff(
+          approver,
+          runtime.limits.maxSteps,
+          runtime.executor.isolation,
+        );
+        if (next === "stop") break;
+        prompt = next === "more" ? CONTINUE_PROMPT : SUMMARY_PROMPT;
+        renderer.info(`› ${prompt}`);
+        continue;
+      }
       // A finished plan: ask whether to build it.
       if (!planning || outcome.kind !== "done" || outcome.result.stopReason !== "done") break;
       if ((await planHandoff(runtime, approver)) !== "now") break;

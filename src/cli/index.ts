@@ -595,6 +595,9 @@ async function start(options: Options, program: Command): Promise<number> {
         ...(outcome.kind === "done"
           ? { stopMessage: stopMessage(outcome.result.stopReason, runtime.limits) }
           : {}),
+        ...(outcome.kind === "done" && runtime.lastReceipt !== undefined
+          ? { receipt: runtime.lastReceipt }
+          : {}),
       });
     };
     // `garuda -p "/review src"` runs a custom command; other text goes to the model as it is.
@@ -679,6 +682,9 @@ async function start(options: Options, program: Command): Promise<number> {
     const setEventTarget = (target: Renderer) => {
       events = target;
     };
+    // UX U10: the key hints in the footer for the first chats only.
+    const { countChat, KEY_HINT_CHATS } = await import("./uiState.js");
+    const chats = await countChat(homedir());
     await ink.runInkChat(
       runtime,
       approver,
@@ -689,6 +695,7 @@ async function start(options: Options, program: Command): Promise<number> {
       options.firstInput,
       notifier,
       focus,
+      chats <= KEY_HINT_CHATS,
     );
   } else {
     process.stderr.write(`${startBanner}\n`);

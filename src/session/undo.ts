@@ -19,6 +19,8 @@ export interface UndoPoint {
   conversation: boolean;
   /** The start of the turn's prompt, for the /undo question. */
   prompt: string;
+  /** The files that the turn changed, from its receipt (UX U1): a kept change when above 0. */
+  changedFiles?: number;
 }
 
 export interface RedoEntry {

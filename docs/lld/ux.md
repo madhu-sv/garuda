@@ -1,6 +1,7 @@
 # UX: show the trust and the evidence (design)
 
-Status: design for review (2026-11-05). No code yet. The user asked for the mock-ups first.
+Status: design approved (2026-11-05: the user took every suggested default, D1–D10). Built: patch 1
+(U1, U3, U10); see "As built (patch 1)" at the end.
 
 ## Purpose
 
@@ -149,11 +150,8 @@ becomes one key:
   The agent may be stuck. Type a hint and press Enter, or Esc to stop here.
 ```
 
-```
-■ Stopped: the session token budget (20M) is used.
-  [c] /compact and go on · [Esc] stop here
-  (limits.tokenBudget in settings raises it for good)
-```
+A stop at the session token budget keeps today's text, which names `limits.tokenBudget`. Compaction
+frees context, not budget, so the chat offers no key for it.
 
 `-p` and pipes keep today's text, which names `--resume`.
 
@@ -363,6 +361,25 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
 | D8 | Side-by-side diffs from what width? | 140 columns. |
 | D9 | Key hints in the footer: for how many chats? | 5, then `?`. |
 | D10 | Syntax colors: a dependency (for example highlight.js) or a small tokenizer of Garuda's own? | Word-level marks first. Decide on colors after that, with the dependency audit. |
+
+## As built (patch 1)
+
+- **U1.** `src/app/receipt.ts`: `Receipt`, `hasReceipt` (D1), `isTestCommand` and
+  `parseTestCount` (D2: vitest, jest, node:test, pytest, Maven Surefire, `go test -v`; Gradle and
+  cargo count as test runs with ✓ or ✗ only), `ReceiptCollector`. Bash reports `commandFacts`
+  (exit code, timeout, sandboxed, blocked hosts) through a new `ToolOutcome.command`; the model
+  never sees it. `Runtime.runTurn` wraps the loop's events, takes a snapshot at the end only when a
+  tool that can change files ran, and writes a `receipt` record. `UndoPoint.changedFiles` makes
+  the kept-change count follow `/undo` and `/redo`; at most 50 undo points count. `--replay` does
+  not draw receipts; `/export` and `--resume` read them.
+- **Views.** `src/cli/receiptView.ts`: a box of at most 76 cells, a Network row for blocked hosts
+  (the Sandbox row stays short), plain lines under 60 columns, in a pipe and with
+  `GARUDA_SCREEN_READER=1`. `-p --json`: `receipt` in the result line, with snake_case keys.
+  Editors (ACP) do not get the receipt yet.
+- **U3.** `chatStopMessage` for both chats; after `max_steps` both ask "Go on?" with the approval
+  keys (Enter or y, a, n or Esc), not the `[s]` key of the mock-up.
+- **U10.** `~/.garuda/ui.json` counts chats; hints for 5 (D9), then `? keys`. The context bar has 10
+  cells.
 
 ## Patch plan
 

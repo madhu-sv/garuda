@@ -43,7 +43,7 @@ Low-level design documents:
 | Editors over ACP (0.15) | `src/acp/`, `src/cli/acpCommand.ts` | [acp.md](lld/acp.md) |
 | Bounded changes (0.17, planned): staged commands, job write scopes, strict profile, audit checkpoint, shared budget | `src/sandbox/`, `src/permissions/`, `src/jobs/`, `src/audit/`, `src/agents/`, `src/knowledge/` | [bounded-changes.md](lld/bounded-changes.md) |
 | Setup and stored keys (0.16) | `src/model/credentials.ts`, `src/model/providers.ts`, `src/cli/setupCommand.ts` | [setup.md](lld/setup.md) |
-| UX: receipts, network fixes, rewind, morning brief, `advise` (planned) | `src/cli/`, `src/app/`, `src/net/`, `src/jobs/`, `src/evals/` | [ux.md](lld/ux.md) |
+| UX: receipts (patch 1 built), network fixes, rewind, morning brief, `advise` (planned) | `src/app/receipt.ts`, `src/cli/`, `src/net/`, `src/jobs/`, `src/evals/` | [ux.md](lld/ux.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
 The code, the tests and the commits use the same IDs. The documents describe version 0.18.0 (eval evidence: repeated runs with intervals, cost per accepted change, unexpected changes, `eval compare`; the Claude Code baseline; a held-out set and a medium suite; an A/B of one MCP server; `eval tune`, the prompt-tuning loop; few-steps rules in the system prompt; on top of 0.17.0).

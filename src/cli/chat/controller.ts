@@ -9,6 +9,7 @@ import { runTurnInTerminal } from "../turn.js";
 import { paletteEntries, runCommand } from "./commands.js";
 import { type ArgChoice, complete, rootFiles, rootLister } from "./complete.js";
 import { BUILD_PROMPT, planHandoff } from "./plan.js";
+import { CONTINUE_PROMPT, SUMMARY_PROMPT, stopHandoff } from "./stop.js";
 import type { ChatStore, Status } from "./store.js";
 
 /**
@@ -96,9 +97,20 @@ export async function runChat(
       store.begin(display, prompt === display);
       let outcome: Awaited<ReturnType<typeof runTurnInTerminal>>;
       try {
-        outcome = await runTurnInTerminal(runtime, store, store, prompt, exitNow, notifier);
+        outcome = await runTurnInTerminal(runtime, store, store, prompt, exitNow, notifier, {
+          chat: true,
+        });
       } finally {
         store.end(statusOf(runtime));
+      }
+      // The step limit (UX U3): ask how to go on.
+      if (outcome.kind === "done" && outcome.result.stopReason === "max_steps") {
+        const next = await stopHandoff(store, runtime.limits.maxSteps, runtime.executor.isolation);
+        store.refreshStatus(statusOf(runtime));
+        if (next === "stop") break;
+        prompt = next === "more" ? CONTINUE_PROMPT : SUMMARY_PROMPT;
+        display = prompt;
+        continue;
       }
       // A finished plan: ask whether to build it.
       if (!planning || outcome.kind !== "done" || outcome.result.stopReason !== "done") break;

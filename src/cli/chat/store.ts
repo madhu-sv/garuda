@@ -1,6 +1,8 @@
+import type { Receipt } from "../../app/receipt.js";
 import type { AgentEvent } from "../../loop/runAgent.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../../permissions/types.js";
 import { colorPreview, header } from "../approver.js";
+import { receiptText, screenReaderMode } from "../receiptView.js";
 import type { Renderer } from "../renderer.js";
 import {
   retryText,
@@ -11,6 +13,7 @@ import {
   todoLines,
 } from "../renderer.js";
 import type { Interruptible } from "../turn.js";
+import { KEYS_HELP } from "../uiState.js";
 import {
   createHunkStaging,
   discardAllHunks,
@@ -91,6 +94,8 @@ export interface ChatState {
   exiting: boolean;
   /** The command palette, while it is open (0.9, Ctrl-P). */
   palette?: PaletteState;
+  /** UX U10: the footer shows the key hints (the first chats); else "? keys". */
+  keyHints: boolean;
 }
 
 const EXIT_WINDOW_MS = 2_000;
@@ -121,6 +126,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   /** Ctrl-G and /editor (0.6): the chat sets it; it edits the text in the user's editor. */
   externalEdit: ((text: string) => { text?: string; problem?: string }) | undefined;
   private readonly paint: Paint;
+  private readonly columns: () => number;
   private readonly now: () => number;
 
   constructor(
@@ -128,6 +134,10 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     options: {
       paint?: Paint;
       now?: () => number;
+      /** UX U10: show the key hints in the footer. Default true. */
+      keyHints?: boolean;
+      /** The terminal's columns (UX U1: the receipt's width). Default: stdout's, or 80. */
+      columns?: () => number;
       history?: string[];
       /** Keys in this time after a question appears do not answer it (type-ahead). */
       approvalKeyDelayMs?: number;
@@ -135,6 +145,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   ) {
     this.paint = options.paint ?? ansi;
     this.now = options.now ?? Date.now;
+    this.columns = options.columns ?? (() => process.stdout.columns || 80);
     this.approvalKeyDelayMs = options.approvalKeyDelayMs ?? APPROVAL_KEY_DELAY_MS;
     this.state = {
       items: [],
@@ -146,6 +157,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
       busy: false,
       status,
       exiting: false,
+      keyHints: options.keyHints ?? true,
     };
   }
 
@@ -465,6 +477,24 @@ export class ChatStore implements Renderer, Approver, Interruptible {
 
   info(text: string): void {
     this.note("info", text);
+  }
+
+  /** UX U10: `?` on an empty input line prints every key. */
+  showKeys(): void {
+    this.add({ kind: "output", text: this.paint("dim", KEYS_HELP) });
+  }
+
+  /** UX U1: the turn's receipt, as a box in the scrollback. */
+  receipt(receipt: Receipt): void {
+    this.flushText();
+    this.add({
+      kind: "output",
+      text: receiptText(receipt, {
+        columns: this.columns(),
+        paint: (style, text) => this.paint(style, text),
+        screenReader: screenReaderMode(),
+      }),
+    });
   }
 
   warn(text: string): void {
