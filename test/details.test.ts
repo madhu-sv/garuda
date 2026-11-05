@@ -34,7 +34,9 @@ describe("/details (0.9)", () => {
         .getState()
         .items.filter((i) => i.kind === "tool")
         .map((i) => i.text);
+    // UX U4: a read stays open until something else comes; end() closes it.
     store.event(ok);
+    store.end({});
     expect(tools()[0]).toContain("⎿ 3 line(s)");
 
     await run(store, "/details");
@@ -46,6 +48,7 @@ describe("/details (0.9)", () => {
 
     await run(store, "/details on");
     store.event(ok);
+    store.end({});
     expect(tools()[3]).toContain("⎿ 3 line(s)");
     await run(store, "/details maybe");
     expect(store.getState().items.at(-1)?.text).toBe("Use: /details, /details on or /details off.");

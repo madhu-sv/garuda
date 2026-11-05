@@ -26,6 +26,7 @@ export function App({ store }: { store: ChatStore }) {
       <Static items={state.items}>{(item) => <ItemView key={item.id} item={item} />}</Static>
       <Box flexDirection="column">
         {state.streaming !== "" && <Text>{state.streaming}</Text>}
+        {state.group !== undefined && <Text>{state.group}</Text>}
         {state.running.map((tool) => (
           <Text key={tool.id}>
             <Text color="cyan">{frame}</Text> {tool.line}
@@ -46,6 +47,11 @@ export function App({ store }: { store: ChatStore }) {
             selected={state.approval.selected}
             hasHunks={state.approval.request.selectHunks !== undefined}
           />
+        )}
+        {state.plan !== undefined && (
+          <Box marginTop={1}>
+            <Text>{state.plan}</Text>
+          </Box>
         )}
         {state.queue.map((line, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: queued lines can repeat.

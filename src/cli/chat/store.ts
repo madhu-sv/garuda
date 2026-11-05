@@ -1,5 +1,6 @@
 import type { Receipt } from "../../app/receipt.js";
 import type { AgentEvent } from "../../loop/runAgent.js";
+import type { ToolUseBlock } from "../../model/types.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../../permissions/types.js";
 import { colorPreview, header } from "../approver.js";
 import { receiptText, screenReaderMode } from "../receiptView.js";
@@ -25,6 +26,7 @@ import {
 import { type EditAction, type EditorState, edit, emptyEditor, submit } from "./lineEditor.js";
 import { ansi, type Paint, renderMarkdown, takeBlocks } from "./markdown.js";
 import { filterPalette, type PaletteEntry, type PaletteState } from "./palette.js";
+import { groupLine, groups, planText } from "./toolGroups.js";
 
 /**
  * The state of the Ink chat (0.2). The view only draws it; all logic is here, so tests
@@ -97,6 +99,10 @@ export interface ChatState {
   palette?: PaletteState;
   /** UX U10: the footer shows the key hints (the first chats); else "? keys". */
   keyHints: boolean;
+  /** UX U4: the open group of read-only calls, drawn live until it closes. */
+  group?: string;
+  /** UX U4: the model's plan (todo_write), drawn live above the input during the turn. */
+  plan?: string;
 }
 
 const EXIT_WINDOW_MS = 2_000;
@@ -130,6 +136,10 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   private readonly columns: () => number;
   /** The turn's answer has started (its first text item got the mark). */
   private answered = true;
+  /** UX U4: the open group: one tool, its calls, and the text of a lone call. */
+  private openGroup: { name: string; calls: ToolUseBlock[]; single: string } | undefined;
+  /** UX U4: the last plan of the turn, for the scrollback at the end. */
+  private planLines: string[] | undefined;
   private readonly now: () => number;
 
   constructor(
@@ -370,6 +380,8 @@ export class ChatStore implements Renderer, Approver, Interruptible {
 
   end(status: Partial<Status>): void {
     this.flushText();
+    this.closeGroup();
+    this.closePlan();
     this.stopping = false;
     this.update({ busy: false, running: [], status: { ...this.state.status, ...status } });
   }
@@ -411,6 +423,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         return;
       case "text_delta": {
         this.flushThinking();
+        this.closeGroup();
         const { blocks, rest } = takeBlocks(this.state.streaming + event.text);
         for (const block of blocks)
           this.add({ kind: "text", text: renderMarkdown(block, this.paint) });
@@ -445,14 +458,32 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         const summary = summariseResult(event.call, event.outcome);
         const line = `${this.paint("cyan", "●")} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`;
         const result = `  ${this.paint("dim", "⎿")} ${event.outcome.isError ? this.paint("red", summary) : this.paint("dim", summary)}`;
-        const todos = todoLines(event.call, event.outcome).map((l) => `    ${l}`);
         const shown = this.details || event.outcome.isError ? [result] : [];
-        this.add({ kind: "tool", text: [line, ...shown, ...todos].join("\n") });
+        const text = [line, ...shown].join("\n");
         this.lastOutput = {
           title: `${event.call.name} ${summariseCall(event.call)}`,
           text: event.outcome.content,
         };
-        this.update({ running: this.state.running.filter((r) => r.id !== event.call.id) });
+        const running = this.state.running.filter((r) => r.id !== event.call.id);
+        // UX U4: the plan is drawn live, not printed again after each todo_write.
+        const todos = todoLines(event.call, event.outcome);
+        if (event.call.name === "todo_write" && todos.length > 0) {
+          this.planLines = todos;
+          this.update({ running, plan: planText(todos, this.paint) });
+          return;
+        }
+        // UX U4: a successful read-only call joins the open group of its tool.
+        if (groups(event.call.name) && !event.outcome.isError) {
+          if (this.openGroup?.name !== event.call.name) this.closeGroup();
+          const open = this.openGroup ?? { name: event.call.name, calls: [], single: text };
+          open.calls.push(event.call);
+          this.openGroup = open;
+          this.update({ running, group: this.groupText(open) });
+          return;
+        }
+        this.closeGroup();
+        this.add({ kind: "tool", text });
+        this.update({ running });
         return;
       }
       case "compaction": {
@@ -468,6 +499,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         return;
       case "server_tool": {
         this.flushText();
+        this.closeGroup();
         const { call, result } = serverToolText(event);
         const failed = event.result?.error !== undefined;
         const head = `${this.paint("cyan", "●")} ${this.paint("bold", call)}`;
@@ -499,6 +531,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   /** UX U1: the turn's receipt, as a box in the scrollback. */
   receipt(receipt: Receipt): void {
     this.flushText();
+    this.closeGroup();
     // A blank line first: the box does not touch the answer above it.
     this.add({
       kind: "output",
@@ -520,6 +553,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
 
   private note(level: "info" | "warn" | "error", text: string): void {
     this.flushText();
+    this.closeGroup();
     const trimmed = text.replace(/^\n+/, "");
     const style = level === "info" ? "dim" : level === "warn" ? "yellow" : "red";
     this.add({ kind: "note", level, text: this.paint(style, trimmed) });
@@ -535,6 +569,35 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     if (text === "") return;
     this.add({ kind: "output", text: thinkingPreview(text, (s) => this.paint("dim", s)) });
     this.lastOutput = { title: "thinking", text };
+  }
+
+  /** UX U4: the open group's text: a lone call as it always was, else one line for all. */
+  private groupText(open: { name: string; calls: ToolUseBlock[]; single: string }): string {
+    return open.calls.length === 1
+      ? open.single
+      : groupLine(open.name, open.calls, this.paint, this.columns());
+  }
+
+  /** UX U4: the open group goes into the scrollback as one item. */
+  private closeGroup(): void {
+    const open = this.openGroup;
+    if (open === undefined) return;
+    this.openGroup = undefined;
+    this.add({ kind: "tool", text: this.groupText(open) });
+    const { group: _closed, ...rest } = this.state;
+    this.state = rest;
+    for (const listener of this.listeners) listener();
+  }
+
+  /** UX U4: at the end of a turn, the last plan goes into the scrollback once. */
+  private closePlan(): void {
+    const lines = this.planLines;
+    if (lines === undefined) return;
+    this.planLines = undefined;
+    this.add({ kind: "tool", text: planText(lines, this.paint) });
+    const { plan: _closed, ...rest } = this.state;
+    this.state = rest;
+    for (const listener of this.listeners) listener();
   }
 
   private flushText(): void {

@@ -241,6 +241,8 @@ interface ChatState {
   (cyan, dim while busy) with `INPUT_HINT` or `INPUT_HINT_BUSY` when empty; no box under
   `INPUT_BOX_MIN_COLUMNS` (40) or for a screen reader. The footer starts one space in, under the
   box's border. The chat does not use the alternate screen: the terminal's scrollback stays.
+- Grouped tool lines (UX U4): `toolGroups.ts`; `ChatStore.closeGroup` and `closePlan`; the
+  live area draws `state.group` before the running tools and `state.plan` above the input.
 - Requests and answers (0.18.1): `ItemView` draws a `user` item in a box with only a left border (`USER_BAR`, so wrapped
   lines get it too), bold, and
   the first `text` item of a turn (`lead`, set by `ChatStore.add` after `begin`) with

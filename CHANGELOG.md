@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- UX, patch 3 (docs/lld/ux.md U4): in the chat, calls of one read-only tool in a row become one
+  line, for example `● Read 5 files  docs/architecture.md, SECURITY.md, +3`; a lone call keeps its
+  line and its result. Edits, commands and failed calls always keep a line of their own. Ctrl-O
+  still shows the last call's output. The model's plan (`todo_write`) is drawn live above the
+  input during the turn and printed once at the end, instead of after every update.
 - The chat's wordmark has a drop shadow (a 3D look), drawn twice as large from 130 columns, with
   the card as wide as the wordmark; a tall screen gets some space above it. A screen reader gets no
   wordmark (the card says the name).

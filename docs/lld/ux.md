@@ -1,7 +1,7 @@
 # UX: show the trust and the evidence (design)
 
 Status: design approved (2026-11-05: the user took every suggested default, D1–D10). Built: patch 1
-(U1, U3, U10) and patch 2 (U2); see "As built" at the end.
+(U1, U3, U10), patch 2 (U2) and patch 3 (U4); see "As built" at the end.
 
 ## Purpose
 
@@ -409,6 +409,19 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   and "Garuda:". The user asked for this after a long chat.
 - **An old build.** The chat's banner warns when `BUILD_COMMIT` differs from the checkout's commit
   (`src/buildCheck.ts`, shared with the evals). The user ran an old `dist/` after a patch.
+
+## As built (patch 3)
+
+- **Groups.** `src/cli/chat/toolGroups.ts`: the read-only tools that group (`read_file`, `glob`,
+  `grep`, `find_symbol`, `find_references`, `find_callers`, `repo_map`), `groupLine` and
+  `groupTargets` (cut to the terminal with "+N"). `ChatStore` keeps the open group live
+  (`state.group`) and puts it into the scrollback as one item when another tool, text, a note, a
+  receipt or the end of the turn comes. A failed call closes the group and keeps its own line. A
+  group of one keeps today's two lines. Only read-only tools group, so `/details` needed no new
+  switch; the design's "`/details` turns grouping off" was dropped. The plain renderer does not
+  group.
+- **Plan.** A `todo_write` result sets `state.plan` (✔ green, ▶ yellow, ○ dim) above the input;
+  `end()` prints the last plan once. The marks are the existing ✔ ▶ ○, not the mock-up's ✓ ◐ ○.
 
 ## Also built: the start screen (0.18.1)
 

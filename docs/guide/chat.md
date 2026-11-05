@@ -77,6 +77,9 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   screen. You type in a box at the bottom; it shows a hint while it is empty, and its border dims
   while a task runs (what you type then queues the next task). The chat stays in the terminal's
   normal screen, so scrolling, search and copy work as usual.
+- Reads and searches in a row show as one line (0.18.1): `● Read 5 files  a.ts, b.ts, +3`. Edits,
+  commands and failed calls keep a line each. Ctrl-O shows the last call's output in full. With
+  `todo_write` on, the plan stays above the input during the task and prints once at the end.
 - Your requests have a bar (`▌`) on every line; Garuda's answer starts with `✦` (0.18.1). With
   `GARUDA_SCREEN_READER=1` they read "You:" and "Garuda:".
 - When Garuda runs from a checkout and `dist/` is older than it, the banner says "run pnpm build
