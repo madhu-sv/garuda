@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The chat's wordmark has a drop shadow (a 3D look), drawn twice as large from 130 columns, with
+  the card as wide as the wordmark; a tall screen gets some space above it. A screen reader gets no
+  wordmark (the card says the name).
 - The chat starts on a clear screen, with the banner centred, and you type in a visible chat box
   with a hint ("Type a task · / for commands · @ for files"). The old screen goes into the
   scrollback, not away; `"ui": { "clearOnStart": false }` in settings keeps it on screen. Garuda

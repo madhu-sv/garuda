@@ -1,6 +1,13 @@
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
-import { banner, centerBlock, centerLines, visibleWidth } from "../src/cli/banner.js";
+import {
+  banner,
+  centerBlock,
+  centerLines,
+  visibleWidth,
+  WORDMARK_LARGE_COLUMNS,
+  wordmark3d,
+} from "../src/cli/banner.js";
 import { clearScreenKeepingScrollback } from "../src/cli/chat/inkChat.js";
 import { noColor } from "../src/cli/chat/markdown.js";
 import { ChatStore } from "../src/cli/chat/store.js";
@@ -45,6 +52,71 @@ describe("the centred banner", () => {
     expect(centerLines(["ab", ""], 10)).toEqual(["    ab", ""]);
     expect(centerLines(["x".repeat(20)], 10)).toEqual(["x".repeat(20)]);
     expect(centerBlock(["a", "bbb"], 3, 9)).toEqual(["   a", "   bbb"]);
+  });
+});
+
+describe("the 3D wordmark (0.18.1)", () => {
+  const plain = (scale: 1 | 2) =>
+    wordmark3d(
+      scale,
+      () => "█",
+      () => "░",
+    );
+
+  it("puts a shadow below and right of each stroke, never on a letter", () => {
+    const mark = plain(1);
+    expect(mark).toHaveLength(6);
+    // The first row of G: " ██████" and its shadow one row down, one cell right.
+    expect(mark[0]?.startsWith(" ██████")).toBe(true);
+    expect(mark[1]?.startsWith("██░░░░░░")).toBe(true);
+    // The last row is shadow only.
+    expect(mark[5]).toMatch(/^[ ░]+$/);
+    // Every lit cell of the flat wordmark is still lit.
+    const flat = banner(info, { columns: 100, color: "none", home: "/Users/m" }).split("\n");
+    for (let y = 0; y < 5; y++) {
+      for (const [x, ch] of [...(flat[y] ?? "")].entries()) {
+        if (ch === "█") expect(mark[y]?.[x]).toBe("█");
+      }
+    }
+  });
+
+  it("is twice as wide and tall from 130 columns, with the card as wide as the wordmark", () => {
+    const large = plain(2);
+    expect(large).toHaveLength(11);
+    expect(Math.max(...large.map((l) => l.length))).toBe(2 * 49 + 2);
+    const out = banner(info, {
+      columns: WORDMARK_LARGE_COLUMNS,
+      color: "none",
+      home: "/Users/m",
+      center: true,
+    });
+    const card = out.split("\n").filter((l) => /^\s*╭/.test(l))[0] ?? "";
+    expect(visibleWidth(card.trimStart())).toBe(2 * 49 + 2);
+    const small = banner(info, {
+      columns: WORDMARK_LARGE_COLUMNS - 1,
+      color: "none",
+      home: "/Users/m",
+      center: true,
+    });
+    expect(small.split("\n").filter((l) => l.includes("█"))).toHaveLength(5);
+  });
+
+  it("leaves some space above it on a tall screen, at most 6 lines", () => {
+    const rows = (r: number) =>
+      banner(info, { columns: 100, rows: r, color: "none", home: "/Users/m", center: true }).split(
+        "\n",
+      );
+    const blanks = (lines: string[]) => lines.findIndex((l) => l.trim() !== "");
+    expect(blanks(rows(20))).toBe(0);
+    expect(blanks(rows(30))).toBe(3);
+    expect(blanks(rows(50))).toBe(6);
+    expect(blanks(rows(200))).toBe(6);
+  });
+
+  it("a screen reader gets no wordmark", () => {
+    const out = banner(info, { columns: 200, color: "none", home: "/Users/m", screenReader: true });
+    expect(out).not.toContain("█");
+    expect(out).toContain("✦ Garuda 0.18.1");
   });
 });
 

@@ -233,7 +233,11 @@ interface ChatState {
 - The start screen (0.18.1): `runInkChat` writes `clearScreenKeepingScrollback(rows)` (new lines,
   then the cursor home) unless `ui.clearOnStart` is false; `banner(..., { center: true })` centres
   the wordmark and the card as blocks (`centerBlock`) and the tips line (`centerLines`); `index.ts`
-  centres the `/init` tip too. No centring in screen-reader mode. `InputLine` draws a round box
+  centres the `/init` tip too. With `center`, the wordmark is `wordmark3d(scale)`: WORDMARK's
+  cells, `scale` 2 from `WORDMARK_LARGE_COLUMNS` (130), and a shadow of the same shape one row down
+  and `scale` cells right (truecolor: the face's colour at 45%; basic: red ▓; none: ░). The card is
+  at least as wide as the wordmark. `rows` gives up to 6 blank lines above on a tall screen. No
+  centring and no wordmark in screen-reader mode. `InputLine` draws a round box
   (cyan, dim while busy) with `INPUT_HINT` or `INPUT_HINT_BUSY` when empty; no box under
   `INPUT_BOX_MIN_COLUMNS` (40) or for a screen reader. The footer starts one space in, under the
   box's border. The chat does not use the alternate screen: the terminal's scrollback stays.

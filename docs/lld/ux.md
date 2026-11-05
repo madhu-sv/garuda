@@ -416,7 +416,9 @@ The user asked for a full-screen start, a centred banner and a visible chat box.
 discussion, the alternate screen stays out: it takes away the terminal's scrollback, search and
 copy, and the conversation would leave the terminal at exit. Built instead, in the normal screen:
 a clear start that keeps the old screen in the scrollback (`ui.clearOnStart`, default on), a
-centred banner, and a round chat box with a hint. A `--fullscreen` option can come later.
+centred banner, and a round chat box with a hint. A `--fullscreen` option can come later. After
+the user's screenshot (a wide terminal, the wordmark small at the left: screen-reader mode was on),
+the wordmark got a drop shadow and a double size from 130 columns, and screen-reader mode drops it.
 
 ## Patch plan
 

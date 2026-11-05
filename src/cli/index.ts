@@ -663,6 +663,8 @@ async function start(options: Options, program: Command): Promise<number> {
     color: colorLevel(process.stdout),
     // 0.18.1: the Ink chat centres the banner; a screen reader gets it as it is.
     center: ink !== undefined && !screenReaderMode(),
+    ...(process.stdout.rows ? { rows: process.stdout.rows } : {}),
+    screenReader: screenReaderMode(),
   });
   // A dist/ older than its checkout (the user's live run: a new patch, no rebuild) says so.
   {

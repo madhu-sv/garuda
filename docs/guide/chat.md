@@ -71,7 +71,8 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   the context use as a bar and a number (yellow from 70%, red from 80%, where compaction starts)
   and the cost. The key hints show in the first 5 chats (counted in `~/.garuda/ui.json`); after
   that the footer says `? keys`, and `?` on an empty input line lists every key.
-- The chat starts on a clear screen with the banner centred (0.18.1). What was on the screen goes
+- The chat starts on a clear screen with the banner centred (0.18.1): a 3D wordmark (twice as
+  large from 130 columns) and the session card under it. What was on the screen goes
   into the scrollback; `"ui": { "clearOnStart": false }` in `.garuda/settings.json` keeps it on
   screen. You type in a box at the bottom; it shows a hint while it is empty, and its border dims
   while a task runs (what you type then queues the next task). The chat stays in the terminal's
