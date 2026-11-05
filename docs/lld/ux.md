@@ -1,7 +1,8 @@
 # UX: show the trust and the evidence (design)
 
 Status: design approved (2026-11-05: the user took every suggested default, D1–D10). Built: patch 1
-(U1, U3, U10), patch 2 (U2), patch 3 (U4) and patch 4 (U6); see "As built" at the end.
+(U1, U3, U10), patch 2 (U2), patch 3 (U4), patch 4 (U6) and patch 5 (U5, steps 1
+and 2); see "As built" at the end.
 
 ## Purpose
 
@@ -430,6 +431,17 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   `/sessions` has: it works in the plain chat too, and Tab completes the numbers with each turn's
   prompt as the hint. The details are in [undo.md](undo.md). A fork's new session starts at cost 0;
   `/export` of it says where it came from but does not repeat the old messages.
+
+## As built (patch 5)
+
+- **U5.** `src/cli/diffView.ts`: `tokens` (words, runs of spaces, single signs), `wordDiff` (the
+  tokens outside the longest common subsequence; no marks when the lines share under 40% of their
+  words, or are too long), `unifiedDiff` (the n-th removed and n-th added line of a run are a
+  pair), `sideBySide` (line numbers from the hunk headers, long lines cut with …), `terminalDiff`
+  (side by side from `SIDE_BY_SIDE_COLUMNS`, 140, D8) and `hunkCount`. `colorDiff` and
+  `colorPreview` in `approver.ts` take the terminal's columns; the approvals, hunk review and
+  `/diff` use them. Changed words are in inverse video, not bold as the design said: bold is hard
+  to see in red and green. Syntax colours wait (D10).
 
 ## Also built: the start screen (0.18.1)
 

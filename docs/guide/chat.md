@@ -87,6 +87,8 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
 - Type-ahead: type during a task and press Enter to queue the next task.
   Keys typed before the chat is ready are kept too.
 - Ctrl-O prints the full output of the last tool call. ↑ and ↓ browse earlier inputs.
+- Diffs mark the changed words of a changed line (0.18.1). From 140 columns a diff is side by side,
+  with the line numbers of both files. An approval that can review hunks says how many there are.
 - Approvals show the full diff or command in the scrollback. Answer with ↑↓ and Enter, or
   y (once), a (session), n or Esc (deny). For `edit_file`, press `h` (or `p`) to review hunks one by one (0.14): only the hunks you stage
   are written, and the model is told which ones you rejected. A diff too long to show in full has no `h`.

@@ -3,6 +3,7 @@ import type { AgentEvent } from "../../loop/runAgent.js";
 import type { ToolUseBlock } from "../../model/types.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../../permissions/types.js";
 import { colorPreview, header } from "../approver.js";
+import { hunkCount } from "../diffView.js";
 import { receiptText, screenReaderMode } from "../receiptView.js";
 import type { Renderer } from "../renderer.js";
 import {
@@ -645,7 +646,14 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   private askNow(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
     this.flushText();
     // The full preview goes to the scrollback; the live part only holds the choice.
-    this.add({ kind: "output", text: `${header(request)}\n${colorPreview(request)}` });
+    // UX U5: the first line says how many hunks there are, and that h reviews them.
+    const hunks = request.selectHunks === undefined ? 0 : hunkCount(request.preview);
+    const hint =
+      hunks >= 2 ? this.paint("dim", ` · ${hunks} hunks · h reviews them one by one`) : "";
+    this.add({
+      kind: "output",
+      text: `${header(request)}${hint}\n${colorPreview(request, this.columns())}`,
+    });
     return new Promise((resolve, reject) => {
       const onAbort = () => {
         this.answer = undefined;

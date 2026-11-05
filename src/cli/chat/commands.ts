@@ -391,10 +391,12 @@ async function diffCommand(
       `Changes${where} ${since} (${result.files.length} file${result.files.length === 1 ? "" : "s"}, +${plus} −${minus}). Changes you made yourself count too.`,
       ...rows,
       "",
-      colorDiff(lines.slice(0, DIFF_LINES).join("\n")),
+      colorDiff(lines.slice(0, DIFF_LINES).join("\n"), process.stdout.columns),
       ...(cut ? [`… ${lines.length - DIFF_LINES} more lines. ${more}`] : []),
     ].join("\n"),
-    cut ? { title: `diff ${since}${where}`, text: colorDiff(result.patch) } : undefined,
+    cut
+      ? { title: `diff ${since}${where}`, text: colorDiff(result.patch, process.stdout.columns) }
+      : undefined,
   );
 }
 

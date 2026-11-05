@@ -1,5 +1,7 @@
 import { Box, Static, Text, useInput, usePaste } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { terminalPaint } from "../approver.js";
+import { unifiedDiff } from "../diffView.js";
 import { focusEvent } from "../focus.js";
 import { screenReaderMode } from "../receiptView.js";
 import { contextBar, contextLevel } from "../uiState.js";
@@ -145,15 +147,8 @@ export function HunkStagingView({ staging }: { staging: HunkStagingState }) {
       </Box>
       <Text color="cyan">{current.header}</Text>
       <Box flexDirection="column" paddingLeft={1}>
-        {current.lines.map((line, i) => {
-          const color = line.startsWith("+") ? "green" : line.startsWith("-") ? "red" : undefined;
-          return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: diff lines can be identical
-            <Text key={i} {...(color ? { color } : {})}>
-              {line}
-            </Text>
-          );
-        })}
+        {/* UX U5: the changed words of a changed line are marked, as in the approval. */}
+        <Text>{unifiedDiff(current.lines.join("\n"), terminalPaint)}</Text>
       </Box>
       <Text dimColor>
         [y] stage hunk · [n] skip · [a] stage all · [d] discard all · [←/→] prev/next · [Esc] back
