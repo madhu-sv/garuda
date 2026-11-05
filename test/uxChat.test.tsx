@@ -1,13 +1,14 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { render } from "ink-testing-library";
 import { afterAll, describe, expect, it } from "vitest";
 import { Runtime } from "../src/app/runtime.js";
 import { runChat } from "../src/cli/chat/controller.js";
 import { noColor } from "../src/cli/chat/markdown.js";
 import { CONTINUE_PROMPT, SUMMARY_PROMPT } from "../src/cli/chat/stop.js";
 import { ChatStore } from "../src/cli/chat/store.js";
-import { footerKeys, onKey } from "../src/cli/chat/ui.js";
+import { App, footerKeys, onKey } from "../src/cli/chat/ui.js";
 import { contextBar, contextLevel, countChat, KEY_HINT_CHATS } from "../src/cli/uiState.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import type { ModelRequest } from "../src/model/types.js";
@@ -164,6 +165,12 @@ describe("the receipt in the chat (UX U1)", () => {
     await until(() => model.remaining === 0 && !store.getState().busy);
     const all = texts(store).join("\n");
     expect(all).toMatch(/Turn 1 · done · 2 steps/);
+    // A blank line first, so the box does not touch the answer (the first live run).
+    expect(
+      texts(store)
+        .find((t) => t.includes("Turn 1 · done"))
+        ?.startsWith("\n"),
+    ).toBe(true);
     expect(all).toContain("1 outside");
     expect(all).not.toMatch(/\[done · 2 step\(s\)/);
     send(store, "/exit");
@@ -179,8 +186,21 @@ describe("the footer and the keys (UX U10)", () => {
     expect(footerKeys(true, false)).toBe("Esc stop · Ctrl-O output");
   });
 
+  it("the footer names the sandbox once: '⛨ seatbelt', not '⛨ sandbox seatbelt'", () => {
+    const store = new ChatStore(
+      { model: "m", sandbox: "sandbox seatbelt", contextPercent: 4 },
+      { paint: noColor, keyHints: false },
+    );
+    const ui = render(<App store={store} />);
+    const frame = ui.lastFrame() ?? "";
+    expect(frame).toContain("m · ⛨ seatbelt · ▓░░░░░░░░░ 4%");
+    expect(frame).not.toContain("⛨ sandbox");
+    ui.unmount();
+  });
+
   it("the context bar has ten cells and turns at 70% and 80%", () => {
     expect(contextBar(0)).toBe("░░░░░░░░░░");
+    expect(contextBar(4)).toBe("▓░░░░░░░░░");
     expect(contextBar(62)).toBe("▓▓▓▓▓▓░░░░");
     expect(contextBar(100)).toBe("▓▓▓▓▓▓▓▓▓▓");
     expect(contextBar(140)).toBe("▓▓▓▓▓▓▓▓▓▓");

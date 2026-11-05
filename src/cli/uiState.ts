@@ -44,7 +44,8 @@ export const KEYS_HELP = [
 
 /** "▓▓▓▓▓▓░░░░" for a percentage, 10 cells. */
 export function contextBar(percent: number): string {
-  const full = Math.max(0, Math.min(10, Math.round(percent / 10)));
+  // Any use shows at least one cell: an empty bar at 4% reads as "nothing used".
+  const full = percent <= 0 ? 0 : Math.max(1, Math.min(10, Math.round(percent / 10)));
   return `${"▓".repeat(full)}${"░".repeat(10 - full)}`;
 }
 

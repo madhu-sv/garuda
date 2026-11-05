@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-- UX, patch 1 (docs/lld/ux.md): a receipt after each turn that changed files or ran commands: the
+- UX, patch 1 (docs/lld/ux.md): a receipt after each turn that changed files, ran tests, ran a command outside the sandbox, or had a host blocked: the
   files with their lines (from the undo snapshots), the last test run with its count for vitest,
   jest, node:test, pytest, Maven and `go test -v`, the commands in and outside the sandbox, blocked
   hosts, what `/undo` puts back, and the session's cost per kept change. A turn that only answered
-  keeps the usage line. The session records the receipt (`receipt`), `/export` shows it, and
+  keeps the usage line, also when it ran read-only commands in the sandbox (the first live run: a
+  `find` gave a receipt with no news). The session records the receipt (`receipt`), `/export` shows it, and
   `-p --json` has it as `receipt`. Under 60 columns, in a pipe and with `GARUDA_SCREEN_READER=1` it
   is plain lines.
 - The chat asks how to go on after the step limit: go on for as many steps again, summarise what is

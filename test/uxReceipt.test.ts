@@ -243,10 +243,21 @@ describe("the view", () => {
     expect(none).not.toContain("kept change");
   });
 
-  it("a turn that only answered has no receipt (decision D1)", () => {
-    const quiet = receipt({ files: [], commands: { sandboxed: 0, outside: 0, blockedHosts: [] } });
+  it("a turn that only read has no receipt, also with commands in the sandbox (decision D1)", () => {
+    const quiet = receipt({
+      files: [],
+      tests: undefined,
+      commands: { sandboxed: 0, outside: 0, blockedHosts: [] },
+    });
     expect(hasReceipt(quiet)).toBe(false);
+    // The first live run: `find` in the sandbox gave a receipt that said nothing new.
+    expect(hasReceipt({ ...quiet, commands: { ...quiet.commands, sandboxed: 3 } })).toBe(false);
     expect(hasReceipt(receipt())).toBe(true);
+    expect(hasReceipt({ ...quiet, files: [{ path: "a", added: 1, removed: 0 }] })).toBe(true);
+    expect(hasReceipt({ ...quiet, tests: { command: "pnpm test", passed: true } })).toBe(true);
+    expect(
+      hasReceipt({ ...quiet, commands: { ...quiet.commands, blockedHosts: ["pypi.org"] } }),
+    ).toBe(true);
     expect(
       hasReceipt(receipt({ files: undefined, commands: { ...quiet.commands, outside: 1 } })),
     ).toBe(true);

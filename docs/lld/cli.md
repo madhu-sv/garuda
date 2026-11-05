@@ -229,7 +229,7 @@ interface ChatState {
   The footer's context is a bar of 10 cells and the number, yellow from 70% and red from 80%.
   The start banner's tips line says the same.
 - The receipt (UX U1): `ChatStore.receipt` adds it to the scrollback as one output item; the plain
-  renderer writes it to stderr. A turn that only answered keeps the usage line.
+  renderer writes it to stderr. `hasReceipt` decides: files, tests, a command outside the sandbox or a blocked host; else the usage line.
 - The step limit (UX U3, `chat/stop.ts`): after a turn that stopped at `max_steps`, both chats ask
   "Go on?" (Go on for N more steps · Summarise what is done and what is left · Stop here) with the
   approval keys. The first runs `CONTINUE_PROMPT`, the second `SUMMARY_PROMPT`.

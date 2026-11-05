@@ -216,7 +216,9 @@ function Footer({ state }: { state: ChatState }) {
           PLAN{" "}
         </Text>
       ) : null}
-      <Text dimColor>{`${model} · ${sandbox === "no sandbox" ? sandbox : `⛨ ${sandbox}`}`}</Text>
+      <Text
+        dimColor
+      >{`${model} · ${sandbox === "no sandbox" ? sandbox : `⛨ ${sandbox.replace(/^sandbox /, "")}`}`}</Text>
       {contextPercent !== undefined && (
         <>
           <Text dimColor> · </Text>

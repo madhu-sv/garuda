@@ -106,7 +106,7 @@ garuda --resume 20260923-201500-a1b2 -p "…"     # continue a given session
 garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no tools run
 ```
 
-- After a turn that changed files or ran commands, Garuda prints a receipt (0.18.1):
+- After a turn that changed files, ran tests, ran a command outside the sandbox, or had a host blocked, Garuda prints a receipt (0.18.1):
 
   ```
   ╭─ Turn 4 · done · 7 steps · 38 s ─────────────────────────── $0.0041 ─╮
@@ -124,7 +124,7 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   allowlist's proxy blocked. A kept change is a turn that changed files and was not undone; "each"
   is the session cost divided by them. Under 60 columns, in a pipe and with
   `GARUDA_SCREEN_READER=1`, the receipt is plain lines. `-p --json` has it as `receipt` in the result.
-- After a turn that only answered, Garuda prints steps, tokens (with cache reads), cost, context use
+- After a turn that only read (also with commands in the sandbox, such as `find`), Garuda prints steps, tokens (with cache reads), cost, context use
   and the session total, as before.
 - At the step limit, the chat asks how to go on (0.18.1): go on for as many steps again, summarise
   what is done and what is left, or stop. Enter takes the first. After the same tool call 3 times,

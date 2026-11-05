@@ -487,13 +487,14 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   /** UX U1: the turn's receipt, as a box in the scrollback. */
   receipt(receipt: Receipt): void {
     this.flushText();
+    // A blank line first: the box does not touch the answer above it.
     this.add({
       kind: "output",
-      text: receiptText(receipt, {
+      text: `\n${receiptText(receipt, {
         columns: this.columns(),
         paint: (style, text) => this.paint(style, text),
         screenReader: screenReaderMode(),
-      }),
+      })}`,
     });
   }
 

@@ -54,7 +54,7 @@ When something stops, the screen gives the next step as one key.
 
 ## U1: turn receipt
 
-After a turn that changed files or ran commands:
+After a turn that changed files, ran tests, ran a command outside the sandbox, or had a host blocked:
 
 ```
 ╭─ Turn 4 · done · 7 steps · 38 s ─────────────────────────── $0.0041 ─╮
@@ -351,7 +351,7 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
 
 | ID | Question | Suggested default |
 | --- | --- | --- |
-| D1 | Receipt for which turns? | Turns that changed files or ran commands. Others keep the one line. |
+| D1 | Receipt for which turns? | Turns that changed files or ran commands. Others keep the one line. Narrowed after the first live run: commands count only when tests ran, one ran outside the sandbox, or a host was blocked. |
 | D2 | Test counts: parse the known runners, or only ✓ and ✗? | Parse the six runners above. Unknown runners: ✓ and ✗ only. |
 | D3 | Watch mode: start a deny-all proxy in every sandboxed chat (loads `node:http`, against N3 today), or guess the host from the error text? | The proxy. Error text is not reliable. Load it on the first bash call, not at start. |
 | D4 | "Allow for this project" writes to `.garuda/settings.json` (in git, so the team sees it) or to `~/.garuda/trust.json` (only this user)? | `.garuda/settings.json`, so it is visible in review. |
@@ -378,6 +378,10 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   Editors (ACP) do not get the receipt yet.
 - **U3.** `chatStopMessage` for both chats; after `max_steps` both ask "Go on?" with the approval
   keys (Enter or y, a, n or Esc), not the `[s]` key of the mock-up.
+- **After the first live run (patch 1b).** A `find` in the sandbox gave a receipt with "no file
+  changed" and nothing else. `hasReceipt` now needs files, tests, a command outside the sandbox or
+  a blocked host. The box gets a blank line above it, the footer says `⛨ seatbelt` (not
+  `⛨ sandbox seatbelt`), and any context use fills at least one cell of the bar.
 - **U10.** `~/.garuda/ui.json` counts chats; hints for 5 (D9), then `? keys`. The context bar has 10
   cells.
 

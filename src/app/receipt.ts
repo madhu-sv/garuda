@@ -44,10 +44,17 @@ export interface ReceiptTests {
   previousTotal?: number;
 }
 
-/** A receipt only for a turn that changed files or ran commands (decision D1). */
+/**
+ * A receipt only when it has news (decision D1, narrowed after the first live run): files
+ * changed, tests ran, a command ran outside the sandbox, or the proxy blocked a host. A turn that
+ * only read, also with a command in the sandbox (`find`, `ls`), keeps the usage line.
+ */
 export function hasReceipt(receipt: Receipt): boolean {
   return (
-    (receipt.files?.length ?? 0) > 0 || receipt.commands.sandboxed + receipt.commands.outside > 0
+    (receipt.files?.length ?? 0) > 0 ||
+    receipt.tests !== undefined ||
+    receipt.commands.outside > 0 ||
+    receipt.commands.blockedHosts.length > 0
   );
 }
 
