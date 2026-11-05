@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Design: the UX note (docs/lld/ux.md), with mock-ups and no code yet. A receipt after each
+  turn (files, tests, sandbox, undo, cost per kept change), a blocked host as a one-key fix,
+  next steps after a stop, a live plan, better diffs, rewind and fork, a morning brief from the
+  night shift, `garuda advise` (which model for this repo), a first-run tour, a quieter footer,
+  HTML export, and reduced motion and screen-reader modes. Ten decisions for the user.
 - Blog: "Garuda against Claude Code, with intervals": the eval method, the Claude Code
   baseline, the faults the live runs found in the tasks, the Graphify A/B, the tuned prompt, and
   the limits.
