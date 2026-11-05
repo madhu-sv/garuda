@@ -689,6 +689,11 @@ export class Runtime {
     }
   }
 
+  /** The chat's look (0.18.1); the CLI applies it. */
+  get uiSettings(): Settings["ui"] {
+    return this.settings.ui;
+  }
+
   /** The notification settings for the chat (0.6); the CLI applies them. */
   get notificationSettings(): Settings["notifications"] {
     return this.settings.notifications;

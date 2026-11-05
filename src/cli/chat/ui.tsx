@@ -227,11 +227,23 @@ function PaletteView({ palette }: { palette: PaletteState }) {
   );
 }
 
+/** The hint in an empty chat box (0.18.1). */
+export const INPUT_HINT = "Type a task · / for commands · @ for files";
+export const INPUT_HINT_BUSY = "Type to queue the next task · Esc stops this one";
+/** Below this width, or for a screen reader, the input line has no box. */
+export const INPUT_BOX_MIN_COLUMNS = 40;
+
 function InputLine({ state }: { state: ChatState }) {
   const { text, cursor } = state.editor;
   const at = text[cursor];
-  return (
-    <Box marginTop={1}>
+  const line =
+    text === "" ? (
+      <Text>
+        <Text color="cyan">› </Text>
+        <Text inverse> </Text>
+        <Text dimColor>{state.busy ? INPUT_HINT_BUSY : INPUT_HINT}</Text>
+      </Text>
+    ) : (
       <Text>
         <Text color="cyan">› </Text>
         {text.slice(0, cursor)}
@@ -239,16 +251,32 @@ function InputLine({ state }: { state: ChatState }) {
         {at === "\n" ? "\n" : ""}
         {text.slice(cursor + 1)}
       </Text>
+    );
+  if (screenReaderMode() || (process.stdout.columns || 80) < INPUT_BOX_MIN_COLUMNS) {
+    return <Box marginTop={1}>{line}</Box>;
+  }
+  // A visible chat box (0.18.1): full width; its border dims while a turn runs.
+  return (
+    <Box
+      marginTop={1}
+      borderStyle="round"
+      borderColor="cyan"
+      borderDimColor={state.busy}
+      paddingX={1}
+    >
+      {line}
     </Box>
   );
 }
 
 function Footer({ state }: { state: ChatState }) {
+  // One space in, so the footer lines up with the chat box's border.
   const { model, sandbox, contextPercent, costUsd, mode } = state.status;
   const keys = footerKeys(state.busy, state.keyHints);
   const level = contextPercent === undefined ? "ok" : contextLevel(contextPercent);
   return (
     <Text>
+      {" "}
       {mode === "plan" ? (
         <Text color="yellow" bold>
           PLAN{" "}

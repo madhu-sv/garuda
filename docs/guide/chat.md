@@ -71,6 +71,11 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   the context use as a bar and a number (yellow from 70%, red from 80%, where compaction starts)
   and the cost. The key hints show in the first 5 chats (counted in `~/.garuda/ui.json`); after
   that the footer says `? keys`, and `?` on an empty input line lists every key.
+- The chat starts on a clear screen with the banner centred (0.18.1). What was on the screen goes
+  into the scrollback; `"ui": { "clearOnStart": false }` in `.garuda/settings.json` keeps it on
+  screen. You type in a box at the bottom; it shows a hint while it is empty, and its border dims
+  while a task runs (what you type then queues the next task). The chat stays in the terminal's
+  normal screen, so scrolling, search and copy work as usual.
 - Your requests have a bar (`▌`) on every line; Garuda's answer starts with `✦` (0.18.1). With
   `GARUDA_SCREEN_READER=1` they read "You:" and "Garuda:".
 - When Garuda runs from a checkout and `dist/` is older than it, the banner says "run pnpm build

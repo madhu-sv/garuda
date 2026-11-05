@@ -230,6 +230,13 @@ interface ChatState {
   The start banner's tips line says the same.
 - The receipt (UX U1): `ChatStore.receipt` adds it to the scrollback as one output item; the plain
   renderer writes it to stderr. `hasReceipt` decides: files, tests, a command outside the sandbox or a blocked host; else the usage line.
+- The start screen (0.18.1): `runInkChat` writes `clearScreenKeepingScrollback(rows)` (new lines,
+  then the cursor home) unless `ui.clearOnStart` is false; `banner(..., { center: true })` centres
+  the wordmark and the card as blocks (`centerBlock`) and the tips line (`centerLines`); `index.ts`
+  centres the `/init` tip too. No centring in screen-reader mode. `InputLine` draws a round box
+  (cyan, dim while busy) with `INPUT_HINT` or `INPUT_HINT_BUSY` when empty; no box under
+  `INPUT_BOX_MIN_COLUMNS` (40) or for a screen reader. The footer starts one space in, under the
+  box's border. The chat does not use the alternate screen: the terminal's scrollback stays.
 - Requests and answers (0.18.1): `ItemView` draws a `user` item in a box with only a left border (`USER_BAR`, so wrapped
   lines get it too), bold, and
   the first `text` item of a turn (`lead`, set by `ChatStore.add` after `begin`) with

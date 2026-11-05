@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The chat starts on a clear screen, with the banner centred, and you type in a visible chat box
+  with a hint ("Type a task · / for commands · @ for files"). The old screen goes into the
+  scrollback, not away; `"ui": { "clearOnStart": false }` in settings keeps it on screen. Garuda
+  stays in the terminal's normal screen, so its scrollback, search and copy still work. The box's
+  border dims while a turn runs. With `GARUDA_SCREEN_READER=1`, or under 40 columns, there is no box
+  and the banner is not centred.
 - UX, patch 2 (docs/lld/ux.md U2): a chat with no network allowlist starts Garuda's proxy with no
   host on it ("watch mode"). A command in the sandbox that needs a host now asks for it (once, this
   session, or no) instead of failing with a DNS error; an empty list needs no consent. After "this

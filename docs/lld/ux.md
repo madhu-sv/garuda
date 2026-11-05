@@ -410,6 +410,14 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
 - **An old build.** The chat's banner warns when `BUILD_COMMIT` differs from the checkout's commit
   (`src/buildCheck.ts`, shared with the evals). The user ran an old `dist/` after a patch.
 
+## Also built: the start screen (0.18.1)
+
+The user asked for a full-screen start, a centred banner and a visible chat box. After a
+discussion, the alternate screen stays out: it takes away the terminal's scrollback, search and
+copy, and the conversation would leave the terminal at exit. Built instead, in the normal screen:
+a clear start that keeps the old screen in the scrollback (`ui.clearOnStart`, default on), a
+centred banner, and a round chat box with a hint. A `--fullscreen` option can come later.
+
 ## Patch plan
 
 | Patch | Contents |

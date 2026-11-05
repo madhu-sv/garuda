@@ -30,7 +30,7 @@ import { ToolRegistry } from "../tools/registry.js";
 import { VERSION } from "../version.js";
 import { loadSearchConfig } from "../web/search.js";
 import { SwitchApprover, TerminalApprover } from "./approver.js";
-import { banner, colorLevel } from "./banner.js";
+import { banner, centerLines, colorLevel } from "./banner.js";
 import { describeError } from "./errors.js";
 import { FOCUS_REPORTING_OFF, FocusTracker, reportsFocus } from "./focus.js";
 import { JsonOutput, OUTPUT_FORMATS, type OutputFormat } from "./jsonOutput.js";
@@ -657,9 +657,12 @@ async function start(options: Options, program: Command): Promise<number> {
     tools: runtime.toolsSummary(),
     ink: ink !== undefined,
   };
+  const { screenReaderMode } = await import("./receiptView.js");
   let startBanner = banner(bannerInfo, {
     columns: process.stdout.columns || 80,
     color: colorLevel(process.stdout),
+    // 0.18.1: the Ink chat centres the banner; a screen reader gets it as it is.
+    center: ink !== undefined && !screenReaderMode(),
   });
   // A dist/ older than its checkout (the user's live run: a new patch, no rebuild) says so.
   {
@@ -673,7 +676,13 @@ async function start(options: Options, program: Command): Promise<number> {
   if (options.firstInput === undefined) {
     const { initTip } = await import("../init/detect.js");
     const tip = initTip(root);
-    if (tip !== undefined) startBanner += `\n${tip}`;
+    if (tip !== undefined) {
+      const shown =
+        ink !== undefined && !screenReaderMode()
+          ? centerLines([tip], process.stdout.columns || 80)[0]
+          : tip;
+      startBanner += `\n${shown}`;
+    }
   }
   const sessionPath = (id: string) => join(store.dir, `${id}.jsonl`);
   // Notifications (0.6): only for a chat on a terminal; escape codes go to the terminal itself.
@@ -710,6 +719,7 @@ async function start(options: Options, program: Command): Promise<number> {
       notifier,
       focus,
       chats <= KEY_HINT_CHATS,
+      runtime.uiSettings?.clearOnStart !== false,
     );
   } else {
     process.stderr.write(`${startBanner}\n`);

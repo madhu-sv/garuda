@@ -32,6 +32,28 @@ export interface BannerOptions {
   columns: number;
   color: ColorLevel;
   home?: string;
+  /** 0.18.1: centre each line in the terminal (the Ink chat). */
+  center?: boolean;
+}
+
+/** The width of a line on screen: no escape codes. */
+export function visibleWidth(line: string): number {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape codes are the point.
+  return [...line.replace(/\u001b\[[0-9;]*m/g, "")].length;
+}
+
+/** Lines that belong together (the wordmark, the card) move as one block, so they stay aligned. */
+export function centerBlock(lines: readonly string[], width: number, columns: number): string[] {
+  const pad = Math.floor((columns - width) / 2);
+  return pad <= 0 ? [...lines] : lines.map((line) => `${" ".repeat(pad)}${line}`);
+}
+
+/** Each line with spaces before it, so it sits in the middle of `columns`. */
+export function centerLines(lines: readonly string[], columns: number): string[] {
+  return lines.map((line) => {
+    const pad = Math.floor((columns - visibleWidth(line)) / 2);
+    return line === "" || pad <= 0 ? line : `${" ".repeat(pad)}${line}`;
+  });
 }
 
 const WORDMARK = [
@@ -60,15 +82,27 @@ export function colorLevel(
 export function banner(info: BannerInfo, options: BannerOptions): string {
   const c = paint(options.color);
   const lines: string[] = [];
+  const block = (rows: string[], width: number) =>
+    options.center === true ? centerBlock(rows, width, options.columns) : rows;
   if (options.columns >= WORDMARK_MIN_COLUMNS) {
-    const width = WORDMARK[0]?.length ?? 1;
-    for (const row of WORDMARK) lines.push(c.gradient(row, width));
-    lines.push("");
+    const width = Math.max(...WORDMARK.map((row) => row.length));
+    lines.push(
+      ...block(
+        WORDMARK.map((row) => c.gradient(row, width)),
+        width,
+      ),
+      "",
+    );
   }
-  lines.push(...card(info, options, c));
+  const cardLines = card(info, options, c);
+  lines.push(...block(cardLines, Math.max(...cardLines.map(visibleWidth))));
   const tips = info.ink
     ? "/help · Esc stops a task · \\ then Enter: new line · Ctrl-G editor · Ctrl-P commands"
     : "/help · Ctrl-C stops a task · \\ at the end: new line";
+  if (options.center === true) {
+    lines.push(...centerLines([c.dim(tips)], options.columns), "");
+    return lines.join("\n");
+  }
   lines.push(c.dim(` ${tips}`), "");
   return lines.join("\n");
 }
