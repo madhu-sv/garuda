@@ -1,6 +1,7 @@
 import { Box, Static, Text, useInput, usePaste } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { focusEvent } from "../focus.js";
+import { screenReaderMode } from "../receiptView.js";
 import { contextBar, contextLevel } from "../uiState.js";
 import type { HunkStagingState } from "./hunkStaging.js";
 import { PALETTE_ROWS, type PaletteState, paletteWindow } from "./palette.js";
@@ -64,18 +65,55 @@ export function App({ store }: { store: ChatStore }) {
   );
 }
 
+/** The bar before each line of the user's request, and the mark before Garuda's answer. */
+export const USER_BAR = "▌";
+/** A border with only its left side: the bar runs down every line, also wrapped ones. */
+const USER_BORDER = {
+  topLeft: "",
+  top: "",
+  topRight: "",
+  left: USER_BAR,
+  right: "",
+  bottomLeft: "",
+  bottom: "",
+  bottomRight: "",
+};
+export const GARUDA_MARK = "✦ ";
+
 function ItemView({ item }: { item: Item }) {
   switch (item.kind) {
     case "user":
+      // The user's request: a bar on every line and bold text (0.18.1: requests and answers looked
+      // alike in a long scrollback). A screen reader hears "You:" instead.
+      if (screenReaderMode()) {
+        return (
+          <Box marginTop={1}>
+            <Text bold>You: {item.text}</Text>
+          </Box>
+        );
+      }
       return (
-        <Box marginTop={1}>
-          <Text bold>› {item.text}</Text>
+        <Box
+          marginTop={1}
+          borderStyle={USER_BORDER}
+          borderColor="cyan"
+          borderTop={false}
+          borderRight={false}
+          borderBottom={false}
+          paddingLeft={1}
+        >
+          <Text bold>{item.text}</Text>
         </Box>
       );
     case "text":
       return (
         <Box marginTop={1}>
-          <Text>{item.text}</Text>
+          <Text>
+            {item.lead === true && (
+              <Text color="yellow">{screenReaderMode() ? "Garuda: " : GARUDA_MARK}</Text>
+            )}
+            {item.text}
+          </Text>
         </Box>
       );
     default:

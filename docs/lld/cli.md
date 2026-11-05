@@ -230,6 +230,14 @@ interface ChatState {
   The start banner's tips line says the same.
 - The receipt (UX U1): `ChatStore.receipt` adds it to the scrollback as one output item; the plain
   renderer writes it to stderr. `hasReceipt` decides: files, tests, a command outside the sandbox or a blocked host; else the usage line.
+- Requests and answers (0.18.1): `ItemView` draws a `user` item in a box with only a left border (`USER_BAR`, so wrapped
+  lines get it too), bold, and
+  the first `text` item of a turn (`lead`, set by `ChatStore.add` after `begin`) with
+  `GARUDA_MARK`; screen-reader mode prints "You:" and "Garuda:".
+- The banner warns about a stale `dist/` (`buildCheck.ts`: `staleBuildNote(BUILD_COMMIT,
+  garudaCommit(), CHAT_STALE)`); `index.ts` imports it only for a chat.
+- Network watch mode (UX U2): `index.ts` passes `network: { watch: true }` for a chat (no task, a
+  terminal, not a job).
 - The step limit (UX U3, `chat/stop.ts`): after a turn that stopped at `max_steps`, both chats ask
   "Go on?" (Go on for N more steps · Summarise what is done and what is left · Stop here) with the
   approval keys. The first runs `CONTINUE_PROMPT`, the second `SUMMARY_PROMPT`.

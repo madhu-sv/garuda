@@ -84,6 +84,10 @@ the sandbox reach named hosts through Garuda's own proxy, with no question:
 - Off by default. The first turn shows the list and asks; "remember" pins it to the list in
   `~/.garuda/trust.json`, so a changed list asks again. The model then gets a note that names the hosts,
   so it runs those commands in the sandbox and does not ask to leave it.
+- In a chat with no list (0.18.1), Garuda starts the proxy anyway with no host on it. A command
+  that needs a host then asks you instead of failing with a DNS error; an empty list asks no
+  consent first. After "this session", Garuda names the line that keeps the host for the project,
+  for example `"npm"` in `network.allow`. `-p`, jobs and evals keep no network, as before.
 - A host that is not on the list asks you (once, this session, or no); `network(host)` in
   `permissions.allow` or `permissions.deny` answers for good. Jobs and evals deny it and say which host.
 - Commands get `HTTP_PROXY` and `HTTPS_PROXY`: npm, pnpm, yarn, pip, cargo, go, git and curl use them;

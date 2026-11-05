@@ -37,7 +37,8 @@ import { filterPalette, type PaletteEntry, type PaletteState } from "./palette.j
 
 export type Item =
   | { id: number; kind: "user"; text: string }
-  | { id: number; kind: "text"; text: string }
+  /** `lead`: the first answer text of a turn, marked as Garuda's (0.18.1). */
+  | { id: number; kind: "text"; text: string; lead?: boolean }
   | { id: number; kind: "tool"; text: string }
   | { id: number; kind: "note"; level: "info" | "warn" | "error"; text: string }
   | { id: number; kind: "output"; text: string };
@@ -127,6 +128,8 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   externalEdit: ((text: string) => { text?: string; problem?: string }) | undefined;
   private readonly paint: Paint;
   private readonly columns: () => number;
+  /** The turn's answer has started (its first text item got the mark). */
+  private answered = true;
   private readonly now: () => number;
 
   constructor(
@@ -175,7 +178,15 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   }
 
   private add(item: NewItem): void {
-    this.update({ items: [...this.state.items, { ...item, id: this.nextId++ } as Item] });
+    // The first answer text of a turn gets Garuda's mark, so answers and requests differ at a glance.
+    const lead = item.kind === "text" && !this.answered;
+    if (item.kind === "text") this.answered = true;
+    this.update({
+      items: [
+        ...this.state.items,
+        { ...item, ...(lead ? { lead } : {}), id: this.nextId++ } as Item,
+      ],
+    });
   }
 
   // Input.
@@ -352,6 +363,7 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   /** Start a turn. `show: false` when the line is already on screen (a custom command). */
   begin(prompt: string, show = true): void {
     if (show) this.add({ kind: "user", text: prompt });
+    this.answered = false;
     this.stopping = false;
     this.update({ busy: true });
   }

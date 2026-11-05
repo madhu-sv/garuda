@@ -19,7 +19,7 @@ interface PermissionGate {
   execPolicy(timeoutMs, { sandbox?, readOnlyRoot? }): ExecPolicy;
 }
 type PermissionDecision =
-  | { allowed: true; by: "read_only" | "sandbox" | "rule" | "session" | "user" }
+  | { allowed: true; by: "read_only" | "sandbox" | "rule" | "session" | "user"; remembered?: true }
   | { allowed: false; by: "rule" | "sensitive" | "user" | "unattended" | "policy"; reason };
 
 interface Approver { ask(request: ApprovalRequest, signal): Promise<"once" | "session" | "deny"> }
@@ -158,7 +158,7 @@ root as the first read-only path (for a project inside a writable folder such as
 can still write temp folders and package caches, so tests that write nothing in the project run.
 Hooks use the same policy.
 
-"Session" answers add a session rule:
+"Session" answers add a session rule (the decision carries `remembered: true` the first time, UX U2):
 
 | Target | Session rule |
 | --- | --- |

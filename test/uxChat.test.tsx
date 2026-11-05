@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { render } from "ink-testing-library";
 import { afterAll, describe, expect, it } from "vitest";
 import { Runtime } from "../src/app/runtime.js";
+import { CHAT_STALE, staleBuildNote } from "../src/buildCheck.js";
 import { runChat } from "../src/cli/chat/controller.js";
 import { noColor } from "../src/cli/chat/markdown.js";
 import { CONTINUE_PROMPT, SUMMARY_PROMPT } from "../src/cli/chat/stop.js";
@@ -229,5 +230,67 @@ describe("the footer and the keys (UX U10)", () => {
     writeFileSync(join(home, ".garuda", "ui.json"), "{ broken");
     expect(await countChat(home)).toBe(1);
     expect(KEY_HINT_CHATS).toBe(5);
+  });
+});
+
+describe("requests and answers look different (0.18.1)", () => {
+  const turn = (store: ChatStore, prompt: string, answer: string) => {
+    store.begin(prompt);
+    store.event({ type: "text_delta", text: answer });
+    store.end({});
+  };
+
+  it("only the first answer text of each turn gets Garuda's mark", () => {
+    const store = newStore();
+    turn(store, "first", "One.\n\nTwo.\n\n");
+    turn(store, "second", "Three.\n\n");
+    const items = store.getState().items.filter((i) => i.kind === "text");
+    expect(items.map((i) => [i.text, i.kind === "text" && i.lead === true])).toEqual([
+      ["One.", true],
+      ["Two.", false],
+      ["Three.", true],
+    ]);
+  });
+
+  it("a request has a bar on every line; the answer starts with ✦", async () => {
+    const store = newStore();
+    const ui = render(<App store={store} />);
+    turn(store, "line one\nline two", "The answer.\n\n");
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = ui.frames.join("\n");
+    expect(frame).toContain("▌ line one\n▌ line two");
+    expect(frame).toContain("✦ The answer.");
+    ui.unmount();
+  });
+
+  it("a screen reader hears 'You:' and 'Garuda:' instead of the marks", async () => {
+    const before = process.env.GARUDA_SCREEN_READER;
+    process.env.GARUDA_SCREEN_READER = "1";
+    try {
+      const store = newStore();
+      const ui = render(<App store={store} />);
+      turn(store, "hello", "Hi.\n\n");
+      await new Promise((r) => setTimeout(r, 30));
+      const frame = ui.frames.join("\n");
+      expect(frame).toContain("You: hello");
+      expect(frame).toContain("Garuda: Hi.");
+      expect(frame).not.toContain("▌");
+      ui.unmount();
+    } finally {
+      if (before === undefined) delete process.env.GARUDA_SCREEN_READER;
+      else process.env.GARUDA_SCREEN_READER = before;
+    }
+  });
+});
+
+describe("the chat warns about an old build (0.18.1)", () => {
+  it("names both commits and says to rebuild; the same commit says nothing", () => {
+    expect(staleBuildNote("a321195aaaa", "88c8ef4bbbb", CHAT_STALE)).toBe(
+      "This build is from commit a321195, but the checkout is at 88c8ef4. The code that runs is the older one: run pnpm build first.",
+    );
+    expect(staleBuildNote("88c8ef4", "88c8ef4", CHAT_STALE)).toBeUndefined();
+    expect(staleBuildNote(undefined, "88c8ef4", CHAT_STALE)).toBeUndefined();
+    // The eval text stays as it was.
+    expect(staleBuildNote("a", "b")).toMatch(/The tasks and the code that run are the older ones/);
   });
 });

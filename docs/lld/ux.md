@@ -1,7 +1,7 @@
 # UX: show the trust and the evidence (design)
 
 Status: design approved (2026-11-05: the user took every suggested default, D1–D10). Built: patch 1
-(U1, U3, U10); see "As built (patch 1)" at the end.
+(U1, U3, U10) and patch 2 (U2); see "As built" at the end.
 
 ## Purpose
 
@@ -384,6 +384,31 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   `⛨ sandbox seatbelt`), and any context use fills at least one cell of the bar.
 - **U10.** `~/.garuda/ui.json` counts chats; hints for 5 (D9), then `? keys`. The context bar has 10
   cells.
+
+## As built (patch 2)
+
+- **U2, watch mode.** `RuntimeOptions.network.watch` (the CLI sets it for a chat only). With no
+  allowlist and an OS sandbox, `startNetwork` starts the proxy with an empty list and no consent
+  question. It starts at the first turn, not at the first bash call (D3 asked for the bash call;
+  the proxy's start is a few milliseconds, and `execPolicy` cannot wait for it). On Linux it needs
+  `node` for the bridge, as the allowlist does; without it watch mode stays off with no notice.
+- **The question.** The proxy asks while the command runs, with the existing network question
+  (once, this session, no), so an allowed command goes on at once instead of failing first. The
+  preview says that commands have no network unless the user allows a host.
+- **"For this project" (D4).** Garuda does not write `.garuda/settings.json`. After "this session"
+  it prints the line that keeps the host (`networkKeepHint`: the preset name, such as `npm`, when
+  the host belongs to one). The approval has three answers, and a fourth for one question type
+  was not worth a new answer kind. `PermissionDecision.remembered` marks a fresh session answer.
+- **Not done:** plan mode, jobs and evals keep their deny with no question (as designed).
+
+## Also in patch 2
+
+- **Requests and answers.** A request has a cyan bar (`▌`) on every line, wrapped lines too (a box
+  with only a left border), bold; the first answer
+  text of a turn starts with a yellow `✦` (`ChatStore` marks it `lead`). Screen-reader mode: "You:"
+  and "Garuda:". The user asked for this after a long chat.
+- **An old build.** The chat's banner warns when `BUILD_COMMIT` differs from the checkout's commit
+  (`src/buildCheck.ts`, shared with the evals). The user ran an old `dist/` after a patch.
 
 ## Patch plan
 

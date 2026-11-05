@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- UX, patch 2 (docs/lld/ux.md U2): a chat with no network allowlist starts Garuda's proxy with no
+  host on it ("watch mode"). A command in the sandbox that needs a host now asks for it (once, this
+  session, or no) instead of failing with a DNS error; an empty list needs no consent. After "this
+  session", Garuda says which line in `network.allow` keeps it for the project (a preset such as
+  `npm` when the host belongs to one). The receipt names a blocked host. `-p`, jobs and evals keep
+  no network, as before.
+- The chat shows your requests with a bar (`▌`) on every line, and Garuda's answer starts with `✦`,
+  so requests and answers differ at a glance. With `GARUDA_SCREEN_READER=1` they read "You:" and
+  "Garuda:".
+- The chat warns at start when `dist/` is older than its checkout ("run pnpm build first"), as the
+  evals do. `garudaCommit` and `staleBuildNote` moved to `src/buildCheck.ts`.
+- Docs: `architecture.md`, `hld.md` and the docs index describe Garuda as it is now. The release
+  history in their prose (version lists, "since 0.x", test counts per release) is gone; the
+  CHANGELOG keeps it.
 - UX, patch 1 (docs/lld/ux.md): a receipt after each turn that changed files, ran tests, ran a command outside the sandbox, or had a host blocked: the
   files with their lines (from the undo snapshots), the last test run with its count for vitest,
   jest, node:test, pytest, Maven and `go test -v`, the commands in and outside the sandbox, blocked

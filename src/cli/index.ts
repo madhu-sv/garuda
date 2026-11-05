@@ -2,6 +2,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
+import { styleText } from "node:util";
 import { Command, Option } from "commander";
 import { Runtime } from "../app/runtime.js";
 import { auditDirFor } from "../audit/logger.js";
@@ -453,6 +454,10 @@ async function start(options: Options, program: Command): Promise<number> {
     // The project's settings that loosen safety: asked at startup when there is a terminal,
     // pinned in ~/.garuda/trust.json (a job passes its own settings).
     projectSettings: { home: homedir(), ask: process.stdin.isTTY === true },
+    // UX U2: a chat watches the network, so a command that needs a host asks for it.
+    ...(job === undefined && prompt === undefined && process.stdin.isTTY === true
+      ? { network: { watch: true } }
+      : {}),
     // Web search (0.5) and Claude's own search (0.6): only the user's search.json and environment.
     ...(searchConfig.config === undefined && searchConfig.claude === undefined
       ? {}
@@ -656,6 +661,15 @@ async function start(options: Options, program: Command): Promise<number> {
     columns: process.stdout.columns || 80,
     color: colorLevel(process.stdout),
   });
+  // A dist/ older than its checkout (the user's live run: a new patch, no rebuild) says so.
+  {
+    const { BUILD_COMMIT } = await import("../buildInfo.js");
+    const { CHAT_STALE, garudaCommit, staleBuildNote } = await import("../buildCheck.js");
+    const stale = staleBuildNote(BUILD_COMMIT, await garudaCommit(), CHAT_STALE);
+    if (stale !== undefined) {
+      startBanner += `\n${colorLevel(process.stdout) === "none" ? stale : styleText("yellow", stale)}`;
+    }
+  }
   if (options.firstInput === undefined) {
     const { initTip } = await import("../init/detect.js");
     const tip = initTip(root);

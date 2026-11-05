@@ -124,7 +124,13 @@ import {
 } from "../web/search.js";
 import { attachMentions } from "./mentions.js";
 import { ModelState, modelFacts } from "./modelState.js";
-import { networkConsent, networkHash, networkNote, nodeBinary } from "./network.js";
+import {
+  networkConsent,
+  networkHash,
+  networkKeepHint,
+  networkNote,
+  nodeBinary,
+} from "./network.js";
 import { type Receipt, ReceiptCollector } from "./receipt.js";
 import { deleteSession, findSession, listSessions, renameSession } from "./sessionManager.js";
 import { SnapshotError, UndoCoordinator } from "./undoCoordinator.js";
@@ -313,7 +319,16 @@ export interface RuntimeOptions {
    * The network allowlist (0.13, `settings.network`). `approved`: the list was approved elsewhere
    * (a job's approval, the eval command line), so no question. `home`: where trust.json is (tests).
    */
-  network?: { approved?: boolean; home?: string };
+  network?: {
+    approved?: boolean;
+    home?: string;
+    /**
+     * UX U2: with no allowlist, start the proxy anyway with no host on it ("watch mode"), so a
+     * command that needs a host asks the user, and the receipt names it. The CLI sets it for a
+     * chat only: -p, jobs and evals keep "no network" as before.
+     */
+    watch?: boolean;
+  };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
   profiles?: LanguageProfile[];
   /**
@@ -1993,6 +2008,9 @@ export class Runtime {
     await this.staged?.remove().catch(() => {});
   }
 
+  /** UX U2: the proxy runs with no host on the list, only to ask for the hosts that commands need. */
+  private watchingNetwork = false;
+
   /** The network allowlist in effect (0.13): the settings entries, or [] when the proxy is off. */
   networkAllowlist(): string[] {
     return this.networkProxy === undefined ? [] : [...(this.settings.network?.allow ?? [])];
@@ -2005,9 +2023,13 @@ export class Runtime {
    */
   private async startNetwork(signal: AbortSignal): Promise<void> {
     const entries = this.settings.network?.allow ?? [];
-    if (entries.length === 0 || this.executor.isolation !== "os") return;
+    if (this.executor.isolation !== "os") return;
+    // UX U2: watch mode, the proxy with an empty list; plan mode denies every host with no question.
+    const watch = entries.length === 0 && this.networkOptions.watch === true;
+    if (entries.length === 0 && !watch) return;
     this.networkStarted ??= (async () => {
-      if (this.networkOptions.approved !== true) {
+      // An empty list opens nothing, so it needs no consent.
+      if (!watch && this.networkOptions.approved !== true) {
         const trust = await TrustStore.open(this.networkOptions.home ?? homedir());
         const hash = networkHash(entries);
         const known = trust.networkHash(this.root);
@@ -2027,9 +2049,11 @@ export class Runtime {
       if (this.executor.name === "bwrap") {
         bridge = nodeBinary();
         if (bridge === undefined) {
-          this.onNotice?.(
-            "Network for commands: off. On Linux the allowlist needs node on the PATH (for the bridge into the sandbox).",
-          );
+          if (!watch) {
+            this.onNotice?.(
+              "Network for commands: off. On Linux the allowlist needs node on the PATH (for the bridge into the sandbox).",
+            );
+          }
           return;
         }
       }
@@ -2045,6 +2069,10 @@ export class Runtime {
         policy: { ...started, ...(bridge === undefined ? {} : { bridge }) },
         takeBlocked: () => proxy.takeBlocked(),
       });
+      if (watch) {
+        this.watchingNetwork = true;
+        return;
+      }
       this.onNotice?.(
         `Network for commands: ${entries.join(", ")}, through Garuda's proxy. Other hosts ask.`,
       );
@@ -2086,12 +2114,18 @@ export class Runtime {
         readOnly: false,
         info: {
           target: { kind: "url", url: `https://${host}`, host },
-          preview: `A command in the sandbox wants to reach ${host}:${port} through Garuda's proxy. The host is not on the network allowlist ("network.allow" in .garuda/settings.json).`,
+          preview: this.watchingNetwork
+            ? `A command in the sandbox wants to reach ${host}:${port}. Commands have no network unless you allow a host; Garuda's proxy sees only the host name.`
+            : `A command in the sandbox wants to reach ${host}:${port} through Garuda's proxy. The host is not on the network allowlist ("network.allow" in .garuda/settings.json).`,
           title: `Let a command reach ${host}?`,
         },
       },
       this.turnSignal ?? new AbortController().signal,
     );
+    // UX U2: how to keep it for good (decision D4: the user's own line in the project settings).
+    if (decision.allowed && decision.remembered === true) {
+      this.onNotice?.(networkKeepHint(host));
+    }
     return decision.allowed
       ? { allowed: true }
       : { allowed: false, reason: decision.reason.replace(/\.$/, "") };
