@@ -6,6 +6,9 @@
   in approvals, in hunk review and in `/diff`. From 140 columns a diff is side by side, with the
   line numbers of both files. An approval that can review hunks says so in its first line:
   "3 hunks · h reviews them one by one". Syntax colours are not in this patch (decision D10).
+  Only a real diff (with a hunk header) gets the marks and the two columns; other previews, such
+  as the project-settings question, keep their simple colours (the first live run showed that
+  question twice, side by side).
 - UX, patch 4 (docs/lld/ux.md U6): `/rewind` lists the turns that undo can reach (files, cost, age).
   `/rewind <n>` goes back to the start of turn n in one step, with one question; `/redo` brings the
   turns back one at a time. `/rewind fork <n>` starts a new session with the conversation up to

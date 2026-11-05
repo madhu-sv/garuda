@@ -250,9 +250,29 @@ export function sideBySide(text: string, columns: number, paint: DiffPaint): str
 
 /** The diff for this terminal: side by side from SIDE_BY_SIDE_COLUMNS, else unified. */
 export function terminalDiff(text: string, columns: number | undefined, paint: DiffPaint): string {
+  // Only a real diff (with a hunk header) gets word marks or two columns. Other previews (the
+  // project-settings question, a write_file preview) keep their simple colours: the first live
+  // run of 0264 showed the settings question twice, side by side, with line numbers.
+  if (hunkCount(text) === 0) return plainColours(text, paint);
   return columns !== undefined && columns >= SIDE_BY_SIDE_COLUMNS
     ? sideBySide(text, columns, paint)
     : unifiedDiff(text, paint);
+}
+
+/** The colours before 0.18.1, line by line: + green, - red, @@ cyan, file headers bold. */
+export function plainColours(text: string, paint: DiffPaint): string {
+  return text
+    .split("\n")
+    .map((line) =>
+      isFileHeader(line)
+        ? paint(["bold"], line)
+        : line.startsWith("+")
+          ? paint(["green"], line)
+          : line.startsWith("-")
+            ? paint(["red"], line)
+            : line,
+    )
+    .join("\n");
 }
 
 /** How many hunks a diff has (UX U5: "3 hunks · h reviews them one by one"). */

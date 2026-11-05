@@ -116,6 +116,21 @@ describe("side by side", () => {
   });
 });
 
+describe("text that is not a diff (the first live run)", () => {
+  const consent = [
+    "This project's .garuda/settings.json asks for:",
+    " - permissions.allow (no question for these): bash(git status)",
+    "A cloned repository can ship this file.",
+  ].join("\n");
+
+  it("keeps its simple colours at any width: no line numbers, no second column", () => {
+    expect(terminalDiff(consent, 200, brackets)).toBe(consent);
+    expect(terminalDiff(consent, 80, marks)).toBe(consent);
+    // A whole new file (write_file) has no hunk header either: green lines, no marks.
+    expect(terminalDiff("+one\n+two", 200, marks)).toBe("<g>+one</g>\n<g>+two</g>");
+  });
+});
+
 describe("the approval names the hunks (UX U5)", () => {
   const request = (preview: string, hunks: boolean): ApprovalRequest => ({
     tool: "edit_file",

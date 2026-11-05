@@ -441,7 +441,9 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   (side by side from `SIDE_BY_SIDE_COLUMNS`, 140, D8) and `hunkCount`. `colorDiff` and
   `colorPreview` in `approver.ts` take the terminal's columns; the approvals, hunk review and
   `/diff` use them. Changed words are in inverse video, not bold as the design said: bold is hard
-  to see in red and green. Syntax colours wait (D10).
+  to see in red and green. Syntax colours wait (D10). `terminalDiff` uses the new views only for
+  text with a hunk header; any other preview gets `plainColours` (the first live run: the
+  project-settings question came out side by side, with line numbers).
 
 ## Also built: the start screen (0.18.1)
 
