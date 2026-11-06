@@ -15,8 +15,8 @@
   model and a count, as in `[haiku-5-5 12/30] ✓ fix-parser: pass`. The first real run, one at a
   time, took 64 minutes for 30 tasks.
 - `advise` reuses an earlier run of a model when the model, the task hashes, `--repeat`, `--seed`
-  and the Garuda version are the same and every run is there. Runs of 0.18.0 and before are not
-  reused: they could read your checkout (the 0.18.1 fix).
+  and the Garuda version and build commit are the same and every run is there. Runs of 0.18.0 and
+  before are not reused: they could read your checkout (the 0.18.1 fix).
 - The cost estimate comes from the mean cost of earlier runs of the model on the same tasks. With
   none, it prices each request of the other model's runs (from their session files) at this
   model's prices; else the token guess. Each line says which. (A first version scaled by the ratio

@@ -217,8 +217,8 @@ Since 0.18.2:
 - **4 runs at a time.** Change it with `--parallel <n>`. Each result line starts with the model and
   a count: `[haiku-5-5 12/30] ✓ fix-parser: pass`.
 - **Earlier runs are reused.** A run with the same model, task hashes, `--repeat`, `--seed` and
-  Garuda version, with every run there, is not run again. `advise` prints `Reusing <folder>`.
-  Runs of 0.18.0 and before are never reused.
+  Garuda version and build, with every run there, is not run again. `advise` prints
+  `Reusing <folder>`. Runs of 0.18.0 and before are never reused.
 - **A better estimate.** It comes from earlier runs of the model on the same tasks. Else it prices
   each request of the other model's runs at this model's prices; a run with a subagent cannot be
   priced again and is left out. Else it is a token guess. The plan says which.

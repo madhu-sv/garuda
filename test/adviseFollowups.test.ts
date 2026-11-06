@@ -36,7 +36,7 @@ function put(folder: string, data: Record<string, unknown>, age: number) {
     file,
     JSON.stringify({
       schema: 2,
-      garuda: { version: "0.18.2" },
+      garuda: { version: "0.18.2", commit: "c1" },
       spec: "claude-haiku-5-5",
       suite: "repo",
       repeat: 1,
@@ -52,7 +52,8 @@ function put(folder: string, data: Record<string, unknown>, age: number) {
 
 put("old-run", {}, 100);
 put("advise-x/a", {}, 10);
-put("leaky", { garuda: { version: "0.18.0" } }, 1);
+put("leaky", { garuda: { version: "0.18.0", commit: "c1" } }, 1);
+put("other-build", { garuda: { version: "0.18.2", commit: "c0" } }, 1);
 put("other-hash", { tasks: { t1: "h1", t2: "changed" } }, 1);
 put("repeat-2", { repeat: 2 }, 1);
 put("short", { results: [result("t1", 0.1)] }, 1);
@@ -60,7 +61,14 @@ put("sonnet", { spec: "claude-sonnet-5-5", results: [result("t1", 1), result("t2
 mkdirSync(join(evals, "broken"));
 writeFileSync(join(evals, "broken", "report.json"), "{");
 
-const want = { model: "claude-haiku-5-5", repeat: 1, seed: 1, tasks: TASKS, version: "0.18.2" };
+const want = {
+  model: "claude-haiku-5-5",
+  repeat: 1,
+  seed: 1,
+  tasks: TASKS,
+  version: "0.18.2",
+  commit: "c1",
+};
 
 describe("garuda advise: reuse of earlier runs", () => {
   const runs = pastRuns(evals);
@@ -78,9 +86,11 @@ describe("garuda advise: reuse of earlier runs", () => {
     );
   });
 
-  it("refuses a run of another version, other task hashes, repeat, seed or with runs missing", () => {
+  it("refuses a run of another version or build, other task hashes, repeat, seed or with runs missing", () => {
     const only = (name: string) => runs.filter((r) => r.path.endsWith(name));
     expect(reusableRun(only("leaky"), want)).toBeUndefined();
+    // Same version, another build: the user's broken 0.18.1 dev runs were reused this way.
+    expect(reusableRun(only("other-build"), want)).toBeUndefined();
     expect(reusableRun(only("other-hash"), want)).toBeUndefined();
     expect(reusableRun(only("repeat-2"), want)).toBeUndefined();
     expect(reusableRun(only("short"), want)).toBeUndefined();
@@ -205,6 +215,7 @@ describe("garuda advise: other runs' requests at this model's prices", () => {
       path: dir,
       model: "haiku",
       version: "0.18.2",
+      commit: "c1",
       suite: "repo",
       repeat: 1,
       seed: 1,

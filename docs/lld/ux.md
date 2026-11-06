@@ -475,8 +475,8 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   a `progress` label: `progressHead` puts "[label n/total] " before each result line, and the
   tool-call lines are left out, since parallel runs mix them. `pastRuns` reads `report.json` in
   each `.garuda/evals/*` folder and its `a` and `b` subfolders, newest first. `reusableRun` takes
-  the newest with the same `spec`, `garuda.version` (this keeps out the 0.18.0 runs that could read
-  the checkout), suite `repo`, repeat, seed, equal `taskHash` maps, and `tasks × repeat` results.
+  the newest with the same `spec`, `garuda.version` and `garuda.commit` (this keeps out the 0.18.0
+  runs that could read the checkout, and the 0.18.1 dev runs that failed every check), suite `repo`, repeat, seed, equal `taskHash` maps, and `tasks × repeat` results.
   `costEstimate` uses `pastCostPerRun` (the mean `costUsd` on the same hashes; unknown when one
   run has no cost), else `repricedCostPerRun`: `repricedSessionCost` reads each session file of the
   other model's runs (next to its report first) and prices each assistant response and

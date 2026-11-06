@@ -1,6 +1,8 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createInterface } from "node:readline/promises";
+import { garudaCommit } from "../buildCheck.js";
+import { BUILD_COMMIT } from "../buildInfo.js";
 import { type Comparison, compareReports, formatComparison, loadReport } from "../evals/compare.js";
 import { taskHash } from "../evals/report.js";
 import { repoEvalTasks } from "../evals/repoTasks.js";
@@ -101,6 +103,8 @@ export interface PastRun {
   path: string;
   model: string | undefined;
   version: string | undefined;
+  /** The build's git commit, as the report records it. */
+  commit: string | undefined;
   suite: string | undefined;
   repeat: number | undefined;
   seed: number | undefined;
@@ -125,7 +129,7 @@ export function pastRuns(evalsDir: string): PastRun[] {
     const file = join(folder, "report.json");
     try {
       const data = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
-      const garuda = data.garuda as { version?: unknown } | undefined;
+      const garuda = data.garuda as { version?: unknown; commit?: unknown } | undefined;
       out.push({
         path: folder,
         model:
@@ -135,6 +139,7 @@ export function pastRuns(evalsDir: string): PastRun[] {
               ? data.model
               : undefined,
         version: typeof garuda?.version === "string" ? garuda.version : undefined,
+        commit: typeof garuda?.commit === "string" ? garuda.commit : undefined,
         suite: typeof data.suite === "string" ? data.suite : undefined,
         repeat: typeof data.repeat === "number" ? data.repeat : undefined,
         seed: typeof data.seed === "number" ? data.seed : undefined,
@@ -159,8 +164,9 @@ const sameTasks = (a: Record<string, string> | undefined, b: Record<string, stri
 
 /**
  * An earlier run that advise can use instead of a new one (0.18.2): the same model, the same repo
- * tasks (by hash), repeat and seed, every run there, and this version of Garuda. The version
- * matters: runs before 0.18.1 could read the answer from the user's checkout.
+ * tasks (by hash), repeat and seed, every run there, and this version and build commit of Garuda.
+ * A run of another build is another agent: runs before 0.18.1 could read the answer from the
+ * user's checkout, and runs of a 0.18.1 dev build before the ~/Library fix failed every check.
  */
 export function reusableRun(
   runs: readonly PastRun[],
@@ -170,6 +176,7 @@ export function reusableRun(
     seed: number;
     tasks: Record<string, string>;
     version: string;
+    commit: string | undefined;
   },
 ): PastRun | undefined {
   const count = Object.keys(want.tasks).length * want.repeat;
@@ -177,6 +184,7 @@ export function reusableRun(
     (r) =>
       r.model === want.model &&
       r.version === want.version &&
+      r.commit === want.commit &&
       r.suite === "repo" &&
       r.repeat === want.repeat &&
       r.seed === want.seed &&
@@ -351,7 +359,9 @@ export async function runAdvise(options: AdviseOptions): Promise<number> {
   }
   const evalsDir = join(process.cwd(), ".garuda", "evals");
   const past = pastRuns(evalsDir);
-  const want = { repeat, seed, tasks: hashes, version: VERSION };
+  // The commit as reports record it: the build's, else the checkout's (buildFields).
+  const commit = BUILD_COMMIT ?? (await garudaCommit());
+  const want = { repeat, seed, tasks: hashes, version: VERSION, commit };
   const reuse = [
     reusableRun(past, { ...want, model: a }),
     reusableRun(past, { ...want, model: b }),
