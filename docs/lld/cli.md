@@ -241,6 +241,8 @@ interface ChatState {
   (cyan, dim while busy) with `INPUT_HINT` or `INPUT_HINT_BUSY` when empty; no box under
   `INPUT_BOX_MIN_COLUMNS` (40) or for a screen reader. The footer starts one space in, under the
   box's border. The chat does not use the alternate screen: the terminal's scrollback stays.
+- `/export --html` (UX U11, `exportHtml.ts`) and `garuda advise` (UX U8, `advise.ts`; `index.ts`
+  registers the command).
 - The start (UX U7, U9): `index.ts` adds `morningBrief` and `firstRunTour` to the banner (the
   tour replaces the `/init` tip); `runChat` and `runRepl` take the tour's tasks and map the first
   input with `tourChoice`.

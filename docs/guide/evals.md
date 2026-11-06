@@ -198,6 +198,20 @@ The checks guard against shortcuts: the tests and build files (`pom.xml`, `pypro
 protected, the Java check refuses a `.mvn` folder, and pytest reads only `pyproject.toml` and no
 `conftest.py`.
 
+### Which model for this repo: `garuda advise` (0.18.1)
+
+```sh
+garuda eval --from-git          # once: the repo suite from your history
+garuda advise                   # Haiku 5.5 and Sonnet 5.5, 2 runs a task, at most $2
+garuda advise --models claude-sonnet-5-5,claude-opus-5-5 --repeat 3 --max-cost 10
+```
+
+It shows the plan and a cost guess and asks first. Then it runs the suite on each model, compares
+them as `eval compare` does, and advises: the model that passes clearly more; with no clear
+difference in passes, the one that costs clearly less per accepted change. With fewer than 10
+tasks the advice says it is a rough guide. The reports, `advice.txt` and `report.html` are in
+`.garuda/evals/advise-<id>/`.
+
 ### Benchmark your repo (0.12)
 
 Measure Garuda on your own code. `--from-git` turns recent commits that changed code and tests into

@@ -104,6 +104,8 @@ export interface EvalCommandOptions {
   mcpPrepare?: string;
   /** --addendum <file> (0.17, T11d): a prompt addendum for every run (the text eval tune edits). */
   addendum?: string;
+  /** UX U8: `garuda advise` picks the run folder; default .garuda/evals/<run-id>. */
+  outDir?: string;
 }
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
@@ -379,7 +381,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     1,
     options.parallel ?? (batchMode === "on" ? Math.min(tasks.length, 20) : 1),
   );
-  const outDir = join(process.cwd(), ".garuda", "evals", newSessionId());
+  const outDir = options.outDir ?? join(process.cwd(), ".garuda", "evals", newSessionId());
   mkdirSync(outDir, { recursive: true });
   // A build older than the checkout runs old tasks and code (the user's second held-out run).
   const stale = staleBuildNote(BUILD_COMMIT, await garudaCommit());
@@ -462,7 +464,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
 }
 
 /** The repo suite of the project in the current folder (0.12), or the text for the user. */
-async function repoSuite(): Promise<RepoSuite | string> {
+export async function repoSuite(): Promise<RepoSuite | string> {
   const root = await gitRoot(process.cwd());
   if (root === undefined) return "-s repo needs a git repository: run it in your project.";
   let suite: RepoSuite | undefined;

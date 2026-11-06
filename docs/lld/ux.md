@@ -2,7 +2,7 @@
 
 Status: design approved (2026-11-05: the user took every suggested default, D1–D10). Built: patch 1
 (U1, U3, U10), patch 2 (U2), patch 3 (U4), patch 4 (U6), patch 5 (U5, steps 1
-and 2) and patch 6 (U7, U9); see "As built" at the end.
+and 2), patch 6 (U7, U9) and patch 7 (U11, U8); see "As built" at the end.
 
 ## Purpose
 
@@ -457,6 +457,20 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   (once per project: `toured` in `~/.garuda/ui.json`, a hash of the root), `tourChoice` (the first
   input 1, 2 or 3). The tour takes the place of the `/init` tip and names `/init` itself.
   `countChat` now keeps the other keys of `ui.json`.
+
+## As built (patch 7)
+
+- **U11.** `src/cli/exportHtml.ts`: `sessionHtml` from the session records; `escapeHtml` on every
+  text; tool calls as `<details>` with the output (at most 4 000 characters) or, for `edit_file`
+  and `write_file`, the change from the call's input (`callChange`); receipts as plain lines; a
+  Content-Security-Policy meta of `default-src 'none'`. Search results are text, not links. Light
+  and dark colours from `prefers-color-scheme`.
+- **U8.** `src/cli/advise.ts`: `runAdvise` needs the repo suite (it says how to build one); the
+  cost guess is 60 000 input and 1 500 output tokens a run at each model's list price. It runs
+  `runEvalCommand` for each model into `.garuda/evals/advise-<id>/a` and `/b` (a new `outDir`
+  option), stops before the second model when the first one's cost and the price ratio would pass
+  `--max-cost`, then `compareReports` and `adviceText`. `report.html` is the comparison and the
+  advice, escaped, with the same policy.
 
 ## Also built: the start screen (0.18.1)
 

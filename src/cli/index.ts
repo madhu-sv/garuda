@@ -226,6 +226,25 @@ async function main(): Promise<void> {
     });
 
   program
+    .command("advise")
+    .description(
+      "which model for this repo: run its own history (garuda eval --from-git) on two models and compare",
+    )
+    .option("--models <a,b>", "two models (default claude-haiku-5-5,claude-sonnet-5-5)", (v) =>
+      v.split(",").map((m) => m.trim()),
+    )
+    .option("--repeat <n>", "runs of each task (default 2)", (v) => Number(v))
+    .option("--max-cost <usd>", "stop before a model that would pass this (default 2)", (v) =>
+      Number(v),
+    )
+    .option("--seed <n>", "seed for the run order and the intervals (default 1)", (v) => Number(v))
+    .option("--yes", "start without the question")
+    .action(async (options) => {
+      const { runAdvise } = await import("./advise.js");
+      process.exitCode = await runAdvise(options);
+    });
+
+  program
     .command("init")
     .description(
       "set up this folder (AGENTS.md; commands, MCP servers and rules from Claude Code, OpenCode, Codex, Gemini CLI, Tabnine, Cursor, Copilot), then chat",

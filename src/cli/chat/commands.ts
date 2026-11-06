@@ -33,7 +33,7 @@ export const HELP = [
   "  /session   the session id and file",
   "  /sessions  this project's sessions; /sessions <n|id> continues one; rename, delete",
   "  /models    the models; /models <n|id|opus|sonnet|haiku> switches for this chat",
-  "  /export    write this conversation as Markdown; /export <file>",
+  "  /export    write this conversation as Markdown; /export <file>; /export --html [file] as one page",
   "  /compact   summarise the older turns now; /compact <what to keep>",
   "  /diff      file changes in this session; /diff last (last turn); /diff [last] <path>",
   "  /schedule  make the last plan a job that runs later: /schedule [HH:MM], then garuda run <id>",
@@ -471,7 +471,13 @@ async function exportCommand(runtime: Runtime, renderer: Renderer, file: string)
     return;
   }
   const { sessionMarkdown, writeExport } = await import("../export.js");
-  const result = await writeExport(runtime.root, id, sessionMarkdown(records, id), file);
+  // UX U11: /export --html [file] writes one self-contained page.
+  const html = /^--html(\s|$)/.test(file);
+  const name = html ? file.slice("--html".length).trim() : file;
+  const text = html
+    ? (await import("../exportHtml.js")).sessionHtml(records, id)
+    : sessionMarkdown(records, id);
+  const result = await writeExport(runtime.root, id, text, name, html ? ".html" : ".md");
   if ("problem" in result) renderer.warn(result.problem);
   else
     renderer.info(

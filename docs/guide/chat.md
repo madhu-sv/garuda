@@ -20,6 +20,9 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   that this Garuda version does not know yet). `/models <number, id or opus|sonnet|haiku|fable>` switches the main model for the next turns of this
   chat. The session records the change; a new chat starts with `-m` or `GARUDA_MODEL` again. The prompt cache
   starts again; a smaller window makes Garuda compact the conversation first. Explore keeps the start model.
+- `/export --html [file]` (0.18.1) writes one self-contained page instead: requests, answers, each
+  tool call with its output or change, and the receipts. It has no script and no link, so it is
+  safe to attach to a pull request or an email.
 - `/export [file]` writes the conversation as Markdown in the working folder (default
   `garuda-<session id>.md`): prompts and answers in full, one line per tool call. It comes from the session
   file, so secrets are redacted. It never overwrites a file and never writes outside the folder.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- UX, patch 7 (docs/lld/ux.md U11, U8): `/export --html [file]` writes the session as one page:
+  your requests, the answers, each tool call that opens to its output (an edit opens to its
+  change), and the receipts. Every text is escaped; the page has no script and no link, and its
+  own policy forbids them. `garuda advise` runs the repo suite (`garuda eval --from-git`) on two
+  models (default Haiku 5.5 and Sonnet 5.5, 2 runs a task, at most $2), compares them as
+  `eval compare` does, and advises: the model that passes clearly more, or on a tie the cheaper
+  one. It asks first with a cost guess, and writes `advice.txt` and `report.html`.
 - UX, patch 6 (docs/lld/ux.md U7, U9): the morning brief. The first chat after jobs ran shows them
   once: each job's verdict, its tests ("tests 120 → 126" when the runner's summary gives counts)
   and its branch, and the total cost. `.garuda/jobs/brief.seen` keeps the time of the last brief.

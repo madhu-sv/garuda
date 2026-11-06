@@ -163,8 +163,10 @@ export async function writeExport(
   sessionId: string,
   markdown: string,
   file = "",
+  /** The default file's extension (UX U11: ".html" for /export --html). */
+  ext = ".md",
 ): Promise<{ path: string } | { problem: string }> {
-  const name = file === "" ? `garuda-${sessionId}.md` : file;
+  const name = file === "" ? `garuda-${sessionId}${ext}` : file;
   let absolute: string;
   try {
     absolute = await resolveInRoot(root, name);
