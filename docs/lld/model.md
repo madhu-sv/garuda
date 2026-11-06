@@ -55,7 +55,7 @@ bytes came while the model thought, and Node's fetch closed the stream after 300
 The summaries alone were not enough (a later review still timed out), so the Anthropic clients use
 their own fetch (`clientOptions`, `streamFetch`: undici's fetch with an `Agent` whose `bodyTimeout`
 is `STREAM_IDLE_MS`, 20 minutes, and `allowH2: false`). The SDK's own 10-minute timeout until the
-response starts stays. undici 8 (0.18.3) would use HTTP/2 with the API, which offers it; the idle
+response starts stays. undici 8 (0.19.0) would use HTTP/2 with the API, which offers it; the idle
 limit was built and checked on HTTP/1.1, so `STREAM_ALLOW_H2` keeps that until a check of long,
 quiet streams on HTTP/2. They are left
 out (`thinking.ts`, `withoutThinking`) only where they cannot go back unchanged: after `/models` (a
@@ -79,7 +79,7 @@ The loop, the session and the tools use only these types.
 
 - The only module that imports `@anthropic-ai/sdk`. `ResolvedModel.create()` loads it with `import()` on
   the first model call, so startup does not pay for it.
-- SDK 1.x (0.18.3) sends API version `2026-10-21` and the key as `Authorization: Bearer`, not
+- SDK 1.x (0.19.0) sends API version `2026-10-21` and the key as `Authorization: Bearer`, not
   `X-Api-Key`. That version refuses `temperature`, `top_p` and `top_k` (400): Garuda sends none
   (`test/anthropicSdk1.test.ts` checks the headers and the body). It refuses `document` blocks in
   assistant messages and `citations` in user messages; Garuda sends neither (citations from web

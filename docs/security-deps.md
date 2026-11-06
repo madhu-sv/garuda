@@ -61,7 +61,7 @@ one is in `pnpm.auditConfig.ignoreGhsas` in package.json and in this table.
 - Build and test tools: `@modelcontextprotocol/server` 2.3.1 (tests only), vite 8.3.5, esbuild
   0.28 (override), `source-map-js` 1.2.2; the website's astro, starlight and mermaid.
 
-## 0.18.3 updates
+## 0.19.0 updates
 
 The three majors that Dependabot opened (#25, #26, #27), each checked against its migration guide.
 `pnpm audit --prod` finds nothing after them.

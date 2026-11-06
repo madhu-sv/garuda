@@ -7,7 +7,7 @@ import { AnthropicClient, clientOptions } from "../src/model/anthropic.js";
 import { sandboxPaths } from "../src/permissions/sandboxPaths.js";
 
 /**
- * 0.18.3: the Anthropic SDK 1.x uses API version 2026-10-21. It sends the key as
+ * 0.19.0: the Anthropic SDK 1.x uses API version 2026-10-21. It sends the key as
  * `Authorization: Bearer`, not `X-Api-Key`, and that version refuses `temperature`, `top_p` and
  * `top_k` with a 400 error. These tests fix what Garuda's requests look like.
  */

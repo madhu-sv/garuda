@@ -86,7 +86,7 @@ export function withHiddenThinking(response: ModelResponse): ModelResponse {
 export const STREAM_IDLE_MS = 20 * 60_000;
 
 /**
- * HTTP/1.1 only (0.18.3). undici 8 uses HTTP/2 when the server offers it, and the API does. The
+ * HTTP/1.1 only (0.19.0). undici 8 uses HTTP/2 when the server offers it, and the API does. The
  * idle limit above was built and checked on HTTP/1.1, where `bodyTimeout` is the wait for the next
  * bytes; HTTP/2 streams handle idle time in another way. Turn it on only after a check of long,
  * quiet streams.

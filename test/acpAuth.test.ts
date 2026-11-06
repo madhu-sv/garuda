@@ -118,7 +118,7 @@ describe("ACP Terminal Auth (0.16)", () => {
     mkdirSync(root, { recursive: true });
     const errors = await createClient({ name: "t" }).connectWith(server.app, async (agent) => {
       const out: { code: number; message: string }[] = [];
-      // ACP SDK 2.x refuses session/new before initialize, as the protocol says (0.18.3).
+      // ACP SDK 2.x refuses session/new before initialize, as the protocol says (0.19.0).
       await agent.request(methods.agent.initialize, { protocolVersion: PROTOCOL_VERSION });
       for (let i = 0; i < 2; i++) {
         await agent

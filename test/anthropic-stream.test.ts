@@ -183,7 +183,7 @@ describe("a quiet stream is not cut off (0.14)", () => {
       expect(await (await streamFetch(10_000)(url)).text()).toBe("ab");
       await expect((await streamFetch(1_000)(url)).text()).rejects.toThrow();
       expect(STREAM_IDLE_MS).toBeGreaterThan(300_000);
-      // undici 8 would use HTTP/2 with the API; the idle limit was checked on HTTP/1.1 (0.18.3).
+      // undici 8 would use HTTP/2 with the API; the idle limit was checked on HTTP/1.1 (0.19.0).
       expect(STREAM_ALLOW_H2).toBe(false);
       expect(clientOptions("k").fetch).toBeTypeOf("function");
     } finally {

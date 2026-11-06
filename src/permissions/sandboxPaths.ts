@@ -19,7 +19,7 @@ export const DENY_READ_IN_HOME = [
   ".docker",
   ".config/gcloud",
   ".config/gh",
-  // The `ant` CLI's and the Anthropic SDK's stored keys (SDK 1.x reads them too, 0.18.3).
+  // The `ant` CLI's and the Anthropic SDK's stored keys (SDK 1.x reads them too, 0.19.0).
   ".config/anthropic/credentials",
   ".netrc",
   ".npmrc",
