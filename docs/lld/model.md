@@ -76,6 +76,14 @@ The loop, the session and the tools use only these types.
 
 - The only module that imports `@anthropic-ai/sdk`. `ResolvedModel.create()` loads it with `import()` on
   the first model call, so startup does not pay for it.
+- SDK 1.x (0.18.3) sends API version `2026-10-21` and the key as `Authorization: Bearer`, not
+  `X-Api-Key`. That version refuses `temperature`, `top_p` and `top_k` (400): Garuda sends none
+  (`test/anthropicSdk1.test.ts` checks the headers and the body). It refuses `document` blocks in
+  assistant messages and `citations` in user messages; Garuda sends neither (citations from web
+  search stay in the assistant's text blocks). With no key, the SDK also reads a profile from
+  `~/.config/anthropic` (the `ant` CLI's): its `credentials` folder is unreadable in the sandbox.
+  `setup` and the model catalog keep their own `fetch` calls with `X-Api-Key` and `2023-06-01`;
+  the API takes both.
 - `stream()` calls `messages.stream`, yields each `text_delta`, then yields the final message as a
   `ModelResponse`. The abort signal goes to the SDK.
 - Mapping functions are pure and exported for tests: `toWireParams`, `toWireTools`, `toWireMessage`,

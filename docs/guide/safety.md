@@ -8,7 +8,8 @@ Garuda runs commands in an OS sandbox: Seatbelt (`sandbox-exec`) on macOS, bubbl
 In the sandbox, a command:
 
 - can read every file, except secrets in your home folder (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`,
-  `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains, Garuda's and Claude Code's tokens and more)
+  `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains, Garuda's and Claude Code's tokens,
+  the `ant` CLI's stored keys in `~/.config/anthropic/credentials`, and more)
   and, since 0.18.1, your personal folders: Desktop, Documents, Downloads, Movies, Music, Pictures (with
   the Photos library), Public, and Mail, Messages, Safari, Calendars, Contacts, iCloud Drive and other
   cloud folders in `~/Library`. A project inside one of them stays readable; the rest of that folder

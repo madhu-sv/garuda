@@ -3,6 +3,12 @@
 ## Unreleased
 
 - The Homebrew formula in the repository names 0.18.2 and its tarball hash.
+- The Anthropic SDK is 1.6 (was 0.128). It uses API version `2026-10-21` and sends the key as
+  `Authorization: Bearer`. Garuda's requests needed no change: they send no `temperature`,
+  `top_p` or `top_k`, which that version refuses. A proxy in front of the API that reads
+  `X-Api-Key` must read `Authorization` now.
+- Security: sandboxed commands can no longer read `~/.config/anthropic/credentials`, where the `ant`
+  CLI stores keys. The SDK 1.x reads them too when it has no key.
 
 ## 0.18.2 (2026-11-06)
 
