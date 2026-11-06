@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Homebrew formula in the repository names 0.18.2 and its tarball hash.
+
 ## 0.18.2 (2026-11-06)
 
 A fix release for repo evals (`garuda eval -s repo`, `garuda advise`). On macOS, 0.18.1 failed
