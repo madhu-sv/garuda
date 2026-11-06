@@ -39,8 +39,13 @@ The report (0.17) says how far one run's numbers can be trusted:
   a pass with extra edits is still a weaker result.
 - failures by kind (0.18.1): `check` (the check failed after the agent stopped), `protected-files`
   (the agent changed the task's tests), `step-limit`, `token-limit`, `repeated-calls`, `refusal`,
-  `timeout`, `error`, and `setup` (the key, the connection or the MCP server). A limit or a timeout
-  wins over the check that failed after it. Up to three runs of each kind are named.
+  `timeout`, `provider`, `error`, and `setup` (the key, the connection or the MCP server). A limit
+  or a timeout wins over the check that failed after it. Up to three runs of each kind are named.
+  `provider` (0.18.2): the run hit its time limit while a model request was open, after a broken
+  and retried stream or 2 minutes of silence from the API. That says nothing about the agent, so
+  the run is not scored, and it runs once more by itself; the result keeps the spending of both.
+  A command that runs until the limit is still the agent's `timeout`. A timeout now shows the
+  steps up to the stop, not 0.
 
 When the provider refuses the API key (401 or 403), or the API cannot be reached (a refused
 connection, an unknown host, a certificate error), `garuda eval` stops after that run and says

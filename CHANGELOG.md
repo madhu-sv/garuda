@@ -10,6 +10,11 @@
   personal parts and the keychains stay denied for every sandboxed command. Run 0.18.1 repo evals
   again.
 - `advise` gives no advice when neither model passes a task: the check itself may fail.
+- Evals: a timeout while the model's API is silent is a new failure kind, `provider`. It applies
+  when a request was open at the limit, and the stream had broken and been retried or the API had
+  sent nothing for 2 minutes. Such a run is not scored, and it runs once more by itself; its
+  spending is kept. In the user's Sonnet run, 4 of 5 timeouts were such stalls, and they counted
+  against the model. A timeout also shows its steps now, not 0.
 - Fix: in repo-task evals, Vite could not write its compiled `vitest.config.ts` to
   `node_modules/.vite-temp`, because the task's `node_modules` links to the project's and was
   read-only. In the user's suite 10 of 30 tasks failed for both models before a test ran.

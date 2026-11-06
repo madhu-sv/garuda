@@ -410,6 +410,18 @@ has its id, attempt, kind, steps, tokens and time (to see whether failures come 
 `formatReport` prints "Failures by kind" with up to three runs per kind; report.json has it in
 `evidence.failures`. The schema stays 2: the field is new and optional for readers.
 
+**Provider stalls (0.18.2).** In the user's Sonnet run, four of five timeouts had a model request
+open at the end, after 55 to 351 s of silence or "Connection error" retries; they counted as the
+model's failures. `ModelWatch` sees the run's events: open tool calls (`tool_call` minus
+`tool_result`), whether the last `step_end` asked for tools, the last time anything came, and
+whether the stream broke (`model_retry`; reset at the next `step_end`). At a timeout,
+`stall(now, PROVIDER_STALL_MS = 120 s)` gives a reason when no tool runs or is due, and the stream
+broke or nothing came for 120 s. The run is then an error run (`stopReason` "error", reason
+`PROVIDER_STALLED`), so the scored rate leaves it out, and `failureKind` gives `provider`.
+`isSetupFailure` is false for it ("401 s" in the reason is not a refused key). `runEvals` runs a
+stalled task once more; `withStalledRun` adds the stalled run's tokens and cost and sets
+`providerStalls`. A timeout records `ModelWatch.steps`: it showed 0 before.
+
 **Published reports.** The reports of the 0.18 blog post are in
 `docs/quality-baseline/evals/0.18/`, one folder per run, with a README. Two string changes only:
 the checkout path before `sessionFile` is removed, and the macOS temp folder is `<tmp>/`.
