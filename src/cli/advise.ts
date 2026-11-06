@@ -1,13 +1,14 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { type Comparison, compareReports, formatComparison, loadReport } from "../evals/compare.js";
 import { taskHash } from "../evals/report.js";
 import { repoEvalTasks } from "../evals/repoTasks.js";
 import { costPerPass } from "../evals/stats.js";
 import type { EvalResult } from "../evals/types.js";
-import type { Price } from "../model/pricing.js";
+import { costOf, type Price, responseCost } from "../model/pricing.js";
 import { loadModelsConfig, resolveModel } from "../model/providers.js";
+import type { ModelResponse, Usage } from "../model/types.js";
 import { newSessionId } from "../session/store.js";
 import { VERSION } from "../version.js";
 import { escapeHtml } from "./exportHtml.js";
@@ -192,18 +193,87 @@ export function pastCostPerRun(
   return results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0) / results.length;
 }
 
-/** The cost of `runs` new runs of a model: from earlier runs, from the other model's by price, or a guess. */
+/**
+ * What one session file would cost at another price: each model request priced on its own, so a
+ * price with a long-prompt level (Haiku 5.5 over 100 000 tokens) applies where it applied. Undefined
+ * when the file is missing, or has usage that cannot be priced again: a subagent (its own model),
+ * unreported tokens or a child's debit.
+ */
+export function repricedSessionCost(file: string, price: Price): number | undefined {
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return undefined;
+  }
+  let usd = 0;
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") continue;
+    let record: Record<string, unknown>;
+    try {
+      record = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+    if (record.type === "unreported" || record.type === "child_debit") return undefined;
+    if (line.includes('"subagent":{')) return undefined;
+    if (record.type === "assistant") {
+      const cost = responseCost(record.response as ModelResponse, price);
+      if (cost === undefined) return undefined;
+      usd += cost;
+    }
+    if (record.type === "side_usage") usd += costOf(record.usage as Usage, price);
+  }
+  return usd;
+}
+
+/**
+ * The mean cost of one run at `price`, from the session files of earlier runs of `model` on these
+ * tasks; undefined when fewer than half of them can be priced. A file is looked for next to its
+ * report first, so a moved folder still works.
+ */
+export function repricedCostPerRun(
+  runs: readonly PastRun[],
+  model: string,
+  tasks: Record<string, string>,
+  price: Price | undefined,
+): number | undefined {
+  if (price === undefined) return undefined;
+  const costs: (number | undefined)[] = [];
+  for (const run of runs.filter((r) => r.model === model && sameTasks(r.tasks, tasks))) {
+    for (const result of run.results) {
+      const file = result.sessionFile;
+      if (file === undefined) {
+        costs.push(undefined);
+        continue;
+      }
+      const near = join(run.path, basename(file));
+      costs.push(repricedSessionCost(near, price) ?? repricedSessionCost(file, price));
+    }
+  }
+  // A run with a subagent or unreported tokens cannot be priced again: the mean of the rest, when
+  // they are at least half (2 of 30 in the first real advise run).
+  const known = costs.filter((c): c is number => c !== undefined);
+  if (known.length === 0 || known.length * 2 < costs.length) return undefined;
+  return known.reduce((sum, c) => sum + c, 0) / known.length;
+}
+
+/**
+ * The cost of `runs` new runs of a model: from its own earlier runs; else from the other model's
+ * requests at this model's prices; else a guess. (A ratio of list prices was wrong by 5 times for
+ * Haiku 5.5, whose long prompts cost 5 times its base price.)
+ */
 export function costEstimate(
   runs: number,
   own: number | undefined,
-  other: { perRun: number | undefined; priceRatio: number | undefined },
+  repriced: { perRun: number | undefined; from: string },
   price: Price | undefined,
 ): { usd: number | undefined; how: string } {
   if (own !== undefined) return { usd: own * runs, how: "from earlier runs" };
-  if (other.perRun !== undefined && other.priceRatio !== undefined) {
+  if (repriced.perRun !== undefined) {
     return {
-      usd: other.perRun * other.priceRatio * runs,
-      how: "from the other model's runs, by price",
+      usd: repriced.perRun * runs,
+      how: `from ${repriced.from}'s requests at this model's prices`,
     };
   }
   return { usd: estimateUsd(price, runs), how: "a guess" };
@@ -283,21 +353,12 @@ export async function runAdvise(options: AdviseOptions): Promise<number> {
   ];
   const runs = tasks * repeat;
   const perRun = [pastCostPerRun(past, a, hashes), pastCostPerRun(past, b, hashes)];
-  const ratio = (from: Price | undefined, to: Price | undefined) =>
-    from === undefined || to === undefined ? undefined : to.input / from.input;
+  // Repricing reads session files: only when a model has no history of its own.
+  const repriced = (i: 0 | 1, from: string) =>
+    perRun[i] === undefined ? repricedCostPerRun(past, from, hashes, prices[i]) : undefined;
   const estimates = [
-    costEstimate(
-      runs,
-      perRun[0],
-      { perRun: perRun[1], priceRatio: ratio(prices[1], prices[0]) },
-      prices[0],
-    ),
-    costEstimate(
-      runs,
-      perRun[1],
-      { perRun: perRun[0], priceRatio: ratio(prices[0], prices[1]) },
-      prices[1],
-    ),
+    costEstimate(runs, perRun[0], { perRun: repriced(0, b), from: b }, prices[0]),
+    costEstimate(runs, perRun[1], { perRun: repriced(1, a), from: a }, prices[1]),
   ];
   const line = (model: string, i: 0 | 1) => {
     const r = reuse[i];
@@ -366,15 +427,13 @@ export async function runAdvise(options: AdviseOptions): Promise<number> {
   if (pathA === undefined) return 1;
   const first = await loadReport(pathA);
   if (reuse[0] === undefined && reuse[1] === undefined) {
-    // The second model's cost: its own history, else the first model's actual cost by price.
+    // The second model's cost: its own history, else the first model's new requests at its prices.
     const spent = costPerPass(first.results);
     const spentA = spent.kind === "unknown" ? undefined : spent.totalUsd;
-    const actualPerRun =
-      spentA === undefined ? undefined : spentA / Math.max(1, first.results.length);
     const nextB = costEstimate(
       runs,
       perRun[1],
-      { perRun: actualPerRun, priceRatio: ratio(prices[0], prices[1]) },
+      { perRun: repricedCostPerRun(pastRuns(evalsDir), a, hashes, prices[1]), from: a },
       prices[1],
     ).usd;
     if (spentA !== undefined && nextB !== undefined && spentA + nextB > maxCost) {

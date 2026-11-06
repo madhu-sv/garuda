@@ -9,9 +9,11 @@
 - `advise` reuses an earlier run of a model when the model, the task hashes, `--repeat`, `--seed`
   and the Garuda version are the same and every run is there. Runs of 0.18.0 and before are not
   reused: they could read your checkout (the 0.18.1 fix).
-- The cost estimate comes from the mean cost of earlier runs of the model on the same tasks; with
-  none, from the other model's runs scaled by the input price; else the token guess. Each line
-  says which.
+- The cost estimate comes from the mean cost of earlier runs of the model on the same tasks. With
+  none, it prices each request of the other model's runs (from their session files) at this
+  model's prices; else the token guess. Each line says which. (A first version scaled by the ratio
+  of list prices: 20 for Sonnet 5.5 over Haiku 5.5, but Haiku costs 5 times as much for a prompt
+  over 100 000 tokens. On a real run it estimated $19.16 where the requests give $12.62.)
 - When the estimate or the first model's real cost passes `--max-cost`, `advise` prints the
   command that goes on (`garuda advise --models a,b --repeat R --seed S --max-cost N`). The first
   model's run is kept and reused.

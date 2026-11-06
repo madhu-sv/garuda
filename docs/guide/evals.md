@@ -219,8 +219,9 @@ Since 0.18.2:
 - **Earlier runs are reused.** A run with the same model, task hashes, `--repeat`, `--seed` and
   Garuda version, with every run there, is not run again. `advise` prints `Reusing <folder>`.
   Runs of 0.18.0 and before are never reused.
-- **A better estimate.** It comes from earlier runs of the model on the same tasks, else from the
-  other model's runs by price, else from a token guess. The plan says which.
+- **A better estimate.** It comes from earlier runs of the model on the same tasks. Else it prices
+  each request of the other model's runs at this model's prices; a run with a subagent cannot be
+  priced again and is left out. Else it is a token guess. The plan says which.
 - **A command to go on.** When the estimate, or the first model's real cost, passes `--max-cost`,
   `advise` prints the command to run next, with a higher cap. The first model's run is reused.
 

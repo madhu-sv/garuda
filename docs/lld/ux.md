@@ -478,7 +478,13 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   the newest with the same `spec`, `garuda.version` (this keeps out the 0.18.0 runs that could read
   the checkout), suite `repo`, repeat, seed, equal `taskHash` maps, and `tasks × repeat` results.
   `costEstimate` uses `pastCostPerRun` (the mean `costUsd` on the same hashes; unknown when one
-  run has no cost), else the other model's mean times the input price ratio, else `estimateUsd`.
+  run has no cost), else `repricedCostPerRun`: `repricedSessionCost` reads each session file of the
+  other model's runs (next to its report first) and prices each assistant response and
+  `side_usage` with `responseCost` and `costOf` at this model's price, so a long-prompt level
+  applies per request. A file with a subagent, `unreported` or `child_debit` gives no cost; the
+  mean is of the rest when they are at least half. Else `estimateUsd`. A ratio of list prices was
+  the first design and was wrong: Haiku 5.5 is $0.1 a million input tokens but $0.5 over 100 000,
+  so Sonnet's ratio is about 13 on real runs, not 20.
   `continueCommand` prints the next command with the cap × 1.25, rounded up. An eval exit code of
   1 (a setup error) stops `advise`; 2 (some runs fail) does not.
 

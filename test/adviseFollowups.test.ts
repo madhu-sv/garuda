@@ -6,8 +6,11 @@ import {
   ADVISE_PARALLEL,
   continueCommand,
   costEstimate,
+  type PastRun,
   pastCostPerRun,
   pastRuns,
+  repricedCostPerRun,
+  repricedSessionCost,
   reusableRun,
   sumKnown,
 } from "../src/cli/advise.js";
@@ -99,19 +102,20 @@ describe("garuda advise: the cost estimate", () => {
     expect(pastCostPerRun(runs, "claude-opus-5-5", TASKS)).toBeUndefined();
   });
 
-  it("uses history first, then the other model's history by price, then the guess", () => {
+  it("uses history first, then the other model's requests repriced, then the guess", () => {
     const price = { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 };
-    expect(costEstimate(10, 0.2, { perRun: 2, priceRatio: 3 }, price)).toEqual({
+    expect(costEstimate(10, 0.2, { perRun: 2, from: "haiku" }, price)).toEqual({
       usd: 2,
       how: "from earlier runs",
     });
-    const scaled = costEstimate(10, undefined, { perRun: 0.2, priceRatio: 3 }, price);
-    expect(scaled.usd).toBeCloseTo(6);
-    expect(scaled.how).toBe("from the other model's runs, by price");
-    expect(costEstimate(10, undefined, { perRun: undefined, priceRatio: 3 }, price).how).toBe(
+    expect(costEstimate(10, undefined, { perRun: 0.6, from: "haiku" }, price)).toEqual({
+      usd: 6,
+      how: "from haiku's requests at this model's prices",
+    });
+    expect(costEstimate(10, undefined, { perRun: undefined, from: "haiku" }, price).how).toBe(
       "a guess",
     );
-    expect(costEstimate(10, undefined, { perRun: 1, priceRatio: undefined }, undefined).usd).toBe(
+    expect(costEstimate(10, undefined, { perRun: undefined, from: "h" }, undefined).usd).toBe(
       undefined,
     );
   });
@@ -134,5 +138,90 @@ describe("garuda advise: the continue command and progress", () => {
     expect(progressHead("haiku-5-5", 12, 30)).toBe("[haiku-5-5 12/30] ");
     expect(progressHead(undefined, 12, 30)).toBe("");
     expect(ADVISE_PARALLEL).toBe(4);
+  });
+});
+
+describe("garuda advise: other runs' requests at this model's prices", () => {
+  const dir = mkdtempSync(join(tmpdir(), "garuda-reprice-"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  const usage = (input: number, output: number) => ({
+    inputTokens: input,
+    outputTokens: output,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  });
+  const assistant = (input: number, output: number) =>
+    JSON.stringify({
+      type: "assistant",
+      step: 1,
+      response: { content: [], stopReason: "end_turn", usage: usage(input, output) },
+    });
+  const file = (name: string, lines: string[]) => {
+    const path = join(dir, name);
+    writeFileSync(path, `${lines.join("\n")}\n`);
+    return path;
+  };
+  // Haiku 5.5's real price: $0.1 a million input tokens, $0.5 for a prompt over 100 000 tokens.
+  const haiku = {
+    input: 0.1,
+    output: 0.5,
+    cacheRead: 0.01,
+    cacheWrite: 0.125,
+    over: {
+      tokens: 100_000,
+      price: { input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 },
+    },
+  };
+  const sonnet = { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 };
+  const session = file("t1.jsonl", [
+    JSON.stringify({ type: "start" }),
+    assistant(200_000, 1_000),
+    assistant(10_000, 1_000),
+    JSON.stringify({ type: "side_usage", purpose: "review", usage: usage(50_000, 0) }),
+  ]);
+
+  it("prices each request on its own, so a long-prompt level applies only where it did", () => {
+    // Haiku: 0.2 M at $0.5 + 1k out at $2.5, then 10k at $0.1 + 1k at $0.5, then 50k at $0.1.
+    expect(repricedSessionCost(session, haiku)).toBeCloseTo(
+      0.1 + 0.0025 + 0.001 + 0.0005 + 0.005,
+      6,
+    );
+    // Sonnet: 0.26 M in at $2, 2k out at $10: about 5 times Haiku's cost, not 20 (the list ratio).
+    expect(repricedSessionCost(session, sonnet)).toBeCloseTo(0.52 + 0.02, 6);
+  });
+
+  it("gives no cost for a missing file, a subagent, unreported tokens or a broken line", () => {
+    expect(repricedSessionCost(join(dir, "none.jsonl"), sonnet)).toBeUndefined();
+    const sub = JSON.stringify({ type: "tool_results", meta: [{ subagent: { sessionId: "c" } }] });
+    expect(repricedSessionCost(file("s.jsonl", [assistant(1, 1), sub]), sonnet)).toBeUndefined();
+    const unreported = JSON.stringify({ type: "unreported", tokens: 9 });
+    expect(repricedSessionCost(file("u.jsonl", [unreported]), sonnet)).toBeUndefined();
+    expect(repricedSessionCost(file("b.jsonl", ["{"]), sonnet)).toBeUndefined();
+  });
+
+  it("averages the runs of the other model, and finds a file next to a moved report", () => {
+    const tasks = { t1: "h1" };
+    const run: PastRun = {
+      path: dir,
+      model: "haiku",
+      version: "0.18.2",
+      suite: "repo",
+      repeat: 1,
+      seed: 1,
+      tasks,
+      // Saved on another machine: the folder moved, the file name stays.
+      results: [{ ...result("t1", 0.2), sessionFile: "/elsewhere/t1.jsonl" } as never],
+      mtimeMs: 0,
+    };
+    expect(repricedCostPerRun([run], "haiku", tasks, sonnet)).toBeCloseTo(0.54, 6);
+    expect(repricedCostPerRun([run], "sonnet", tasks, sonnet)).toBeUndefined();
+    expect(repricedCostPerRun([run], "haiku", tasks, undefined)).toBeUndefined();
+    const noFile: PastRun = { ...run, results: [result("t1", 0.2) as never] };
+    expect(repricedCostPerRun([noFile], "haiku", tasks, sonnet)).toBeUndefined();
+    // A run that cannot be priced is left out while it is at most half.
+    const half: PastRun = { ...run, results: [...run.results, ...noFile.results] };
+    expect(repricedCostPerRun([half], "haiku", tasks, sonnet)).toBeCloseTo(0.54, 6);
+    const most: PastRun = { ...run, results: [...half.results, ...noFile.results] };
+    expect(repricedCostPerRun([most], "haiku", tasks, sonnet)).toBeUndefined();
   });
 });
