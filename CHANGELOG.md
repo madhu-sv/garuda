@@ -1,7 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.19.0 (2026-11-06)
 
+A security fix and the dependency majors. Sandboxed commands can no longer read the keys that the
+`ant` CLI stores. The Anthropic SDK 1.x moves Garuda's requests to API version `2026-10-21` and
+sends the key as `Authorization: Bearer` instead of `X-Api-Key`. Most setups notice nothing. If
+your requests go through a gateway or proxy (for example with `ANTHROPIC_BASE_URL`) that reads
+`X-Api-Key`, change it to read `Authorization`: the API takes either. This change is why the
+version is 0.19.0, not 0.18.3.
+
+- Security: sandboxed commands can no longer read `~/.config/anthropic/credentials`, where the `ant`
+  CLI stores keys. The SDK 1.x reads them too when it has no key.
 - The Homebrew formula in the repository names 0.18.2 and its tarball hash.
 - The Anthropic SDK is 1.6 (was 0.128). It uses API version `2026-10-21` and sends the key as
   `Authorization: Bearer`. Garuda's requests needed no change: they send no `temperature`,
@@ -13,8 +22,6 @@
 - The ACP SDK is 2.4 (was 1.7). Garuda speaks the same protocol, ACP version 1, and uses only its
   stable parts. The SDK now refuses `session/new` before `initialize`, as the protocol says;
   editors always send `initialize` first.
-- Security: sandboxed commands can no longer read `~/.config/anthropic/credentials`, where the `ant`
-  CLI stores keys. The SDK 1.x reads them too when it has no key.
 
 ## 0.18.2 (2026-11-06)
 

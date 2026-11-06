@@ -33,10 +33,11 @@ What each release added, and the known limits of this version.
 | Eval evidence (T11): repeated runs with intervals, cost per accepted change and unexpected changes, `eval compare`, the Claude Code baseline, a held-out set and a medium suite, an A/B of one MCP server, `eval tune` (the prompt-tuning loop), and few-steps rules in the system prompt | Done (0.18.0) |
 | The UX of docs/lld/ux.md (receipts, the network question, `/rewind`, diffs, the morning brief, `/export --html`, `garuda advise`), and the sandbox's read rules for personal folders (a security fix) | Done (0.18.1) |
 | Repo evals that work on macOS (`~/Library` and Vite caches), suite tasks checked as an eval runs them, provider stalls left out of the score, and a faster `garuda advise` (parallel runs, reuse, estimates from real requests) | Done (0.18.2) |
+| The Anthropic SDK 1.6 (API version 2026-10-21, the key as a bearer token), undici 8 and the ACP SDK 2.4, and the `ant` CLI's stored keys unreadable in the sandbox (a security fix) | Done (0.19.0) |
 
 The rows labelled 0.14–0.17 are branch labels, not versions: the "0.15" and "0.16" branches (code
-intelligence, language plugins) shipped in 0.14.0. The last six rows are versions 0.15.0, 0.16.0,
-0.17.0, 0.18.0, 0.18.1 and 0.18.2.
+intelligence, language plugins) shipped in 0.14.0. The last seven rows are versions 0.15.0,
+0.16.0, 0.17.0, 0.18.0, 0.18.1, 0.18.2 and 0.19.0.
 
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
@@ -48,7 +49,7 @@ headings in the user guide keep the branch labels (0.14–0.17).
 Before 0.14.0, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
 permissions, tools, sandbox, audit, loop, agents), in plan mode. 0.14.1 adds the cli and extensions
 areas and fixes the open findings of all nine areas (see [CHANGELOG.md](../../CHANGELOG.md)). Known limits
-in 0.18.2:
+in 0.19.0:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Reads: a command in the sandbox can still read your home folder outside the secret and personal
