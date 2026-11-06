@@ -221,7 +221,9 @@ Since 0.18.2:
   `Reusing <folder>`. Runs of 0.18.0 and before are never reused.
 - **A better estimate.** It comes from earlier runs of the model on the same tasks. Else it prices
   each request of the other model's runs at this model's prices; a run with a subagent cannot be
-  priced again and is left out. Else it is a token guess. The plan says which.
+  priced again and is left out. When both models ran other repo tasks before, that price is
+  scaled by how their real costs compared there (Sonnet 5.5 needs about half the tokens of
+  Haiku 5.5). Else it is a token guess. The plan says which.
 - **A command to go on.** When the estimate, or the first model's real cost, passes `--max-cost`,
   `advise` prints the command to run next, with a higher cap. The first model's run is reused.
 

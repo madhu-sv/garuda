@@ -11,6 +11,7 @@ import {
   pastRuns,
   repricedCostPerRun,
   repricedSessionCost,
+  repriceFactor,
   reusableRun,
   sumKnown,
 } from "../src/cli/advise.js";
@@ -234,5 +235,93 @@ describe("garuda advise: other runs' requests at this model's prices", () => {
     expect(repricedCostPerRun([half], "haiku", tasks, sonnet)).toBeCloseTo(0.54, 6);
     const most: PastRun = { ...run, results: [...half.results, ...noFile.results] };
     expect(repricedCostPerRun([most], "haiku", tasks, sonnet)).toBeUndefined();
+  });
+});
+
+describe("garuda advise: the repriced estimate learns from earlier comparisons", () => {
+  const dir = mkdtempSync(join(tmpdir(), "garuda-factor-"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  const sonnet = { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 };
+  /** A run in its own folder; with `inputTokens`, a session file with one request of that size. */
+  const run = (
+    name: string,
+    model: string,
+    tasks: Record<string, string>,
+    passed: boolean,
+    cost: number,
+    inputTokens?: number,
+  ): PastRun => {
+    const path = join(dir, name);
+    mkdirSync(path, { recursive: true });
+    const results = Object.keys(tasks).map((id) => {
+      if (inputTokens === undefined) return { ...result(id, cost), passed };
+      const usage = { inputTokens, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+      const line = JSON.stringify({
+        type: "assistant",
+        step: 1,
+        response: { content: [], stopReason: "end_turn", usage },
+      });
+      writeFileSync(join(path, `${id}.jsonl`), `${line}\n`);
+      return { ...result(id, cost), passed, sessionFile: `/elsewhere/${id}.jsonl` };
+    });
+    return {
+      path,
+      model,
+      version: "0.18.2",
+      commit: "c1",
+      suite: "repo",
+      repeat: 1,
+      seed: 1,
+      tasks,
+      results: results as never,
+      mtimeMs: 0,
+    };
+  };
+  const x = { x1: "hx" };
+  const y = { y1: "hy" };
+  // Shared set x: Haiku's request (100k tokens) at Sonnet's prices is $0.20; Sonnet really cost $0.10.
+  const haikuX = run("hx", "haiku", x, true, 0.01, 100_000);
+  const sonnetX = run("sx", "sonnet", x, true, 0.1);
+  // Shared set y, with a broken check (nothing passed): it would give a factor of 2.
+  const haikuY = run("hy", "haiku", y, false, 0.01, 100_000);
+  const sonnetY = run("sy", "sonnet", y, false, 0.4);
+
+  it("scales by the real cost over the repriced cost where both models ran the same tasks", () => {
+    expect(repriceFactor([haikuX, sonnetX], "haiku", "sonnet", sonnet)).toEqual({
+      value: 0.5,
+      sets: 1,
+    });
+  });
+
+  it("uses repo runs only: built-in tasks are small, and the models use tokens differently there", () => {
+    const builtin = (r: PastRun): PastRun => ({ ...r, suite: "hard" });
+    const z = { z1: "hz" };
+    const haikuZ = builtin(run("hz", "haiku", z, true, 0.01, 100_000));
+    const sonnetZ = builtin(run("sz", "sonnet", z, true, 0.2));
+    expect(repriceFactor([haikuX, sonnetX, haikuZ, sonnetZ], "haiku", "sonnet", sonnet)).toEqual({
+      value: 0.5,
+      sets: 1,
+    });
+  });
+
+  it("leaves out a comparison where no task passed: the check was broken", () => {
+    const f = repriceFactor([haikuX, sonnetX, haikuY, sonnetY], "haiku", "sonnet", sonnet);
+    expect(f?.value).toBeCloseTo(0.5, 6);
+    expect(f?.sets).toBe(1);
+  });
+
+  it("has no factor without a shared task set, and the estimate says which it used", () => {
+    expect(repriceFactor([haikuX, sonnetY], "haiku", "sonnet", sonnet)).toBeUndefined();
+    expect(repriceFactor([haikuX, sonnetX], "haiku", "sonnet", undefined)).toBeUndefined();
+    const scaled = costEstimate(
+      90,
+      undefined,
+      { perRun: 0.4, from: "haiku", factor: { value: 0.5, sets: 1 } },
+      sonnet,
+    );
+    expect(scaled.usd).toBeCloseTo(18, 6);
+    expect(scaled.how).toBe(
+      "from haiku's requests at this model's prices, × 0.50 as in 1 earlier comparison",
+    );
   });
 });

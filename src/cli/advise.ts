@@ -272,21 +272,62 @@ export function repricedCostPerRun(
 }
 
 /**
+ * How the real cost of `target` compares with `source`'s requests at `target`'s prices, from task
+ * sets that both models ran (0.18.2). Repricing keeps the source's steps and tokens, but models use
+ * different amounts: Sonnet 5.5 cost $6.30 on 30 tasks where Haiku's requests at its prices gave
+ * $12.62. The mean ratio over the shared sets of repo tasks; runs where no task passed are left out
+ * (a broken check: the user's first 0.18.1 runs). Undefined with no shared task set.
+ */
+export function repriceFactor(
+  runs: readonly PastRun[],
+  source: string,
+  target: string,
+  price: Price | undefined,
+): { value: number; sets: number } | undefined {
+  // Repo runs only: on the small built-in tasks the two models use about the same tokens (a factor
+  // of 1.04 in the user's runs), on the repo tasks Sonnet uses half (0.52).
+  const useful = runs.filter((r) => r.suite === "repo" && r.results.some((x) => x.passed));
+  const sets: Record<string, string>[] = [];
+  for (const run of useful.filter((r) => r.model === source && r.tasks !== undefined)) {
+    const tasks = run.tasks as Record<string, string>;
+    if (sets.some((t) => sameTasks(t, tasks))) continue;
+    if (useful.some((r) => r.model === target && sameTasks(r.tasks, tasks))) sets.push(tasks);
+  }
+  const ratios: number[] = [];
+  for (const tasks of sets) {
+    const real = pastCostPerRun(useful, target, tasks);
+    const repriced = repricedCostPerRun(useful, source, tasks, price);
+    if (real !== undefined && repriced !== undefined && repriced > 0) ratios.push(real / repriced);
+  }
+  if (ratios.length === 0) return undefined;
+  return { value: ratios.reduce((sum, r) => sum + r, 0) / ratios.length, sets: ratios.length };
+}
+
+/**
  * The cost of `runs` new runs of a model: from its own earlier runs; else from the other model's
- * requests at this model's prices; else a guess. (A ratio of list prices was wrong by 5 times for
- * Haiku 5.5, whose long prompts cost 5 times its base price.)
+ * requests at this model's prices, scaled by `factor` when both models ran shared tasks before;
+ * else a guess. (A ratio of list prices was wrong by 5 times for Haiku 5.5, whose long prompts cost
+ * 5 times its base price.)
  */
 export function costEstimate(
   runs: number,
   own: number | undefined,
-  repriced: { perRun: number | undefined; from: string },
+  repriced: {
+    perRun: number | undefined;
+    from: string;
+    factor?: { value: number; sets: number } | undefined;
+  },
   price: Price | undefined,
 ): { usd: number | undefined; how: string } {
   if (own !== undefined) return { usd: own * runs, how: "from earlier runs" };
   if (repriced.perRun !== undefined) {
+    const f = repriced.factor;
     return {
-      usd: repriced.perRun * runs,
-      how: `from ${repriced.from}'s requests at this model's prices`,
+      usd: repriced.perRun * (f?.value ?? 1) * runs,
+      how:
+        f === undefined
+          ? `from ${repriced.from}'s requests at this model's prices`
+          : `from ${repriced.from}'s requests at this model's prices, × ${f.value.toFixed(2)} as in ${f.sets} earlier comparison${f.sets === 1 ? "" : "s"}`,
     };
   }
   return { usd: estimateUsd(price, runs), how: "a guess" };
@@ -371,9 +412,23 @@ export async function runAdvise(options: AdviseOptions): Promise<number> {
   // Repricing reads session files: only when a model has no history of its own.
   const repriced = (i: 0 | 1, from: string) =>
     perRun[i] === undefined ? repricedCostPerRun(past, from, hashes, prices[i]) : undefined;
+  const factors = [
+    perRun[0] === undefined ? repriceFactor(past, b, a, prices[0]) : undefined,
+    perRun[1] === undefined ? repriceFactor(past, a, b, prices[1]) : undefined,
+  ];
   const estimates = [
-    costEstimate(runs, perRun[0], { perRun: repriced(0, b), from: b }, prices[0]),
-    costEstimate(runs, perRun[1], { perRun: repriced(1, a), from: a }, prices[1]),
+    costEstimate(
+      runs,
+      perRun[0],
+      { perRun: repriced(0, b), from: b, factor: factors[0] },
+      prices[0],
+    ),
+    costEstimate(
+      runs,
+      perRun[1],
+      { perRun: repriced(1, a), from: a, factor: factors[1] },
+      prices[1],
+    ),
   ];
   const line = (model: string, i: 0 | 1) => {
     const r = reuse[i];
@@ -448,7 +503,11 @@ export async function runAdvise(options: AdviseOptions): Promise<number> {
     const nextB = costEstimate(
       runs,
       perRun[1],
-      { perRun: repricedCostPerRun(pastRuns(evalsDir), a, hashes, prices[1]), from: a },
+      {
+        perRun: repricedCostPerRun(pastRuns(evalsDir), a, hashes, prices[1]),
+        from: a,
+        factor: factors[1],
+      },
       prices[1],
     ).usd;
     if (spentA !== undefined && nextB !== undefined && spentA + nextB > maxCost) {

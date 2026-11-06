@@ -484,7 +484,11 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   applies per request. A file with a subagent, `unreported` or `child_debit` gives no cost; the
   mean is of the rest when they are at least half. Else `estimateUsd`. A ratio of list prices was
   the first design and was wrong: Haiku 5.5 is $0.1 a million input tokens but $0.5 over 100 000,
-  so Sonnet's ratio is about 13 on real runs, not 20.
+  so Sonnet's ratio is about 13 on real runs, not 20. `repriceFactor` then scales the repriced
+  cost: over each task set that both models ran (repo suite only, runs with at least one pass),
+  the target's real mean cost over the source's repriced mean, averaged over the sets. On the
+  user's runs: 0.52 on the repo tasks (Sonnet uses about half of Haiku's tokens there), 1.04 on 10
+  built-in tasks; the estimate for 90 Sonnet runs went from $33.62 to $17.37.
   `continueCommand` prints the next command with the cap × 1.25, rounded up. An eval exit code of
   1 (a setup error) stops `advise`; 2 (some runs fail) does not.
 

@@ -30,6 +30,10 @@
   model's prices; else the token guess. Each line says which. (A first version scaled by the ratio
   of list prices: 20 for Sonnet 5.5 over Haiku 5.5, but Haiku costs 5 times as much for a prompt
   over 100 000 tokens. On a real run it estimated $19.16 where the requests give $12.62.)
+- The repriced estimate is scaled by what both models really cost on shared repo tasks before:
+  Sonnet 5.5 needs fewer steps and tokens than Haiku 5.5, and cost $6.30 where Haiku's requests at
+  its prices gave $12.62 (× 0.52). Without the factor, the user's 90-run estimate was $33.62; with
+  it, $17.37. Runs where no task passed, and built-in suites, are left out.
 - When the estimate or the first model's real cost passes `--max-cost`, `advise` prints the
   command that goes on (`garuda advise --models a,b --repeat R --seed S --max-cost N`). The first
   model's run is kept and reused.
