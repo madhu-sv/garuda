@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.18.2 (2026-11-06)
+
+A fix release for repo evals (`garuda eval -s repo`, `garuda advise`). On macOS, 0.18.1 failed
+every check of a project whose tools live in `~/Library` (pnpm does), and Vite projects failed
+before a test ran. It also makes `garuda advise` faster and cheaper to repeat: runs in parallel,
+reuse of earlier runs, a cost estimate from real requests, and the command to go on after a stop
+at the cap. A provider outage no longer counts against a model.
 
 - Fix: repo-task evals (`-s repo`, `garuda advise`) on macOS failed every check in 0.18.1 when the
   project's tools live in `~/Library`. pnpm runs the version that a project asks for from
