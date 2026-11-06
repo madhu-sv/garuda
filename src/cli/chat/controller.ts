@@ -5,6 +5,7 @@ import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { THINKING_WORDS } from "../../model/thinking.js";
 import { describeError } from "../errors.js";
 import type { Notifier } from "../notify.js";
+import { tourChoice } from "../tour.js";
 import { runTurnInTerminal } from "../turn.js";
 import { paletteEntries, runCommand } from "./commands.js";
 import { type ArgChoice, complete, rootFiles, rootLister } from "./complete.js";
@@ -23,7 +24,10 @@ export async function runChat(
   exitNow: () => never,
   /** Tells the user when a long turn ends (0.6). */
   notifier?: Notifier,
+  /** UX U9: the tour's tasks; the first input 1, 2 or 3 runs one. */
+  tour?: readonly string[],
 ): Promise<void> {
+  let tourTasks = tour;
   store.onToggleMode = () => {
     runtime.setMode(runtime.mode === "plan" ? "build" : "plan");
     return statusOf(runtime);
@@ -43,7 +47,9 @@ export async function runChat(
     void args.refresh();
     const input = await store.nextInput();
     if (input === undefined) return;
-    const text = input.trim();
+    // UX U9: only the first input can pick a tour task.
+    const text = tourChoice(input.trim(), tourTasks);
+    tourTasks = undefined;
     let prompt = text;
     // !command (0.6): run it like the bash tool; the output also goes with the next message.
     if (text.startsWith("!") && text.length > 1) {

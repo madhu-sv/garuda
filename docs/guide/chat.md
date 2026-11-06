@@ -80,6 +80,10 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
 - Reads and searches in a row show as one line (0.18.1): `● Read 5 files  a.ts, b.ts, +3`. Edits,
   commands and failed calls keep a line each. Ctrl-O shows the last call's output in full. With
   `todo_write` on, the plan stays above the input during the task and prints once at the end.
+- The first chat in a project with code names its stack and offers three first tasks (0.18.1);
+  type 1, 2 or 3 to run one, or your own task. It shows once per project.
+- The first chat after scheduled jobs ran shows them once (0.18.1): verdict, tests and branch of
+  each, and the total cost.
 - Your requests have a bar (`▌`) on every line; Garuda's answer starts with `✦` (0.18.1). With
   `GARUDA_SCREEN_READER=1` they read "You:" and "Garuda:".
 - When Garuda runs from a checkout and `dist/` is older than it, the banner says "run pnpm build

@@ -40,6 +40,8 @@ export async function runInkChat(
   keyHints = true,
   /** 0.18.1: start on a clear screen ("ui": { "clearOnStart": false } turns it off). */
   clearOnStart = true,
+  /** UX U9: the tour's tasks; a first input of 1, 2 or 3 runs one. */
+  tour?: readonly string[],
 ): Promise<void> {
   if (clearOnStart && process.stdout.isTTY === true) {
     process.stdout.write(clearScreenKeepingScrollback(process.stdout.rows || 24));
@@ -78,7 +80,7 @@ export async function runInkChat(
     return exitNow();
   };
   try {
-    await runChat(runtime, store, sessionPath, exitClean, notifier);
+    await runChat(runtime, store, sessionPath, exitClean, notifier, tour);
   } finally {
     reportFocus(false);
     ink.unmount();

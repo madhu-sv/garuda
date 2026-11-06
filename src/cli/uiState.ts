@@ -14,8 +14,13 @@ export async function countChat(home: string): Promise<number> {
   const dir = join(home, ".garuda");
   const file = join(dir, "ui.json");
   let chats = 0;
+  // Other keys (UX U9: `toured`) stay as they are.
+  let data: Record<string, unknown> = {};
   try {
-    const data = JSON.parse(await readFile(file, "utf8")) as { chats?: unknown };
+    const read = JSON.parse(await readFile(file, "utf8")) as unknown;
+    if (typeof read === "object" && read !== null && !Array.isArray(read)) {
+      data = read as Record<string, unknown>;
+    }
     if (typeof data.chats === "number" && Number.isInteger(data.chats) && data.chats >= 0) {
       chats = data.chats;
     }
@@ -25,7 +30,7 @@ export async function countChat(home: string): Promise<number> {
   chats++;
   try {
     await mkdir(dir, { recursive: true, mode: 0o700 });
-    await writeFile(file, `${JSON.stringify({ chats })}\n`, { mode: 0o600 });
+    await writeFile(file, `${JSON.stringify({ ...data, chats })}\n`, { mode: 0o600 });
   } catch {
     // The hints are a help: a home folder that cannot be written changes nothing else.
   }

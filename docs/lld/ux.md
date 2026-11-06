@@ -1,8 +1,8 @@
 # UX: show the trust and the evidence (design)
 
 Status: design approved (2026-11-05: the user took every suggested default, D1–D10). Built: patch 1
-(U1, U3, U10), patch 2 (U2), patch 3 (U4), patch 4 (U6) and patch 5 (U5, steps 1
-and 2); see "As built" at the end.
+(U1, U3, U10), patch 2 (U2), patch 3 (U4), patch 4 (U6), patch 5 (U5, steps 1
+and 2) and patch 6 (U7, U9); see "As built" at the end.
 
 ## Purpose
 
@@ -444,6 +444,19 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   to see in red and green. Syntax colours wait (D10). `terminalDiff` uses the new views only for
   text with a hunk header; any other preview gets `plainColours` (the first live run: the
   project-settings question came out side by side, with line numbers).
+
+## As built (patch 6)
+
+- **U7.** `src/jobs/brief.ts`: `morningBrief` reads the jobs that ended after the last brief (the
+  last day when there is none), writes `.garuda/jobs/brief.seen` (not a `.json` name: `listJobs`
+  reads every `.json` file there as a job), and returns `briefText`. Test counts come from the
+  proof's test output with the receipt's `parseTestCount`. The mock-up's keys (r, d, j) became a
+  line that names `/jobs <id>` and `git diff`: keys at start would compete with typing.
+- **U9.** `src/cli/tour.ts`: `detectStack` (package.json with its runner and package manager,
+  React Native and Expo, then the language profiles, Go, Rust), `tourPrompts`, `firstRunTour`
+  (once per project: `toured` in `~/.garuda/ui.json`, a hash of the root), `tourChoice` (the first
+  input 1, 2 or 3). The tour takes the place of the `/init` tip and names `/init` itself.
+  `countChat` now keeps the other keys of `ui.json`.
 
 ## Also built: the start screen (0.18.1)
 

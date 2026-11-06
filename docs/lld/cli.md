@@ -241,6 +241,9 @@ interface ChatState {
   (cyan, dim while busy) with `INPUT_HINT` or `INPUT_HINT_BUSY` when empty; no box under
   `INPUT_BOX_MIN_COLUMNS` (40) or for a screen reader. The footer starts one space in, under the
   box's border. The chat does not use the alternate screen: the terminal's scrollback stays.
+- The start (UX U7, U9): `index.ts` adds `morningBrief` and `firstRunTour` to the banner (the
+  tour replaces the `/init` tip); `runChat` and `runRepl` take the tour's tasks and map the first
+  input with `tourChoice`.
 - Diffs (UX U5): `diffView.ts`; `colorDiff(text, columns)` and `colorPreview(request, columns)`
   in `approver.ts`; `ChatStore.askNow` adds "N hunks · h reviews them one by one" for a request
   with `selectHunks` and two or more hunks; `HunkStagingView` draws the hunk with `unifiedDiff`.

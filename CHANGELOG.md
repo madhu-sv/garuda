@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- UX, patch 6 (docs/lld/ux.md U7, U9): the morning brief. The first chat after jobs ran shows them
+  once: each job's verdict, its tests ("tests 120 → 126" when the runner's summary gives counts)
+  and its branch, and the total cost. `.garuda/jobs/brief.seen` keeps the time of the last brief.
+  The first-run tour: the first chat in a project with code names its stack ("TypeScript with
+  vitest (pnpm)") and offers three first tasks; typing 1, 2 or 3 runs one. It shows once per
+  project (`~/.garuda/ui.json` keeps a hash of the folder, not its path).
 - UX, patch 5 (docs/lld/ux.md U5): diffs mark the changed words of a changed line (inverse video),
   in approvals, in hunk review and in `/diff`. From 140 columns a diff is side by side, with the
   line numbers of both files. An approval that can review hunks says so in its first line:

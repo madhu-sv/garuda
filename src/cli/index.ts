@@ -675,10 +675,24 @@ async function start(options: Options, program: Command): Promise<number> {
       startBanner += `\n${colorLevel(process.stdout) === "none" ? stale : styleText("yellow", stale)}`;
     }
   }
+  // UX U7: the jobs that ended since the last chat, once. UX U9: the first-run tour, once per
+  // project; it replaces the /init tip and names /init itself.
+  let tour: string[] | undefined;
   if (options.firstInput === undefined) {
+    const colored = colorLevel(process.stdout) !== "none";
+    const { morningBrief } = await import("../jobs/brief.js");
+    const brief = await morningBrief(root, (style, text) =>
+      colored ? styleText(style, text) : text,
+    ).catch(() => undefined);
+    if (brief !== undefined) startBanner += `\n${brief}\n`;
     const { initTip } = await import("../init/detect.js");
     const tip = initTip(root);
-    if (tip !== undefined) {
+    const { firstRunTour } = await import("./tour.js");
+    const first = await firstRunTour(root, homedir(), runtime.profiles).catch(() => undefined);
+    if (first !== undefined) {
+      tour = first.prompts;
+      startBanner += `\n${first.text}${tip === undefined ? "" : " /init sets up AGENTS.md for this project."}`;
+    } else if (tip !== undefined) {
       const shown =
         ink !== undefined && !screenReaderMode()
           ? centerLines([tip], process.stdout.columns || 80)[0]
@@ -722,6 +736,7 @@ async function start(options: Options, program: Command): Promise<number> {
       focus,
       chats <= KEY_HINT_CHATS,
       runtime.uiSettings?.clearOnStart !== false,
+      tour,
     );
   } else {
     process.stderr.write(`${startBanner}\n`);
@@ -734,6 +749,7 @@ async function start(options: Options, program: Command): Promise<number> {
       undefined,
       options.firstInput,
       notifier,
+      tour,
     );
   }
   await runtime.close();
