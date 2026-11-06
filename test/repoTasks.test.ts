@@ -23,11 +23,12 @@ import {
   type RepoSuite,
   repoEvalTasks,
   repoPrompt,
+  repoTaskWritePaths,
   saveRepoSuite,
   scopedTestCommand,
   skipReason,
 } from "../src/evals/repoTasks.js";
-import { runEvalTask } from "../src/evals/runner.js";
+import { checkAsEval, repoTaskSandbox, runEvalTask } from "../src/evals/runner.js";
 import { git } from "../src/jobs/git.js";
 import { cleanArgs } from "../src/jobs/worktree.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
@@ -273,6 +274,46 @@ describe("repo tasks: the suite from git (0.12)", () => {
     await saveRepoSuite(suite);
   });
 
+  it("leaves out a task whose tests fail as an eval runs them, and says why (0.18.2)", async () => {
+    const calls: [string, string][] = [];
+    const refused = await buildRepoSuite(host, root, {
+      testCommand: "node --test",
+      evalCheck: async (sha, check) => {
+        calls.push([sha, check]);
+        return { ok: false, tail: "Error: cannot start a sandbox in the sandbox" };
+      },
+    });
+    // Only a commit that passed both host checks reaches the eval check.
+    expect(calls).toEqual([[shas["Add mul"], "node --test test/mul.test.js"]]);
+    expect(refused.suite.tasks).toEqual([]);
+    expect(
+      refused.skipped["the tests fail as an eval runs them (a task copy, in the sandbox)"],
+    ).toBe(1);
+    expect(refused.evalFailure).toEqual({
+      sha: shas["Add mul"],
+      command: "node --test test/mul.test.js",
+      tail: "Error: cannot start a sandbox in the sandbox",
+    });
+    const kept = await buildRepoSuite(host, root, {
+      testCommand: "node --test",
+      evalCheck: async () => ({ ok: true, tail: "" }),
+    });
+    expect(kept.suite.tasks.map((t) => t.subject)).toEqual(["Add mul"]);
+    expect(kept.evalFailure).toBeUndefined();
+  }, 60_000);
+
+  it("checks a commit as an eval does: in a copy, with no model; it fails where the tests fail", async () => {
+    const at = await checkAsEval(root, shas["Add mul"] ?? "", "node --test test/mul.test.js");
+    expect(at.ok).toBe(true);
+    // At the parent the test file is not there: the check fails, and says so.
+    const before = await checkAsEval(root, shas.Initial ?? "", "node --test test/mul.test.js");
+    expect(before.ok).toBe(false);
+    expect(before.tail).not.toBe("");
+    // The checkout did not change (an earlier test saved the suite in .garuda).
+    const status = await git(host, root, ["status", "--porcelain", "--", ".", ":!.garuda"]);
+    expect(status.stdout).toBe("");
+  }, 60_000);
+
   it("runs a repo task in a worktree at the parent, and passes when the agent makes the change", async () => {
     const [task] = repoEvalTasks(suite);
     if (task === undefined) throw new Error("no task");
@@ -339,4 +380,22 @@ describe("repo tasks: the suite from git (0.12)", () => {
     expect(answer.exitCode).not.toBe(0);
     rmSync(kept, { recursive: true, force: true });
   }, 60_000);
+});
+
+describe("repo tasks: caches in node_modules (0.18.2)", () => {
+  it("lets commands write Vite's and other caches in the linked node_modules, as real paths", () => {
+    const project = join(base, "cache-project");
+    const deps = join(base, "cache-deps");
+    mkdirSync(join(deps, "vitest"), { recursive: true });
+    mkdirSync(project, { recursive: true });
+    symlinkSync(deps, join(project, "node_modules"), "dir");
+    const paths = repoTaskWritePaths(project);
+    // vitest.config.ts compiles into node_modules/.vite-temp: without it, 10 of 30 tasks failed.
+    expect(paths).toEqual([join(deps, ".vite-temp"), join(deps, ".vite"), join(deps, ".cache")]);
+    for (const path of paths) expect(existsSync(path)).toBe(true);
+    expect(repoTaskSandbox(project, join(base, "nohome")).writePaths).toEqual(paths);
+    // Only those: the rest of node_modules stays read-only.
+    expect(paths).not.toContain(deps);
+    expect(repoTaskWritePaths(join(base, "no-modules"))).toEqual([]);
+  });
 });

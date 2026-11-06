@@ -10,6 +10,14 @@
   personal parts and the keychains stay denied for every sandboxed command. Run 0.18.1 repo evals
   again.
 - `advise` gives no advice when neither model passes a task: the check itself may fail.
+- Fix: in repo-task evals, Vite could not write its compiled `vitest.config.ts` to
+  `node_modules/.vite-temp`, because the task's `node_modules` links to the project's and was
+  read-only. In the user's suite 10 of 30 tasks failed for both models before a test ran.
+  Commands may now write `.vite-temp`, `.vite` and `.cache` there, and nothing else.
+- `garuda eval --from-git` checks each kept commit a third time, as an eval runs it (a copy, in the
+  sandbox), and leaves out a commit whose tests fail there. Before, it checked only on the host,
+  and a task could pass the build but never an eval (2 of 30 in the user's suite: tests that start
+  their own sandbox). Build your suite again.
 - The Homebrew formula in the repository names 0.18.1 and its tarball hash.
 - `garuda advise` runs 4 tasks at a time (`--parallel <n>`); each result line starts with the
   model and a count, as in `[haiku-5-5 12/30] ✓ fix-parser: pass`. The first real run, one at a

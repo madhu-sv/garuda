@@ -176,6 +176,15 @@ a user can check a model, a setting or a Garuda version on the work they do.
 3. Stop at `--max-tasks` (default 30). The test command is `--test-command`, else the one that jobs use
    (`detectTestCommand`). Both runs are on the host, with no sandbox (the project's own commits, not an
    agent's code); the output says so. The user's checkout does not change.
+   Since 0.18.2 a kept commit runs its check a third time with `evalCheck` (`checkAsEval` from the
+   eval command): an `isolatedTaskCopy` of the commit, a `Runtime` with the eval's settings, the
+   repo sandbox (`repoTaskSandbox`) and the team policy, no model, and `runCheck` in its sandbox. A
+   failure skips the commit ("the tests fail as an eval runs them") and the first one is printed
+   (`evalFailure`). In the user's suite, 12 of 30 tasks could never pass: 10 because Vite writes
+   the compiled `vitest.config.ts` to `node_modules/.vite-temp` and the linked `node_modules` was
+   read-only, 2 because macOS cannot start a sandbox inside the sandbox. `repoTaskWritePaths` now
+   makes `.vite-temp`, `.vite` and `.cache` in the project's real `node_modules` and lets the
+   task's commands write them (real paths: the sandbox matches those, not the link).
 4. Save `.garuda/evals/repo-suite.json` (version 1: root, HEAD, test command; per task the commit, its
    parent, the subject, the prompt and the test files' content). Print the kept count and the skip
    reasons.

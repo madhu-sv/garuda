@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync } from "node:fs";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
@@ -242,6 +242,39 @@ export function repoTaskReadDenials(root: string, home: string): string[] {
   ];
 }
 
+/**
+ * Cache folders that test tools write in `node_modules` (0.18.2): Vite compiles a
+ * `vitest.config.ts` into `.vite-temp`, Vitest keeps its results in `.vite`, Babel and others use
+ * `.cache`. In a task copy, `node_modules` links to the project's own, which a command cannot
+ * write: in the user's run, 10 of 30 tasks failed for both models before a test ran.
+ */
+export const NODE_MODULES_CACHES = [".vite-temp", ".vite", ".cache"];
+
+/**
+ * The cache folders of the project's `node_modules` that a repo task's commands may write, as real
+ * paths (the sandbox matches real paths, and the task copy only links to them). Each is made
+ * first: a Linux sandbox can only bind a folder that exists. None without `node_modules`.
+ */
+export function repoTaskWritePaths(root: string): string[] {
+  let modules: string;
+  try {
+    modules = realpathSync(join(root, "node_modules"));
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const name of NODE_MODULES_CACHES) {
+    const path = join(modules, name);
+    try {
+      mkdirSync(path, { recursive: true });
+      out.push(path);
+    } catch {
+      // Cannot be made: the tools run without it, as before.
+    }
+  }
+  return out;
+}
+
 export async function removeTaskWorktree(
   executor: Executor,
   root: string,
@@ -297,6 +330,12 @@ export interface BuildOptions {
   maxTasks?: number;
   testCommand: string;
   onProgress?: (line: string) => void;
+  /**
+   * 0.18.2: the check at the commit as an eval runs it (a task copy, in the sandbox). A task that
+   * passes on the host but not there can never pass in an eval: in the user's run, the sandbox
+   * tests could not start a sandbox inside the sandbox.
+   */
+  evalCheck?: (sha: string, check: string) => Promise<{ ok: boolean; tail: string }>;
 }
 
 /**
@@ -313,6 +352,8 @@ export async function buildRepoSuite(
   skipped: Record<string, number>;
   /** The first failure at a commit: the tests may not run in a worktree on this machine. */
   failure?: { sha: string; command: string; tail: string };
+  /** The first commit whose tests pass on the host but fail as an eval runs them. */
+  evalFailure?: { sha: string; command: string; tail: string };
 }> {
   const say = options.onProgress ?? (() => {});
   const head = (await git(executor, root, ["rev-parse", "HEAD"])).stdout.trim();
@@ -327,6 +368,7 @@ export async function buildRepoSuite(
   const tasks: RepoTaskSpec[] = [];
   let checked = 0;
   let failure: { sha: string; command: string; tail: string } | undefined;
+  let evalFailure: { sha: string; command: string; tail: string } | undefined;
   const max = options.maxTasks ?? DEFAULT_MAX_TASKS;
   for (const commit of commits) {
     if (tasks.length >= max) break;
@@ -399,6 +441,14 @@ export async function buildRepoSuite(
     } finally {
       await removeTaskWorktree(executor, root, dir);
     }
+    if (options.evalCheck !== undefined) {
+      const inEval = await options.evalCheck(commit.sha, check);
+      if (!inEval.ok) {
+        skip("the tests fail as an eval runs them (a task copy, in the sandbox)");
+        evalFailure ??= { sha: commit.sha, command: check, tail: inEval.tail };
+        continue;
+      }
+    }
     tasks.push({
       id: `repo-${commit.sha.slice(0, 7)}`,
       sha: commit.sha,
@@ -422,6 +472,7 @@ export async function buildRepoSuite(
     checked,
     skipped,
     ...(failure === undefined ? {} : { failure }),
+    ...(evalFailure === undefined ? {} : { evalFailure }),
   };
 }
 

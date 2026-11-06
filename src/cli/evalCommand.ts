@@ -530,16 +530,32 @@ async function buildFromGit(options: EvalCommandOptions): Promise<number> {
       return 1;
     }
   }
+  // The check as an eval runs it obeys the team policy too (its sandbox rules).
+  const { loadTeamPolicy } = await import("../permissions/policy.js");
+  let team: Awaited<ReturnType<typeof loadTeamPolicy>>;
+  try {
+    team = await loadTeamPolicy();
+  } catch (error) {
+    process.stderr.write(`Team policy: ${(error as Error).message}\n`);
+    return 1;
+  }
+  const { checkAsEval } = await import("../evals/runner.js");
   process.stderr.write(
-    `Building the repo suite from ${options.commits ?? DEFAULT_COMMITS} recent commits${options.since === undefined ? "" : ` since ${options.since}`} in ${root}.\nEach candidate runs its own test files with \`${testCommand}\` twice on this machine (no sandbox), in a git worktree; your checkout does not change.\n\n`,
+    `Building the repo suite from ${options.commits ?? DEFAULT_COMMITS} recent commits${options.since === undefined ? "" : ` since ${options.since}`} in ${root}.\nEach candidate runs its own test files with \`${testCommand}\` twice on this machine (no sandbox), in a git worktree; your checkout does not change. A kept one runs a third time as an eval runs it: in a copy, in the sandbox.\n\n`,
   );
-  const { suite, checked, skipped, failure } = await buildRepoSuite(new HostExecutor(), root, {
-    testCommand,
-    ...(options.commits === undefined ? {} : { commits: options.commits }),
-    ...(options.since === undefined ? {} : { since: options.since }),
-    ...(options.maxTasks === undefined ? {} : { maxTasks: options.maxTasks }),
-    onProgress: (line) => process.stderr.write(`  ${line}\n`),
-  });
+  const { suite, checked, skipped, failure, evalFailure } = await buildRepoSuite(
+    new HostExecutor(),
+    root,
+    {
+      testCommand,
+      evalCheck: (sha, check) =>
+        checkAsEval(root, sha, check, team === undefined ? {} : { policy: team.policy }),
+      ...(options.commits === undefined ? {} : { commits: options.commits }),
+      ...(options.since === undefined ? {} : { since: options.since }),
+      ...(options.maxTasks === undefined ? {} : { maxTasks: options.maxTasks }),
+      onProgress: (line) => process.stderr.write(`  ${line}\n`),
+    },
+  );
   const file = await saveRepoSuite(suite);
   const reasons = Object.entries(skipped)
     .sort((a, b) => b[1] - a[1])
@@ -554,6 +570,13 @@ async function buildFromGit(options: EvalCommandOptions): Promise<number> {
             `The first failure at a commit (${failure.sha.slice(0, 7)}: \`${failure.command}\`):`,
             ...failure.tail.split("\n").map((line) => `  ${line}`),
             'If every commit fails like this, the tests do not run in a worktree on this machine; give a working command with --test-command ("{files}" takes the test files).',
+          ]),
+      ...(evalFailure === undefined
+        ? []
+        : [
+            `The first commit whose tests pass here but fail as an eval runs them (${evalFailure.sha.slice(0, 7)}: \`${evalFailure.command}\`):`,
+            ...evalFailure.tail.split("\n").map((line) => `  ${line}`),
+            "No model could pass such a task, so it is left out. A test that needs the network, or starts its own sandbox, fails like this.",
           ]),
       `Suite: ${file}`,
       ...(suite.tasks.length === 0

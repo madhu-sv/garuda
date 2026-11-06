@@ -241,7 +241,13 @@ garuda eval -s repo -m claude-sonnet-5     # run them (the A/B flags work too)
 A commit is kept only when its tests fail at the parent and pass at the commit. Garuda runs only the
 commit's test files when it knows the runner; `--test-command "make test T={files}"` works for others.
 Commits that change dependencies, binary files or more than 10 code files are skipped. Building runs your test command twice per
-candidate on this machine, with no sandbox, in git worktrees: your checkout does not change.
+candidate on this machine, with no sandbox, in git worktrees: your checkout does not change. Since
+0.18.2 a kept commit runs its tests a third time, as an eval runs them: in a copy of the commit, in
+the sandbox. A commit whose tests fail there is left out, because no model could pass it. For
+example, a test that starts its own sandbox fails like this on macOS. The output shows the first
+such failure. In an eval, commands may write Vite's and other caches in your `node_modules`
+(`.vite-temp`, `.vite` and `.cache`), and nothing else there.
+Built a suite before 0.18.2? Build it again: in one user's suite, 12 of 30 tasks could not pass.
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).
 Commands, and the check after each task, run in the scratch folders, in the OS sandbox when there is one (`--executor auto|os|host`). Results and session files go to

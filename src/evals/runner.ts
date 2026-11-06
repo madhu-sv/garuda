@@ -23,7 +23,12 @@ import { changedPaths, treeState, unexpectedPaths } from "./changes.js";
 import { roughNote } from "./compare.js";
 import { writeFiles } from "./files.js";
 import { isProtectedPath } from "./projects.js";
-import { applyTests, isolatedTaskCopy, repoTaskReadDenials } from "./repoTasks.js";
+import {
+  applyTests,
+  isolatedTaskCopy,
+  repoTaskReadDenials,
+  repoTaskWritePaths,
+} from "./repoTasks.js";
 import {
   consistency,
   costPerPass,
@@ -124,6 +129,72 @@ export interface EvalOptions {
 /** Time limit of an MCP prepare command (`--mcp-prepare`). */
 export const MCP_PREPARE_TIMEOUT_MS = 120_000;
 
+/**
+ * The sandbox settings of a repo task (0.18.1, 0.18.2): no reads of the project's checkout or the
+ * rest of the home folder, and writes to the caches in the project's `node_modules`.
+ */
+export function repoTaskSandbox(repoRoot: string, home: string) {
+  return {
+    denyRead: repoTaskReadDenials(repoRoot, home),
+    writePaths: repoTaskWritePaths(repoRoot),
+  };
+}
+
+/**
+ * The check of a repo task at its commit, as an eval runs it (0.18.2, for the suite builder): a
+ * task copy of the commit, a runtime with the eval's settings and no model, and `runCheck` in its
+ * sandbox. Nothing is asked of a model.
+ */
+export async function checkAsEval(
+  repoRoot: string,
+  sha: string,
+  check: string,
+  options: {
+    home?: string;
+    executor?: EvalOptions["executor"];
+    policy?: EvalOptions["policy"];
+  } = {},
+): Promise<{ ok: boolean; tail: string }> {
+  const host = new HostExecutor();
+  const root = await isolatedTaskCopy(host, repoRoot, sha);
+  try {
+    const runtime = await Runtime.create({
+      root,
+      modelId: "none",
+      model: async () => {
+        throw new Error("checkAsEval asks no model.");
+      },
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({
+        permissions: { deny: EVAL_DENY_RULES },
+        web: { enabled: false },
+        sandbox: repoTaskSandbox(repoRoot, options.home ?? homedir()),
+        ...(options.executor === undefined ? {} : { executor: options.executor }),
+      }),
+      mcp: false,
+      hooks: false,
+      commands: false,
+      ...(options.policy === undefined ? {} : { policy: options.policy }),
+    });
+    try {
+      const result = await runCheck(
+        root,
+        check,
+        REPO_CHECK_TIMEOUT_MS,
+        runtime.executor.isolation === "none"
+          ? undefined
+          : { executor: runtime.executor, policy: runtime.execPolicy(REPO_CHECK_TIMEOUT_MS) },
+      );
+      return { ok: result.ok, tail: result.output.split("\n").slice(-15).join("\n") };
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
   const started = Date.now();
   const host = new HostExecutor();
@@ -153,7 +224,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     // home folder: the checkout, and copies of it, hold the commit that the task asks for.
     ...(task.repo === undefined
       ? {}
-      : { sandbox: { denyRead: repoTaskReadDenials(task.repo.root, options.home ?? homedir()) } }),
+      : { sandbox: repoTaskSandbox(task.repo.root, options.home ?? homedir()) }),
     ...(options.executor === undefined ? {} : { executor: options.executor }),
     ...(options.codeIndex === undefined ? {} : { codeIndex: options.codeIndex }),
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
