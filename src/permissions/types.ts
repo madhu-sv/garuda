@@ -80,6 +80,8 @@ export type PermissionDecision =
       by: "read_only" | "sandbox" | "rule" | "session" | "user";
       /** The user accepted only these hunks of the preview (0-based, in diff order). */
       hunks?: readonly number[];
+      /** The user chose "allow for this session" just now (UX U2: the network keep hint). */
+      remembered?: true;
     }
   | {
       allowed: false;

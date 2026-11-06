@@ -2,6 +2,178 @@
 
 ## Unreleased
 
+- The Homebrew formula in the repository names 0.18.2 and its tarball hash.
+- The Anthropic SDK is 1.6 (was 0.128). It uses API version `2026-10-21` and sends the key as
+  `Authorization: Bearer`. Garuda's requests needed no change: they send no `temperature`,
+  `top_p` or `top_k`, which that version refuses. A proxy in front of the API that reads
+  `X-Api-Key` must read `Authorization` now.
+- undici is 8.12 (was 7.30). Its HTTP/2 default stays off for model requests: Garuda's
+  20-minute wait for quiet streams was checked on HTTP/1.1. undici 8 needs Node.js 22.19 or newer;
+  Garuda already needs 22.23.4.
+- The ACP SDK is 2.4 (was 1.7). Garuda speaks the same protocol, ACP version 1, and uses only its
+  stable parts. The SDK now refuses `session/new` before `initialize`, as the protocol says;
+  editors always send `initialize` first.
+- Security: sandboxed commands can no longer read `~/.config/anthropic/credentials`, where the `ant`
+  CLI stores keys. The SDK 1.x reads them too when it has no key.
+
+## 0.18.2 (2026-11-06)
+
+A fix release for repo evals (`garuda eval -s repo`, `garuda advise`). On macOS, 0.18.1 failed
+every check of a project whose tools live in `~/Library` (pnpm does), and Vite projects failed
+before a test ran. It also makes `garuda advise` faster and cheaper to repeat: runs in parallel,
+reuse of earlier runs, a cost estimate from real requests, and the command to go on after a stop
+at the cap. A provider outage no longer counts against a model.
+
+- Fix: repo-task evals (`-s repo`, `garuda advise`) on macOS failed every check in 0.18.1 when the
+  project's tools live in `~/Library`. pnpm runs the version that a project asks for from
+  `~/Library/pnpm`, and the 0.18.1 rules denied all of the home folder except hidden entries. The
+  check stopped with "EPERM: process.cwd failed", so both models passed 0 of 30 in the user's run.
+  `~/Library` is readable again in these runs; Mail, Messages, Safari, iCloud Drive, the other
+  personal parts and the keychains stay denied for every sandboxed command. Run 0.18.1 repo evals
+  again.
+- `advise` gives no advice when neither model passes a task: the check itself may fail.
+- Evals: a timeout while the model's API is silent is a new failure kind, `provider`. It applies
+  when a request was open at the limit, and the stream had broken and been retried or the API had
+  sent nothing for 2 minutes. Such a run is not scored, and it runs once more by itself; its
+  spending is kept. In the user's Sonnet run, 4 of 5 timeouts were such stalls, and they counted
+  against the model. A timeout also shows its steps now, not 0.
+- Fix: in repo-task evals, Vite could not write its compiled `vitest.config.ts` to
+  `node_modules/.vite-temp`, because the task's `node_modules` links to the project's and was
+  read-only. In the user's suite 10 of 30 tasks failed for both models before a test ran.
+  Commands may now write `.vite-temp`, `.vite` and `.cache` there, and nothing else.
+- `garuda eval --from-git` checks each kept commit a third time, as an eval runs it (a copy, in the
+  sandbox), and leaves out a commit whose tests fail there. Before, it checked only on the host,
+  and a task could pass the build but never an eval (2 of 30 in the user's suite: tests that start
+  their own sandbox). Build your suite again.
+- The Homebrew formula in the repository names 0.18.1 and its tarball hash.
+- `garuda advise` runs 4 tasks at a time (`--parallel <n>`); each result line starts with the
+  model and a count, as in `[haiku-5-5 12/30] ✓ fix-parser: pass`. The first real run, one at a
+  time, took 64 minutes for 30 tasks.
+- `advise` reuses an earlier run of a model when the model, the task hashes, `--repeat`, `--seed`
+  and the Garuda version and build commit are the same and every run is there. Runs of 0.18.0 and
+  before are not reused: they could read your checkout (the 0.18.1 fix).
+- The cost estimate comes from the mean cost of earlier runs of the model on the same tasks. With
+  none, it prices each request of the other model's runs (from their session files) at this
+  model's prices; else the token guess. Each line says which. (A first version scaled by the ratio
+  of list prices: 20 for Sonnet 5.5 over Haiku 5.5, but Haiku costs 5 times as much for a prompt
+  over 100 000 tokens. On a real run it estimated $19.16 where the requests give $12.62.)
+- The repriced estimate is scaled by what both models really cost on shared repo tasks before:
+  Sonnet 5.5 needs fewer steps and tokens than Haiku 5.5, and cost $6.30 where Haiku's requests at
+  its prices gave $12.62 (× 0.52). Without the factor, the user's 90-run estimate was $33.62; with
+  it, $17.37. Runs where no task passed, and built-in suites, are left out.
+- When the estimate or the first model's real cost passes `--max-cost`, `advise` prints the
+  command that goes on (`garuda advise --models a,b --repeat R --seed S --max-cost N`). The first
+  model's run is kept and reused.
+- `advise` stops when a run fails to start (for example a refused key), not at a missing report.
+
+## 0.18.1 (2026-11-06)
+
+A security release. In 0.18.0 and earlier, a command in the OS sandbox could read your personal
+folders (Documents, Downloads, Pictures and the Photos library, Mail and the like), and on macOS it
+could reach denied paths through `/System/Volumes/Data`. Update to 0.18.1. It also has the UX work
+of docs/lld/ux.md (receipts, a network question, `/rewind`, word-level diffs, the morning brief,
+`/export --html`, `garuda advise` and more) and eval failure kinds.
+
+- Security: sandboxed commands can no longer read your personal folders: Desktop, Documents,
+  Downloads, Movies, Music, Pictures (with the Photos library), Public, and Mail, Messages, Safari,
+  Calendars, Contacts, iCloud Drive and other cloud folders in `~/Library`. A project inside one of
+  them stays readable, the rest of that folder does not. On macOS each read and write rule also
+  covers the same path under `/System/Volumes/Data`, where a command could reach it before. Found
+  in a live run: a model's `find /` in an eval made macOS ask the user to let iTerm into Downloads
+  and Photos.
+- Evals: a repo task now runs in a copy of the project with no history, not a git worktree, and
+  its commands cannot read the project's checkout (except `node_modules` and venvs) or the rest of
+  the home folder except hidden entries. In a live run, a model read the user's checkout, which
+  holds the commit that the task asks for. Repo results from before this change may have read the
+  answer; run them again.
+- UX, patch 7 (docs/lld/ux.md U11, U8): `/export --html [file]` writes the session as one page:
+  your requests, the answers, each tool call that opens to its output (an edit opens to its
+  change), and the receipts. Every text is escaped; the page has no script and no link, and its
+  own policy forbids them. `garuda advise` runs the repo suite (`garuda eval --from-git`) on two
+  models (default Haiku 5.5 and Sonnet 5.5, 2 runs a task, at most $2), compares them as
+  `eval compare` does, and advises: the model that passes clearly more, or on a tie the cheaper
+  one. It asks first with a cost guess, and writes `advice.txt` and `report.html`.
+- UX, patch 6 (docs/lld/ux.md U7, U9): the morning brief. The first chat after jobs ran shows them
+  once: each job's verdict, its tests ("tests 120 → 126" when the runner's summary gives counts)
+  and its branch, and the total cost. `.garuda/jobs/brief.seen` keeps the time of the last brief.
+  The first-run tour: the first chat in a project with code names its stack ("TypeScript with
+  vitest (pnpm)") and offers three first tasks; typing 1, 2 or 3 runs one. It shows once per
+  project (`~/.garuda/ui.json` keeps a hash of the folder, not its path).
+- UX, patch 5 (docs/lld/ux.md U5): diffs mark the changed words of a changed line (inverse video),
+  in approvals, in hunk review and in `/diff`. From 140 columns a diff is side by side, with the
+  line numbers of both files. An approval that can review hunks says so in its first line:
+  "3 hunks · h reviews them one by one". Syntax colours are not in this patch (decision D10).
+  Only a real diff (with a hunk header) gets the marks and the two columns; other previews, such
+  as the project-settings question, keep their simple colours (the first live run showed that
+  question twice, side by side).
+- UX, patch 4 (docs/lld/ux.md U6): `/rewind` lists the turns that undo can reach (files, cost, age).
+  `/rewind <n>` goes back to the start of turn n in one step, with one question; `/redo` brings the
+  turns back one at a time. `/rewind fork <n>` starts a new session with the conversation up to
+  turn n and the files as they were then; the old session does not change. A new `fork` record
+  starts such a session.
+- UX, patch 3 (docs/lld/ux.md U4): in the chat, calls of one read-only tool in a row become one
+  line, for example `● Read 5 files  docs/architecture.md, SECURITY.md, +3`; a lone call keeps its
+  line and its result. Edits, commands and failed calls always keep a line of their own. Ctrl-O
+  still shows the last call's output. The model's plan (`todo_write`) is drawn live above the
+  input during the turn and printed once at the end, instead of after every update.
+- The chat's wordmark has a drop shadow (a 3D look), drawn twice as large from 130 columns, with
+  the card as wide as the wordmark; a tall screen gets some space above it. A screen reader gets no
+  wordmark (the card says the name).
+- The chat starts on a clear screen, with the banner centred, and you type in a visible chat box
+  with a hint ("Type a task · / for commands · @ for files"). The old screen goes into the
+  scrollback, not away; `"ui": { "clearOnStart": false }` in settings keeps it on screen. Garuda
+  stays in the terminal's normal screen, so its scrollback, search and copy still work. The box's
+  border dims while a turn runs. With `GARUDA_SCREEN_READER=1`, or under 40 columns, there is no box
+  and the banner is not centred.
+- UX, patch 2 (docs/lld/ux.md U2): a chat with no network allowlist starts Garuda's proxy with no
+  host on it ("watch mode"). A command in the sandbox that needs a host now asks for it (once, this
+  session, or no) instead of failing with a DNS error; an empty list needs no consent. After "this
+  session", Garuda says which line in `network.allow` keeps it for the project (a preset such as
+  `npm` when the host belongs to one). The receipt names a blocked host. `-p`, jobs and evals keep
+  no network, as before.
+- The chat shows your requests with a bar (`▌`) on every line, and Garuda's answer starts with `✦`,
+  so requests and answers differ at a glance. With `GARUDA_SCREEN_READER=1` they read "You:" and
+  "Garuda:".
+- The chat warns at start when `dist/` is older than its checkout ("run pnpm build first"), as the
+  evals do. `garudaCommit` and `staleBuildNote` moved to `src/buildCheck.ts`.
+- Docs: `architecture.md`, `hld.md` and the docs index describe Garuda as it is now. The release
+  history in their prose (version lists, "since 0.x", test counts per release) is gone; the
+  CHANGELOG keeps it.
+- UX, patch 1 (docs/lld/ux.md): a receipt after each turn that changed files, ran tests, ran a command outside the sandbox, or had a host blocked: the
+  files with their lines (from the undo snapshots), the last test run with its count for vitest,
+  jest, node:test, pytest, Maven and `go test -v`, the commands in and outside the sandbox, blocked
+  hosts, what `/undo` puts back, and the session's cost per kept change. A turn that only answered
+  keeps the usage line, also when it ran read-only commands in the sandbox (the first live run: a
+  `find` gave a receipt with no news). The session records the receipt (`receipt`), `/export` shows it, and
+  `-p --json` has it as `receipt`. Under 60 columns, in a pipe and with `GARUDA_SCREEN_READER=1` it
+  is plain lines.
+- The chat asks how to go on after the step limit: go on for as many steps again, summarise what is
+  left, or stop. After the same tool call 3 times it says to type a hint, and no longer names
+  `--resume`.
+- The chat's footer shows the context as a bar and a number (yellow from 70%, red from 80%). The key
+  hints show in the first 5 chats; then the footer says `? keys`, and `?` on an empty line lists them.
+- Design: the UX note (docs/lld/ux.md), with mock-ups and no code yet. A receipt after each
+  turn (files, tests, sandbox, undo, cost per kept change), a blocked host as a one-key fix,
+  next steps after a stop, a live plan, better diffs, rewind and fork, a morning brief from the
+  night shift, `garuda advise` (which model for this repo), a first-run tour, a quieter footer,
+  HTML export, and reduced motion and screen-reader modes. Ten decisions for the user.
+- Blog: "Garuda against Claude Code, with intervals": the eval method, the Claude Code
+  baseline, the faults the live runs found in the tasks, the Graphify A/B, the tuned prompt, and
+  the limits.
+- The Homebrew formula in the repository names 0.18.0 and its tarball hash.
+- Failure kinds: the eval report gives one line, "Failures by kind", that counts the failed runs
+  as `check` (the check failed), `protected-files`, `step-limit`, `token-limit`,
+  `repeated-calls`, `refusal`, `timeout`, `error` or `setup` (the key, the connection or the MCP
+  server), and names up to three runs of each kind. A limit or a timeout wins over the check that
+  failed after it. `report.json` has the same in `evidence.failures`, with each failed run's
+  steps, tokens and time.
+- The reports of the runs in the blog post are in `docs/quality-baseline/evals/0.18/`, with a
+  README that maps each run to the post and gives the `eval compare` commands. Local paths are
+  removed. A test checks that the files hold no local path and that `compare` gives the post's
+  numbers. The post links to them. Biome and the docs site leave the folder out.
+
+## 0.18.0 (2026-11-04)
+
 - Biome 2.6.2 (with @inquirer/prompts 8.7.4, react 19.3.1 and smol-toml 1.9.1, from Dependabot's
   group update). Biome 2.6 formats Markdown and YAML by default: Markdown formatting is off (the
   docs keep their own layout), and pnpm's lockfiles are left out.
@@ -84,6 +256,58 @@
 - Design (T11; T11a and T11b built, T11c–d not yet): eval evidence — intervals and consistency over repeated runs, cost per
   accepted change, unexpected changes, a Claude Code baseline runner, a held-out task split, and a
   proposer loop that edits only a prompt addendum (`docs/lld/eval-evidence.md`).
+
+- An eval A/B of one MCP server: `garuda eval --mcp <server>` allows that one server from your
+  own `~/.garuda/mcp.json` (no other server, and none from a project file), and
+  `--mcp-prepare <command>` runs a command in each scratch folder, in the sandbox, before the agent
+  starts; what it writes is not counted as the agent's change. For Graphify:
+  `--mcp graphify --mcp-prepare "graphify update ."`. Each run records its MCP tool calls; the
+  report and `eval compare` show them ("the agent never used the server" when none), compare notes
+  when the arms' servers differ, and `report.json` records the server and the command. A server
+  that does not start, or a failed prepare command, stops the eval at the first run. The Claude
+  Code baseline refuses both options.
+- The prepare command now runs before the agent's runtime starts, so a note that it writes into
+  `GARUDA.md` reaches the agent (the user's first Graphify run: the agent never called the server,
+  and a note written later would not have been read). A `~/.garuda/mcp.json` whose `"servers"` is a
+  list now gets a message that shows the right form, not "expected record, received array".
+- Docs: Graphify as an example MCP server in the tools guide (install, `mcp.json`, the note in
+  `GARUDA.md`, and what we measured: ×1.28 cost per accepted change on the hard suite, no change in
+  passes). Garuda does not include it. The T11d design gets the user's keep rule: an edit with the
+  same passes stays when its cost per accepted change is clearly lower.
+- Tests: `waitUntil` waits up to 20 s by default (it was 5 s), under the 30 s test limit. The
+  user's `pnpm check` failed the M5 Ctrl-C test on a busy machine. Two test files had their own
+  copy with 4 or 5 s (a second M5 Ctrl-C test then failed the same way); they use `waitUntil`
+  now, and a test refuses a new copy.
+
+- The proposer loop (T11d): `garuda eval tune --addendum <file>` improves a prompt addendum. A
+  proposer model (default `claude-opus-5-5`) reads the dev runs that failed, or each task's cost
+  when all passed, and writes a new version; it stays when no task goes from all runs to none and
+  it passes 2 more runs (`--margin`) or as many at a clearly lower cost per accepted change (the
+  user's rule). Texts that ask to skip or edit tests or checks, or to leave the sandbox, are
+  refused before a run; the proposer never sees the held-out tasks; `--max-cost` (default $20)
+  stops before a round that would pass it. At the end the held-out set compares no addendum with
+  the final one. Garuda never edits the file: the versions, inputs, reports and history go to
+  `.garuda/evals/tune-<id>/`. `garuda eval --addendum <file>` runs any suite with an addendum.
+- `eval tune` after the user's first run (Haiku 5.5 agent, Opus 5.5 proposer, $0.65): the kept
+  version cut the held-out cost per accepted change to ×0.81 (×0.75 to ×0.88), all runs passing.
+  The run also found four faults, now fixed: two of three proposals were refused for phrases in
+  rules against cheating ("never modify tests to make them pass") or about reading ("skip tests
+  you won't run"), so a negation now clears a phrase and a refused text gets one more try in the
+  round; the held-out comparison said the reports had no task hashes; runs went one at a time
+  (about 16 minutes a score), so `--parallel` (default 4) runs them together; and nothing printed
+  during a score, so each run prints a line. Two runs of one task at the same time can no longer
+  take the same session file name (also for `garuda eval --parallel`).
+
+- The system prompt tells the agent how to work in few steps: batch tool calls that do not depend
+  on each other, find before reading, no exploration with bash, all edits in one step, one narrow
+  test run, fix the code not the tests, stop when done. The rules come from the first
+  `garuda eval tune` run: on the held-out set, with every run passing, they cut the cost per
+  accepted change to ×0.81 (95% interval ×0.75 to ×0.88) with Haiku 5.5 and ×0.87 (×0.79 to
+  ×0.95) with Sonnet 5.5. The tuned text's rules against `remember` and for one-sentence answers
+  are left out: they served the evals, not users. The prompt's own wording, measured against
+  0.17.0's prompt on the held-out set (3 runs a task, seed 7): with Sonnet 5.5, 30/30 both and
+  ×0.90 (×0.84 to ×0.96); with Haiku 5.5, 30/30 and 29/30 (one miss of the invoice refund trap)
+  and ×0.88 (×0.79 to ×1.02), so the Haiku saving is likely but not shown with confidence.
 
 ## 0.17.0 (2026-10-27)
 

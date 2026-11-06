@@ -3,7 +3,7 @@
 Status: design approved (2026-10-29). Built: T11a (patch 1: unexpected changes, the stats module,
 report v2 and metadata, `--shuffle`, `--seed`; patch 2: `garuda eval compare`); see "As built" in
 T11a; T11b (the Claude Code baseline), see "As built" in T11b; T11c (the split and the held-out
-set), see "As built" in T11c. T11d is not built yet. The user chose: Claude
+set), see "As built" in T11c; T11d (`--addendum` and `garuda eval tune`), see "As built" in T11d. The user chose: Claude
 Code (`claude -p`) as the baseline agent; a prompt addendum file as the only thing that the
 proposer loop may edit; this design note before any code. The user's answers to the open questions
 are in "Decisions" at the end.
@@ -314,13 +314,22 @@ garuda eval tune --addendum <file> [--proposer claude-opus-5-5] [-m model] [--ro
 2. **Propose.** One request to the proposer model, with no tools. Input: the current addendum; for
    each failed or error dev run, the task id, prompt, stop reason, the last 40 lines of the check
    output and the unexpected files; the history of earlier proposals with their score and decision.
+   When every run passed, the input also gives each task's mean steps, tokens and cost, and the
+   tool calls (names only) of its most expensive run, so the proposer can aim at cost.
    Output: a complete new addendum and a one-paragraph reason. A text over the limit, or one that
    asks to skip or weaken checks, protected files or the sandbox, is rejected without a run (a
    fixed list of phrases, and the size limit).
 3. **Score the candidate** on the same dev tasks with the same seed.
-4. **Keep or drop.** Keep it when it passes at least `--margin` more runs over all attempts than
-   the current version (default 2), and no task goes from k of k to 0 of k. Otherwise drop it. Both
-   decisions and both scores go into the history.
+4. **Keep or drop.** Keep it when no task goes from k of k to 0 of k, and either:
+   - it passes at least `--margin` more runs over all attempts than the current version (default
+     2); or
+   - it passes at least as many runs, and its cost per accepted change is lower: the upper end of
+     the paired 95% interval of the cost ratio (candidate / current, T11a) is below ×1.0.
+
+   Otherwise drop it. Both decisions, both scores and the cost ratio go into the history. (The
+   user's decision, 2026-10-30: on the held-out set Haiku 5.5 passed 30 of 30, so a rule on passes
+   alone could never keep an edit, while cost per accepted change still told agents apart, ×1.75.
+   An unknown cost gives no cost ratio, so only the pass rule can keep that candidate.)
 5. **Feed back.** The next proposal starts from the kept version, with the candidate's failures in
    its input: the failed checks of one candidate are the next prompt.
 
@@ -342,9 +351,84 @@ comparison. Garuda changes no file outside this folder.
 
 ### Cost
 
-One dev round is k × (number of dev tasks) runs. With the 20 regression tasks and k = 3, that is
-60 runs per score, two scores in round 1 and one per later round. The command prints this count
+One dev round is k × (number of dev tasks) runs. The dev tasks are `-s` (default: `basic`, `hard`
+and `medium`, 26 tasks; the medium suite's Java and Python tasks need their toolchains). With k = 3 that is 78 runs per score, two scores in
+round 1 and one per later round. The command prints this count
 and the estimated cost range before the first run and asks to continue.
+
+### As built
+
+`src/evals/tune.ts` (the loop, with the model calls as functions) and `src/cli/evalTune.ts` (the
+command). As planned, with these details:
+
+- `--addendum <file>` on `garuda eval`: `RuntimeOptions.addendum` → `buildSystemPrompt` puts it
+  after the project instructions in `<project_addendum>`; a `</project_addendum>` inside the text
+  becomes `[project_addendum]`, so the block cannot be closed from inside. `report.json` keeps the
+  file name, the size and a SHA-256 of the text, not the text. The baseline refuses it.
+- `decide`: first the k-of-k to 0-of-k rule, then `+margin` passes, then the cost rule (the
+  paired cost ratio of `compareReports`, upper end below ×1.0). An unknown cost gives no ratio.
+- `rejectReason`: empty, over 4 000 characters, or a phrase that asks to skip, weaken or edit
+  tests, checks or protected files, `outside_sandbox`, hard-coded expected values, or `.check/`.
+- `proposerInput`: the failed runs (prompt, stop reason, the last 40 lines of the reason,
+  unexpected files) or, when all passed, each task's mean steps, tokens and cost and the tool
+  names of its costliest run (`EvalResult.tools`, recorded for every Garuda run); then the history.
+- `askProposer`: one request, no tools, the answer in `<addendum>` and `<reason>`; its cost from
+  the proposer's price. An answer without the form becomes an empty text, refused before a run.
+- Before the first run the command prints the plan (runs a score, rounds, the held-out runs, the
+  rule, the budget) and asks; `--yes` skips the question, and without a terminal it is required.
+- The budget check runs before each round: the money spent plus the last score and the last
+  proposal. An unknown cost stops the loop.
+- The held-out set runs only when a version was kept: the empty addendum against the final one.
+- Output: `.garuda/evals/tune-<id>/` with `v0.md`, `vN.md`, `vN.input.md`, a run folder and
+  `report.json` per score, `history.json`, `final.md` and `heldout.txt`. The `--addendum` file is
+  never written.
+- **First live run** (2026-11-03, Haiku 5.5 agent, Opus 5.5 proposer, `--rounds 3`, $0.65,
+  about 2 hours one run at a time): v0 (empty) 78/78 on the dev suites; v1 and v3 were refused,
+  both wrongly: v1 said "never modify tests to make them pass", v3 "Skip tests you won't run,
+  READMEs, configs" (about reading). v2 (batch independent tool calls, read only what the edit
+  needs, verify once, stop when done) was kept on cost: ×0.91 (×0.85 to ×0.98). Held-out, 5 runs a
+  task: 50/50 both; cost per accepted change $0.0036 → $0.0029, ×0.81 (×0.75 to ×0.88); median
+  time 20 s → 16 s. The held-out note said the reports had no task hashes: the loop's reports
+  did not carry them.
+- After that run: a phrase after a negation in the same clause ("never", "not", "don't", "do
+  not", "no", "without"), or with one inside the match, is not refused; a clause ends at `. ; ! ?`
+  before a space or at a line end, so `.check/` stays whole. A refused text gets one more try in
+  the same round, with the reason (`vN.refused.md` keeps the first text; `refusedFirst` in the
+  history). The loop's reports carry the task hashes. `--parallel <n>` (default 4) runs a score's
+  runs at the same time, with one progress line per run; `saveUnique` names each session file
+  with an exclusive write, so two runs of one task never take the same name.
+
+## After T11 (0.18.1): failure kinds and published reports
+
+**Failure kinds.** `failureKind(result)` in `src/evals/runner.ts` gives each failed run one kind,
+in this order: an error run is `setup` (`isSetupFailure`: key, connection, MCP server) or `error`;
+then the stop reason: `timeout`, `step-limit` (`max_steps`), `token-limit` (`token_budget`,
+`max_tokens`), `repeated-calls`, `refusal`; then the reason: `protected-files` (it starts with
+`PROTECTED_FILES_CHANGED`); else `check`. A limit wins over the check that failed after it,
+because the agent did not finish. `failureSummary` gives `{ total, byKind, runs }`, where each run
+has its id, attempt, kind, steps, tokens and time (to see whether failures come in long runs).
+`formatReport` prints "Failures by kind" with up to three runs per kind; report.json has it in
+`evidence.failures`. The schema stays 2: the field is new and optional for readers.
+
+**Provider stalls (0.18.2).** In the user's Sonnet run, four of five timeouts had a model request
+open at the end, after 55 to 351 s of silence or "Connection error" retries; they counted as the
+model's failures. `ModelWatch` sees the run's events: open tool calls (`tool_call` minus
+`tool_result`), whether the last `step_end` asked for tools, the last time anything came, and
+whether the stream broke (`model_retry`; reset at the next `step_end`). At a timeout,
+`stall(now, PROVIDER_STALL_MS = 120 s)` gives a reason when no tool runs or is due, and the stream
+broke or nothing came for 120 s. The run is then an error run (`stopReason` "error", reason
+`PROVIDER_STALLED`), so the scored rate leaves it out, and `failureKind` gives `provider`.
+`isSetupFailure` is false for it ("401 s" in the reason is not a refused key). `runEvals` runs a
+stalled task once more; `withStalledRun` adds the stalled run's tokens and cost and sets
+`providerStalls`. A timeout records `ModelWatch.steps`: it showed 0 before.
+
+**Published reports.** The reports of the 0.18 blog post are in
+`docs/quality-baseline/evals/0.18/`, one folder per run, with a README. Two string changes only:
+the checkout path before `sessionFile` is removed, and the macOS temp folder is `<tmp>/`.
+Session files are not published. `test/publishedEvals.test.ts` checks that no file holds a home
+path, a temp path or a key, and that `compareReports` on the six pairs gives the post's cost
+ratios and intervals. Biome and the site's doc sync leave the folder out, so the files stay as
+Garuda wrote them.
 
 ## Threat model
 
@@ -356,6 +440,7 @@ and the estimated cost range before the first run and asks to continue.
 | The proposer writes an addendum that tells the agent to skip checks or edit tests. | Protected files and checks still decide the score; a text with such phrases is rejected before a run; the user reviews the final text. |
 | Noise looks like an improvement. | The margin, the "no k-of-k to 0-of-k" rule, the fixed seed, and the held-out measurement with an interval. |
 | Tasks change between runs that are compared. | Task hashes in each report; `compare` refuses different hashes. |
+| A published report leaks a local path, a user name or a key. | Paths are cut to the checkout or `<tmp>/`; session files stay private; a test scans every published file. |
 
 ## Tests
 
@@ -368,14 +453,16 @@ and the estimated cost range before the first run and asks to continue.
 - T11c: every held-out task fails before and passes with its solution; `--split` selects; the
   default never includes held-out tasks.
 - T11d: with a fake proposer and a fake model, an edit that adds two passes is kept, one that adds
-  one is dropped, one that drops a task from k/k to 0/k is dropped; the proposer's input never
+  one is dropped, one that drops a task from k/k to 0/k is dropped, one with the same passes and
+  a clearly lower cost is kept, one with the same passes and a cost interval that reaches ×1.0 is
+  dropped; the proposer's input never
   contains a held-out task id; `--max-cost` stops the loop; a rejected phrase never runs.
 
 ## Decisions (the user, 2026-10-29)
 
 Each value is a default; every one is an option the user can change.
 
-1. **Margin:** 2 more passes over all attempts (`--margin 2`; 60 runs with 20 dev tasks × 3).
+1. **Margin:** 2 more passes over all attempts (`--margin 2`; 78 runs with 26 dev tasks × 3).
 2. **Repeats:** k = 3 in the loop (`--repeat 3`). The one held-out measurement keeps k = 5
    (`--heldout-repeat 5`), as proposed.
 3. **Models:** the proposer is a frontier model, by default Opus 5.5 (`--proposer
@@ -386,6 +473,8 @@ Each value is a default; every one is an option the user can change.
    only (the environment allowlist), never writes its value to a report, a session or the audit
    log, and the network allowlist opens only `api.anthropic.com`. A subscription login (macOS
    Keychain) stays unsupported: the sandbox denies the Keychain on purpose.
+6. **Keep rule, cost (2026-10-30):** an edit that passes as many runs also stays when its cost per
+   accepted change is clearly lower (the paired interval of the ratio below ×1.0). See "One round".
 
 ## Patch plan
 

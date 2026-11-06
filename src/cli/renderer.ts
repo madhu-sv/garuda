@@ -1,8 +1,10 @@
 import { styleText } from "node:util";
+import type { Receipt } from "../app/receipt.js";
 import type { AgentEvent } from "../loop/runAgent.js";
 import { serverCallText, serverResultSummary } from "../model/serverTools.js";
 import type { ToolUseBlock } from "../model/types.js";
 import type { ToolOutcome } from "../tools/types.js";
+import { receiptText, screenReaderMode } from "./receiptView.js";
 
 /**
  * The renderer (F3): it shows model text and tool activity as they happen.
@@ -13,6 +15,8 @@ export interface Renderer {
   info(text: string): void;
   warn(text: string): void;
   error(text: string): void;
+  /** UX U1: the turn's receipt. Absent: the turn prints the usage line instead. */
+  receipt?(receipt: Receipt): void;
   /**
    * /details (0.9): false hides the result line under each tool call, unless the call failed.
    * Absent: the renderer always shows them.
@@ -117,6 +121,19 @@ export class PlainRenderer implements Renderer {
 
   info(text: string): void {
     this.line(this.paint("dim", text));
+  }
+
+  /** UX U1: a box on a terminal of 60 columns or more, else plain lines (stderr, like notes). */
+  receipt(receipt: Receipt): void {
+    const tty = (this.err as { isTTY?: boolean }).isTTY === true;
+    const columns = tty ? (this.err as { columns?: number }).columns : undefined;
+    this.line(
+      `\n${receiptText(receipt, {
+        ...(columns === undefined ? {} : { columns }),
+        ...(this.color ? { paint: (style, text) => this.paint(style, text) } : {}),
+        screenReader: screenReaderMode(),
+      })}`,
+    );
   }
 
   warn(text: string): void {

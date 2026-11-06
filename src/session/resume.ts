@@ -31,6 +31,9 @@ export interface RebuiltState {
   undo: UndoState;
   /** The last /thinking choice (0.9). */
   thinking?: ThinkingChoice;
+  /** Turns (user records) and the last receipt's test count (UX U1). */
+  turns: number;
+  lastTestTotal?: number;
 }
 
 /** Rebuild the conversation and the totals from session records (F25). */
@@ -45,6 +48,7 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
     childDebits: new Map(),
     start: undefined,
     undo: emptyUndoState(),
+    turns: 0,
   };
   const addCost = (cost: number | undefined) => {
     state.costUsd =
@@ -69,10 +73,15 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
       case "user":
         state.messages.push(record.message);
         newUserMessage(state.undo);
+        state.turns++;
         break;
-      case "snapshot":
+      case "snapshot": {
         pushPoint(state.undo, record.tree, record.messages, record.prompt);
+        const point = state.undo.points.at(-1);
+        const at = record.at ?? Date.parse(record.t);
+        if (point !== undefined && !Number.isNaN(at)) point.at = at;
         break;
+      }
       case "undo":
         popPoint(state.undo, state.messages, record.after);
         break;
@@ -119,6 +128,24 @@ export function rebuildState(records: readonly SessionRecord[]): RebuiltState {
       case "thinking":
         state.thinking = record.choice;
         break;
+      case "fork":
+        // UX U6: a session forked from another one starts with its messages up to a turn.
+        state.messages = structuredClone(record.messages);
+        state.turns = record.from.turn - 1;
+        break;
+      case "receipt": {
+        const point = state.undo.points.at(-1);
+        if (point !== undefined && record.receipt.files !== undefined) {
+          point.changedFiles = record.receipt.files.length;
+        }
+        if (point !== undefined && record.receipt.costUsd !== undefined) {
+          point.costUsd = record.receipt.costUsd;
+        }
+        if (record.receipt.tests?.total !== undefined) {
+          state.lastTestTotal = record.receipt.tests.total;
+        }
+        break;
+      }
       case "unreported":
         // Any request without reported usage keeps its reservation, including a successful one.
         state.unreportedTokens += record.tokens;
@@ -187,6 +214,8 @@ export async function resumeSession(options: ResumeOptions): Promise<Session> {
   session.childDebits = state.childDebits;
   session.undo = state.undo;
   if (state.thinking !== undefined) session.thinking = state.thinking;
+  session.turns = state.turns;
+  if (state.lastTestTotal !== undefined) session.lastTestTotal = state.lastTestTotal;
   journal.write({ type: "resume", sessionId: id, ...options.start });
   closeOpenToolCalls(session);
   return session;

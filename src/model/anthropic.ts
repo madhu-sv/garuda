@@ -85,13 +85,21 @@ export function withHiddenThinking(response: ModelResponse): ModelResponse {
  */
 export const STREAM_IDLE_MS = 20 * 60_000;
 
+/**
+ * HTTP/1.1 only (0.18.3). undici 8 uses HTTP/2 when the server offers it, and the API does. The
+ * idle limit above was built and checked on HTTP/1.1, where `bodyTimeout` is the wait for the next
+ * bytes; HTTP/2 streams handle idle time in another way. Turn it on only after a check of long,
+ * quiet streams.
+ */
+export const STREAM_ALLOW_H2 = false;
+
 const dispatchers = new Map<number, Agent>();
 
 /** A fetch whose streams may be quiet for up to `idleMs` (one shared connection pool per value). */
 export function streamFetch(idleMs: number = STREAM_IDLE_MS): typeof globalThis.fetch {
   let agent = dispatchers.get(idleMs);
   if (agent === undefined) {
-    agent = new Agent({ bodyTimeout: idleMs });
+    agent = new Agent({ bodyTimeout: idleMs, allowH2: STREAM_ALLOW_H2 });
     dispatchers.set(idleMs, agent);
   }
   const dispatcher = agent;

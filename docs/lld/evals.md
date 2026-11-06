@@ -20,6 +20,7 @@ same-build A/B runs.
 | `suites.ts` | `basic`, `hard`, `java`, `python`, `medium`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
 | `mediumTasks.ts` | T11c (0.17): the medium suite, 10 dev tasks (the first held-out set): multi-file defects, refactors, mutation-checked tests, repository conventions with hidden tests, one vague request. |
 | `heldOutTasks.ts` | T11c (0.17): the held-out split, 10 harder tasks in no suite, each with a trap that a quick fix falls into. Only `--split heldout` or `all` runs them. |
+| `tune.ts` | T11d (0.17): `garuda eval tune`: `decide` (the keep rule), `rejectReason`, `proposerInput`, `PROPOSER_SYSTEM`, `parseProposal`, `readAddendum`, `tune` (the loop; the score and proposer calls are functions). The command is `src/cli/evalTune.ts` (`askProposer`, `runEvalTune`). |
 | `taskKit.ts` | T11c (0.17): helpers for written tasks: `NODE_PKG`, `testHead`, `hiddenNode`, `hiddenPytest`, `hiddenMaven`, `mutationCheck`, `guard` (a check step that prints why it stops). |
 | `repoTasks.ts` | Benchmark your repo (0.12): candidate commits from git history (`skipReason`, `recentCommits`), `repoPrompt`, `taskWorktree` / `applyTests` / `removeTaskWorktree`, `buildRepoSuite`, `saveRepoSuite` / `loadRepoSuite`, `repoEvalTasks`. |
 | `runner.ts` | Runs tasks; `runCheck` (a silent failure reports its exit code, 0.17); `formatReport` (its id column fits the longest id, at least 18, since 0.17). |
@@ -33,9 +34,18 @@ same-build A/B runs.
 
 For each task (and each repeat):
 
-1. Create a scratch folder in the temp directory; write the task files. A repo task (0.12) gets a git
-   worktree of the project at the commit's parent (detached, `node_modules` and venvs linked), with the
-   commit's test files added.
+1. Create a scratch folder in the temp directory; write the task files. A repo task (0.12) gets a copy of
+   the project at the commit's parent, with the commit's test files added. Since 0.18.1 the copy has
+   no history (`isolatedTaskCopy`: `read-tree` and `checkout-index` through a temporary index, then
+   a new repository with one commit; `node_modules` and venvs linked), and its commands cannot read
+   the project's checkout (except those links) or the rest of the home folder except its hidden
+   entries and `~/Library` (`repoTaskReadDenials`, in `sandbox.denyRead`). Before, a worktree
+   shared the project's history, and a model read the user's live checkout: both hold the commit
+   that the task asks for. Results of repo runs before 0.18.1 may have read the answer. 0.18.1
+   denied `~/Library` too, and on macOS pnpm runs a project's own version from `~/Library/pnpm`:
+   every check failed with EPERM on its working folder. 0.18.2 keeps `~/Library` readable; its
+   personal parts and the keychains stay denied by the rules of every sandboxed command. Repo runs
+   of 0.18.1 on macOS that use pnpm (or other tools in `~/Library`) are not valid.
 2. Snapshot the protected files. Default: tests (`test/`, `tests/`, `src/test/`) and build files
    (`pom.xml`, `pyproject.toml`). A task can list its own. Since 0.17 (T11a) also a hash of every
    file (`treeState`): after the run and before the check, the changed files go to `changed`, and
@@ -54,8 +64,8 @@ For each task (and each repeat):
 5. Pass when the protected files are unchanged and the check command (for example `node --test`) exits 0.
    The check runs code that the agent wrote, so it runs in the run's OS sandbox with the policy of
    bash (0.14.1, review; on the host only with `--executor host` or no sandbox), with a 120 s limit
-   (5 min for a repo task). The task self-tests run known solutions on the host. A repo task's worktree is removed
-   after the run (`git worktree remove`), unless `--keep`.
+   (5 min for a repo task). The task self-tests run known solutions on the host. A repo task's copy is removed after
+   the run, unless `--keep`. `--from-git` still checks candidates in worktrees.
 6. Copy the session file to `.garuda/evals/<run-id>/<task>.jsonl` (`-2`, `-3` … for repeats).
 7. `runEvals` numbers the repeats of each task in run order (`attempt`). Its `stop` predicate
    (0.17) ends the eval: `garuda eval` passes `isSetupFailure`: `isAuthFailure` (an error run whose
@@ -118,11 +128,25 @@ garuda eval [-m model] [-s basic|hard|java|python|medium|all|repo] [-t ids…] [
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
             [--batch on|off] [--parallel n] [--shuffle] [--seed n] [--agent garuda|claude-code]
-            [--split dev|heldout|all]
+            [--split dev|heldout|all] [--mcp server [--mcp-prepare command]] [--addendum file]
 garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the same tasks
+garuda eval tune --addendum <file> [--proposer model] [-m model] [-s suites…] [--rounds n]
+                 [--repeat n] [--heldout-repeat n] [--margin n] [--max-cost usd] [--seed n]
+                 [--parallel n] [--yes]
 garuda eval --prepare java|python
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
+
+`--mcp <server>` (0.17): the runtime gets `mcp: { home, only: server }`, so it loads that one
+server from the user's own file (`chooseMcp` refuses an unknown or disabled one, and
+`--mcp-prepare` alone). `--mcp-prepare` runs through `runCheck` (2 minutes) in the executor of a
+first runtime without the server, before the agent's runtime starts (it reads `GARUDA.md` at its
+start, so a note written by the command reaches the agent) and before the start state is taken;
+a failure skips the agent. The runner counts `tool_call` events
+whose name starts with `mcp__` (`EvalResult.mcpCalls`) and reads the server's status before the
+runtime closes: `failed` makes the run an error. `isMcpFailure` joins `isSetupFailure`, so both
+stop the eval. `report.json` gets `mcp: { server, prepare } | null`; `mcpUse` (stats.ts) gives the
+report's and compare's "MCP tool calls" line; compare notes when the arms' servers differ.
 
 `--list` shows the toolchains that each suite needs, the repo suite when the project has one, and
 the held-out set (0.17, T11c), which runs only with `--split heldout` or `all`.
@@ -152,6 +176,15 @@ a user can check a model, a setting or a Garuda version on the work they do.
 3. Stop at `--max-tasks` (default 30). The test command is `--test-command`, else the one that jobs use
    (`detectTestCommand`). Both runs are on the host, with no sandbox (the project's own commits, not an
    agent's code); the output says so. The user's checkout does not change.
+   Since 0.18.2 a kept commit runs its check a third time with `evalCheck` (`checkAsEval` from the
+   eval command): an `isolatedTaskCopy` of the commit, a `Runtime` with the eval's settings, the
+   repo sandbox (`repoTaskSandbox`) and the team policy, no model, and `runCheck` in its sandbox. A
+   failure skips the commit ("the tests fail as an eval runs them") and the first one is printed
+   (`evalFailure`). In the user's suite, 12 of 30 tasks could never pass: 10 because Vite writes
+   the compiled `vitest.config.ts` to `node_modules/.vite-temp` and the linked `node_modules` was
+   read-only, 2 because macOS cannot start a sandbox inside the sandbox. `repoTaskWritePaths` now
+   makes `.vite-temp`, `.vite` and `.cache` in the project's real `node_modules` and lets the
+   task's commands write them (real paths: the sandbox matches those, not the link).
 4. Save `.garuda/evals/repo-suite.json` (version 1: root, HEAD, test command; per task the commit, its
    parent, the subject, the prompt and the test files' content). Print the kept count and the skip
    reasons.
@@ -292,6 +325,24 @@ refusals.
 `test/evals.medium.test.ts` (0.17, T11c): the medium suite's self-tests, its weak answers (a test
 that kills no mutant, the old name left in the client, a `print` in the command) and its careful
 answers (a CSV test added to the visible tests; a new test in scope in the conventions tasks).
+
+`test/evalMcp.test.ts` (0.17): with the fixture MCP server in a fake home: only the named server's
+tools reach the model, and their calls are counted; without `--mcp` no server starts; the prepare
+command's files are not changes; its note in `GARUDA.md` reaches the model; a failed prepare skips the agent and stops the eval; a server
+that does not start fails the run and stops the eval; `chooseMcp`, and its message for a `servers` list; the baseline refuses `--mcp`;
+the report and compare lines. Checked by hand with Graphify 0.9.97: `graphify update .` in the
+prepare step, `query_graph` through `mcp__graphify__query_graph`, `graphify-out/` not a change.
+
+`test/evalTune.test.ts` (0.17, T11d): the keep rule (+2 kept, +1 dropped, k/k to 0/k dropped
+whatever it gains, as many passes and a clearly lower cost kept, an interval that reaches ×1.0
+dropped, fewer passes dropped even when cheaper, an unknown cost not kept by cost); refused texts;
+the answer's form; the proposer's input (failures with the end of the output; costs and tools when
+all passed); the loop with a fake proposer and score (a rejected text never runs; the proposer
+never sees a held-out task; `--max-cost` stops; no kept version, no held-out run); the addendum in
+the system prompt (after the instructions, the block cannot be closed); `readAddendum`; the report
+keeps a hash, not the text; the baseline refuses `--addendum`; `askProposer` with a fake model;
+a negation clears a phrase, and a refused text gets one retry; the held-out comparison has task
+hashes; `saveUnique` gives six runs of one task at the same time six files; the progress line.
 
 `test/evalCompare.test.ts` (0.17, T11a part 2): the paired interval (easy tasks equal, hard tasks
 A 0/3 and B 1/3 give "B passes more"; an unpaired bootstrap fails this), "no clear difference" for

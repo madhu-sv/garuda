@@ -74,3 +74,45 @@ export function filesText(changes: readonly FileChange[]): string {
   if (changes.length === 0) return "no file changes";
   return `${changes.length} file${changes.length === 1 ? "" : "s"} changed`;
 }
+
+/**
+ * The question before /rewind (UX U6): back to the start of turn `turn`, which takes back `count`
+ * turns, or a fork from there into a new session. Like /undo, it always asks.
+ */
+export function rewindQuestion(
+  kind: "rewind" | "fork",
+  turn: number,
+  prompt: string,
+  count: number,
+  changes: readonly FileChange[],
+  isolation: Isolation,
+): ApprovalRequest {
+  const lines = [`Back to the start of turn ${turn}: "${prompt}"`];
+  if (changes.length === 0) lines.push("No file changes.");
+  else {
+    lines.push(`Files (${changes.length}):`);
+    for (const c of changes.slice(0, MAX_CHANGE_LINES))
+      lines.push(`  ${MARKS[c.status]} ${cleanText(c.path).replace(/\n/g, " ")}`);
+    if (changes.length > MAX_CHANGE_LINES) {
+      lines.push(`  … and ${changes.length - MAX_CHANGE_LINES} more.`);
+    }
+    lines.push("  (+ comes back, - is removed, ~ changes)");
+  }
+  lines.push("Files that .gitignore covers (for example build output) are not in undo.");
+  lines.push(
+    kind === "rewind"
+      ? `This takes back ${count} turn${count === 1 ? "" : "s"}: their file changes and their messages. /redo brings them back one at a time.`
+      : "A new session starts with the conversation up to this turn. This session stays as it is: /sessions opens it again.",
+    "Changes that you made to these files since then go back too.",
+  );
+  return {
+    tool: kind === "rewind" ? "undo" : "fork",
+    target: { kind: "input", json: "{}" },
+    preview: lines.join("\n"),
+    isolation,
+    title: kind === "rewind" ? `Rewind to turn ${turn}?` : `Fork a new session from turn ${turn}?`,
+    question: kind === "rewind" ? "Rewind?" : "Fork?",
+    choices: ["once", "deny"],
+    labels: { once: kind === "rewind" ? "Yes, rewind" : "Yes, fork", deny: "No" },
+  };
+}

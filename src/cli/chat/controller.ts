@@ -5,10 +5,12 @@ import { LSP_LANGUAGES } from "../../lsp/servers.js";
 import { THINKING_WORDS } from "../../model/thinking.js";
 import { describeError } from "../errors.js";
 import type { Notifier } from "../notify.js";
+import { tourChoice } from "../tour.js";
 import { runTurnInTerminal } from "../turn.js";
 import { paletteEntries, runCommand } from "./commands.js";
 import { type ArgChoice, complete, rootFiles, rootLister } from "./complete.js";
 import { BUILD_PROMPT, planHandoff } from "./plan.js";
+import { CONTINUE_PROMPT, SUMMARY_PROMPT, stopHandoff } from "./stop.js";
 import type { ChatStore, Status } from "./store.js";
 
 /**
@@ -22,7 +24,10 @@ export async function runChat(
   exitNow: () => never,
   /** Tells the user when a long turn ends (0.6). */
   notifier?: Notifier,
+  /** UX U9: the tour's tasks; the first input 1, 2 or 3 runs one. */
+  tour?: readonly string[],
 ): Promise<void> {
+  let tourTasks = tour;
   store.onToggleMode = () => {
     runtime.setMode(runtime.mode === "plan" ? "build" : "plan");
     return statusOf(runtime);
@@ -42,7 +47,9 @@ export async function runChat(
     void args.refresh();
     const input = await store.nextInput();
     if (input === undefined) return;
-    const text = input.trim();
+    // UX U9: only the first input can pick a tour task.
+    const text = tourChoice(input.trim(), tourTasks);
+    tourTasks = undefined;
     let prompt = text;
     // !command (0.6): run it like the bash tool; the output also goes with the next message.
     if (text.startsWith("!") && text.length > 1) {
@@ -96,9 +103,20 @@ export async function runChat(
       store.begin(display, prompt === display);
       let outcome: Awaited<ReturnType<typeof runTurnInTerminal>>;
       try {
-        outcome = await runTurnInTerminal(runtime, store, store, prompt, exitNow, notifier);
+        outcome = await runTurnInTerminal(runtime, store, store, prompt, exitNow, notifier, {
+          chat: true,
+        });
       } finally {
         store.end(statusOf(runtime));
+      }
+      // The step limit (UX U3): ask how to go on.
+      if (outcome.kind === "done" && outcome.result.stopReason === "max_steps") {
+        const next = await stopHandoff(store, runtime.limits.maxSteps, runtime.executor.isolation);
+        store.refreshStatus(statusOf(runtime));
+        if (next === "stop") break;
+        prompt = next === "more" ? CONTINUE_PROMPT : SUMMARY_PROMPT;
+        display = prompt;
+        continue;
       }
       // A finished plan: ask whether to build it.
       if (!planning || outcome.kind !== "done" || outcome.result.stopReason !== "done") break;
@@ -195,6 +213,15 @@ export class CommandArgs {
         return (first === "cancel" || first === "delete") && second === undefined ? this.jobs : [];
       case "diff":
         return first === undefined ? words("last") : [];
+      case "rewind": {
+        // UX U6: the turn numbers, with each turn's prompt as the hint.
+        const turns = this.runtime.rewindPoints.map((p, i) => ({
+          value: String(i + 1),
+          hint: p.prompt,
+        }));
+        if (first === undefined) return [...words("fork"), ...turns];
+        return first === "fork" && second === undefined ? turns : [];
+      }
       case "mcp":
         if (first === undefined) return words("logout");
         return first === "logout" && second === undefined

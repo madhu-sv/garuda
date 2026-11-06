@@ -5,8 +5,10 @@ import { runCommand } from "./chat/commands.js";
 import { complete, rootFiles, rootLister } from "./chat/complete.js";
 import { CommandArgs, commandNames } from "./chat/controller.js";
 import { BUILD_PROMPT, planHandoff } from "./chat/plan.js";
+import { CONTINUE_PROMPT, SUMMARY_PROMPT, stopHandoff } from "./chat/stop.js";
 import type { Notifier } from "./notify.js";
 import type { Renderer } from "./renderer.js";
+import { tourChoice } from "./tour.js";
 import type { Interruptible } from "./turn.js";
 import { runTurnInTerminal } from "./turn.js";
 
@@ -35,7 +37,10 @@ export async function runRepl(
   firstInput?: string,
   /** Tells the user when a long turn ends (0.6). */
   notifier?: Notifier,
+  /** UX U9: the tour's tasks; the first input 1, 2 or 3 runs one. */
+  tour?: readonly string[],
 ): Promise<void> {
+  let tourTasks = tour;
   const history: string[] = [];
   // Tab completion (0.6): the same /commands and @paths as the Ink chat.
   const list = rootLister(runtime.root);
@@ -83,7 +88,8 @@ export async function runRepl(
       if (more.kind !== "line") break;
       raw = `${raw.slice(0, -1)}\n${more.text}`;
     }
-    const text = raw.trim();
+    const text = tourChoice(raw.trim(), tourTasks);
+    tourTasks = undefined;
     if (text === "") continue;
     history.unshift(raw);
 
@@ -124,7 +130,20 @@ export async function runRepl(
         prompt,
         exitNow,
         notifier,
+        { chat: true },
       );
+      // The step limit (UX U3): ask how to go on.
+      if (outcome.kind === "done" && outcome.result.stopReason === "max_steps") {
+        const next = await stopHandoff(
+          approver,
+          runtime.limits.maxSteps,
+          runtime.executor.isolation,
+        );
+        if (next === "stop") break;
+        prompt = next === "more" ? CONTINUE_PROMPT : SUMMARY_PROMPT;
+        renderer.info(`› ${prompt}`);
+        continue;
+      }
       // A finished plan: ask whether to build it.
       if (!planning || outcome.kind !== "done" || outcome.result.stopReason !== "done") break;
       if ((await planHandoff(runtime, approver)) !== "now") break;

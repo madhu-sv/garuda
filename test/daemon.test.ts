@@ -11,7 +11,7 @@ import type { ExecPolicy } from "../src/sandbox/types.js";
 import { createBashTool } from "../src/tools/bash.js";
 import { processManagerTool } from "../src/tools/processManager.js";
 import { ToolRegistry } from "../src/tools/registry.js";
-import { toolContext } from "./helpers.js";
+import { toolContext, waitUntil } from "./helpers.js";
 
 const bashTool = createBashTool({ daemons: true });
 const root = realpathSync(mkdtempSync(join(tmpdir(), "garuda-daemon-test-")));
@@ -30,14 +30,6 @@ const policy = (over: Partial<ExecPolicy> = {}): ExecPolicy => ({
   ...over,
 });
 
-async function waitFor(check: () => boolean | Promise<boolean>, timeoutMs = 4_000): Promise<void> {
-  const end = Date.now() + timeoutMs;
-  while (!(await check())) {
-    if (Date.now() > end) throw new Error("waitFor timed out");
-    await new Promise((r) => setTimeout(r, 20));
-  }
-}
-
 describe("DaemonManager in sandbox", () => {
   it("spawns a background process, tails logs, and kills it cleanly", async () => {
     const executor = new HostExecutor();
@@ -51,7 +43,7 @@ describe("DaemonManager in sandbox", () => {
     expect(daemon.pid).toBeTypeOf("number");
 
     // Wait until at least one log line is captured
-    await waitFor(() => (executor.daemons.logs(daemon.id)?.length ?? 0) >= 1);
+    await waitUntil(() => (executor.daemons.logs(daemon.id)?.length ?? 0) >= 1);
     const logs = executor.daemons.logs(daemon.id);
     expect(logs?.some((l) => l.includes("hello 1"))).toBe(true);
 
@@ -62,7 +54,7 @@ describe("DaemonManager in sandbox", () => {
     const killOutcome = executor.daemons.kill(daemon.id);
     expect(killOutcome.ok).toBe(true);
 
-    await waitFor(() => executor.daemons.get(daemon.id)?.status === "stopped");
+    await waitUntil(() => executor.daemons.get(daemon.id)?.status === "stopped");
     expect(executor.daemons.get(daemon.id)?.status).toBe("stopped");
 
     executor.shutdown();
@@ -72,7 +64,7 @@ describe("DaemonManager in sandbox", () => {
     const executor = new HostExecutor();
     const daemon = executor.daemons.spawn('echo "done quickly"; exit 0', policy());
 
-    await waitFor(() => executor.daemons.get(daemon.id)?.status === "stopped");
+    await waitUntil(() => executor.daemons.get(daemon.id)?.status === "stopped");
     const status = executor.daemons.get(daemon.id);
     expect(status?.status).toBe("stopped");
     expect(status?.exitCode).toBe(0);
@@ -86,7 +78,7 @@ describe("DaemonManager in sandbox", () => {
     const executor = new HostExecutor();
     const daemon = executor.daemons.spawn('echo "something went wrong" >&2; exit 42', policy());
 
-    await waitFor(() => executor.daemons.get(daemon.id)?.status === "failed");
+    await waitUntil(() => executor.daemons.get(daemon.id)?.status === "failed");
     const status = executor.daemons.get(daemon.id);
     expect(status?.status).toBe("failed");
     expect(status?.exitCode).toBe(42);
@@ -106,8 +98,8 @@ describe("DaemonManager in sandbox", () => {
 
     executor.shutdown();
 
-    await waitFor(() => executor.daemons.get(d1.id)?.status === "stopped");
-    await waitFor(() => executor.daemons.get(d2.id)?.status === "stopped");
+    await waitUntil(() => executor.daemons.get(d1.id)?.status === "stopped");
+    await waitUntil(() => executor.daemons.get(d2.id)?.status === "stopped");
     expect(executor.daemons.get(d1.id)?.status).toBe("stopped");
     expect(executor.daemons.get(d2.id)?.status).toBe("stopped");
   });
@@ -148,7 +140,7 @@ describe("bash tool and process_manager integration", () => {
     expect(daemonId).not.toBe("");
 
     // 3. Check logs via process_manager(action: "logs")
-    await waitFor(async () => {
+    await waitUntil(async () => {
       const logs = await call("process_manager", { action: "logs", daemonId });
       return logs.content.includes("server tick 1");
     });
@@ -171,7 +163,7 @@ describe("bash tool and process_manager integration", () => {
     // The status changes when the process has ended (0.14, review), not at once.
     const status = async () =>
       (await call("process_manager", { action: "status", daemonId })).content;
-    await waitFor(async () => (await status()).includes("Status: stopped"));
+    await waitUntil(async () => (await status()).includes("Status: stopped"));
 
     executor.shutdown();
   });
@@ -226,7 +218,7 @@ describe("bash tool and process_manager integration", () => {
     const daemonId = match?.[1] ?? "";
     expect(daemonId).not.toBe("");
 
-    await waitFor(async () => {
+    await waitUntil(async () => {
       const logs = await call("process_manager", { action: "logs", daemonId });
       return logs.content.includes("hello stdout") && logs.content.includes("hello stderr");
     });
@@ -248,7 +240,7 @@ describe("bash tool and process_manager integration", () => {
     expect(stderrLogs.content).not.toContain("hello stdout");
 
     await call("process_manager", { action: "kill", daemonId });
-    await waitFor(async () =>
+    await waitUntil(async () =>
       (await call("process_manager", { action: "status", daemonId })).content.includes(
         "Status: stopped",
       ),
@@ -289,7 +281,7 @@ describe("bash tool and process_manager integration", () => {
 
     // Kill daemon 1 only
     await call("process_manager", { action: "kill", daemonId: id1 });
-    await waitFor(async () =>
+    await waitUntil(async () =>
       (await call("process_manager", { action: "status", daemonId: id1 })).content.includes(
         "Status: stopped",
       ),
@@ -311,7 +303,7 @@ describe("daemons: bounded memory and shutdown (merge gate)", () => {
       "head -c 200000 /dev/zero | tr '\\0' x; echo; head -c 10000 /dev/zero | tr '\\0' y; echo; sleep 5",
       policy(),
     );
-    await waitFor(() =>
+    await waitUntil(() =>
       (executor.daemons.logs(daemon.id, { lines: 0 }) ?? []).some((l) => l.includes("yyyy")),
     );
     const lines = executor.daemons.logs(daemon.id, { lines: 0 }) ?? [];
@@ -345,7 +337,7 @@ describe("daemons: bounded memory and shutdown (merge gate)", () => {
     await runtime.close();
     expect(daemons.get(started.id)?.status).toBe("stopped");
     const pid = started.pid as number;
-    await waitFor(() => {
+    await waitUntil(() => {
       try {
         process.kill(pid, 0);
         return false;

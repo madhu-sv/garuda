@@ -1,12 +1,13 @@
-import { mkdtempSync, realpathSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync } from "node:fs";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { z } from "zod";
 import { git, shellWord } from "../jobs/git.js";
 import { MANIFEST, TEST_PATH, tail } from "../jobs/proof.js";
 import { cleanArgs, LINK_CANDIDATES } from "../jobs/worktree.js";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
+import { denyAround } from "../permissions/sandboxPaths.js";
 import type { Executor } from "../sandbox/types.js";
 import { TOOLCHAIN_ENV } from "./toolchains.js";
 import type { EvalTask } from "./types.js";
@@ -179,6 +180,101 @@ export async function taskWorktree(
   return dir;
 }
 
+/**
+ * The project at `commit` for an eval run (0.18.1), with no link to the project's history: the
+ * files of the commit, checked out through a temporary index, in a new repository with one
+ * commit. In a worktree, `git log --all` and the project's own folder held the answer: the
+ * commit that the task asks for. node_modules and the virtual environments are links, as before.
+ */
+export async function isolatedTaskCopy(
+  executor: Executor,
+  root: string,
+  commit: string,
+): Promise<string> {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "garuda-repo-task-")));
+  const indexDir = mkdtempSync(join(tmpdir(), "garuda-repo-index-"));
+  try {
+    const env = { GIT_INDEX_FILE: join(indexDir, "index") };
+    await git(executor, root, ["read-tree", commit], { env });
+    await git(executor, root, ["checkout-index", "--all", "--force", `--prefix=${dir}/`], { env });
+  } finally {
+    await rm(indexDir, { recursive: true, force: true });
+  }
+  await git(executor, dir, ["init", "--quiet"]);
+  await git(executor, dir, ["add", "--all"]);
+  await git(executor, dir, [
+    "-c",
+    "user.name=Garuda eval",
+    "-c",
+    "user.email=eval@garuda.invalid",
+    "commit",
+    "--quiet",
+    "--no-verify",
+    "--message",
+    "The task's start",
+  ]);
+  for (const name of LINK_CANDIDATES) {
+    try {
+      await symlink(join(root, name), join(dir, name), "dir");
+    } catch {
+      // Not in the checkout, or already there.
+    }
+  }
+  return dir;
+}
+
+/**
+ * The reads to deny in an eval run of a repo task (0.18.1): the rest of the home folder (other
+ * checkouts and copies of the project hold the answer too), and in the project's own folder
+ * everything except the links that the task copy uses. Hidden entries of the home folder stay
+ * readable: toolchains and package caches live there. So does `~/Library` (0.18.2): on macOS,
+ * pnpm runs the version that a project asks for from `~/Library/pnpm`, and caches and user
+ * site-packages are there too. With it denied, every check of the user's first repo run failed
+ * with EPERM on the working folder. Its personal parts (Mail, Messages, iCloud Drive and the
+ * like) and the keychains stay denied by the rules of every sandboxed command.
+ */
+export function repoTaskReadDenials(root: string, home: string): string[] {
+  const links = LINK_CANDIDATES.map((name) => join(root, name));
+  const inHome = root === home || root.startsWith(`${home}${sep}`);
+  return [
+    ...(inHome ? denyAround(home, [...links, join(home, "Library")], true) : []),
+    ...(inHome ? [] : denyAround(root, links)),
+  ];
+}
+
+/**
+ * Cache folders that test tools write in `node_modules` (0.18.2): Vite compiles a
+ * `vitest.config.ts` into `.vite-temp`, Vitest keeps its results in `.vite`, Babel and others use
+ * `.cache`. In a task copy, `node_modules` links to the project's own, which a command cannot
+ * write: in the user's run, 10 of 30 tasks failed for both models before a test ran.
+ */
+export const NODE_MODULES_CACHES = [".vite-temp", ".vite", ".cache"];
+
+/**
+ * The cache folders of the project's `node_modules` that a repo task's commands may write, as real
+ * paths (the sandbox matches real paths, and the task copy only links to them). Each is made
+ * first: a Linux sandbox can only bind a folder that exists. None without `node_modules`.
+ */
+export function repoTaskWritePaths(root: string): string[] {
+  let modules: string;
+  try {
+    modules = realpathSync(join(root, "node_modules"));
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const name of NODE_MODULES_CACHES) {
+    const path = join(modules, name);
+    try {
+      mkdirSync(path, { recursive: true });
+      out.push(path);
+    } catch {
+      // Cannot be made: the tools run without it, as before.
+    }
+  }
+  return out;
+}
+
 export async function removeTaskWorktree(
   executor: Executor,
   root: string,
@@ -234,6 +330,12 @@ export interface BuildOptions {
   maxTasks?: number;
   testCommand: string;
   onProgress?: (line: string) => void;
+  /**
+   * 0.18.2: the check at the commit as an eval runs it (a task copy, in the sandbox). A task that
+   * passes on the host but not there can never pass in an eval: in the user's run, the sandbox
+   * tests could not start a sandbox inside the sandbox.
+   */
+  evalCheck?: (sha: string, check: string) => Promise<{ ok: boolean; tail: string }>;
 }
 
 /**
@@ -250,6 +352,8 @@ export async function buildRepoSuite(
   skipped: Record<string, number>;
   /** The first failure at a commit: the tests may not run in a worktree on this machine. */
   failure?: { sha: string; command: string; tail: string };
+  /** The first commit whose tests pass on the host but fail as an eval runs them. */
+  evalFailure?: { sha: string; command: string; tail: string };
 }> {
   const say = options.onProgress ?? (() => {});
   const head = (await git(executor, root, ["rev-parse", "HEAD"])).stdout.trim();
@@ -264,6 +368,7 @@ export async function buildRepoSuite(
   const tasks: RepoTaskSpec[] = [];
   let checked = 0;
   let failure: { sha: string; command: string; tail: string } | undefined;
+  let evalFailure: { sha: string; command: string; tail: string } | undefined;
   const max = options.maxTasks ?? DEFAULT_MAX_TASKS;
   for (const commit of commits) {
     if (tasks.length >= max) break;
@@ -336,6 +441,14 @@ export async function buildRepoSuite(
     } finally {
       await removeTaskWorktree(executor, root, dir);
     }
+    if (options.evalCheck !== undefined) {
+      const inEval = await options.evalCheck(commit.sha, check);
+      if (!inEval.ok) {
+        skip("the tests fail as an eval runs them (a task copy, in the sandbox)");
+        evalFailure ??= { sha: commit.sha, command: check, tail: inEval.tail };
+        continue;
+      }
+    }
     tasks.push({
       id: `repo-${commit.sha.slice(0, 7)}`,
       sha: commit.sha,
@@ -359,6 +472,7 @@ export async function buildRepoSuite(
     checked,
     skipped,
     ...(failure === undefined ? {} : { failure }),
+    ...(evalFailure === undefined ? {} : { evalFailure }),
   };
 }
 

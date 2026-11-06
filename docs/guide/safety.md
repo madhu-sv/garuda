@@ -8,7 +8,12 @@ Garuda runs commands in an OS sandbox: Seatbelt (`sandbox-exec`) on macOS, bubbl
 In the sandbox, a command:
 
 - can read every file, except secrets in your home folder (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`,
-  `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains, Garuda's and Claude Code's tokens and more);
+  `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains, Garuda's and Claude Code's tokens,
+  the `ant` CLI's stored keys in `~/.config/anthropic/credentials`, and more)
+  and, since 0.18.1, your personal folders: Desktop, Documents, Downloads, Movies, Music, Pictures (with
+  the Photos library), Public, and Mail, Messages, Safari, Calendars, Contacts, iCloud Drive and other
+  cloud folders in `~/Library`. A project inside one of them stays readable; the rest of that folder
+  does not. On macOS each rule also covers the same path under `/System/Volumes/Data`;
 - can write only in the working root, the temp folders and package caches (`~/.cache`, `~/.npm`, pnpm,
   and for a Java or Python project `~/.m2/repository`, `~/.gradle/caches` and similar);
 - cannot write `.git/hooks`, `.git/config` or `.garuda/` in the root, because those run or apply later
@@ -84,6 +89,10 @@ the sandbox reach named hosts through Garuda's own proxy, with no question:
 - Off by default. The first turn shows the list and asks; "remember" pins it to the list in
   `~/.garuda/trust.json`, so a changed list asks again. The model then gets a note that names the hosts,
   so it runs those commands in the sandbox and does not ask to leave it.
+- In a chat with no list (0.18.1), Garuda starts the proxy anyway with no host on it. A command
+  that needs a host then asks you instead of failing with a DNS error; an empty list asks no
+  consent first. After "this session", Garuda names the line that keeps the host for the project,
+  for example `"npm"` in `network.allow`. `-p`, jobs and evals keep no network, as before.
 - A host that is not on the list asks you (once, this session, or no); `network(host)` in
   `permissions.allow` or `permissions.deny` answers for good. Jobs and evals deny it and say which host.
 - Commands get `HTTP_PROXY` and `HTTPS_PROXY`: npm, pnpm, yarn, pip, cargo, go, git and curl use them;

@@ -7,7 +7,7 @@ Website and docs: https://madhu-sv.github.io/garuda/
 Garuda is a coding agent for the terminal, and for editors over the Agent Client Protocol. It reads
 and edits your code, runs commands in an OS sandbox, and keeps an audit log of its permission
 decisions. It works with Claude and with OpenAI-compatible models, local ones too. This is version
-0.17.0. Release notes: [CHANGELOG.md](CHANGELOG.md).
+0.18.2. Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## What Garuda does on your machine
 
@@ -15,7 +15,8 @@ decisions. It works with Claude and with OpenAI-compatible models, local ones to
 - `write_file` and `edit_file` show a diff first. You allow once, allow for this session, or deny.
 - Commands (`bash`) run in an OS sandbox when your machine has one: Seatbelt on macOS, bubblewrap
   on Linux. There they run with no question, but they can write only in the project, temp folders
-  and package caches, cannot read secrets in your home folder (such as `~/.ssh`), and have no
+  and package caches, cannot read secrets in your home folder (such as `~/.ssh`) or your personal folders (Documents,
+  Downloads, Pictures and the like, outside the project), and have no
   network unless you open an allowlist. So a command can change project files without a question;
   `/undo` restores the files in its snapshot (ignored files, such as build output, are not in it).
 - A command outside the sandbox asks first, unless one of your allow rules covers it. The strict

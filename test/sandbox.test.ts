@@ -277,6 +277,23 @@ describe.runIf(osExecutor !== undefined)("OS sandbox on this machine", () => {
     expect(open.stdout.text).toContain("skill text");
   });
 
+  it("a command cannot read the personal folders; the project inside Documents stays readable (0.18.1)", async () => {
+    const home = join(base, "home-personal");
+    const project = join(home, "Documents", "work", "proj");
+    mkdirSync(join(home, "Downloads"), { recursive: true });
+    mkdirSync(project, { recursive: true });
+    writeFileSync(join(home, "Downloads", "bank.txt"), "statement-123\n");
+    writeFileSync(join(home, "Documents", "tax.txt"), "tax-456\n");
+    writeFileSync(join(project, "code.txt"), "code-789\n");
+    const policy = sandboxed({ denyReadPaths: sandboxPaths(project, {}, home).denyReadPaths });
+    const downloads = await executor.run(`cat "${home}/Downloads/bank.txt"`, policy);
+    expect(downloads.stdout.text).not.toContain("statement-123");
+    const documents = await executor.run(`cat "${home}/Documents/tax.txt"`, policy);
+    expect(documents.stdout.text).not.toContain("tax-456");
+    const code = await executor.run(`cat "${project}/code.txt"`, policy);
+    expect(code.stdout.text).toContain("code-789");
+  });
+
   it("has no network", async () => {
     const r = await executor.run(
       `node -e "require('net').connect(53, '1.1.1.1').on('connect', () => process.exit(0)).on('error', (e) => { console.log(e.code); process.exit(1); })"`,

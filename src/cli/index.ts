@@ -2,6 +2,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
+import { styleText } from "node:util";
 import { Command, Option } from "commander";
 import { Runtime } from "../app/runtime.js";
 import { auditDirFor } from "../audit/logger.js";
@@ -29,7 +30,7 @@ import { ToolRegistry } from "../tools/registry.js";
 import { VERSION } from "../version.js";
 import { loadSearchConfig } from "../web/search.js";
 import { SwitchApprover, TerminalApprover } from "./approver.js";
-import { banner, colorLevel } from "./banner.js";
+import { banner, centerLines, colorLevel } from "./banner.js";
 import { describeError } from "./errors.js";
 import { FOCUS_REPORTING_OFF, FocusTracker, reportsFocus } from "./focus.js";
 import { JsonOutput, OUTPUT_FORMATS, type OutputFormat } from "./jsonOutput.js";
@@ -121,6 +122,12 @@ async function main(): Promise<void> {
       "--split <name>",
       "dev (default), heldout or all: the held-out tasks run only on request",
     )
+    .option("--addendum <file>", "add this text (4000 characters at most) to the system prompt")
+    .option("--mcp <server>", "allow this one server from ~/.garuda/mcp.json (an MCP A/B)")
+    .option(
+      "--mcp-prepare <command>",
+      "with --mcp: run this in each scratch folder before the agent (e.g. graphify update .)",
+    )
     .option("--shuffle", "run the tasks and their repeats in a random order from --seed")
     .option("--seed <n>", "seed for --shuffle and the report's interval (default 1)", (v) =>
       Number(v),
@@ -179,6 +186,35 @@ async function main(): Promise<void> {
       });
     });
   evalCommand
+    .command("tune")
+    .description(
+      "improve a prompt addendum: a proposer model edits it, an edit stays when the dev score improves, the held-out set is measured once",
+    )
+    .requiredOption(
+      "--addendum <file>",
+      "the starting addendum (a missing file starts empty); never edited",
+    )
+    .option("--proposer <model>", "the model that proposes edits (default claude-opus-5-5)")
+    .option("-m, --model <id>", "the agent's model (or set GARUDA_MODEL)")
+    .option("-s, --suite <names...>", "dev suites (default: basic hard medium)")
+    .option("--rounds <n>", "proposals (default 5)", (v) => Number(v))
+    .option("--repeat <n>", "runs of each dev task per score (default 3)", (v) => Number(v))
+    .option("--heldout-repeat <n>", "runs of each held-out task (default 5)", (v) => Number(v))
+    .option("--margin <n>", "more passing runs that keep an edit (default 2)", (v) => Number(v))
+    .option("--max-cost <usd>", "stop before a round that would pass this (default 20)", (v) =>
+      Number(v),
+    )
+    .option("--seed <n>", "seed for the run order and the intervals (default 1)", (v) => Number(v))
+    .option("--yes", "start without the question")
+    .option("--parallel <n>", "runs at the same time in each score (default 4)", (v) => Number(v))
+    .action(async (options) => {
+      const { runEvalTune } = await import("./evalTune.js");
+      process.exitCode = await runEvalTune({
+        ...options,
+        model: options.model ?? process.env.GARUDA_MODEL,
+      });
+    });
+  evalCommand
     .command("compare")
     .description("compare two eval reports of the same tasks (pass rates with a paired interval)")
     .argument("<a>", "report.json, or its run folder (.garuda/evals/<run-id>)")
@@ -187,6 +223,26 @@ async function main(): Promise<void> {
     .action(async (a: string, b: string, options: { seed?: number }) => {
       const { runEvalCompare } = await import("./evalCommand.js");
       process.exitCode = await runEvalCompare(a, b, options);
+    });
+
+  program
+    .command("advise")
+    .description(
+      "which model for this repo: run its own history (garuda eval --from-git) on two models and compare",
+    )
+    .option("--models <a,b>", "two models (default claude-haiku-5-5,claude-sonnet-5-5)", (v) =>
+      v.split(",").map((m) => m.trim()),
+    )
+    .option("--repeat <n>", "runs of each task (default 2)", (v) => Number(v))
+    .option("--max-cost <usd>", "stop before a model that would pass this (default 2)", (v) =>
+      Number(v),
+    )
+    .option("--seed <n>", "seed for the run order and the intervals (default 1)", (v) => Number(v))
+    .option("--parallel <n>", "runs at the same time (default 4)", (v) => Number(v))
+    .option("--yes", "start without the question")
+    .action(async (options) => {
+      const { runAdvise } = await import("./advise.js");
+      process.exitCode = await runAdvise(options);
     });
 
   program
@@ -418,6 +474,10 @@ async function start(options: Options, program: Command): Promise<number> {
     // The project's settings that loosen safety: asked at startup when there is a terminal,
     // pinned in ~/.garuda/trust.json (a job passes its own settings).
     projectSettings: { home: homedir(), ask: process.stdin.isTTY === true },
+    // UX U2: a chat watches the network, so a command that needs a host asks for it.
+    ...(job === undefined && prompt === undefined && process.stdin.isTTY === true
+      ? { network: { watch: true } }
+      : {}),
     // Web search (0.5) and Claude's own search (0.6): only the user's search.json and environment.
     ...(searchConfig.config === undefined && searchConfig.claude === undefined
       ? {}
@@ -560,6 +620,9 @@ async function start(options: Options, program: Command): Promise<number> {
         ...(outcome.kind === "done"
           ? { stopMessage: stopMessage(outcome.result.stopReason, runtime.limits) }
           : {}),
+        ...(outcome.kind === "done" && runtime.lastReceipt !== undefined
+          ? { receipt: runtime.lastReceipt }
+          : {}),
       });
     };
     // `garuda -p "/review src"` runs a custom command; other text goes to the model as it is.
@@ -614,14 +677,48 @@ async function start(options: Options, program: Command): Promise<number> {
     tools: runtime.toolsSummary(),
     ink: ink !== undefined,
   };
+  const { screenReaderMode } = await import("./receiptView.js");
   let startBanner = banner(bannerInfo, {
     columns: process.stdout.columns || 80,
     color: colorLevel(process.stdout),
+    // 0.18.1: the Ink chat centres the banner; a screen reader gets it as it is.
+    center: ink !== undefined && !screenReaderMode(),
+    ...(process.stdout.rows ? { rows: process.stdout.rows } : {}),
+    screenReader: screenReaderMode(),
   });
+  // A dist/ older than its checkout (the user's live run: a new patch, no rebuild) says so.
+  {
+    const { BUILD_COMMIT } = await import("../buildInfo.js");
+    const { CHAT_STALE, garudaCommit, staleBuildNote } = await import("../buildCheck.js");
+    const stale = staleBuildNote(BUILD_COMMIT, await garudaCommit(), CHAT_STALE);
+    if (stale !== undefined) {
+      startBanner += `\n${colorLevel(process.stdout) === "none" ? stale : styleText("yellow", stale)}`;
+    }
+  }
+  // UX U7: the jobs that ended since the last chat, once. UX U9: the first-run tour, once per
+  // project; it replaces the /init tip and names /init itself.
+  let tour: string[] | undefined;
   if (options.firstInput === undefined) {
+    const colored = colorLevel(process.stdout) !== "none";
+    const { morningBrief } = await import("../jobs/brief.js");
+    const brief = await morningBrief(root, (style, text) =>
+      colored ? styleText(style, text) : text,
+    ).catch(() => undefined);
+    if (brief !== undefined) startBanner += `\n${brief}\n`;
     const { initTip } = await import("../init/detect.js");
     const tip = initTip(root);
-    if (tip !== undefined) startBanner += `\n${tip}`;
+    const { firstRunTour } = await import("./tour.js");
+    const first = await firstRunTour(root, homedir(), runtime.profiles).catch(() => undefined);
+    if (first !== undefined) {
+      tour = first.prompts;
+      startBanner += `\n${first.text}${tip === undefined ? "" : " /init sets up AGENTS.md for this project."}`;
+    } else if (tip !== undefined) {
+      const shown =
+        ink !== undefined && !screenReaderMode()
+          ? centerLines([tip], process.stdout.columns || 80)[0]
+          : tip;
+      startBanner += `\n${shown}`;
+    }
   }
   const sessionPath = (id: string) => join(store.dir, `${id}.jsonl`);
   // Notifications (0.6): only for a chat on a terminal; escape codes go to the terminal itself.
@@ -644,6 +741,9 @@ async function start(options: Options, program: Command): Promise<number> {
     const setEventTarget = (target: Renderer) => {
       events = target;
     };
+    // UX U10: the key hints in the footer for the first chats only.
+    const { countChat, KEY_HINT_CHATS } = await import("./uiState.js");
+    const chats = await countChat(homedir());
     await ink.runInkChat(
       runtime,
       approver,
@@ -654,6 +754,9 @@ async function start(options: Options, program: Command): Promise<number> {
       options.firstInput,
       notifier,
       focus,
+      chats <= KEY_HINT_CHATS,
+      runtime.uiSettings?.clearOnStart !== false,
+      tour,
     );
   } else {
     process.stderr.write(`${startBanner}\n`);
@@ -666,6 +769,7 @@ async function start(options: Options, program: Command): Promise<number> {
       undefined,
       options.firstInput,
       notifier,
+      tour,
     );
   }
   await runtime.close();

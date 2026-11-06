@@ -94,6 +94,8 @@ const schema = z.strictObject({
     .optional(),
   /** Language server diagnostics after edits (0.4). enabled: default false. */
   lsp: z.strictObject({ enabled: z.boolean().optional() }).optional(),
+  /** The chat's look (0.18.1). clearOnStart: default true (the Ink chat starts on a clear screen). */
+  ui: z.strictObject({ clearOnStart: z.boolean().optional() }).optional(),
   /**
    * The project's formatter after edits (0.10). enabled: default false (A/B first). commands: by
    * name, false turns a detected formatter off; a command adds one or replaces a detected one.
@@ -204,6 +206,8 @@ export interface Settings {
   skills?: { enabled: boolean };
   agents?: { enabled: boolean };
   notifications?: { channel?: NotifyChoice; afterSeconds?: number };
+  /** The chat's look (0.18.1). */
+  ui?: { clearOnStart?: boolean };
   thinking?: { keepBlocks?: boolean; enabled?: boolean; effort?: Effort; show?: boolean };
   formatters?: { enabled: boolean; commands: Record<string, FormatterSetting> };
 }
@@ -239,6 +243,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     skills,
     agents,
     notifications,
+    ui,
     thinking,
     formatters,
     network,
@@ -285,6 +290,7 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(commands?.mode === undefined ? {} : { commands: { mode: commands.mode } }),
     ...(todo?.enabled === undefined ? {} : { todo: { enabled: todo.enabled } }),
     ...(lsp?.enabled === undefined ? {} : { lsp: { enabled: lsp.enabled } }),
+    ...(ui?.clearOnStart === undefined ? {} : { ui: { clearOnStart: ui.clearOnStart } }),
     ...(undo?.enabled === undefined ? {} : { undo: { enabled: undo.enabled } }),
     ...(skills?.enabled === undefined ? {} : { skills: { enabled: skills.enabled } }),
     ...(agents?.enabled === undefined ? {} : { agents: { enabled: agents.enabled } }),

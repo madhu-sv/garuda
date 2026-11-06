@@ -29,6 +29,9 @@ pinning against silent changes. Spec 2026-07-28; SDK `@modelcontextprotocol/clie
   "network": true, "writePaths": [], "timeoutMs": 60000, "enabled": true } } }
 ```
 
+- A `"servers"` list (not an object) gets a message with the right form (0.17).
+- `RuntimeOptions.mcp.only` (0.17, `garuda eval --mcp`): only the user's server of that name is
+  loaded; the project file's servers are left out.
 - Server names: `^[a-z0-9][a-z0-9_]{0,31}$` (they become part of tool names). Strict schema: a server is
   either local (`command` …) or remote (`url`, optional `"type": "http"`, `timeoutMs`, `enabled`).
 - Remote URLs (`checkServerUrl`): https; http only for localhost in the user's file; no user:password, no

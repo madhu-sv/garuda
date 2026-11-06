@@ -28,7 +28,7 @@ export function git(
   executor: Executor,
   cwd: string,
   args: readonly string[],
-  options: { check?: boolean; signal?: AbortSignal } = {},
+  options: { check?: boolean; signal?: AbortSignal; env?: Record<string, string> } = {},
 ): Promise<GitResult> {
   return hostCommand(executor, cwd, ["git", "-c", "core.hooksPath=/dev/null", ...args], options);
 }
@@ -41,7 +41,7 @@ export async function hostCommand(
   executor: Executor,
   cwd: string,
   argv: readonly string[],
-  options: { check?: boolean; signal?: AbortSignal } = {},
+  options: { check?: boolean; signal?: AbortSignal; env?: Record<string, string> } = {},
 ): Promise<GitResult> {
   const policy: ExecPolicy = {
     root: cwd,
@@ -57,7 +57,7 @@ export async function hostCommand(
   const command = argv.map(shellWord).join(" ");
   const result = await executor.run(command, policy, {
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    env: { GIT_TERMINAL_PROMPT: "0" },
+    env: { ...options.env, GIT_TERMINAL_PROMPT: "0" },
   });
   if (result.aborted) throw options.signal?.reason ?? new Error("stopped");
   const out = { exitCode: result.exitCode, stdout: result.stdout.text, stderr: result.stderr.text };

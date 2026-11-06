@@ -1,6 +1,6 @@
 {
   "name": "@garuda-agent/garuda",
-  "version": "0.17.0",
+  "version": "0.18.2",
   "description": "Garuda: a terminal coding agent with an OS sandbox, approvals and an audit log.",
   "license": "Apache-2.0",
   "author": "Madhusudhan Vasanth Kumar",
@@ -69,8 +69,8 @@
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
-    "@agentclientprotocol/sdk": "1.7.0",
-    "@anthropic-ai/sdk": "^0.128.0",
+    "@agentclientprotocol/sdk": "2.4.0",
+    "@anthropic-ai/sdk": "^1.6.0",
     "@inquirer/prompts": "^8.7.2",
     "@modelcontextprotocol/client": "^2.3.1",
     "commander": "^15.0.0",
@@ -82,13 +82,13 @@
     "react": "^19.3.0",
     "smol-toml": "^1.9.0",
     "ts6": "npm:typescript@^6.0.3",
-    "undici": "^7.30.1",
+    "undici": "^8.12.4",
     "vscode-jsonrpc": "^9.0.3",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
-    "@modelcontextprotocol/server": "^2.3.1",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@types/node": "^22.20.4",
     "@types/react": "^19.3.0",
     "ink-testing-library": "^4.0.0",

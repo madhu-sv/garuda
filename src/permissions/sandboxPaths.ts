@@ -1,6 +1,6 @@
-import { realpathSync } from "node:fs";
+import { readdirSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, resolve, sep } from "node:path";
 import { globbySync } from "globby";
 import { CASE_INSENSITIVE_FS, fullGlob } from "./rules.js";
 
@@ -19,6 +19,8 @@ export const DENY_READ_IN_HOME = [
   ".docker",
   ".config/gcloud",
   ".config/gh",
+  // The `ant` CLI's and the Anthropic SDK's stored keys (SDK 1.x reads them too, 0.18.3).
+  ".config/anthropic/credentials",
   ".netrc",
   ".npmrc",
   ".pypirc",
@@ -33,6 +35,68 @@ export const DENY_READ_IN_HOME = [
   ".claude.json",
   ".claude/.credentials.json",
 ];
+
+/**
+ * The user's personal folders (0.18.1: a model's `find /` in an eval read them, and macOS asked
+ * the user to let iTerm into Downloads and Photos). Commands in the sandbox cannot read them,
+ * except the part that holds the project (see `personalDenials`). The Photos library is in
+ * Pictures; iCloud Drive and other cloud folders are in Library.
+ */
+export const PERSONAL_IN_HOME = [
+  "Desktop",
+  "Documents",
+  "Downloads",
+  "Movies",
+  "Music",
+  "Pictures",
+  "Public",
+  "Library/Mail",
+  "Library/Messages",
+  "Library/Safari",
+  "Library/Calendars",
+  "Library/Application Support/AddressBook",
+  "Library/Mobile Documents",
+  "Library/CloudStorage",
+];
+
+/**
+ * Every entry of `base` except the paths in `keep` and the folders on the way to them: the reads
+ * to deny so that only `keep` stays readable under `base`. A folder that cannot be read gives
+ * nothing (it holds nothing to read). `keepHidden`: entries of `base` itself that start with a
+ * dot stay readable (toolchains keep their files there).
+ */
+export function denyAround(base: string, keep: readonly string[], keepHidden = false): string[] {
+  let names: string[];
+  try {
+    names = readdirSync(base);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const name of names) {
+    const path = join(base, name);
+    if (keep.includes(path)) continue;
+    if (keep.some((k) => k.startsWith(`${path}${sep}`))) {
+      out.push(...denyAround(path, keep));
+      continue;
+    }
+    if (keepHidden && name.startsWith(".")) continue;
+    out.push(path);
+  }
+  return out;
+}
+
+/**
+ * The personal folders to deny for a project in `root`: each folder whole, or, when the project
+ * is inside one, everything in it except the way to the project.
+ */
+export function personalDenials(home: string, root: string): string[] {
+  return PERSONAL_IN_HOME.flatMap((name) => {
+    const folder = join(home, name);
+    if (root === folder) return [];
+    return root.startsWith(`${folder}${sep}`) ? denyAround(folder, [root]) : [folder];
+  });
+}
 
 /**
  * Paths in the root that stay read-only for commands. A git hook or Garuda's own
@@ -80,6 +144,7 @@ export function sandboxPaths(
     denyWritePaths: PROTECTED_IN_ROOT.map((p) => join(root, p)),
     denyReadPaths: unique([
       ...DENY_READ_IN_HOME.map((p) => join(home, p)),
+      ...personalDenials(home, root),
       ...(settings.denyRead ?? []).map(expand),
     ]),
   };

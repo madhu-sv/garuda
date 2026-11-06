@@ -345,7 +345,14 @@ export class PermissionEngine implements PermissionGate {
     if (choice === "once" && accepted !== undefined) {
       return { decision: { allowed: true, by: "user", hunks: accepted }, userChoice: choice };
     }
-    return { decision: { allowed: true, by: "user" }, userChoice: choice };
+    return {
+      decision: {
+        allowed: true,
+        by: "user",
+        ...(choice === "session" ? { remembered: true } : {}),
+      },
+      userChoice: choice,
+    };
   }
 
   /**

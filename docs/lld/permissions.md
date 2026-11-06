@@ -19,7 +19,7 @@ interface PermissionGate {
   execPolicy(timeoutMs, { sandbox?, readOnlyRoot? }): ExecPolicy;
 }
 type PermissionDecision =
-  | { allowed: true; by: "read_only" | "sandbox" | "rule" | "session" | "user" }
+  | { allowed: true; by: "read_only" | "sandbox" | "rule" | "session" | "user"; remembered?: true }
   | { allowed: false; by: "rule" | "sensitive" | "user" | "unattended" | "policy"; reason };
 
 interface Approver { ask(request: ApprovalRequest, signal): Promise<"once" | "session" | "deny"> }
@@ -158,7 +158,7 @@ root as the first read-only path (for a project inside a writable folder such as
 can still write temp folders and package caches, so tests that write nothing in the project run.
 Hooks use the same policy.
 
-"Session" answers add a session rule:
+"Session" answers add a session rule (the decision carries `remembered: true` the first time, UX U2):
 
 | Target | Session rule |
 | --- | --- |
@@ -267,7 +267,7 @@ grep never searches them; the code index never indexes them.
 | --- | --- |
 | Writable | the root, `os.tmpdir()` and `/tmp` (real paths), `~/.cache`, `~/.npm`, `~/.local/share/pnpm`, `~/Library/Caches`, `~/Library/pnpm`, plus `sandbox.writePaths`, plus the caches of the detected language profiles (for example `~/.m2/repository`) |
 | Read-only inside the root | `.git/hooks`, `.git/config`, `.garuda` (they run or apply later, outside the sandbox) |
-| Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, `~/.garuda/mcp-auth.json`, `~/.garuda/credentials` (0.16), `~/.claude.json`, `~/.claude/.credentials.json` (0.5: tokens of Garuda and Claude Code; the rest of `~/.garuda` and `~/.claude` stays readable, for skills), plus `sandbox.denyRead` |
+| Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.config/anthropic/credentials` (0.18.3: the `ant` CLI's and the Anthropic SDK's stored keys), `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, `~/.garuda/mcp-auth.json`, `~/.garuda/credentials` (0.16), `~/.claude.json`, `~/.claude/.credentials.json` (0.5: tokens of Garuda and Claude Code; the rest of `~/.garuda` and `~/.claude` stays readable, for skills), plus `sandbox.denyRead` |
 
 `~/` means the home folder; other relative paths start at the root.
 

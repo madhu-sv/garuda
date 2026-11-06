@@ -211,6 +211,15 @@ response: batch responses at half the token price.
   --from-launchd` sends a macOS notification (`osascript`, the text as an argument) and removes the
   agent last. `/jobs` shows the agent's time (read from its plist); `/jobs cancel night` removes it.
 
+## The morning brief (`jobs/brief.ts`, UX U7, 0.18.1)
+
+- At a chat start, `morningBrief(root)` lists the jobs that ended (done, stopped, failed) after
+  the time in `.garuda/jobs/brief.seen` (with no file: the last day), oldest first, and saves the
+  time of this brief. Each line: ✓ or ✗, the title, the verdict, the tests ("tests 120 → 126" from
+  `parseTestCount` on the proof's test output, else "tests pass" or "tests fail after the
+  change"), the branch; then the total cost (`sumCosts`). It reads job files only, never the
+  Markdown digest.
+
 ## Safety
 
 - The user approves the list once, with the rules in view; nothing else can be approved later.

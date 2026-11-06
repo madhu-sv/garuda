@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { constants as fsConstants, mkdirSync, realpathSync } from "node:fs";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { Runtime, type RuntimeOptions } from "../app/runtime.js";
 import { git } from "../jobs/git.js";
@@ -23,11 +23,18 @@ import { changedPaths, treeState, unexpectedPaths } from "./changes.js";
 import { roughNote } from "./compare.js";
 import { writeFiles } from "./files.js";
 import { isProtectedPath } from "./projects.js";
-import { applyTests, removeTaskWorktree, taskWorktree } from "./repoTasks.js";
+import {
+  applyTests,
+  isolatedTaskCopy,
+  repoTaskReadDenials,
+  repoTaskWritePaths,
+} from "./repoTasks.js";
 import {
   consistency,
   costPerPass,
   DEFAULT_SEED,
+  mcpUse,
+  mcpUseText,
   passInterval,
   spread,
   stepsSd,
@@ -56,8 +63,17 @@ export const REPO_CHECK_TIMEOUT_MS = 5 * 60_000;
 
 /** A task that runs longer than this is stopped. */
 export const EVAL_TASK_TIMEOUT_MS = 10 * 60_000;
+/**
+ * A timeout is the provider's when a model request was open at the end and the model had sent
+ * nothing for this long, or the stream had broken and been retried (0.18.2). In the user's Sonnet
+ * run, four runs timed out this way: 55 to 351 s of silence, after "Connection error" retries.
+ */
+export const PROVIDER_STALL_MS = 120_000;
+export const PROVIDER_STALLED = "The model's API stalled:";
 
 export interface EvalOptions {
+  /** The home folder for the repo tasks' read denials (0.18.1). Default: the user's. Tests set it. */
+  home?: string;
   modelId: string;
   /** Makes a model client for each task. */
   model: () => ModelClient | Promise<ModelClient>;
@@ -94,6 +110,8 @@ export interface EvalOptions {
   parallel?: number;
   /** Time limit per task. Default: EVAL_TASK_TIMEOUT_MS (the Batch API needs much more). */
   taskTimeoutMs?: number;
+  /** Silence from the model that makes a timeout a provider stall. Default: PROVIDER_STALL_MS. */
+  providerStallMs?: number;
   /** The team policy (merge gate): evals obey it as the chat does. Absent: none. */
   policy?: TeamPolicy;
   /**
@@ -107,6 +125,134 @@ export interface EvalOptions {
    * settings above that change Garuda, and the session belong to Garuda only.
    */
   agent?: ClaudeCodeAgent;
+  /**
+   * One MCP server for the run (0.17, `--mcp`): its name in the user's own ~/.garuda/mcp.json
+   * under `home`, and an optional command that prepares the scratch folder for it before the
+   * agent starts (for Graphify: `graphify update .`, which builds the code graph).
+   */
+  mcp?: { server: string; home: string; prepare?: string };
+  /** The prompt addendum (0.17, T11d): `--addendum`, and each version that `eval tune` scores. */
+  addendum?: string;
+}
+
+/** Time limit of an MCP prepare command (`--mcp-prepare`). */
+export const MCP_PREPARE_TIMEOUT_MS = 120_000;
+
+/**
+ * What the model was doing (0.18.2): whether a request is open (no tool runs), when it last sent
+ * something, whether its stream broke and was retried, and the steps so far.
+ */
+export class ModelWatch {
+  steps = 0;
+  /** Tool calls that started and have no result yet. */
+  private running = 0;
+  /** The last response asked for tools that have not started yet. */
+  private toolsNext = false;
+  private lastAt = Date.now();
+  private retried = false;
+
+  see(event: AgentEvent, now = Date.now()): void {
+    switch (event.type) {
+      case "model_retry":
+        // A broken stream is not progress.
+        this.retried = true;
+        return;
+      case "tool_call":
+        this.running++;
+        this.toolsNext = false;
+        break;
+      case "tool_result":
+        this.running = Math.max(0, this.running - 1);
+        break;
+      case "step_end":
+        this.steps = event.step;
+        this.toolsNext = event.response.content.some((b) => b.type === "tool_use");
+        // A new request starts clean.
+        this.retried = false;
+        break;
+    }
+    this.lastAt = now;
+  }
+
+  /** A model request is open: no tool runs or is about to. */
+  private get waiting(): boolean {
+    return this.running === 0 && !this.toolsNext;
+  }
+
+  /** Why the stop is the provider's, or undefined: a tool was running, or the model was sending. */
+  stall(now: number, quietMs: number): string | undefined {
+    if (!this.waiting) return undefined;
+    const quiet = Math.round((now - this.lastAt) / 1000);
+    if (this.retried) return `its stream broke and was retried, and it sent nothing for ${quiet} s`;
+    if (now - this.lastAt >= quietMs) return `it sent nothing for ${quiet} s`;
+    return undefined;
+  }
+}
+
+/**
+ * The sandbox settings of a repo task (0.18.1, 0.18.2): no reads of the project's checkout or the
+ * rest of the home folder, and writes to the caches in the project's `node_modules`.
+ */
+export function repoTaskSandbox(repoRoot: string, home: string) {
+  return {
+    denyRead: repoTaskReadDenials(repoRoot, home),
+    writePaths: repoTaskWritePaths(repoRoot),
+  };
+}
+
+/**
+ * The check of a repo task at its commit, as an eval runs it (0.18.2, for the suite builder): a
+ * task copy of the commit, a runtime with the eval's settings and no model, and `runCheck` in its
+ * sandbox. Nothing is asked of a model.
+ */
+export async function checkAsEval(
+  repoRoot: string,
+  sha: string,
+  check: string,
+  options: {
+    home?: string;
+    executor?: EvalOptions["executor"];
+    policy?: EvalOptions["policy"];
+  } = {},
+): Promise<{ ok: boolean; tail: string }> {
+  const host = new HostExecutor();
+  const root = await isolatedTaskCopy(host, repoRoot, sha);
+  try {
+    const runtime = await Runtime.create({
+      root,
+      modelId: "none",
+      model: async () => {
+        throw new Error("checkAsEval asks no model.");
+      },
+      approver: new AutoApprover("once"),
+      store: new FileSessionStore(root),
+      settings: parseSettings({
+        permissions: { deny: EVAL_DENY_RULES },
+        web: { enabled: false },
+        sandbox: repoTaskSandbox(repoRoot, options.home ?? homedir()),
+        ...(options.executor === undefined ? {} : { executor: options.executor }),
+      }),
+      mcp: false,
+      hooks: false,
+      commands: false,
+      ...(options.policy === undefined ? {} : { policy: options.policy }),
+    });
+    try {
+      const result = await runCheck(
+        root,
+        check,
+        REPO_CHECK_TIMEOUT_MS,
+        runtime.executor.isolation === "none"
+          ? undefined
+          : { executor: runtime.executor, policy: runtime.execPolicy(REPO_CHECK_TIMEOUT_MS) },
+      );
+      return { ok: result.ok, tail: result.output.split("\n").slice(-15).join("\n") };
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 }
 
 export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise<EvalResult> {
@@ -118,14 +264,13 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     await writeFiles(root, task.files);
   } else {
     // Benchmark your repo (0.12): the project at the commit's parent, with its tests added.
-    root = await taskWorktree(host, task.repo.root, task.repo.base);
+    // 0.18.1: a copy with no history, not a worktree: the history held the answer.
+    root = await isolatedTaskCopy(host, task.repo.root, task.repo.base);
     await applyTests(root, task.repo.tests);
   }
   if (options.format !== undefined) await formatProject(root, options.format.biome);
   const protect = task.protect ?? Object.keys(task.files).filter(isProtectedPath);
   const before = await snapshot(root, protect);
-  // The start state for the changed files (0.17, T11a).
-  const start = await treeState(root);
 
   const settings = parseSettings({
     // With an allowlist, a host outside it is denied: nobody answers questions in an eval.
@@ -135,6 +280,11 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     ...(options.network === undefined ? {} : { network: { allow: options.network } }),
     // Evals must not depend on the internet.
     web: { enabled: false },
+    // 0.18.1: a repo task's commands cannot read the project's own folder or the rest of the
+    // home folder: the checkout, and copies of it, hold the commit that the task asks for.
+    ...(task.repo === undefined
+      ? {}
+      : { sandbox: repoTaskSandbox(task.repo.root, options.home ?? homedir()) }),
     ...(options.executor === undefined ? {} : { executor: options.executor }),
     ...(options.codeIndex === undefined ? {} : { codeIndex: options.codeIndex }),
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
@@ -158,28 +308,67 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       : { thinking: { keepBlocks: options.keepThinking } }),
   });
   const store = new FileSessionStore(root);
-  const runtime = await Runtime.create({
-    root,
-    modelId: options.modelId,
-    model: async () => options.model(),
-    ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo }),
-    ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
-    ...(options.subagentModel === undefined ? {} : { subagentModel: options.subagentModel }),
-    approver: new AutoApprover("once"),
-    store,
-    settings,
-    // The user's own MCP servers must not change eval results.
-    mcp: false,
-    hooks: false,
-    ...(options.policy === undefined ? {} : { policy: options.policy }),
-    commands: false,
-    // The list comes from the eval command line: the user typed it.
-    ...(options.network === undefined ? {} : { network: { approved: true } }),
-    ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
-    ...(options.onEvent === undefined
-      ? {}
-      : { onEvent: (event: AgentEvent) => options.onEvent?.(task.id, event) }),
-  });
+  const watch = new ModelWatch();
+  let mcpCalls = 0;
+  const tools: string[] = [];
+  // `prepare`: a runtime only for the `--mcp-prepare` command, without the MCP server.
+  const createRuntime = (prepare: boolean) =>
+    Runtime.create({
+      root,
+      modelId: options.modelId,
+      model: async () => options.model(),
+      ...(options.modelInfo === undefined ? {} : { modelInfo: options.modelInfo }),
+      ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
+      ...(options.subagentModel === undefined ? {} : { subagentModel: options.subagentModel }),
+      approver: new AutoApprover("once"),
+      store,
+      settings,
+      // The user's own MCP servers must not change eval results; `--mcp` allows one by name.
+      mcp:
+        options.mcp === undefined || prepare
+          ? false
+          : { home: options.mcp.home, only: options.mcp.server },
+      hooks: false,
+      ...(options.addendum === undefined ? {} : { addendum: options.addendum }),
+      ...(options.policy === undefined ? {} : { policy: options.policy }),
+      commands: false,
+      // The list comes from the eval command line: the user typed it.
+      ...(options.network === undefined ? {} : { network: { approved: true } }),
+      ...(options.lsp === undefined ? {} : { lsp: { enabled: options.lsp } }),
+      onEvent: (event: AgentEvent) => {
+        if (event.type === "tool_call") {
+          tools.push(event.call.name);
+          if (event.call.name.startsWith("mcp__")) mcpCalls++;
+        }
+        watch.see(event);
+        options.onEvent?.(task.id, event);
+      },
+    });
+
+  // The MCP server's preparation (`--mcp-prepare`) runs first, in the run's sandbox: the runtime
+  // reads the instruction files when it starts, so a note that the command writes into GARUDA.md
+  // (how a user tells the agent about the server) reaches the agent. What the command writes is
+  // in the start state, so it is not a change of the agent.
+  let prepareFailure: string | undefined;
+  const prepare = options.mcp?.prepare;
+  if (prepare !== undefined) {
+    const prep = await createRuntime(true);
+    try {
+      const prepared = await runCheck(
+        root,
+        prepare,
+        MCP_PREPARE_TIMEOUT_MS,
+        prep.executor.isolation === "none"
+          ? undefined
+          : { executor: prep.executor, policy: prep.execPolicy(MCP_PREPARE_TIMEOUT_MS) },
+      );
+      if (!prepared.ok) prepareFailure = `${MCP_PREPARE_FAILED}\n${prepared.output}`;
+    } finally {
+      await prep.close();
+      prep.executor.shutdown();
+    }
+  }
+  const runtime = await createRuntime(false);
 
   const result: EvalResult = {
     id: task.id,
@@ -192,10 +381,16 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     durationMs: 0,
   };
 
+  if (prepareFailure !== undefined) result.reason = prepareFailure;
+  // The start state for the changed files (0.17, T11a).
+  const start = await treeState(root);
+
   const limitMs = options.taskTimeoutMs ?? EVAL_TASK_TIMEOUT_MS;
   const timeout = AbortSignal.timeout(limitMs);
   try {
-    if (options.agent !== undefined) {
+    if (result.reason !== undefined) {
+      // The preparation failed: the agent does not run.
+    } else if (options.agent !== undefined) {
       // The baseline (T11b): Claude Code in the run's sandbox, with the same limits. The proxy
       // for api.anthropic.com starts first (the user's first run: no proxy, ECONNREFUSED).
       await runtime.prepareCommands(timeout);
@@ -215,11 +410,9 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       if (outcome.reason !== undefined) result.reason = outcome.reason;
       if (options.outDir !== undefined) {
         mkdirSync(options.outDir, { recursive: true });
-        let target = join(options.outDir, `${task.id}.claude.json`);
-        for (let n = 2; existsSync(target); n++)
-          target = join(options.outDir, `${task.id}-${n}.claude.json`);
-        await writeFile(target, exec.stdout.text);
-        result.sessionFile = target;
+        result.sessionFile = await saveUnique(options.outDir, task.id, ".claude.json", (path) =>
+          writeFile(path, exec.stdout.text, { flag: "wx" }),
+        );
       }
     } else {
       const run = await runtime.runTurn(task.prompt, timeout);
@@ -228,7 +421,16 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     }
   } catch (error) {
     runtime.recordStop("error");
-    if (timeout.aborted) {
+    // The steps up to the stop (0.18.2: a timeout showed 0 steps after 13).
+    result.steps = watch.steps;
+    const stall = timeout.aborted
+      ? watch.stall(Date.now(), options.providerStallMs ?? PROVIDER_STALL_MS)
+      : undefined;
+    if (stall !== undefined) {
+      // The provider's failure, not the agent's: an error run, left out of the score (0.18.2).
+      result.stopReason = "error";
+      result.reason = `${PROVIDER_STALLED} ${stall} when the task hit its ${limitMs / 60_000}-minute limit.`;
+    } else if (timeout.aborted) {
       // Too slow is the agent's failure, not an error of the run.
       result.stopReason = "timeout";
       result.reason = `The task took longer than ${limitMs / 60_000} minutes.`;
@@ -236,6 +438,16 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       result.reason = `The run failed: ${(error as Error).message}`;
     }
   } finally {
+    if (tools.length > 0) result.tools = tools;
+    if (options.mcp !== undefined) {
+      result.mcpCalls = mcpCalls;
+      // A server that did not start makes the run an A/B of nothing: say so, and stop the eval.
+      const status = runtime.mcpStatus().find((m) => m.name === options.mcp?.server);
+      if (result.reason === undefined && status !== undefined && status.state === "failed") {
+        result.stopReason = "error";
+        result.reason = `${MCP_NOT_STARTED} "${options.mcp.server}": ${status.message ?? "no reason given"}`;
+      }
+    }
     await runtime.close();
     runtime.executor.shutdown();
   }
@@ -250,11 +462,10 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     if (options.outDir !== undefined) {
       mkdirSync(options.outDir, { recursive: true });
       // With --repeat, later runs of a task get -2, -3, … in the file name.
-      let target = join(options.outDir, `${task.id}.jsonl`);
-      for (let n = 2; existsSync(target); n++)
-        target = join(options.outDir, `${task.id}-${n}.jsonl`);
-      await copyFile(store.path(session.id), target);
-      result.sessionFile = target;
+      const from = store.path(session.id);
+      result.sessionFile = await saveUnique(options.outDir, task.id, ".jsonl", (path) =>
+        copyFile(from, path, fsConstants.COPYFILE_EXCL),
+      );
     }
   }
 
@@ -277,16 +488,14 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
         ? undefined
         : { executor: runtime.executor, policy: runtime.execPolicy(checkMs) },
     );
-    if (changed.length > 0)
-      result.reason = `The agent changed protected files: ${changed.join(", ")}.`;
+    if (changed.length > 0) result.reason = `${PROTECTED_FILES_CHANGED} ${changed.join(", ")}.`;
     else if (!check.ok) result.reason = `The check failed:\n${check.output}`;
     else result.passed = true;
   }
 
   result.durationMs = Date.now() - started;
   if (!options.keep) {
-    if (task.repo === undefined) await rm(root, { recursive: true, force: true });
-    else await removeTaskWorktree(host, task.repo.root, root);
+    await rm(root, { recursive: true, force: true });
   }
   return result;
 }
@@ -336,15 +545,179 @@ export function isConnectionFailure(result: EvalResult): boolean {
   );
 }
 
+/**
+ * Write a run's file as <id><ext>, or <id>-2<ext>, -3 … when that name is taken. The write itself
+ * refuses a taken name, so runs of one task at the same time (`--parallel`) never share a file.
+ */
+export async function saveUnique(
+  dir: string,
+  id: string,
+  ext: string,
+  write: (path: string) => Promise<void>,
+): Promise<string> {
+  for (let n = 1; ; n++) {
+    const path = join(dir, `${id}${n === 1 ? "" : `-${n}`}${ext}`);
+    try {
+      await write(path);
+      return path;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+}
+
+export const PROTECTED_FILES_CHANGED = "The agent changed protected files:";
+export const MCP_PREPARE_FAILED = "The MCP prepare command failed:";
+export const MCP_NOT_STARTED = "The MCP server did not start:";
+
+/** The `--mcp` server or its preparation failed (0.17): every later run would fail the same way. */
+export function isMcpFailure(result: EvalResult): boolean {
+  return (
+    result.reason !== undefined &&
+    (result.reason.startsWith(MCP_PREPARE_FAILED) || result.reason.startsWith(MCP_NOT_STARTED))
+  );
+}
+
+/** The model's API stalled at the time limit (0.18.2): the run says nothing about the agent. */
+export function isProviderStall(result: EvalResult): boolean {
+  return isErrorRun(result) && result.reason?.startsWith(PROVIDER_STALLED) === true;
+}
+
 /** A failure that every later run would repeat: the eval stops at it (0.17). */
 export function isSetupFailure(result: EvalResult): boolean {
-  return isAuthFailure(result) || isConnectionFailure(result);
+  // A stall's reason has a count of seconds: "401 s" must not read as a refused key.
+  if (isProviderStall(result)) return false;
+  return isAuthFailure(result) || isConnectionFailure(result) || isMcpFailure(result);
+}
+
+/**
+ * Why a run failed, in a few fixed kinds (0.18.1; a dev.to reader asked for failure categories).
+ * A limit or a timeout wins over the check: the agent did not finish, so the check failing says
+ * less than the reason it stopped.
+ */
+export type FailureKind =
+  | "setup"
+  | "error"
+  | "timeout"
+  | "provider"
+  | "step-limit"
+  | "token-limit"
+  | "repeated-calls"
+  | "refusal"
+  | "protected-files"
+  | "check";
+
+export const FAILURE_KINDS: readonly FailureKind[] = [
+  "check",
+  "protected-files",
+  "step-limit",
+  "token-limit",
+  "repeated-calls",
+  "refusal",
+  "timeout",
+  "provider",
+  "error",
+  "setup",
+];
+
+/** The kind of a failed run; undefined for a pass. */
+export function failureKind(result: EvalResult): FailureKind | undefined {
+  if (result.passed) return undefined;
+  if (isErrorRun(result)) {
+    if (isProviderStall(result)) return "provider";
+    return isSetupFailure(result) ? "setup" : "error";
+  }
+  switch (result.stopReason) {
+    case "timeout":
+      return "timeout";
+    case "max_steps":
+      return "step-limit";
+    case "token_budget":
+    case "max_tokens":
+      return "token-limit";
+    case "repeated_calls":
+      return "repeated-calls";
+    case "refusal":
+      return "refusal";
+  }
+  if (result.reason?.startsWith(PROTECTED_FILES_CHANGED) === true) return "protected-files";
+  return "check";
+}
+
+/** One failed run, with what it spent: enough to see whether failures come late in long runs. */
+export interface FailedRun {
+  id: string;
+  attempt: number;
+  kind: FailureKind;
+  steps: number;
+  tokens: number;
+  durationMs: number;
+}
+
+/** The failures of a run set by kind, and each failed run (report.json `evidence.failures`). */
+export function failureSummary(results: readonly EvalResult[]): {
+  total: number;
+  byKind: Partial<Record<FailureKind, number>>;
+  runs: FailedRun[];
+} {
+  const runs: FailedRun[] = [];
+  for (const r of results) {
+    const kind = failureKind(r);
+    if (kind === undefined) continue;
+    runs.push({
+      id: r.id,
+      attempt: r.attempt ?? 1,
+      kind,
+      steps: r.steps,
+      tokens: r.tokens,
+      durationMs: r.durationMs,
+    });
+  }
+  const byKind: Partial<Record<FailureKind, number>> = {};
+  for (const kind of FAILURE_KINDS) {
+    const n = runs.filter((f) => f.kind === kind).length;
+    if (n > 0) byKind[kind] = n;
+  }
+  return { total: runs.length, byKind, runs };
+}
+
+/** "check 2 (a run 1, b run 3) · timeout 1 (c run 2)"; at most 3 runs named per kind. */
+export function failureLine(results: readonly EvalResult[]): string | undefined {
+  const s = failureSummary(results);
+  if (s.total === 0) return undefined;
+  const parts = FAILURE_KINDS.flatMap((kind) => {
+    const runs = s.runs.filter((f) => f.kind === kind);
+    if (runs.length === 0) return [];
+    const named = runs.slice(0, 3).map((f) => `${f.id} run ${f.attempt}`);
+    if (runs.length > 3) named.push(`${runs.length - 3} more`);
+    return [`${kind} ${runs.length} (${named.join(", ")})`];
+  });
+  return `Failures by kind: ${parts.join(" · ")}`;
 }
 
 /**
  * Run the tasks, `parallel` at a time; the results keep the task order. `stop` (0.17): when it
  * returns true for a result, no further task starts, and the result list holds the runs that ran.
  */
+/**
+ * The run again after a provider stall, with the stalled run's spending added: its tokens and cost
+ * were spent. `providerStalls` says that it happened; the stalled session file stays in the folder.
+ */
+export function withStalledRun(again: EvalResult, stalled: EvalResult): EvalResult {
+  const unreported = (again.unreportedTokens ?? 0) + (stalled.unreportedTokens ?? 0);
+  return {
+    ...again,
+    tokens: again.tokens + stalled.tokens,
+    ...(unreported > 0 ? { unreportedTokens: unreported } : {}),
+    costUsd:
+      again.costUsd === undefined || stalled.costUsd === undefined
+        ? undefined
+        : again.costUsd + stalled.costUsd,
+    ...(again.costIncomplete || stalled.costIncomplete ? { costIncomplete: true } : {}),
+    providerStalls: (again.providerStalls ?? 0) + 1,
+  };
+}
+
 export async function runEvals(
   tasks: readonly EvalTask[],
   options: EvalOptions,
@@ -364,7 +737,15 @@ export async function runEvals(
   let stopped = false;
   const worker = async () => {
     for (let i = next++; i < tasks.length && !stopped; i = next++) {
-      const result = await runEvalTask(tasks[i] as EvalTask, options);
+      let result = await runEvalTask(tasks[i] as EvalTask, options);
+      if (isProviderStall(result)) {
+        // Once more (0.18.2): a provider outage must not count for or against a model.
+        options.onEvent?.(result.id, {
+          type: "notice",
+          text: `${result.reason ?? PROVIDER_STALLED} Running it again.`,
+        });
+        result = withStalledRun(await runEvalTask(tasks[i] as EvalTask, options), result);
+      }
       result.attempt = attempts[i] as number;
       results[i] = result;
       onResult?.(result);
@@ -583,6 +964,10 @@ function evidenceLines(results: readonly EvalResult[], seed: number): string[] {
     }
     if (u.runs > shown.length) out.push(`  … ${u.runs - shown.length} more in report.json`);
   }
+  const mcp = mcpUse(results);
+  if (mcp !== undefined) out.push(`MCP tool calls: ${mcpUseText(mcp)}`);
+  const failures = failureLine(results);
+  if (failures !== undefined) out.push(failures);
   return out;
 }
 

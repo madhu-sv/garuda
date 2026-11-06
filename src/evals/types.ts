@@ -77,4 +77,10 @@ export interface EvalResult {
   changed?: string[];
   /** The changed files that the task did not need. Absent when its expected files are unknown. */
   unexpected?: string[];
+  /** Calls of the `--mcp` server's tools in the run (0.17). Absent without `--mcp`. */
+  mcpCalls?: number;
+  /** Runs of this task that the provider stalled and that ran again (0.18.2). Their spending is in. */
+  providerStalls?: number;
+  /** The names of the tools the agent called, in order (0.17, T11d: the proposer's input). */
+  tools?: string[];
 }

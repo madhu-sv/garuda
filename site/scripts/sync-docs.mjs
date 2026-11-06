@@ -19,6 +19,8 @@ const pages = new Map([["README.md", "guide/index"]]);
 for (const file of walk(join(repo, "docs"))) {
   const path = posix.normalize(relative(repo, file).split("\\").join("/"));
   if (!path.endsWith(".md")) continue;
+  // Published eval runs (0.18.1): raw data with its own README, read on GitHub, not site pages.
+  if (path.startsWith("docs/quality-baseline/evals/")) continue;
   const inner = path.slice("docs/".length, -".md".length).replace(/(^|\/)README$/, "$1index");
   pages.set(
     path,

@@ -164,7 +164,13 @@ export class ToolRegistry implements ToolRunner {
           : await context.hooks.after(hookCall, outcome, context.signal);
       // The usage report does not depend on hooks: the child run has happened either way.
       const subagent = tool.report?.(output);
-      return subagent === undefined ? final : { ...final, subagent };
+      // The receipt's facts do not depend on hooks either: the command ran (UX U1).
+      const command = tool.commandFacts?.(output);
+      return {
+        ...final,
+        ...(subagent === undefined ? {} : { subagent }),
+        ...(command === undefined ? {} : { command }),
+      };
     } catch (error) {
       if (context.signal.aborted) throw error;
       // The team policy requires the audit log and it cannot be written (0.14, review): the call

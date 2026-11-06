@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { networkConsent, networkHash, nodeBinary } from "../src/app/network.js";
+import { networkConsent, networkHash, networkKeepHint, nodeBinary } from "../src/app/network.js";
 import { Runtime } from "../src/app/runtime.js";
 import { prepareJob } from "../src/cli/jobCommand.js";
 import { runEvalTask } from "../src/evals/runner.js";
@@ -11,6 +11,7 @@ import { createJob } from "../src/jobs/create.js";
 import { git } from "../src/jobs/git.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import type { ModelRequest } from "../src/model/types.js";
+import { presetFor } from "../src/net/allowlist.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { parseSettings } from "../src/permissions/settings.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../src/permissions/types.js";
@@ -48,6 +49,41 @@ function lastResult(request: ModelRequest | undefined): string {
 }
 
 describe("network allowlist: the parts (0.13)", () => {
+  it("UX U2: a host maps to its preset for the keep hint; any other host stays itself", () => {
+    expect(presetFor("registry.npmjs.org")).toBe("npm");
+    expect(presetFor("Files.Pythonhosted.org")).toBe("pypi");
+    expect(presetFor("example.com")).toBeUndefined();
+    expect(networkKeepHint("registry.npmjs.org")).toBe(
+      'registry.npmjs.org works for commands in this session. To keep it for this project, add "npm" to "network.allow" in .garuda/settings.json.',
+    );
+  });
+
+  it("UX U2: watch mode needs an OS sandbox; with none it starts nothing", async () => {
+    const { home, root } = dirs();
+    const approver = new Scripted([]);
+    const runtime = await Runtime.create({
+      root,
+      modelId: "claude-sonnet-5",
+      model: async () =>
+        new FakeModelClient([
+          reply([toolUse("bash", { command: "true" }, "b1")]),
+          reply([text("ok")]),
+        ]),
+      approver,
+      store: new FileSessionStore(root),
+      settings: parseSettings({ executor: "host" }),
+      mcp: false,
+      hooks: false,
+      profiles: [],
+      network: { home, watch: true },
+    });
+    await runtime.runTurn("go", AbortSignal.timeout(30_000));
+    expect(runtime.networkAllowlist()).toEqual([]);
+    // The host executor asks for the command itself; nothing asks about the network.
+    expect(approver.requests.every((r) => r.tool !== "network")).toBe(true);
+    await runtime.close();
+  });
+
   it("rejects a settings entry that is neither a preset nor a host", () => {
     expect(parseSettings({ network: { allow: ["npm", "api.example.com"] } }).network).toEqual({
       allow: ["npm", "api.example.com"],
@@ -146,6 +182,53 @@ describe.runIf(sandboxed && curl)("network allowlist in the runtime (0.13)", () 
     expect(second.notices.filter((t) => t.startsWith("Network for commands"))).toHaveLength(1);
     expect(second.result).toMatch(/blocked allowed\.test:8080: only ports 80 and 443/);
   }, 60_000);
+
+  it("UX U2: a chat with no list watches; a needed host asks, with no consent first", async () => {
+    const run = async (approver: Approver, watch: boolean) => {
+      const { home, root } = dirs();
+      const model = new FakeModelClient([
+        reply([toolUse("bash", { command: curlCode("http://other.test/") }, "b1")]),
+        reply([text("Done.")]),
+      ]);
+      const notices: string[] = [];
+      const runtime = await Runtime.create({
+        root,
+        modelId: "claude-sonnet-5",
+        model: async () => model,
+        approver,
+        store: new FileSessionStore(root),
+        settings: parseSettings({ executor: "os" }),
+        mcp: false,
+        hooks: false,
+        profiles: [],
+        network: { home, watch },
+        onNotice: (t) => notices.push(t),
+      });
+      await runtime.runTurn("go", AbortSignal.timeout(30_000));
+      const receipt = runtime.lastReceipt;
+      await runtime.close();
+      return { notices, receipt, result: lastResult(model.requests[1]) };
+    };
+    const denied = new Scripted(["deny"]);
+    const first = await run(denied, true);
+    // No consent question: an empty list opens nothing. Only the host asks.
+    expect(denied.requests.map((r) => r.title)).toEqual(["Let a command reach other.test?"]);
+    expect(denied.requests[0]?.preview).toMatch(/Commands have no network unless you allow a host/);
+    expect(first.result).toMatch(/blocked other\.test:80/);
+    expect(first.receipt?.commands.blockedHosts).toEqual(["other.test"]);
+
+    const allowed = new Scripted(["session"]);
+    const second = await run(allowed, true);
+    expect(second.notices).toContain(
+      'other.test works for commands in this session. To keep it for this project, add "other.test" to "network.allow" in .garuda/settings.json.',
+    );
+
+    // The negative control: without watch mode (-p, jobs, evals) nothing asks, as before.
+    const quiet = new Scripted([]);
+    const third = await run(quiet, false);
+    expect(quiet.requests).toEqual([]);
+    expect(third.receipt?.commands.blockedHosts).toEqual([]);
+  }, 90_000);
 
   it("a denied consent leaves commands with no network and no proxy", async () => {
     const { home, root } = dirs();

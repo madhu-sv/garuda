@@ -1,9 +1,10 @@
+import { hasReceipt } from "../app/receipt.js";
 import type { Runtime } from "../app/runtime.js";
 import type { AgentResult } from "../loop/runAgent.js";
 import { pendingChildTokens } from "../session/session.js";
 import { describeError } from "./errors.js";
 import type { Renderer } from "./renderer.js";
-import { stopMessage, usageLine } from "./report.js";
+import { chatStopMessage, stopMessage, usageLine } from "./report.js";
 
 /** Something that can stop the turn on Ctrl-C: the terminal approver. */
 export interface Interruptible {
@@ -28,12 +29,14 @@ export async function runTurnInTerminal(
   exitNow: () => never,
   /** Told when the turn starts and ends: the chat's notifier (0.6). */
   watcher?: TurnWatcher,
+  /** chat: a stop says what to type next, not which flag to use (UX U3). */
+  options: { chat?: boolean } = {},
 ): Promise<TurnOutcome> {
   const started = performance.now();
   watcher?.turnStarted();
   let outcome: TurnOutcome | undefined;
   try {
-    outcome = await runTurn(runtime, approver, renderer, prompt, exitNow);
+    outcome = await runTurn(runtime, approver, renderer, prompt, exitNow, options);
     return outcome;
   } finally {
     watcher?.turnEnded(outcome, performance.now() - started);
@@ -52,6 +55,7 @@ async function runTurn(
   renderer: Renderer,
   prompt: string,
   exitNow: () => never,
+  options: { chat?: boolean },
 ): Promise<TurnOutcome> {
   const controller = new AbortController();
   const stop = () => {
@@ -76,11 +80,20 @@ async function runTurn(
         session.unreportedTokens > unreportedBefore ||
         pendingChildTokens(session) > pendingBefore ||
         (session.costIncomplete && !incompleteBefore);
-      renderer.info(
-        `\n[${usageLine(result, session, runCost, runtime.limits.contextWindow, runIncomplete)}]`,
-      );
+      // UX U1 (decision D1): a receipt for a turn that changed files or ran commands.
+      const receipt = runtime.lastReceipt;
+      if (receipt !== undefined && hasReceipt(receipt) && renderer.receipt !== undefined) {
+        renderer.receipt(receipt);
+      } else {
+        renderer.info(
+          `\n[${usageLine(result, session, runCost, runtime.limits.contextWindow, runIncomplete)}]`,
+        );
+      }
     }
-    const message = stopMessage(result.stopReason, runtime.limits);
+    const message = (options.chat === true ? chatStopMessage : stopMessage)(
+      result.stopReason,
+      runtime.limits,
+    );
     if (message !== undefined) renderer.warn(message);
     return { kind: "done", result };
   } catch (error) {

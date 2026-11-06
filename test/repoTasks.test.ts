@@ -3,8 +3,10 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -21,11 +23,12 @@ import {
   type RepoSuite,
   repoEvalTasks,
   repoPrompt,
+  repoTaskWritePaths,
   saveRepoSuite,
   scopedTestCommand,
   skipReason,
 } from "../src/evals/repoTasks.js";
-import { runEvalTask } from "../src/evals/runner.js";
+import { checkAsEval, repoTaskSandbox, runEvalTask } from "../src/evals/runner.js";
 import { git } from "../src/jobs/git.js";
 import { cleanArgs } from "../src/jobs/worktree.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
@@ -271,6 +274,46 @@ describe("repo tasks: the suite from git (0.12)", () => {
     await saveRepoSuite(suite);
   });
 
+  it("leaves out a task whose tests fail as an eval runs them, and says why (0.18.2)", async () => {
+    const calls: [string, string][] = [];
+    const refused = await buildRepoSuite(host, root, {
+      testCommand: "node --test",
+      evalCheck: async (sha, check) => {
+        calls.push([sha, check]);
+        return { ok: false, tail: "Error: cannot start a sandbox in the sandbox" };
+      },
+    });
+    // Only a commit that passed both host checks reaches the eval check.
+    expect(calls).toEqual([[shas["Add mul"], "node --test test/mul.test.js"]]);
+    expect(refused.suite.tasks).toEqual([]);
+    expect(
+      refused.skipped["the tests fail as an eval runs them (a task copy, in the sandbox)"],
+    ).toBe(1);
+    expect(refused.evalFailure).toEqual({
+      sha: shas["Add mul"],
+      command: "node --test test/mul.test.js",
+      tail: "Error: cannot start a sandbox in the sandbox",
+    });
+    const kept = await buildRepoSuite(host, root, {
+      testCommand: "node --test",
+      evalCheck: async () => ({ ok: true, tail: "" }),
+    });
+    expect(kept.suite.tasks.map((t) => t.subject)).toEqual(["Add mul"]);
+    expect(kept.evalFailure).toBeUndefined();
+  }, 60_000);
+
+  it("checks a commit as an eval does: in a copy, with no model; it fails where the tests fail", async () => {
+    const at = await checkAsEval(root, shas["Add mul"] ?? "", "node --test test/mul.test.js");
+    expect(at.ok).toBe(true);
+    // At the parent the test file is not there: the check fails, and says so.
+    const before = await checkAsEval(root, shas.Initial ?? "", "node --test test/mul.test.js");
+    expect(before.ok).toBe(false);
+    expect(before.tail).not.toBe("");
+    // The checkout did not change (an earlier test saved the suite in .garuda).
+    const status = await git(host, root, ["status", "--porcelain", "--", ".", ":!.garuda"]);
+    expect(status.stdout).toBe("");
+  }, 60_000);
+
   it("runs a repo task in a worktree at the parent, and passes when the agent makes the change", async () => {
     const [task] = repoEvalTasks(suite);
     if (task === undefined) throw new Error("no task");
@@ -319,10 +362,40 @@ describe("repo tasks: the suite from git (0.12)", () => {
     });
     expect(result.passed).toBe(false);
     expect(result.reason).toMatch(/changed protected files: test\/mul\.test\.js/);
-    // --keep leaves the worktree: the user can look at it, and git still knows it.
+    // --keep leaves the task's copy for the user to look at (0.18.1: a copy, not a worktree).
     const list = await git(host, root, ["worktree", "list", "--porcelain"]);
-    const kept = /^worktree (.+garuda-repo-task-.+)$/m.exec(list.stdout)?.[1];
-    expect(kept !== undefined && existsSync(join(kept, "test", "mul.test.js"))).toBe(true);
-    await git(host, root, ["worktree", "remove", "--force", kept as string]);
+    expect(list.stdout.match(/^worktree /gm)).toHaveLength(1);
+    const kept = readdirSync(tmpdir())
+      .filter((n) => n.startsWith("garuda-repo-task-"))
+      .map((n) => join(tmpdir(), n))
+      .sort((x, y) => statSync(y).mtimeMs - statSync(x).mtimeMs)[0] as string;
+    expect(existsSync(join(kept, "test", "mul.test.js"))).toBe(true);
+    // The negative control of the leak: the copy has one commit, and the task's own commit (the
+    // answer) is not in it. In a worktree, `git show <sha>` printed the answer.
+    const log = await git(host, kept, ["log", "--all", "--oneline"]);
+    expect(log.stdout.trim().split("\n")).toHaveLength(1);
+    const answer = await git(host, kept, ["cat-file", "-t", task.repo?.sha as string], {
+      check: false,
+    });
+    expect(answer.exitCode).not.toBe(0);
+    rmSync(kept, { recursive: true, force: true });
   }, 60_000);
+});
+
+describe("repo tasks: caches in node_modules (0.18.2)", () => {
+  it("lets commands write Vite's and other caches in the linked node_modules, as real paths", () => {
+    const project = join(base, "cache-project");
+    const deps = join(base, "cache-deps");
+    mkdirSync(join(deps, "vitest"), { recursive: true });
+    mkdirSync(project, { recursive: true });
+    symlinkSync(deps, join(project, "node_modules"), "dir");
+    const paths = repoTaskWritePaths(project);
+    // vitest.config.ts compiles into node_modules/.vite-temp: without it, 10 of 30 tasks failed.
+    expect(paths).toEqual([join(deps, ".vite-temp"), join(deps, ".vite"), join(deps, ".cache")]);
+    for (const path of paths) expect(existsSync(path)).toBe(true);
+    expect(repoTaskSandbox(project, join(base, "nohome")).writePaths).toEqual(paths);
+    // Only those: the rest of node_modules stays read-only.
+    expect(paths).not.toContain(deps);
+    expect(repoTaskWritePaths(join(base, "no-modules"))).toEqual([]);
+  });
 });

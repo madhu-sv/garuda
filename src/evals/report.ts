@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
 import { arch, platform, release } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { BUILD_COMMIT } from "../buildInfo.js";
-import { git } from "../jobs/git.js";
-import { HostExecutor } from "../sandbox/host.js";
 import { VERSION } from "../version.js";
+import { failureSummary } from "./runner.js";
+
+// Moved to src/buildCheck.ts (0.18.1: the chat warns too); kept here for the eval code.
+export { garudaCommit, staleBuildNote } from "../buildCheck.js";
+
+import { garudaCommit } from "../buildCheck.js";
 import {
   byTask,
   consistency,
@@ -48,24 +49,6 @@ export function taskHash(task: EvalTask): string {
   return createHash("sha256").update(JSON.stringify(data)).digest("hex");
 }
 
-/** Garuda's git commit when it runs from a checkout; undefined from the npm package. */
-export async function garudaCommit(): Promise<string | undefined> {
-  let dir: string;
-  try {
-    dir = dirname(fileURLToPath(import.meta.url));
-  } catch {
-    return undefined;
-  }
-  for (let i = 0; i < 4; i++) {
-    if (existsSync(join(dir, ".git"))) {
-      const r = await git(new HostExecutor(), dir, ["rev-parse", "HEAD"], { check: false });
-      return r.exitCode === 0 ? r.stdout.trim() : undefined;
-    }
-    dir = dirname(dir);
-  }
-  return undefined;
-}
-
 export interface ReportMetadata {
   model: string;
   provider: string;
@@ -75,6 +58,10 @@ export interface ReportMetadata {
   shuffle: boolean;
   /** --split (T11c): dev, heldout or all. A held-out score is only valid with unchanged hashes. */
   split?: string;
+  /** The `--addendum` file and its text (0.17, T11d); the report keeps a hash of the text. */
+  addendum?: { file: string; text: string };
+  /** The `--mcp` server and its prepare command (0.17); absent without one. */
+  mcp?: { server: string; prepare?: string };
   /** The agent (T11b): Garuda, or the Claude Code baseline with its version. */
   agent?: { name: string; version?: string };
 }
@@ -91,12 +78,6 @@ export function buildFields(build: string | undefined, checkout: string | undefi
     ...(commit === undefined ? {} : { commit }),
     ...(build !== undefined && checkout !== undefined && checkout !== build ? { checkout } : {}),
   };
-}
-
-/** A warning when the build is older than the checkout: run pnpm build first. */
-export function staleBuildNote(build: string | undefined, checkout: string | undefined) {
-  if (build === undefined || checkout === undefined || build === checkout) return undefined;
-  return `This build is from commit ${build.slice(0, 7)}, but the checkout is at ${checkout.slice(0, 7)}. The tasks and the code that run are the older ones: run pnpm build first.`;
 }
 
 /** The version 2 fields: metadata, task hashes, the run order and the evidence. */
@@ -118,6 +99,21 @@ export async function reportV2(
     seed: meta.seed,
     shuffle: meta.shuffle,
     split: meta.split ?? "dev",
+    addendum:
+      meta.addendum === undefined
+        ? null
+        : {
+            file: meta.addendum.file,
+            chars: meta.addendum.text.length,
+            sha256: createHash("sha256").update(meta.addendum.text).digest("hex"),
+          },
+    mcp:
+      meta.mcp === undefined
+        ? null
+        : {
+            server: meta.mcp.server,
+            ...(meta.mcp.prepare === undefined ? {} : { prepare: meta.mcp.prepare }),
+          },
     order: results.map((r) => ({ id: r.id, attempt: r.attempt ?? 1 })),
     tasks: Object.fromEntries(tasks.map((t) => [t.id, taskHash(t)])),
     evidence: {
@@ -127,6 +123,7 @@ export async function reportV2(
       stepsSd: Object.fromEntries(byTask(results).map((t) => [t.id, stepsSd(t.results) ?? null])),
       costPerAcceptedChange: costPerPass(results),
       unexpected: unexpectedChanges(results),
+      failures: failureSummary(results),
     },
   };
 }

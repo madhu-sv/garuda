@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { basename, delimiter, join } from "node:path";
-import { describeAllowlist } from "../net/allowlist.js";
+import { describeAllowlist, presetFor } from "../net/allowlist.js";
 import type { ApprovalRequest } from "../permissions/types.js";
 import type { Isolation } from "../sandbox/types.js";
 
@@ -23,6 +23,15 @@ export function networkNote(entries: readonly string[], strict = false): string 
       ? "For any other host, also run the command in the sandbox: Garuda asks the user for that host, and the result says if it was blocked."
       : "For any other host, also run the command in the sandbox: Garuda asks the user for that host, and the result says if it was blocked. Use outside_sandbox only when the sandbox blocks something else (a write outside the project).",
   ].join("\n");
+}
+
+/**
+ * After the user allowed a host for the session (UX U2): the line that keeps it for this project.
+ * Garuda does not write it: the settings file is the user's, and a review sees the line.
+ */
+export function networkKeepHint(host: string): string {
+  const entry = presetFor(host) ?? host;
+  return `${host} works for commands in this session. To keep it for this project, add "${entry}" to "network.allow" in .garuda/settings.json.`;
 }
 
 /** The question before the proxy starts: the project's list, with each preset's hosts. */

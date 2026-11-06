@@ -73,6 +73,21 @@ Conversation rules (`src/session/undo.ts`):
 The question says that files which `.gitignore` covers (build output) are not in undo (0.14.1, review):
 "No file changes" read as if the turn had changed nothing.
 
+## `/rewind` (UX U6, 0.18.1)
+
+- `UndoPoint` also keeps `at` (the snapshot time; from the record's `t` on resume) and `costUsd`
+  (from the turn's receipt). `chat/rewind.ts` lists the points newest first.
+- `/rewind <n>` (`UndoCoordinator.rewind`): one snapshot of now, the changes from now to point
+  n−1, one question (`rewindQuestion`), one `read-tree` restore. Then `undoTurn` for each point from
+  the last to n−1, each with `after` = the next point's tree (now for the last): the redo stack then
+  holds each turn's files after it, so `/redo` brings the turns back in order. The records are the
+  usual `undo` records, so resume and replay give the same state.
+- `/rewind fork <n>` (`restoreForFork`, `Runtime.fork`): the same question and restore, then
+  `newSession()`; the new session's first records are `start`, `fork` (`from`: the old session and
+  the turn; `messages`: the old messages before the turn) and a `title`. `rebuildState` takes the
+  messages from `fork` as from a compaction. The old session file does not change. A point with
+  `conversation: false` (before a compaction) cannot fork.
+
 ## `/diff` (0.6)
 
 `Runtime.diff(scope, path)` compares a base snapshot with a new one taken now (so the user's own changes

@@ -78,3 +78,21 @@ export function stopMessage(
       return "Stopped: the model refused the request.";
   }
 }
+
+/**
+ * Why a chat turn stopped, and what to type next (UX U3). After the step limit the chat asks how
+ * to go on (`stopHandoff`), so the text does not name a flag.
+ */
+export function chatStopMessage(
+  reason: AgentStopReason,
+  limits: { maxSteps: number; tokenBudget: number },
+): string | undefined {
+  switch (reason) {
+    case "max_steps":
+      return `■ Stopped at the step limit (${limits.maxSteps}). The task is not finished.`;
+    case "repeated_calls":
+      return "■ Stopped: the agent made the same tool call 3 times in a row, so it may be stuck. Type a hint as your next message, and it goes on from there.";
+    default:
+      return stopMessage(reason, limits);
+  }
+}
