@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.18.1 (2026-11-06)
+
+A security release. In 0.18.0 and earlier, a command in the OS sandbox could read your personal
+folders (Documents, Downloads, Pictures and the Photos library, Mail and the like), and on macOS it
+could reach denied paths through `/System/Volumes/Data`. Update to 0.18.1. It also has the UX work
+of docs/lld/ux.md (receipts, a network question, `/rewind`, word-level diffs, the morning brief,
+`/export --html`, `garuda advise` and more) and eval failure kinds.
 
 - Security: sandboxed commands can no longer read your personal folders: Desktop, Documents,
   Downloads, Movies, Music, Pictures (with the Photos library), Public, and Mail, Messages, Safari,
