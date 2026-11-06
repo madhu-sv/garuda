@@ -54,7 +54,10 @@ bytes came while the model thought, and Node's fetch closed the stream after 300
 (`UND_ERR_BODY_TIMEOUT`); a Fable review lost its final answer three times.
 The summaries alone were not enough (a later review still timed out), so the Anthropic clients use
 their own fetch (`clientOptions`, `streamFetch`: undici's fetch with an `Agent` whose `bodyTimeout`
-is `STREAM_IDLE_MS`, 20 minutes). The SDK's own 10-minute timeout until the response starts stays. They are left
+is `STREAM_IDLE_MS`, 20 minutes, and `allowH2: false`). The SDK's own 10-minute timeout until the
+response starts stays. undici 8 (0.18.3) would use HTTP/2 with the API, which offers it; the idle
+limit was built and checked on HTTP/1.1, so `STREAM_ALLOW_H2` keeps that until a check of long,
+quiet streams on HTTP/2. They are left
 out (`thinking.ts`, `withoutThinking`) only where they cannot go back unchanged: after `/models` (a
 signature belongs to its model), on a resume with another model, when redaction changed one on
 disk (a thinking-only answer is then left out: empty content is refused), and on a resume after a message that redaction changed (the signature binds the content before

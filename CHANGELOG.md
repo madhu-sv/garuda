@@ -7,6 +7,9 @@
   `Authorization: Bearer`. Garuda's requests needed no change: they send no `temperature`,
   `top_p` or `top_k`, which that version refuses. A proxy in front of the API that reads
   `X-Api-Key` must read `Authorization` now.
+- undici is 8.12 (was 7.30). Its HTTP/2 default stays off for model requests: Garuda's
+  20-minute wait for quiet streams was checked on HTTP/1.1. undici 8 needs Node.js 22.19 or newer;
+  Garuda already needs 22.23.4.
 - Security: sandboxed commands can no longer read `~/.config/anthropic/credentials`, where the `ant`
   CLI stores keys. The SDK 1.x reads them too when it has no key.
 
