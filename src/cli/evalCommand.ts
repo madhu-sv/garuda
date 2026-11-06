@@ -106,7 +106,16 @@ export interface EvalCommandOptions {
   addendum?: string;
   /** UX U8: `garuda advise` picks the run folder; default .garuda/evals/<run-id>. */
   outDir?: string;
+  /**
+   * `garuda advise` (0.18.2): each result line starts with "[<label> 12/30]", and the tool-call
+   * lines are left out (with runs in parallel, they mix).
+   */
+  progress?: string;
 }
+
+/** "[haiku 12/30] " before a result line for `garuda advise`; "" without a label. */
+export const progressHead = (label: string | undefined, done: number, total: number): string =>
+  label === undefined ? "" : `[${label} ${done}/${total}] `;
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
 export const BATCH_TASK_TIMEOUT_MS = 12 * 60 * 60_000;
@@ -396,6 +405,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     );
   }
   const started = Date.now();
+  let done = 0;
   const results = await runEvals(
     tasks,
     {
@@ -426,7 +436,9 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       executor: executor.name === "host" ? "host" : "os",
       ...(options.keep ? { keep: true } : {}),
       onEvent: (taskId, event) => {
-        if (event.type === "tool_call") process.stderr.write(`  [${taskId}] ${event.call.name}\n`);
+        if (event.type === "tool_call" && options.progress === undefined) {
+          process.stderr.write(`  [${taskId}] ${event.call.name}\n`);
+        }
         // For example the output limit (0.12): shows when a run recovered from a cut-off response.
         if (event.type === "notice") process.stderr.write(`  [${taskId}] ${event.text}\n`);
         if (event.type === "model_retry")
@@ -435,10 +447,13 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
           );
       },
     },
-    (r) =>
+    (r) => {
+      done++;
+      const head = progressHead(options.progress, done, tasks.length);
       process.stderr.write(
-        `${r.passed ? "✓" : "✗"} ${r.id}: ${r.passed ? "pass" : "fail"} (${r.steps} steps)${r.reason ? `\n    ${r.reason.split("\n").slice(0, 3).join("\n    ")}` : ""}\n`,
-      ),
+        `${head}${r.passed ? "✓" : "✗"} ${r.id}: ${r.passed ? "pass" : "fail"} (${r.steps} steps)${r.reason ? `\n    ${r.reason.split("\n").slice(0, 3).join("\n    ")}` : ""}\n`,
+      );
+    },
     // A refused key or an unreachable API fails every run: stop at the first one (0.17).
     isSetupFailure,
   );

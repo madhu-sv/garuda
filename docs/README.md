@@ -43,7 +43,7 @@ Low-level design documents:
 | Editors over ACP (0.15) | `src/acp/`, `src/cli/acpCommand.ts` | [acp.md](lld/acp.md) |
 | Bounded changes: staged commands, job write scopes, strict profile, audit checkpoint, shared budget | `src/sandbox/`, `src/permissions/`, `src/jobs/`, `src/audit/`, `src/agents/`, `src/knowledge/` | [bounded-changes.md](lld/bounded-changes.md) |
 | Setup and stored keys (0.16) | `src/model/credentials.ts`, `src/model/providers.ts`, `src/cli/setupCommand.ts` | [setup.md](lld/setup.md) |
-| UX: receipts, network questions, the step-limit question; planned: rewind, morning brief, `advise` | `src/app/receipt.ts`, `src/cli/`, `src/net/`, `src/jobs/`, `src/evals/` | [ux.md](lld/ux.md) |
+| UX: receipts, network questions, the step-limit question, rewind, the morning brief, `advise` | `src/app/receipt.ts`, `src/cli/`, `src/net/`, `src/jobs/`, `src/evals/` | [ux.md](lld/ux.md) |
 
 The requirements doc defines the IDs used here: F1–F26 (functional) and N1–N8 (non-functional).
 The code, the tests and the commits use the same IDs. The documents describe Garuda as it is now; what each release changed is in

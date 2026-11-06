@@ -3,6 +3,19 @@
 ## Unreleased
 
 - The Homebrew formula in the repository names 0.18.1 and its tarball hash.
+- `garuda advise` runs 4 tasks at a time (`--parallel <n>`); each result line starts with the
+  model and a count, as in `[haiku-5-5 12/30] ✓ fix-parser: pass`. The first real run, one at a
+  time, took 64 minutes for 30 tasks.
+- `advise` reuses an earlier run of a model when the model, the task hashes, `--repeat`, `--seed`
+  and the Garuda version are the same and every run is there. Runs of 0.18.0 and before are not
+  reused: they could read your checkout (the 0.18.1 fix).
+- The cost estimate comes from the mean cost of earlier runs of the model on the same tasks; with
+  none, from the other model's runs scaled by the input price; else the token guess. Each line
+  says which.
+- When the estimate or the first model's real cost passes `--max-cost`, `advise` prints the
+  command that goes on (`garuda advise --models a,b --repeat R --seed S --max-cost N`). The first
+  model's run is kept and reused.
+- `advise` stops when a run fails to start (for example a refused key), not at a missing report.
 
 ## 0.18.1 (2026-11-06)
 

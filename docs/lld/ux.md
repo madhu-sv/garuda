@@ -471,6 +471,16 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   option), stops before the second model when the first one's cost and the price ratio would pass
   `--max-cost`, then `compareReports` and `adviceText`. `report.html` is the comparison and the
   advice, escaped, with the same policy.
+- **U8 follow-ups (0.18.2).** `ADVISE_PARALLEL` = 4 goes to `runEvalCommand` as `parallel`, with
+  a `progress` label: `progressHead` puts "[label n/total] " before each result line, and the
+  tool-call lines are left out, since parallel runs mix them. `pastRuns` reads `report.json` in
+  each `.garuda/evals/*` folder and its `a` and `b` subfolders, newest first. `reusableRun` takes
+  the newest with the same `spec`, `garuda.version` (this keeps out the 0.18.0 runs that could read
+  the checkout), suite `repo`, repeat, seed, equal `taskHash` maps, and `tasks × repeat` results.
+  `costEstimate` uses `pastCostPerRun` (the mean `costUsd` on the same hashes; unknown when one
+  run has no cost), else the other model's mean times the input price ratio, else `estimateUsd`.
+  `continueCommand` prints the next command with the cap × 1.25, rounded up. An eval exit code of
+  1 (a setup error) stops `advise`; 2 (some runs fail) does not.
 
 ## Also built: the start screen (0.18.1)
 

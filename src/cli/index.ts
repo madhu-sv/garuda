@@ -238,6 +238,7 @@ async function main(): Promise<void> {
       Number(v),
     )
     .option("--seed <n>", "seed for the run order and the intervals (default 1)", (v) => Number(v))
+    .option("--parallel <n>", "runs at the same time (default 4)", (v) => Number(v))
     .option("--yes", "start without the question")
     .action(async (options) => {
       const { runAdvise } = await import("./advise.js");

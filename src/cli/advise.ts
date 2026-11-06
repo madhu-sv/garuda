@@ -1,12 +1,15 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { type Comparison, compareReports, formatComparison, loadReport } from "../evals/compare.js";
+import { taskHash } from "../evals/report.js";
 import { repoEvalTasks } from "../evals/repoTasks.js";
 import { costPerPass } from "../evals/stats.js";
+import type { EvalResult } from "../evals/types.js";
 import type { Price } from "../model/pricing.js";
 import { loadModelsConfig, resolveModel } from "../model/providers.js";
 import { newSessionId } from "../session/store.js";
+import { VERSION } from "../version.js";
 import { escapeHtml } from "./exportHtml.js";
 
 /**
@@ -80,6 +83,147 @@ export interface AdviseOptions {
   seed?: number;
   /** --yes: start without the question. */
   yes?: boolean;
+  /** --parallel <n>: runs at the same time (0.18.2, default 4). */
+  parallel?: number;
+}
+
+/** Runs at the same time (0.18.2): one at a time took 64 minutes for 30 repo tasks. */
+export const ADVISE_PARALLEL = 4;
+
+/** An earlier eval run, from its report.json. */
+export interface PastRun {
+  path: string;
+  model: string | undefined;
+  version: string | undefined;
+  suite: string | undefined;
+  repeat: number | undefined;
+  seed: number | undefined;
+  tasks: Record<string, string> | undefined;
+  results: EvalResult[];
+  mtimeMs: number;
+}
+
+/** The eval runs in `.garuda/evals`: run folders, and the a and b folders of advise runs. */
+export function pastRuns(evalsDir: string): PastRun[] {
+  const folders: string[] = [];
+  try {
+    for (const name of readdirSync(evalsDir)) {
+      const path = join(evalsDir, name);
+      folders.push(path, join(path, "a"), join(path, "b"));
+    }
+  } catch {
+    return [];
+  }
+  const out: PastRun[] = [];
+  for (const folder of folders) {
+    const file = join(folder, "report.json");
+    try {
+      const data = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+      const garuda = data.garuda as { version?: unknown } | undefined;
+      out.push({
+        path: folder,
+        model:
+          typeof data.spec === "string"
+            ? data.spec
+            : typeof data.model === "string"
+              ? data.model
+              : undefined,
+        version: typeof garuda?.version === "string" ? garuda.version : undefined,
+        suite: typeof data.suite === "string" ? data.suite : undefined,
+        repeat: typeof data.repeat === "number" ? data.repeat : undefined,
+        seed: typeof data.seed === "number" ? data.seed : undefined,
+        tasks:
+          typeof data.tasks === "object" && data.tasks !== null
+            ? (data.tasks as Record<string, string>)
+            : undefined,
+        results: Array.isArray(data.results) ? (data.results as EvalResult[]) : [],
+        mtimeMs: statSync(file).mtimeMs,
+      });
+    } catch {
+      // No report here, or a broken one.
+    }
+  }
+  return out.sort((x, y) => y.mtimeMs - x.mtimeMs);
+}
+
+const sameTasks = (a: Record<string, string> | undefined, b: Record<string, string>) =>
+  a !== undefined &&
+  Object.keys(a).length === Object.keys(b).length &&
+  Object.entries(b).every(([id, hash]) => a[id] === hash);
+
+/**
+ * An earlier run that advise can use instead of a new one (0.18.2): the same model, the same repo
+ * tasks (by hash), repeat and seed, every run there, and this version of Garuda. The version
+ * matters: runs before 0.18.1 could read the answer from the user's checkout.
+ */
+export function reusableRun(
+  runs: readonly PastRun[],
+  want: {
+    model: string;
+    repeat: number;
+    seed: number;
+    tasks: Record<string, string>;
+    version: string;
+  },
+): PastRun | undefined {
+  const count = Object.keys(want.tasks).length * want.repeat;
+  return runs.find(
+    (r) =>
+      r.model === want.model &&
+      r.version === want.version &&
+      r.suite === "repo" &&
+      r.repeat === want.repeat &&
+      r.seed === want.seed &&
+      sameTasks(r.tasks, want.tasks) &&
+      r.results.length === count,
+  );
+}
+
+/** The mean cost of one run of these tasks with this model, from earlier runs; undefined: none. */
+export function pastCostPerRun(
+  runs: readonly PastRun[],
+  model: string,
+  tasks: Record<string, string>,
+): number | undefined {
+  const results = runs
+    .filter((r) => r.model === model && sameTasks(r.tasks, tasks))
+    .flatMap((r) => r.results);
+  if (results.length === 0 || results.some((r) => r.costUsd === undefined)) return undefined;
+  return results.reduce((sum, r) => sum + (r.costUsd ?? 0), 0) / results.length;
+}
+
+/** The cost of `runs` new runs of a model: from earlier runs, from the other model's by price, or a guess. */
+export function costEstimate(
+  runs: number,
+  own: number | undefined,
+  other: { perRun: number | undefined; priceRatio: number | undefined },
+  price: Price | undefined,
+): { usd: number | undefined; how: string } {
+  if (own !== undefined) return { usd: own * runs, how: "from earlier runs" };
+  if (other.perRun !== undefined && other.priceRatio !== undefined) {
+    return {
+      usd: other.perRun * other.priceRatio * runs,
+      how: "from the other model's runs, by price",
+    };
+  }
+  return { usd: estimateUsd(price, runs), how: "a guess" };
+}
+
+/** The sum, or undefined when one value is unknown. */
+export const sumKnown = (values: readonly (number | undefined)[]): number | undefined =>
+  values.some((v) => v === undefined)
+    ? undefined
+    : values.reduce((sum: number, v) => sum + (v ?? 0), 0);
+
+/** The command that goes on after a stop at the cap; the finished model's run is reused. */
+export function continueCommand(
+  a: string,
+  b: string,
+  repeat: number,
+  seed: number,
+  maxCost: number,
+): string {
+  return `garuda advise --models ${a},${b} --repeat ${repeat} --seed ${seed} --max-cost ${Math.ceil(maxCost)}`;
 }
 
 export async function runAdvise(options: AdviseOptions): Promise<number> {
@@ -96,8 +240,17 @@ export async function runAdvise(options: AdviseOptions): Promise<number> {
   const repeat = options.repeat ?? ADVISE_REPEAT;
   const maxCost = options.maxCost ?? ADVISE_MAX_COST;
   const seed = options.seed ?? 1;
-  if (!Number.isInteger(repeat) || repeat < 1 || !(maxCost > 0)) {
-    process.stderr.write("--repeat must be a whole number of 1 or more, and --max-cost above 0.\n");
+  const parallel = options.parallel ?? ADVISE_PARALLEL;
+  if (
+    !Number.isInteger(repeat) ||
+    repeat < 1 ||
+    !(maxCost > 0) ||
+    !Number.isInteger(parallel) ||
+    parallel < 1
+  ) {
+    process.stderr.write(
+      "--repeat and --parallel must be whole numbers of 1 or more, and --max-cost above 0.\n",
+    );
     return 1;
   }
   const { repoSuite, runEvalCommand } = await import("./evalCommand.js");
@@ -106,7 +259,9 @@ export async function runAdvise(options: AdviseOptions): Promise<number> {
     process.stderr.write(`${suite}\n`);
     return 1;
   }
-  const tasks = repoEvalTasks(suite).length;
+  const repoTasks = repoEvalTasks(suite);
+  const tasks = repoTasks.length;
+  const hashes = Object.fromEntries(repoTasks.map((t) => [t.id, taskHash(t)]));
   const models = await loadModelsConfig();
   if (models.problem !== undefined) {
     process.stderr.write(`${models.problem}\n`);
@@ -119,25 +274,59 @@ export async function runAdvise(options: AdviseOptions): Promise<number> {
     process.stderr.write(`${(error as Error).message}\n`);
     return 1;
   }
+  const evalsDir = join(process.cwd(), ".garuda", "evals");
+  const past = pastRuns(evalsDir);
+  const want = { repeat, seed, tasks: hashes, version: VERSION };
+  const reuse = [
+    reusableRun(past, { ...want, model: a }),
+    reusableRun(past, { ...want, model: b }),
+  ];
   const runs = tasks * repeat;
-  const estimates = prices.map((p) => estimateUsd(p, runs));
-  const total =
-    estimates[0] === undefined || estimates[1] === undefined
-      ? undefined
-      : estimates[0] + estimates[1];
+  const perRun = [pastCostPerRun(past, a, hashes), pastCostPerRun(past, b, hashes)];
+  const ratio = (from: Price | undefined, to: Price | undefined) =>
+    from === undefined || to === undefined ? undefined : to.input / from.input;
+  const estimates = [
+    costEstimate(
+      runs,
+      perRun[0],
+      { perRun: perRun[1], priceRatio: ratio(prices[1], prices[0]) },
+      prices[0],
+    ),
+    costEstimate(
+      runs,
+      perRun[1],
+      { perRun: perRun[0], priceRatio: ratio(prices[0], prices[1]) },
+      prices[1],
+    ),
+  ];
+  const line = (model: string, i: 0 | 1) => {
+    const r = reuse[i];
+    const e = estimates[i];
+    return r !== undefined
+      ? `  ${model}: reuses ${r.path} (Garuda ${r.version}, ${r.results.length} runs)`
+      : `  ${model}: ${runs} runs, ${e?.usd === undefined ? "cost unknown" : `about $${e.usd.toFixed(2)} (${e.how})`}`;
+  };
+  // What the new runs cost: undefined when a model's cost is unknown.
+  const toSpend = sumKnown(
+    [0, 1].filter((i) => reuse[i] === undefined).map((i) => estimates[i]?.usd),
+  );
   process.stderr.write(
     [
       `Your repo: ${tasks} task${tasks === 1 ? "" : "s"} from its history (tests that fail before the commit and pass after it).`,
-      `Models: ${a}, ${b} · ${repeat} run${repeat === 1 ? "" : "s"} a task · ${2 * runs} runs, ${total === undefined ? "cost unknown" : `about $${total.toFixed(2)} (a guess)`}.`,
+      `${repeat} run${repeat === 1 ? "" : "s"} a task, ${parallel} at a time, seed ${seed}:`,
+      line(a, 0),
+      line(b, 1),
       `Cap: --max-cost $${maxCost}; it stops before a model that would pass it.`,
       "",
     ].join("\n"),
   );
-  if (total !== undefined && total > maxCost) {
-    process.stderr.write(`The guess passes the cap: raise --max-cost, or lower --repeat.\n`);
+  if (toSpend !== undefined && toSpend > maxCost) {
+    process.stderr.write(
+      `The estimate passes the cap. To go on: ${continueCommand(a, b, repeat, seed, toSpend * 1.25)}\n`,
+    );
     return 1;
   }
-  if (options.yes !== true) {
+  if (options.yes !== true && (reuse[0] === undefined || reuse[1] === undefined)) {
     if (!process.stdin.isTTY) {
       process.stderr.write("Add --yes to start without a question.\n");
       return 1;
@@ -147,27 +336,61 @@ export async function runAdvise(options: AdviseOptions): Promise<number> {
     rl.close();
     if (!/^y(es)?$/i.test(answer.trim())) return 1;
   }
-  const dir = join(process.cwd(), ".garuda", "evals", `advise-${newSessionId()}`);
+  const dir = join(evalsDir, `advise-${newSessionId()}`);
   mkdirSync(dir, { recursive: true });
-  const run = (model: string, label: string) =>
-    runEvalCommand({ model, suite: "repo", repeat, shuffle: true, seed, outDir: join(dir, label) });
-  await run(a, "a");
-  const first = await loadReport(join(dir, "a"));
-  const spent = costPerPass(first.results);
-  const spentA = spent.kind === "unknown" ? undefined : spent.totalUsd;
-  // The second model's cost from the first one's, by the price ratio.
-  const ratio =
-    prices[0] === undefined || prices[1] === undefined
-      ? undefined
-      : prices[1].input / prices[0].input;
-  if (spentA !== undefined && ratio !== undefined && spentA * (1 + ratio) > maxCost) {
-    process.stderr.write(
-      `Stopped before ${b}: ${a} cost $${spentA.toFixed(2)}, so ${b} would take the total past $${maxCost}.\n`,
-    );
-    return 1;
+  // The report folder, or undefined when the run stopped on an error (eval returns 1; 2 is fails).
+  const runModel = async (
+    model: string,
+    label: "a" | "b",
+    i: 0 | 1,
+  ): Promise<string | undefined> => {
+    const earlier = reuse[i];
+    if (earlier !== undefined) {
+      process.stderr.write(`Reusing ${earlier.path} for ${model}.\n`);
+      return earlier.path;
+    }
+    const outDir = join(dir, label);
+    const code = await runEvalCommand({
+      model,
+      suite: "repo",
+      repeat,
+      shuffle: true,
+      seed,
+      parallel,
+      outDir,
+      progress: model.replace(/^claude-/, ""),
+    });
+    return code === 1 ? undefined : outDir;
+  };
+  const pathA = await runModel(a, "a", 0);
+  if (pathA === undefined) return 1;
+  const first = await loadReport(pathA);
+  if (reuse[0] === undefined && reuse[1] === undefined) {
+    // The second model's cost: its own history, else the first model's actual cost by price.
+    const spent = costPerPass(first.results);
+    const spentA = spent.kind === "unknown" ? undefined : spent.totalUsd;
+    const actualPerRun =
+      spentA === undefined ? undefined : spentA / Math.max(1, first.results.length);
+    const nextB = costEstimate(
+      runs,
+      perRun[1],
+      { perRun: actualPerRun, priceRatio: ratio(prices[0], prices[1]) },
+      prices[1],
+    ).usd;
+    if (spentA !== undefined && nextB !== undefined && spentA + nextB > maxCost) {
+      process.stderr.write(
+        [
+          `Stopped before ${b}: ${a} cost $${spentA.toFixed(2)}, and ${b} would cost about $${nextB.toFixed(2)}, past $${maxCost}.`,
+          `${a}'s run is kept and will be reused. To go on: ${continueCommand(a, b, repeat, seed, nextB * 1.25)}`,
+          "",
+        ].join("\n"),
+      );
+      return 1;
+    }
   }
-  await run(b, "b");
-  const second = await loadReport(join(dir, "b"));
+  const pathB = await runModel(b, "b", 1);
+  if (pathB === undefined) return 1;
+  const second = await loadReport(pathB);
   const result = compareReports(first, second, { seed });
   if ("problems" in result) {
     process.stderr.write(`The two runs cannot be compared:\n${result.problems.join("\n")}\n`);

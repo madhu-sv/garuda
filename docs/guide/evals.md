@@ -212,6 +212,18 @@ difference in passes, the one that costs clearly less per accepted change. With 
 tasks the advice says it is a rough guide. The reports, `advice.txt` and `report.html` are in
 `.garuda/evals/advise-<id>/`.
 
+Since 0.18.2:
+
+- **4 runs at a time.** Change it with `--parallel <n>`. Each result line starts with the model and
+  a count: `[haiku-5-5 12/30] ✓ fix-parser: pass`.
+- **Earlier runs are reused.** A run with the same model, task hashes, `--repeat`, `--seed` and
+  Garuda version, with every run there, is not run again. `advise` prints `Reusing <folder>`.
+  Runs of 0.18.0 and before are never reused.
+- **A better estimate.** It comes from earlier runs of the model on the same tasks, else from the
+  other model's runs by price, else from a token guess. The plan says which.
+- **A command to go on.** When the estimate, or the first model's real cost, passes `--max-cost`,
+  `advise` prints the command to run next, with a higher cap. The first model's run is reused.
+
 ### Benchmark your repo (0.12)
 
 Measure Garuda on your own code. `--from-git` turns recent commits that changed code and tests into
