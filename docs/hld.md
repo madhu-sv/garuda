@@ -1,7 +1,8 @@
 # High-level design
 
-Version 0.18.0 (eval evidence, the Claude Code baseline, a held-out set, an MCP A/B, `eval tune` and few-steps rules in the system prompt; 0.17.0: bounded changes: staged commands, job write scopes, the strict profile, the audit checkpoint, one token budget for the agent tree; the IPI suite and no escaped processes on macOS; a fixed-Node floor and a dependency audit; `garuda setup` and the editor sign-in since 0.16.0; editors over ACP since 0.15.0; on top of 0.14.1: the 0.14–0.17 branches after the merge gate and Garuda's own review of nine areas). This document shows how the parts work together. The component documents in
-[lld/](lld/) give the details.
+This document shows how the parts work together. The component documents in
+[lld/](lld/) give the details. It describes Garuda as it is
+now; what each release changed is in [CHANGELOG.md](../CHANGELOG.md).
 
 ## 1. Modes of use
 

@@ -1,6 +1,10 @@
 import { Box, Static, Text, useInput, usePaste } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { terminalPaint } from "../approver.js";
+import { unifiedDiff } from "../diffView.js";
 import { focusEvent } from "../focus.js";
+import { screenReaderMode } from "../receiptView.js";
+import { contextBar, contextLevel } from "../uiState.js";
 import type { HunkStagingState } from "./hunkStaging.js";
 import { PALETTE_ROWS, type PaletteState, paletteWindow } from "./palette.js";
 import type { ChatState, ChatStore, Item } from "./store.js";
@@ -24,6 +28,7 @@ export function App({ store }: { store: ChatStore }) {
       <Static items={state.items}>{(item) => <ItemView key={item.id} item={item} />}</Static>
       <Box flexDirection="column">
         {state.streaming !== "" && <Text>{state.streaming}</Text>}
+        {state.group !== undefined && <Text>{state.group}</Text>}
         {state.running.map((tool) => (
           <Text key={tool.id}>
             <Text color="cyan">{frame}</Text> {tool.line}
@@ -45,6 +50,11 @@ export function App({ store }: { store: ChatStore }) {
             hasHunks={state.approval.request.selectHunks !== undefined}
           />
         )}
+        {state.plan !== undefined && (
+          <Box marginTop={1}>
+            <Text>{state.plan}</Text>
+          </Box>
+        )}
         {state.queue.map((line, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: queued lines can repeat.
           <Text key={i} dimColor>
@@ -63,18 +73,55 @@ export function App({ store }: { store: ChatStore }) {
   );
 }
 
+/** The bar before each line of the user's request, and the mark before Garuda's answer. */
+export const USER_BAR = "▌";
+/** A border with only its left side: the bar runs down every line, also wrapped ones. */
+const USER_BORDER = {
+  topLeft: "",
+  top: "",
+  topRight: "",
+  left: USER_BAR,
+  right: "",
+  bottomLeft: "",
+  bottom: "",
+  bottomRight: "",
+};
+export const GARUDA_MARK = "✦ ";
+
 function ItemView({ item }: { item: Item }) {
   switch (item.kind) {
     case "user":
+      // The user's request: a bar on every line and bold text (0.18.1: requests and answers looked
+      // alike in a long scrollback). A screen reader hears "You:" instead.
+      if (screenReaderMode()) {
+        return (
+          <Box marginTop={1}>
+            <Text bold>You: {item.text}</Text>
+          </Box>
+        );
+      }
       return (
-        <Box marginTop={1}>
-          <Text bold>› {item.text}</Text>
+        <Box
+          marginTop={1}
+          borderStyle={USER_BORDER}
+          borderColor="cyan"
+          borderTop={false}
+          borderRight={false}
+          borderBottom={false}
+          paddingLeft={1}
+        >
+          <Text bold>{item.text}</Text>
         </Box>
       );
     case "text":
       return (
         <Box marginTop={1}>
-          <Text>{item.text}</Text>
+          <Text>
+            {item.lead === true && (
+              <Text color="yellow">{screenReaderMode() ? "Garuda: " : GARUDA_MARK}</Text>
+            )}
+            {item.text}
+          </Text>
         </Box>
       );
     default:
@@ -100,15 +147,8 @@ export function HunkStagingView({ staging }: { staging: HunkStagingState }) {
       </Box>
       <Text color="cyan">{current.header}</Text>
       <Box flexDirection="column" paddingLeft={1}>
-        {current.lines.map((line, i) => {
-          const color = line.startsWith("+") ? "green" : line.startsWith("-") ? "red" : undefined;
-          return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: diff lines can be identical
-            <Text key={i} {...(color ? { color } : {})}>
-              {line}
-            </Text>
-          );
-        })}
+        {/* UX U5: the changed words of a changed line are marked, as in the approval. */}
+        <Text>{unifiedDiff(current.lines.join("\n"), terminalPaint)}</Text>
       </Box>
       <Text dimColor>
         [y] stage hunk · [n] skip · [a] stage all · [d] discard all · [←/→] prev/next · [Esc] back
@@ -188,11 +228,23 @@ function PaletteView({ palette }: { palette: PaletteState }) {
   );
 }
 
+/** The hint in an empty chat box (0.18.1). */
+export const INPUT_HINT = "Type a task · / for commands · @ for files";
+export const INPUT_HINT_BUSY = "Type to queue the next task · Esc stops this one";
+/** Below this width, or for a screen reader, the input line has no box. */
+export const INPUT_BOX_MIN_COLUMNS = 40;
+
 function InputLine({ state }: { state: ChatState }) {
   const { text, cursor } = state.editor;
   const at = text[cursor];
-  return (
-    <Box marginTop={1}>
+  const line =
+    text === "" ? (
+      <Text>
+        <Text color="cyan">› </Text>
+        <Text inverse> </Text>
+        <Text dimColor>{state.busy ? INPUT_HINT_BUSY : INPUT_HINT}</Text>
+      </Text>
+    ) : (
       <Text>
         <Text color="cyan">› </Text>
         {text.slice(0, cursor)}
@@ -200,31 +252,66 @@ function InputLine({ state }: { state: ChatState }) {
         {at === "\n" ? "\n" : ""}
         {text.slice(cursor + 1)}
       </Text>
+    );
+  if (screenReaderMode() || (process.stdout.columns || 80) < INPUT_BOX_MIN_COLUMNS) {
+    return <Box marginTop={1}>{line}</Box>;
+  }
+  // A visible chat box (0.18.1): full width; its border dims while a turn runs.
+  return (
+    <Box
+      marginTop={1}
+      borderStyle="round"
+      borderColor="cyan"
+      borderDimColor={state.busy}
+      paddingX={1}
+    >
+      {line}
     </Box>
   );
 }
 
 function Footer({ state }: { state: ChatState }) {
+  // One space in, so the footer lines up with the chat box's border.
   const { model, sandbox, contextPercent, costUsd, mode } = state.status;
-  const parts = [model, sandbox];
-  if (contextPercent !== undefined) parts.push(`context ${contextPercent}%`);
-  if (costUsd !== undefined) parts.push(`$${costUsd.toFixed(costUsd < 0.01 ? 4 : 2)}`);
-  const keys = state.busy
-    ? "Esc stop · Ctrl-O output"
-    : "\\ then Enter: new line · Ctrl-G editor · Ctrl-P commands";
+  const keys = footerKeys(state.busy, state.keyHints);
+  const level = contextPercent === undefined ? "ok" : contextLevel(contextPercent);
   return (
     <Text>
+      {" "}
       {mode === "plan" ? (
         <Text color="yellow" bold>
           PLAN{" "}
         </Text>
       ) : null}
+      <Text
+        dimColor
+      >{`${model} · ${sandbox === "no sandbox" ? sandbox : `⛨ ${sandbox.replace(/^sandbox /, "")}`}`}</Text>
+      {contextPercent !== undefined && (
+        <>
+          <Text dimColor> · </Text>
+          {/* UX U10: the number is always there; the color is only a second signal. */}
+          <Text
+            {...(level === "ok"
+              ? { dimColor: true }
+              : { color: level === "full" ? "red" : "yellow" })}
+          >
+            {`${contextBar(contextPercent)} ${contextPercent}%`}
+          </Text>
+        </>
+      )}
       <Text dimColor>
-        {parts.join(" · ")} {"  "}
+        {costUsd === undefined ? "" : ` · $${costUsd.toFixed(costUsd < 0.01 ? 4 : 2)}`}
+        {"  "}
         {keys}
       </Text>
     </Text>
   );
+}
+
+/** The footer's key text (UX U10): full hints in the first chats, then "? keys". */
+export function footerKeys(busy: boolean, hints: boolean): string {
+  if (busy) return "Esc stop · Ctrl-O output";
+  return hints ? "\\ then Enter: new line · Ctrl-G editor · Ctrl-P commands · ? keys" : "? keys";
 }
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -349,7 +436,11 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     if (key.shift) store.toggleMode();
     else store.completeLine();
   } else if (/[\r\n]/.test(input)) typeAhead(store, input);
-  else if (input !== "" && !key.meta) store.editLine({ type: "insert", text: input });
+  // UX U10: "?" on an empty input line shows every key, and is not typed.
+  // The live state: keys typed fast arrive before the view draws again.
+  else if (input === "?" && store.getState().editor.text === "" && !store.getState().busy) {
+    store.showKeys();
+  } else if (input !== "" && !key.meta) store.editLine({ type: "insert", text: input });
 }
 
 /**

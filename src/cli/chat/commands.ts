@@ -21,6 +21,7 @@ import type { Renderer } from "../renderer.js";
 import { budgetNote, formatTokens } from "../report.js";
 import type { PaletteEntry } from "./palette.js";
 import { modeText } from "./plan.js";
+import { rewindList } from "./rewind.js";
 
 /** Chat commands (F2). The plain chat and the Ink chat share them. */
 
@@ -32,7 +33,7 @@ export const HELP = [
   "  /session   the session id and file",
   "  /sessions  this project's sessions; /sessions <n|id> continues one; rename, delete",
   "  /models    the models; /models <n|id|opus|sonnet|haiku> switches for this chat",
-  "  /export    write this conversation as Markdown; /export <file>",
+  "  /export    write this conversation as Markdown; /export <file>; /export --html [file] as one page",
   "  /compact   summarise the older turns now; /compact <what to keep>",
   "  /diff      file changes in this session; /diff last (last turn); /diff [last] <path>",
   "  /schedule  make the last plan a job that runs later: /schedule [HH:MM], then garuda run <id>",
@@ -55,6 +56,7 @@ export const HELP = [
   "  /build     build mode: change files and run commands (the default); /build <task> runs it",
   "  /undo      take back the last turn: its file changes and its messages",
   "  /redo      bring back the last undone turn",
+  "  /rewind    the turns of this session; /rewind <n> goes back to turn n, /rewind fork <n> forks",
   "  /init      set up this folder: AGENTS.md, and files from other agents (Claude Code, OpenCode …)",
   "  /editor    write the next prompt in $VISUAL or $EDITOR (also Ctrl-G)",
   "  /details   show or hide the result line under each tool call; /details on|off",
@@ -210,6 +212,23 @@ export async function runCommand(
     await expertsCommand(runtime, renderer);
   } else if (command === "/audit") {
     await auditCommand(runtime, renderer, text.slice(command.length).trim());
+  } else if (command === "/rewind") {
+    // UX U6: the list, a rewind to turn n, or a fork from turn n.
+    const args = text
+      .slice(command.length)
+      .trim()
+      .split(/\s+/)
+      .filter((a) => a !== "");
+    const signal = new AbortController().signal;
+    const fork = args[0] === "fork";
+    const number = fork ? args[1] : args[0];
+    if (number === undefined && !fork) renderer.info(rewindList(runtime.rewindPoints));
+    else if (number === undefined || !/^\d+$/.test(number) || args.length > (fork ? 2 : 1)) {
+      renderer.info("Use: /rewind, /rewind <n> or /rewind fork <n>.");
+    } else {
+      const turn = Number(number);
+      renderer.info(await (fork ? runtime.fork(turn, signal) : runtime.rewind(turn, signal)));
+    }
   } else if (command === "/undo" || command === "/redo") {
     const signal = new AbortController().signal;
     renderer.info(await (command === "/undo" ? runtime.undo(signal) : runtime.redo(signal)));
@@ -372,10 +391,12 @@ async function diffCommand(
       `Changes${where} ${since} (${result.files.length} file${result.files.length === 1 ? "" : "s"}, +${plus} −${minus}). Changes you made yourself count too.`,
       ...rows,
       "",
-      colorDiff(lines.slice(0, DIFF_LINES).join("\n")),
+      colorDiff(lines.slice(0, DIFF_LINES).join("\n"), process.stdout.columns),
       ...(cut ? [`… ${lines.length - DIFF_LINES} more lines. ${more}`] : []),
     ].join("\n"),
-    cut ? { title: `diff ${since}${where}`, text: colorDiff(result.patch) } : undefined,
+    cut
+      ? { title: `diff ${since}${where}`, text: colorDiff(result.patch, process.stdout.columns) }
+      : undefined,
   );
 }
 
@@ -450,7 +471,13 @@ async function exportCommand(runtime: Runtime, renderer: Renderer, file: string)
     return;
   }
   const { sessionMarkdown, writeExport } = await import("../export.js");
-  const result = await writeExport(runtime.root, id, sessionMarkdown(records, id), file);
+  // UX U11: /export --html [file] writes one self-contained page.
+  const html = /^--html(\s|$)/.test(file);
+  const name = html ? file.slice("--html".length).trim() : file;
+  const text = html
+    ? (await import("../exportHtml.js")).sessionHtml(records, id)
+    : sessionMarkdown(records, id);
+  const result = await writeExport(runtime.root, id, text, name, html ? ".html" : ".md");
   if ("problem" in result) renderer.warn(result.problem);
   else
     renderer.info(
@@ -872,6 +899,7 @@ const RUN_AT_ONCE = new Set([
   "build",
   "undo",
   "redo",
+  "rewind",
   "init",
   "editor",
   "details",

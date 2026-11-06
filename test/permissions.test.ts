@@ -30,6 +30,28 @@ function request(tool: string, target: CallTarget, readOnly = false): Permission
   return { tool, readOnly, info: { target } };
 }
 
+describe("the session answer (UX U2)", () => {
+  it("marks a fresh 'allow for this session' as remembered, and nothing else", async () => {
+    const url: CallTarget = { kind: "url", url: "https://a.test", host: "a.test" };
+    const session = engine({}, "session");
+    expect(await session.permissions.check(request("network", url), signal)).toEqual({
+      allowed: true,
+      by: "user",
+      remembered: true,
+    });
+    // The next call of the same host passes by the session rule, with no new mark.
+    expect(await session.permissions.check(request("network", url), signal)).toEqual({
+      allowed: true,
+      by: "session",
+    });
+    const once = engine({}, "once");
+    expect(await once.permissions.check(request("network", url), signal)).toEqual({
+      allowed: true,
+      by: "user",
+    });
+  });
+});
+
 describe("rules (F19)", () => {
   it("parses tool and tool(pattern)", () => {
     expect(parseRule("bash")).toEqual({ tool: "bash" });

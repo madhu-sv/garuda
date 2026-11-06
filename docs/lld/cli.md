@@ -10,7 +10,9 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 | File | Role |
 | --- | --- |
 | `index.ts` | Entry point (commander). Modes: chat, `-p`, stdin task, `--resume`, `--replay`, `eval`, `acp` (0.15, loaded with `import()`), `setup` (0.16, loaded with `import()`), `init` (the chat with `/init` as the first line, `firstInput`). With no first line, the banner gets `initTip` (see [init.md](init.md)). |
-| `turn.ts` | `runTurnInTerminal`: one turn with Ctrl-C handling, usage line and stop message; an optional `TurnWatcher` (0.6) is told when it starts and ends. |
+| `turn.ts` | `runTurnInTerminal`: one turn with Ctrl-C handling, the receipt or the usage line, and the stop message (`{ chat: true }`: `chatStopMessage`, UX U3); an optional `TurnWatcher` (0.6) is told when it starts and ends. |
+| `receiptView.ts` | `receiptText` (UX U1): the turn's receipt as a box from 60 columns, else as plain lines (also with no terminal and with `GARUDA_SCREEN_READER=1`); widths in terminal cells (`cells`). |
+| `uiState.ts` | `countChat` (UX U10): the chat count in `~/.garuda/ui.json`; `KEYS_HELP`, `contextBar`, `contextLevel`. |
 | `notify.ts` | Notifications (0.6): `pickChannel`, `notificationBytes`, `Notifier`. See below. |
 | `focus.ts` | Terminal focus (0.6): `reportsFocus`, `FocusTracker`, `focusEvent`, the mode 1004 codes. See below. |
 | `repl.ts` | Plain chat (readline). Used for pipes, `GARUDA_PLAIN=1`, and the single binary. |
@@ -222,7 +224,44 @@ interface ChatState {
   also set by Ctrl-C, reset by `begin`/`end`), so Esc never reaches the second-stop exit. Idle → drop the queue.
 - **New lines (0.6):** Enter with `meta` (Alt/Option+Enter) inserts `\n`; Enter after a `\` at the cursor
   replaces the backslash with `\n`; else Enter submits. `typeAhead` does the same when "\" and Enter arrive in one chunk (fast typing). The
-  footer shows `\ then Enter: new line · Ctrl-G editor · Ctrl-P commands` (0.9); the start banner's tips line says the same.
+  footer shows `\ then Enter: new line · Ctrl-G editor · Ctrl-P commands · ? keys` (0.9) in the first 5
+  chats (UX U10, `countChat`), and then only `? keys`; `?` on an empty input line prints `KEYS_HELP`.
+  The footer's context is a bar of 10 cells and the number, yellow from 70% and red from 80%.
+  The start banner's tips line says the same.
+- The receipt (UX U1): `ChatStore.receipt` adds it to the scrollback as one output item; the plain
+  renderer writes it to stderr. `hasReceipt` decides: files, tests, a command outside the sandbox or a blocked host; else the usage line.
+- The start screen (0.18.1): `runInkChat` writes `clearScreenKeepingScrollback(rows)` (new lines,
+  then the cursor home) unless `ui.clearOnStart` is false; `banner(..., { center: true })` centres
+  the wordmark and the card as blocks (`centerBlock`) and the tips line (`centerLines`); `index.ts`
+  centres the `/init` tip too. With `center`, the wordmark is `wordmark3d(scale)`: WORDMARK's
+  cells, `scale` 2 from `WORDMARK_LARGE_COLUMNS` (130), and a shadow of the same shape one row down
+  and `scale` cells right (truecolor: the face's colour at 45%; basic: red ▓; none: ░). The card is
+  at least as wide as the wordmark. `rows` gives up to 6 blank lines above on a tall screen. No
+  centring and no wordmark in screen-reader mode. `InputLine` draws a round box
+  (cyan, dim while busy) with `INPUT_HINT` or `INPUT_HINT_BUSY` when empty; no box under
+  `INPUT_BOX_MIN_COLUMNS` (40) or for a screen reader. The footer starts one space in, under the
+  box's border. The chat does not use the alternate screen: the terminal's scrollback stays.
+- `/export --html` (UX U11, `exportHtml.ts`) and `garuda advise` (UX U8, `advise.ts`; `index.ts`
+  registers the command).
+- The start (UX U7, U9): `index.ts` adds `morningBrief` and `firstRunTour` to the banner (the
+  tour replaces the `/init` tip); `runChat` and `runRepl` take the tour's tasks and map the first
+  input with `tourChoice`.
+- Diffs (UX U5): `diffView.ts`; `colorDiff(text, columns)` and `colorPreview(request, columns)`
+  in `approver.ts`; `ChatStore.askNow` adds "N hunks · h reviews them one by one" for a request
+  with `selectHunks` and two or more hunks; `HunkStagingView` draws the hunk with `unifiedDiff`.
+- Grouped tool lines (UX U4): `toolGroups.ts`; `ChatStore.closeGroup` and `closePlan`; the
+  live area draws `state.group` before the running tools and `state.plan` above the input.
+- Requests and answers (0.18.1): `ItemView` draws a `user` item in a box with only a left border (`USER_BAR`, so wrapped
+  lines get it too), bold, and
+  the first `text` item of a turn (`lead`, set by `ChatStore.add` after `begin`) with
+  `GARUDA_MARK`; screen-reader mode prints "You:" and "Garuda:".
+- The banner warns about a stale `dist/` (`buildCheck.ts`: `staleBuildNote(BUILD_COMMIT,
+  garudaCommit(), CHAT_STALE)`); `index.ts` imports it only for a chat.
+- Network watch mode (UX U2): `index.ts` passes `network: { watch: true }` for a chat (no task, a
+  terminal, not a job).
+- The step limit (UX U3, `chat/stop.ts`): after a turn that stopped at `max_steps`, both chats ask
+  "Go on?" (Go on for N more steps · Summarise what is done and what is left · Stop here) with the
+  approval keys. The first runs `CONTINUE_PROMPT`, the second `SUMMARY_PROMPT`.
 - **`@path` (0.6):** the runtime attaches mentioned files (see runtime-and-loop.md); the chat shows the
   `notice` event ("Attached src/a.ts (42 lines).").
 - **`!command` (0.6):** the controller (Ink) and the REPL send a line that starts with `!` to

@@ -90,6 +90,7 @@ import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { FileTracker } from "../session/fileTracker.js";
 import type { SessionSummary } from "../session/list.js";
+import { cleanTitle } from "../session/list.js";
 import type { RunLimits, SessionRecord, StartRecord } from "../session/records.js";
 import { resumeSession } from "../session/resume.js";
 import {
@@ -99,9 +100,12 @@ import {
   budgetSpent,
   closeOpenToolCalls,
   createSession,
+  isCostIncomplete,
+  pendingChildTokens,
   type Session,
 } from "../session/session.js";
 import { newSessionId, type SessionStore } from "../session/store.js";
+import type { UndoPoint } from "../session/undo.js";
 import { loadSkills, type Skill, skillConsent } from "../skills/load.js";
 import { createSkillTool, skillText } from "../skills/tool.js";
 import { StagingError } from "../staging/copy.js";
@@ -122,7 +126,14 @@ import {
 } from "../web/search.js";
 import { attachMentions } from "./mentions.js";
 import { ModelState, modelFacts } from "./modelState.js";
-import { networkConsent, networkHash, networkNote, nodeBinary } from "./network.js";
+import {
+  networkConsent,
+  networkHash,
+  networkKeepHint,
+  networkNote,
+  nodeBinary,
+} from "./network.js";
+import { type Receipt, ReceiptCollector } from "./receipt.js";
 import { deleteSession, findSession, listSessions, renameSession } from "./sessionManager.js";
 import { SnapshotError, UndoCoordinator } from "./undoCoordinator.js";
 
@@ -310,7 +321,16 @@ export interface RuntimeOptions {
    * The network allowlist (0.13, `settings.network`). `approved`: the list was approved elsewhere
    * (a job's approval, the eval command line), so no question. `home`: where trust.json is (tests).
    */
-  network?: { approved?: boolean; home?: string };
+  network?: {
+    approved?: boolean;
+    home?: string;
+    /**
+     * UX U2: with no allowlist, start the proxy anyway with no host on it ("watch mode"), so a
+     * command that needs a host asks the user, and the receipt names it. The CLI sets it for a
+     * chat only: -p, jobs and evals keep "no network" as before.
+     */
+    watch?: boolean;
+  };
   /** Language profiles (0.3). Default: detect them from marker files in the root. */
   profiles?: LanguageProfile[];
   /**
@@ -448,6 +468,8 @@ export class Runtime {
   private readonly startModel: string;
   /** The prompt of the turn that runs or ran last (0.9: the note after a stopped turn). */
   private lastPrompt: string | undefined;
+  /** The receipt of the last turn (UX U1); undefined before a turn ends, or after a failed one. */
+  private receipt: Receipt | undefined;
   /** LSP diagnostics after edits are on (0.4). */
   readonly lspEnabled: boolean;
   private readonly lspOptions: NonNullable<RuntimeOptions["lsp"]>;
@@ -667,6 +689,11 @@ export class Runtime {
         }),
       );
     }
+  }
+
+  /** The chat's look (0.18.1); the CLI applies it. */
+  get uiSettings(): Settings["ui"] {
+    return this.settings.ui;
   }
 
   /** The notification settings for the chat (0.6); the CLI applies them. */
@@ -1398,6 +1425,8 @@ export class Runtime {
 
   /** Run one turn: the user's prompt, then the loop until it stops. */
   async runTurn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
+    const started = Date.now();
+    this.receipt = undefined;
     this.lastPrompt = prompt;
     this.turnSignal = signal;
     await this.startHooks(signal);
@@ -1433,6 +1462,22 @@ export class Runtime {
     // open calls only when the last message is the assistant's, so close them before the new user
     // message (0.14, review): else the API refused every later request of the chat.
     closeOpenToolCalls(session);
+    session.turns = (session.turns ?? 0) + 1;
+    const before = {
+      cost: session.costUsd,
+      unreported: session.unreportedTokens,
+      pending: pendingChildTokens(session),
+      incomplete: session.costIncomplete,
+    };
+    const collector = new ReceiptCollector(detectTestCommand(this.root, this.profiles));
+    let changesFiles = false;
+    const onEvent = (event: AgentEvent) => {
+      collector.onEvent(event);
+      if (event.type === "tool_call" && !this.tools.isReadOnly(event.call.name)) {
+        changesFiles = true;
+      }
+      this.onEvent?.(event);
+    };
     addUserMessage(
       session,
       prompt,
@@ -1461,9 +1506,15 @@ export class Runtime {
       ...this.outputTokens(),
       contextWindow: this.limits.contextWindow,
       ...(this.price === undefined ? {} : { price: this.price }),
-      ...(this.onEvent === undefined ? {} : { onEvent: this.onEvent }),
+      onEvent,
       ...(this.settings.thinking?.keepBlocks === false ? { keepThinking: false } : {}),
       ...(this.thinkingParams === undefined ? {} : { thinking: this.thinkingParams }),
+      signal,
+    });
+    this.receipt = await this.makeReceipt(session, result, collector, {
+      ...before,
+      started,
+      changesFiles,
       signal,
     });
     // A finished plan (0.7): /schedule turns it into a job.
@@ -1472,6 +1523,89 @@ export class Runtime {
       if (plan !== "") this.plan = { request: prompt, plan, sessionId: session.id };
     }
     return result;
+  }
+
+  /** The receipt of the last turn (UX U1), or undefined. */
+  get lastReceipt(): Receipt | undefined {
+    return this.receipt;
+  }
+
+  /**
+   * The turn's receipt (UX U1; docs/lld/ux.md): the files from a snapshot at the end of the turn
+   * (only when a tool that can change files ran), the commands' facts, and the costs.
+   */
+  private async makeReceipt(
+    session: Session,
+    result: AgentResult,
+    collector: ReceiptCollector,
+    before: {
+      cost: number | undefined;
+      unreported: number;
+      pending: number;
+      incomplete: boolean;
+      started: number;
+      changesFiles: boolean;
+      signal: AbortSignal;
+    },
+  ): Promise<Receipt> {
+    const store = this.undoCoordinator.store;
+    const point = session.undo.points.at(-1);
+    let files: Receipt["files"];
+    if (store !== undefined && point !== undefined) {
+      files = [];
+      if (before.changesFiles) {
+        try {
+          const end = await store.take(before.signal);
+          files = (await store.stats(point.tree, end, before.signal)).map((f) => ({
+            path: f.path,
+            ...(f.added === undefined ? {} : { added: f.added, removed: f.removed ?? 0 }),
+          }));
+        } catch (error) {
+          if (before.signal.aborted) throw error;
+          files = undefined;
+        }
+      }
+      if (files !== undefined) point.changedFiles = files.length;
+      if (session.costUsd !== undefined && before.cost !== undefined) {
+        point.costUsd = session.costUsd - before.cost;
+      }
+    }
+    const costIncomplete =
+      session.unreportedTokens > before.unreported ||
+      pendingChildTokens(session) > before.pending ||
+      (session.costIncomplete && !before.incomplete);
+    const tests = collector.tests;
+    if (tests !== undefined && session.lastTestTotal !== undefined) {
+      tests.previousTotal = session.lastTestTotal;
+    }
+    if (tests?.total !== undefined) session.lastTestTotal = tests.total;
+    const receipt: Receipt = {
+      turn: session.turns ?? 1,
+      stopReason: result.stopReason,
+      steps: result.steps,
+      durationMs: Date.now() - before.started,
+      ...(session.costUsd === undefined || before.cost === undefined
+        ? {}
+        : { costUsd: session.costUsd - before.cost }),
+      ...(costIncomplete ? { costIncomplete: true } : {}),
+      ...(files === undefined ? {} : { files }),
+      ...(tests === undefined ? {} : { tests }),
+      commands: {
+        sandboxed: collector.sandboxed,
+        outside: collector.outside,
+        blockedHosts: [...collector.blockedHosts],
+      },
+      contextPercent: Math.round((session.contextTokens / this.limits.contextWindow) * 100),
+      ...(session.costUsd === undefined ? {} : { sessionCostUsd: session.costUsd }),
+      ...(isCostIncomplete(session) ? { sessionCostIncomplete: true } : {}),
+      ...(store === undefined
+        ? {}
+        : {
+            keptChanges: session.undo.points.filter((p) => (p.changedFiles ?? 0) > 0).length,
+          }),
+    };
+    session.journal?.write({ type: "receipt", receipt });
+    return receipt;
   }
 
   /** The last finished plan of this process, for /schedule (0.7). */
@@ -1884,6 +2018,9 @@ export class Runtime {
     await this.staged?.remove().catch(() => {});
   }
 
+  /** UX U2: the proxy runs with no host on the list, only to ask for the hosts that commands need. */
+  private watchingNetwork = false;
+
   /** The network allowlist in effect (0.13): the settings entries, or [] when the proxy is off. */
   networkAllowlist(): string[] {
     return this.networkProxy === undefined ? [] : [...(this.settings.network?.allow ?? [])];
@@ -1896,9 +2033,13 @@ export class Runtime {
    */
   private async startNetwork(signal: AbortSignal): Promise<void> {
     const entries = this.settings.network?.allow ?? [];
-    if (entries.length === 0 || this.executor.isolation !== "os") return;
+    if (this.executor.isolation !== "os") return;
+    // UX U2: watch mode, the proxy with an empty list; plan mode denies every host with no question.
+    const watch = entries.length === 0 && this.networkOptions.watch === true;
+    if (entries.length === 0 && !watch) return;
     this.networkStarted ??= (async () => {
-      if (this.networkOptions.approved !== true) {
+      // An empty list opens nothing, so it needs no consent.
+      if (!watch && this.networkOptions.approved !== true) {
         const trust = await TrustStore.open(this.networkOptions.home ?? homedir());
         const hash = networkHash(entries);
         const known = trust.networkHash(this.root);
@@ -1918,9 +2059,11 @@ export class Runtime {
       if (this.executor.name === "bwrap") {
         bridge = nodeBinary();
         if (bridge === undefined) {
-          this.onNotice?.(
-            "Network for commands: off. On Linux the allowlist needs node on the PATH (for the bridge into the sandbox).",
-          );
+          if (!watch) {
+            this.onNotice?.(
+              "Network for commands: off. On Linux the allowlist needs node on the PATH (for the bridge into the sandbox).",
+            );
+          }
           return;
         }
       }
@@ -1936,6 +2079,10 @@ export class Runtime {
         policy: { ...started, ...(bridge === undefined ? {} : { bridge }) },
         takeBlocked: () => proxy.takeBlocked(),
       });
+      if (watch) {
+        this.watchingNetwork = true;
+        return;
+      }
       this.onNotice?.(
         `Network for commands: ${entries.join(", ")}, through Garuda's proxy. Other hosts ask.`,
       );
@@ -1977,12 +2124,18 @@ export class Runtime {
         readOnly: false,
         info: {
           target: { kind: "url", url: `https://${host}`, host },
-          preview: `A command in the sandbox wants to reach ${host}:${port} through Garuda's proxy. The host is not on the network allowlist ("network.allow" in .garuda/settings.json).`,
+          preview: this.watchingNetwork
+            ? `A command in the sandbox wants to reach ${host}:${port}. Commands have no network unless you allow a host; Garuda's proxy sees only the host name.`
+            : `A command in the sandbox wants to reach ${host}:${port} through Garuda's proxy. The host is not on the network allowlist ("network.allow" in .garuda/settings.json).`,
           title: `Let a command reach ${host}?`,
         },
       },
       this.turnSignal ?? new AbortController().signal,
     );
+    // UX U2: how to keep it for good (decision D4: the user's own line in the project settings).
+    if (decision.allowed && decision.remembered === true) {
+      this.onNotice?.(networkKeepHint(host));
+    }
     return decision.allowed
       ? { allowed: true }
       : { allowed: false, reason: decision.reason.replace(/\.$/, "") };
@@ -2269,6 +2422,39 @@ export class Runtime {
    */
   async undo(signal: AbortSignal): Promise<string> {
     return this.undoCoordinator.undo(this.current, this.pendingNotes, signal);
+  }
+
+  /** The undo points of this session, oldest first (UX U6: the /rewind list). */
+  get rewindPoints(): readonly UndoPoint[] {
+    return this.current?.undo.points ?? [];
+  }
+
+  /** /rewind <n> (UX U6): back to the start of turn n (1-based in the list). */
+  async rewind(turn: number, signal: AbortSignal): Promise<string> {
+    return this.undoCoordinator.rewind(this.current, turn - 1, this.pendingNotes, signal);
+  }
+
+  /**
+   * /rewind fork <n> (UX U6): a new session with the conversation up to the start of turn n, and
+   * the files as they were then. The old session stays on disk as it is.
+   */
+  async fork(turn: number, signal: AbortSignal): Promise<string> {
+    const old = this.current;
+    if (old === undefined) return "No turn has run in this session yet.";
+    const restored = await this.undoCoordinator.restoreForFork(old, turn - 1, signal);
+    if (!restored.ok) return restored.text;
+    const point = old.undo.points[turn - 1] as UndoPoint;
+    const messages = structuredClone(old.messages.slice(0, point.messages));
+    this.newSession();
+    const fresh = this.ensureSession();
+    fresh.messages = messages;
+    fresh.turns = turn - 1;
+    fresh.journal?.write({ type: "fork", from: { sessionId: old.id, turn }, messages });
+    fresh.journal?.write({
+      type: "title",
+      title: cleanTitle(`Fork of turn ${turn}: ${point.prompt}`),
+    });
+    return `New session ${fresh.id}: the conversation up to turn ${turn} ("${point.prompt}"), and the files as they were then. The old session ${old.id} stays as it was: /sessions opens it.`;
   }
 
   /** /redo (0.4): bring back the last undone turn: its files and its messages. */

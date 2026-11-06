@@ -7,7 +7,7 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
 `garuda` with no task starts a chat. Each line is one task; the conversation carries over.
 
 - `/help`, `/usage` (tokens and cost), `/session` (id and file), `/new` (new session), `/commands`
-  (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/lsp` (language servers),
+  (your custom commands), `/plan` and `/build` (plan mode), `/undo` and `/redo`, `/rewind` (see Undo), `/lsp` (language servers),
   `/init` (set up this folder, see [Init](projects.md#init-set-up-a-folder)), `/editor`, `/compact`, `/details`, `/thinking`, `/diff` (see Undo), `/schedule` and `/jobs` (see
   [Scheduled jobs](jobs.md)), `/exit`. Your custom commands and
   skills run with `/name`.
@@ -20,6 +20,9 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   that this Garuda version does not know yet). `/models <number, id or opus|sonnet|haiku|fable>` switches the main model for the next turns of this
   chat. The session records the change; a new chat starts with `-m` or `GARUDA_MODEL` again. The prompt cache
   starts again; a smaller window makes Garuda compact the conversation first. Explore keeps the start model.
+- `/export --html [file]` (0.18.1) writes one self-contained page instead: requests, answers, each
+  tool call with its output or change, and the receipts. It has no script and no link, so it is
+  safe to attach to a pull request or an email.
 - `/export [file]` writes the conversation as Markdown in the working folder (default
   `garuda-<session id>.md`): prompts and answers in full, one line per tool call. It comes from the session
   file, so secrets are redacted. It never overwrites a file and never writes outside the folder.
@@ -67,11 +70,32 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   back into the input line; press Enter to send it. The plain chat also joins lines that end with `\`.
 - At the prompt, Ctrl-C clears the line; Ctrl-C twice (within 2 s) or Ctrl-D exits.
 - On a terminal, the chat uses Ink (0.2): model text streams, and each finished paragraph gets
-  basic markdown styles. A spinner shows running tools. The footer shows the model, the sandbox,
-  the context use and the cost.
+  basic markdown styles. A spinner shows running tools. The footer shows the model, the sandbox (⛨),
+  the context use as a bar and a number (yellow from 70%, red from 80%, where compaction starts)
+  and the cost. The key hints show in the first 5 chats (counted in `~/.garuda/ui.json`); after
+  that the footer says `? keys`, and `?` on an empty input line lists every key.
+- The chat starts on a clear screen with the banner centred (0.18.1): a 3D wordmark (twice as
+  large from 130 columns) and the session card under it. What was on the screen goes
+  into the scrollback; `"ui": { "clearOnStart": false }` in `.garuda/settings.json` keeps it on
+  screen. You type in a box at the bottom; it shows a hint while it is empty, and its border dims
+  while a task runs (what you type then queues the next task). The chat stays in the terminal's
+  normal screen, so scrolling, search and copy work as usual.
+- Reads and searches in a row show as one line (0.18.1): `● Read 5 files  a.ts, b.ts, +3`. Edits,
+  commands and failed calls keep a line each. Ctrl-O shows the last call's output in full. With
+  `todo_write` on, the plan stays above the input during the task and prints once at the end.
+- The first chat in a project with code names its stack and offers three first tasks (0.18.1);
+  type 1, 2 or 3 to run one, or your own task. It shows once per project.
+- The first chat after scheduled jobs ran shows them once (0.18.1): verdict, tests and branch of
+  each, and the total cost.
+- Your requests have a bar (`▌`) on every line; Garuda's answer starts with `✦` (0.18.1). With
+  `GARUDA_SCREEN_READER=1` they read "You:" and "Garuda:".
+- When Garuda runs from a checkout and `dist/` is older than it, the banner says "run pnpm build
+  first".
 - Type-ahead: type during a task and press Enter to queue the next task.
   Keys typed before the chat is ready are kept too.
 - Ctrl-O prints the full output of the last tool call. ↑ and ↓ browse earlier inputs.
+- Diffs mark the changed words of a changed line (0.18.1). From 140 columns a diff is side by side,
+  with the line numbers of both files. An approval that can review hunks says how many there are.
 - Approvals show the full diff or command in the scrollback. Answer with ↑↓ and Enter, or
   y (once), a (session), n or Esc (deny). For `edit_file`, press `h` (or `p`) to review hunks one by one (0.14): only the hunks you stage
   are written, and the model is told which ones you rejected. A diff too long to show in full has no `h`.
@@ -104,7 +128,29 @@ garuda --resume 20260923-201500-a1b2 -p "…"     # continue a given session
 garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no tools run
 ```
 
-- After each turn Garuda prints steps, tokens (with cache reads), cost, context use and the session total.
+- After a turn that changed files, ran tests, ran a command outside the sandbox, or had a host blocked, Garuda prints a receipt (0.18.1):
+
+  ```
+  ╭─ Turn 4 · done · 7 steps · 38 s ─────────────────────────── $0.0041 ─╮
+  │ Files    src/cart.ts +12 −4 · src/price.ts +3 −1 · 1 more            │
+  │ Tests    pnpm test ✓ passed (124 tests, was 121)                     │
+  │ Sandbox  ⛨ 6 commands in the sandbox · 0 outside                     │
+  │ Undo     /undo puts back 3 files                                     │
+  ╰─ context 34% · session $0.02 · 4 kept changes · $0.0043 each ────────╯
+  ```
+
+  Files come from the undo snapshots (with undo off: "no file list"). Tests: the last command of
+  the turn that ran the project's test command or a known runner (vitest, jest, node:test, pytest,
+  Maven, Gradle, go test, cargo test); the count comes from the runner's summary line when Garuda
+  knows it. Sandbox: the turn's commands by where they ran, and a Network row for hosts that the
+  allowlist's proxy blocked. A kept change is a turn that changed files and was not undone; "each"
+  is the session cost divided by them. Under 60 columns, in a pipe and with
+  `GARUDA_SCREEN_READER=1`, the receipt is plain lines. `-p --json` has it as `receipt` in the result.
+- After a turn that only read (also with commands in the sandbox, such as `find`), Garuda prints steps, tokens (with cache reads), cost, context use
+  and the session total, as before.
+- At the step limit, the chat asks how to go on (0.18.1): go on for as many steps again, summarise
+  what is done and what is left, or stop. Enter takes the first. After the same tool call 3 times,
+  type a hint as your next message.
 - A run stops at 50 steps, at the session token budget (20M tokens), or after the same tool call
   3 times in a row. Garuda says why. The budget holds for the whole turn (0.17): each model call
   reserves its request and its output limit first, and stops when they do not fit; subagents,
@@ -166,6 +212,12 @@ forgets it. `/redo` brings it back.
   the diff (300 lines; Ctrl-O shows all). `/diff last` shows only the last turn; `/diff <path>` or
   `/diff last <path>` limits it to one file or folder. It compares with the files now, so your own changes
   count too. It uses the undo snapshots, so it is off when undo is off.
+- `/rewind` (0.18.1) lists the turns that undo can reach, newest first, with the files each changed,
+  its cost and its age. `/rewind <n>` goes back to the start of turn n in one step: one question,
+  then the files and the messages of turn n and every later turn go back. `/redo` brings them back
+  one at a time. `/rewind fork <n>` starts a new session with the conversation up to turn n and the
+  files as they were then; the old session stays as it is, and `/sessions` opens it again. A turn
+  before a compaction can rewind its files but cannot start a fork. Tab completes the turn numbers.
 
 ## Todo list (opt-in)
 

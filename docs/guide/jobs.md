@@ -77,3 +77,17 @@ Each job report starts with a verdict: **Ready to merge** or **Needs a look**. I
   call (shown in the report); `"review": false` in the job file turns it off.
 
 A STOP flag always means "Needs a look"; otherwise the review decides.
+
+## The morning brief (0.18.1)
+
+The first chat after jobs ran shows them once, under the banner:
+
+```
+While you were away: 2 jobs ran ($0.2100)
+  ✓ Add CSV export      ready to merge   tests 120 → 126              garuda/job-…
+  ✗ Upgrade undici      needs a look     tests fail after the change  garuda/job-…
+  /jobs <id> shows a job's report and review · git diff <base>...<branch> shows its change
+```
+
+`.garuda/jobs/brief.seen` keeps the time of the last brief, so the next chat does not show the
+same jobs again.

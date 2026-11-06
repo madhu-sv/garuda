@@ -69,6 +69,12 @@ imports the CLI.
 6. Load the model if it is still a factory (`client()`), then
    `runAgent(session, deps)`. With LSP on, `deps.diagnostics` calls the `LspManager`, which the runtime
    creates with `import()` on the first edit (N3).
+7. The receipt (UX U1, 0.18.1; docs/lld/ux.md): a `ReceiptCollector` sees the loop's events (the
+   bash results carry `ToolOutcome.command`: exit code, timeout, sandboxed, blocked hosts). When a
+   tool that can change files ran and undo is on, a snapshot at the end gives the files with their
+   lines (`SnapshotStore.stats`). `makeReceipt` sets the undo point's `changedFiles`, writes a
+   `receipt` record, and `lastReceipt` returns it. The session's `turns` and `lastTestTotal` come
+   back on resume.
 
 Other methods: `newSession()`, `recordStop(reason)`, `mcpStatus()`, `hookLines()`, `close()` (closes MCP
 clients and language servers), `mode` and `setMode()` (0.4), `commands` and `resolveCommand()` (0.4),

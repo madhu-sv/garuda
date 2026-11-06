@@ -11,6 +11,15 @@ import { ChatStore } from "./store.js";
 import { App } from "./ui.js";
 
 /**
+ * A clear screen that keeps what was there (0.18.1): new lines push the old screen up into the
+ * scrollback, as `clear` does in most terminals, then the cursor goes to the top. ESC[2J alone
+ * drops the old screen in some terminals.
+ */
+export function clearScreenKeepingScrollback(rows: number): string {
+  return `${"\n".repeat(Math.max(1, rows))}\u001b[H`;
+}
+
+/**
  * The Ink chat (0.2). The CLI loads this module with import() only for a chat on a
  * terminal, so Ink and React never slow down -p, pipes or evals (N3).
  */
@@ -27,8 +36,17 @@ export async function runInkChat(
   notifier?: Notifier,
   /** Focus reporting (0.6): the chat turns it on and feeds the tracker. */
   focus?: FocusTracker,
+  /** UX U10: the footer shows the key hints (the first chats). */
+  keyHints = true,
+  /** 0.18.1: start on a clear screen ("ui": { "clearOnStart": false } turns it off). */
+  clearOnStart = true,
+  /** UX U9: the tour's tasks; a first input of 1, 2 or 3 runs one. */
+  tour?: readonly string[],
 ): Promise<void> {
-  const store = new ChatStore(statusOf(runtime));
+  if (clearOnStart && process.stdout.isTTY === true) {
+    process.stdout.write(clearScreenKeepingScrollback(process.stdout.rows || 24));
+  }
+  const store = new ChatStore(statusOf(runtime), { keyHints });
   store.print(banner);
   if (firstInput !== undefined) store.enqueue(firstInput);
   approver.current = store;
@@ -62,7 +80,7 @@ export async function runInkChat(
     return exitNow();
   };
   try {
-    await runChat(runtime, store, sessionPath, exitClean, notifier);
+    await runChat(runtime, store, sessionPath, exitClean, notifier, tour);
   } finally {
     reportFocus(false);
     ink.unmount();

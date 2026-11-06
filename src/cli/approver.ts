@@ -1,5 +1,6 @@
 import { styleText } from "node:util";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../permissions/types.js";
+import { type DiffPaint, terminalDiff } from "./diffView.js";
 
 /**
  * Asks the user in the terminal (F18): allow once, allow for this session, or deny.
@@ -32,7 +33,7 @@ export class TerminalApprover implements Approver {
   private async askNow(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalChoice> {
     signal.throwIfAborted();
     const out = process.stderr;
-    out.write(`\n${header(request)}\n${colorPreview(request)}\n`);
+    out.write(`\n${header(request)}\n${colorPreview(request, out.columns)}\n`);
 
     if (!process.stdin.isTTY) {
       out.write("No terminal to ask for approval, so Garuda denies this call.\n");
@@ -131,24 +132,29 @@ export function header(request: ApprovalRequest): string {
   return styleText("bold", headerText(request));
 }
 
-export function colorPreview({ target, preview }: ApprovalRequest): string {
+export function colorPreview(
+  { target, preview }: ApprovalRequest,
+  /** UX U5: from 140 columns the diff is side by side. */
+  columns?: number,
+): string {
   const warning = hasHidden(preview) ? `\n${styleText("yellow", `  ${HIDDEN_WARNING}`)}` : "";
   if (target.kind === "command") return `${styleText("cyan", `  $ ${visible(preview)}`)}${warning}`;
   if (target.kind === "url") return `${visible(preview)}${warning}`;
-  return `${colorDiff(visible(preview))}${warning}`;
+  return `${colorDiff(visible(preview), columns)}${warning}`;
 }
 
-/** A unified diff with colors: + green, - red, hunk headers cyan, file headers bold. */
-export function colorDiff(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => {
-      if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff --git"))
-        return styleText("bold", line);
-      if (line.startsWith("+")) return styleText("green", line);
-      if (line.startsWith("-")) return styleText("red", line);
-      if (line.startsWith("@@")) return styleText("cyan", line);
-      return line;
-    })
-    .join("\n");
+/** The terminal's colours for a diff (styleText leaves them out on a pipe and with NO_COLOR). */
+export const terminalPaint: DiffPaint = (styles, text) =>
+  styles.length === 0 ? text : styleText([...styles], text);
+
+/**
+ * A diff with colours (UX U5): + green, - red, hunk headers cyan, file headers bold, the changed
+ * words of a changed line marked; side by side from 140 columns.
+ */
+export function colorDiff(
+  text: string,
+  columns?: number,
+  paint: DiffPaint = terminalPaint,
+): string {
+  return terminalDiff(text, columns, paint);
 }

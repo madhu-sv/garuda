@@ -59,10 +59,10 @@ export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = [
     }
   }
   if (policy.denyWritePaths.length > 0) {
-    lines.push(`(deny file-write* ${paths(policy.denyWritePaths)})`);
+    lines.push(`(deny file-write* ${paths(withDataVolume(policy.denyWritePaths))})`);
   }
   if (policy.denyReadPaths.length > 0) {
-    lines.push(`(deny file-read* ${paths(policy.denyReadPaths)})`);
+    lines.push(`(deny file-read* ${paths(withDataVolume(policy.denyReadPaths))})`);
   }
   // No apps through LaunchServices (`open`) or Apple Events (`osascript`) (0.14, review): an app
   // started that way runs outside the sandbox, with the user's full rights.
@@ -80,6 +80,20 @@ export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = [
   }
   lines.push(...extra);
   return lines.join("\n");
+}
+
+/**
+ * Each path under /Users also under /System/Volumes/Data/Users (0.18.1): macOS reaches the same
+ * folder through that firmlink, and a model in an eval read the user's checkout that way. A deny
+ * rule names both, so neither path gets past it.
+ */
+export function withDataVolume(list: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const path of list) {
+    out.push(path);
+    if (path.startsWith("/Users/")) out.push(`/System/Volumes/Data${path}`);
+  }
+  return out;
 }
 
 /** A Seatbelt (Scheme) string literal. */

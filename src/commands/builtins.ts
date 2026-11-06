@@ -37,6 +37,7 @@ export const BUILTIN_COMMANDS: readonly string[] = [
   "search",
   "undo",
   "redo",
+  "rewind",
   "exit",
   "quit",
 ];

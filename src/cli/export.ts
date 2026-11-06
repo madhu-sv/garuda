@@ -1,9 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { hasReceipt } from "../app/receipt.js";
 import { serverCallText, serverResultSummary } from "../model/serverTools.js";
 import type { ToolUseBlock } from "../model/types.js";
 import { displayPath, PathOutsideRootError, resolveInRoot } from "../permissions/pathGuard.js";
 import type { SessionRecord } from "../session/records.js";
+import { receiptText } from "./receiptView.js";
 import { summariseCall, summariseResult } from "./renderer.js";
 
 /**
@@ -97,6 +99,23 @@ export function sessionMarkdown(records: readonly SessionRecord[], sessionId: st
       case "compaction":
         out.push("_The conversation was compacted here to fit the context window._", "");
         break;
+      case "fork":
+        out.push(
+          `_This session starts as a fork of session ${record.from.sessionId}, at turn ${record.from.turn}._`,
+          "",
+        );
+        break;
+      case "receipt":
+        // UX U1: the receipt of a turn that changed files or ran commands, as plain lines.
+        if (hasReceipt(record.receipt)) {
+          out.push(
+            ...receiptText(record.receipt)
+              .split("\n")
+              .map((line) => `> ${line}`),
+            "",
+          );
+        }
+        break;
       case "model":
         out.push(`_The model changed to ${record.model}._`, "");
         break;
@@ -144,8 +163,10 @@ export async function writeExport(
   sessionId: string,
   markdown: string,
   file = "",
+  /** The default file's extension (UX U11: ".html" for /export --html). */
+  ext = ".md",
 ): Promise<{ path: string } | { problem: string }> {
-  const name = file === "" ? `garuda-${sessionId}.md` : file;
+  const name = file === "" ? `garuda-${sessionId}${ext}` : file;
   let absolute: string;
   try {
     absolute = await resolveInRoot(root, name);

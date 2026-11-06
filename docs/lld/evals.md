@@ -34,9 +34,14 @@ same-build A/B runs.
 
 For each task (and each repeat):
 
-1. Create a scratch folder in the temp directory; write the task files. A repo task (0.12) gets a git
-   worktree of the project at the commit's parent (detached, `node_modules` and venvs linked), with the
-   commit's test files added.
+1. Create a scratch folder in the temp directory; write the task files. A repo task (0.12) gets a copy of
+   the project at the commit's parent, with the commit's test files added. Since 0.18.1 the copy has
+   no history (`isolatedTaskCopy`: `read-tree` and `checkout-index` through a temporary index, then
+   a new repository with one commit; `node_modules` and venvs linked), and its commands cannot read
+   the project's checkout (except those links) or the rest of the home folder except its hidden
+   entries (`repoTaskReadDenials`, in `sandbox.denyRead`). Before, a worktree shared the project's
+   history, and a model read the user's live checkout: both hold the commit that the task asks for.
+   Results of repo runs before 0.18.1 may have read the answer.
 2. Snapshot the protected files. Default: tests (`test/`, `tests/`, `src/test/`) and build files
    (`pom.xml`, `pyproject.toml`). A task can list its own. Since 0.17 (T11a) also a hash of every
    file (`treeState`): after the run and before the check, the changed files go to `changed`, and
@@ -55,8 +60,8 @@ For each task (and each repeat):
 5. Pass when the protected files are unchanged and the check command (for example `node --test`) exits 0.
    The check runs code that the agent wrote, so it runs in the run's OS sandbox with the policy of
    bash (0.14.1, review; on the host only with `--executor host` or no sandbox), with a 120 s limit
-   (5 min for a repo task). The task self-tests run known solutions on the host. A repo task's worktree is removed
-   after the run (`git worktree remove`), unless `--keep`.
+   (5 min for a repo task). The task self-tests run known solutions on the host. A repo task's copy is removed after
+   the run, unless `--keep`. `--from-git` still checks candidates in worktrees.
 6. Copy the session file to `.garuda/evals/<run-id>/<task>.jsonl` (`-2`, `-3` … for repeats).
 7. `runEvals` numbers the repeats of each task in run order (`attempt`). Its `stop` predicate
    (0.17) ends the eval: `garuda eval` passes `isSetupFailure`: `isAuthFailure` (an error run whose

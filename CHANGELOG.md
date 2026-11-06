@@ -2,6 +2,89 @@
 
 ## Unreleased
 
+- Security: sandboxed commands can no longer read your personal folders: Desktop, Documents,
+  Downloads, Movies, Music, Pictures (with the Photos library), Public, and Mail, Messages, Safari,
+  Calendars, Contacts, iCloud Drive and other cloud folders in `~/Library`. A project inside one of
+  them stays readable, the rest of that folder does not. On macOS each read and write rule also
+  covers the same path under `/System/Volumes/Data`, where a command could reach it before. Found
+  in a live run: a model's `find /` in an eval made macOS ask the user to let iTerm into Downloads
+  and Photos.
+- Evals: a repo task now runs in a copy of the project with no history, not a git worktree, and
+  its commands cannot read the project's checkout (except `node_modules` and venvs) or the rest of
+  the home folder except hidden entries. In a live run, a model read the user's checkout, which
+  holds the commit that the task asks for. Repo results from before this change may have read the
+  answer; run them again.
+- UX, patch 7 (docs/lld/ux.md U11, U8): `/export --html [file]` writes the session as one page:
+  your requests, the answers, each tool call that opens to its output (an edit opens to its
+  change), and the receipts. Every text is escaped; the page has no script and no link, and its
+  own policy forbids them. `garuda advise` runs the repo suite (`garuda eval --from-git`) on two
+  models (default Haiku 5.5 and Sonnet 5.5, 2 runs a task, at most $2), compares them as
+  `eval compare` does, and advises: the model that passes clearly more, or on a tie the cheaper
+  one. It asks first with a cost guess, and writes `advice.txt` and `report.html`.
+- UX, patch 6 (docs/lld/ux.md U7, U9): the morning brief. The first chat after jobs ran shows them
+  once: each job's verdict, its tests ("tests 120 → 126" when the runner's summary gives counts)
+  and its branch, and the total cost. `.garuda/jobs/brief.seen` keeps the time of the last brief.
+  The first-run tour: the first chat in a project with code names its stack ("TypeScript with
+  vitest (pnpm)") and offers three first tasks; typing 1, 2 or 3 runs one. It shows once per
+  project (`~/.garuda/ui.json` keeps a hash of the folder, not its path).
+- UX, patch 5 (docs/lld/ux.md U5): diffs mark the changed words of a changed line (inverse video),
+  in approvals, in hunk review and in `/diff`. From 140 columns a diff is side by side, with the
+  line numbers of both files. An approval that can review hunks says so in its first line:
+  "3 hunks · h reviews them one by one". Syntax colours are not in this patch (decision D10).
+  Only a real diff (with a hunk header) gets the marks and the two columns; other previews, such
+  as the project-settings question, keep their simple colours (the first live run showed that
+  question twice, side by side).
+- UX, patch 4 (docs/lld/ux.md U6): `/rewind` lists the turns that undo can reach (files, cost, age).
+  `/rewind <n>` goes back to the start of turn n in one step, with one question; `/redo` brings the
+  turns back one at a time. `/rewind fork <n>` starts a new session with the conversation up to
+  turn n and the files as they were then; the old session does not change. A new `fork` record
+  starts such a session.
+- UX, patch 3 (docs/lld/ux.md U4): in the chat, calls of one read-only tool in a row become one
+  line, for example `● Read 5 files  docs/architecture.md, SECURITY.md, +3`; a lone call keeps its
+  line and its result. Edits, commands and failed calls always keep a line of their own. Ctrl-O
+  still shows the last call's output. The model's plan (`todo_write`) is drawn live above the
+  input during the turn and printed once at the end, instead of after every update.
+- The chat's wordmark has a drop shadow (a 3D look), drawn twice as large from 130 columns, with
+  the card as wide as the wordmark; a tall screen gets some space above it. A screen reader gets no
+  wordmark (the card says the name).
+- The chat starts on a clear screen, with the banner centred, and you type in a visible chat box
+  with a hint ("Type a task · / for commands · @ for files"). The old screen goes into the
+  scrollback, not away; `"ui": { "clearOnStart": false }` in settings keeps it on screen. Garuda
+  stays in the terminal's normal screen, so its scrollback, search and copy still work. The box's
+  border dims while a turn runs. With `GARUDA_SCREEN_READER=1`, or under 40 columns, there is no box
+  and the banner is not centred.
+- UX, patch 2 (docs/lld/ux.md U2): a chat with no network allowlist starts Garuda's proxy with no
+  host on it ("watch mode"). A command in the sandbox that needs a host now asks for it (once, this
+  session, or no) instead of failing with a DNS error; an empty list needs no consent. After "this
+  session", Garuda says which line in `network.allow` keeps it for the project (a preset such as
+  `npm` when the host belongs to one). The receipt names a blocked host. `-p`, jobs and evals keep
+  no network, as before.
+- The chat shows your requests with a bar (`▌`) on every line, and Garuda's answer starts with `✦`,
+  so requests and answers differ at a glance. With `GARUDA_SCREEN_READER=1` they read "You:" and
+  "Garuda:".
+- The chat warns at start when `dist/` is older than its checkout ("run pnpm build first"), as the
+  evals do. `garudaCommit` and `staleBuildNote` moved to `src/buildCheck.ts`.
+- Docs: `architecture.md`, `hld.md` and the docs index describe Garuda as it is now. The release
+  history in their prose (version lists, "since 0.x", test counts per release) is gone; the
+  CHANGELOG keeps it.
+- UX, patch 1 (docs/lld/ux.md): a receipt after each turn that changed files, ran tests, ran a command outside the sandbox, or had a host blocked: the
+  files with their lines (from the undo snapshots), the last test run with its count for vitest,
+  jest, node:test, pytest, Maven and `go test -v`, the commands in and outside the sandbox, blocked
+  hosts, what `/undo` puts back, and the session's cost per kept change. A turn that only answered
+  keeps the usage line, also when it ran read-only commands in the sandbox (the first live run: a
+  `find` gave a receipt with no news). The session records the receipt (`receipt`), `/export` shows it, and
+  `-p --json` has it as `receipt`. Under 60 columns, in a pipe and with `GARUDA_SCREEN_READER=1` it
+  is plain lines.
+- The chat asks how to go on after the step limit: go on for as many steps again, summarise what is
+  left, or stop. After the same tool call 3 times it says to type a hint, and no longer names
+  `--resume`.
+- The chat's footer shows the context as a bar and a number (yellow from 70%, red from 80%). The key
+  hints show in the first 5 chats; then the footer says `? keys`, and `?` on an empty line lists them.
+- Design: the UX note (docs/lld/ux.md), with mock-ups and no code yet. A receipt after each
+  turn (files, tests, sandbox, undo, cost per kept change), a blocked host as a one-key fix,
+  next steps after a stop, a live plan, better diffs, rewind and fork, a morning brief from the
+  night shift, `garuda advise` (which model for this repo), a first-run tour, a quieter footer,
+  HTML export, and reduced motion and screen-reader modes. Ten decisions for the user.
 - Blog: "Garuda against Claude Code, with intervals": the eval method, the Claude Code
   baseline, the faults the live runs found in the tasks, the Graphify A/B, the tuned prompt, and
   the limits.

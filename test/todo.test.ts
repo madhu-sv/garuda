@@ -100,9 +100,18 @@ describe("todo_write (0.4)", () => {
     expect(result.isError).toBe(false);
 
     const checklist = "    ✔ Read the failing test\n    ▶ Fix the rounding\n    ○ Run the tests";
-    expect(store.getState().items.map((i) => i.text)).toContain(
-      `● todo_write 3 step(s)\n  ⎿ 1 of 3 done\n${checklist}`,
-    );
+    // UX U4: the chat draws the plan live during the turn, and prints it once at the end.
+    const plan = "Plan\n  ✔ Read the failing test\n  ▶ Fix the rounding\n  ○ Run the tests";
+    expect(store.getState().plan).toBe(plan);
+    expect(
+      store
+        .getState()
+        .items.map((i) => i.text)
+        .join("\n"),
+    ).not.toContain("todo_write");
+    store.end({});
+    expect(store.getState().plan).toBeUndefined();
+    expect(store.getState().items.map((i) => i.text)).toContain(plan);
     expect(err.text()).toContain(`● todo_write 3 step(s)\n  ⎿ 1 of 3 done\n${checklist}\n`);
     runtime.executor.shutdown();
   });

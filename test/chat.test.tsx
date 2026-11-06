@@ -82,6 +82,10 @@ describe("chat store", () => {
       event({ type: "tool_result", call, outcome: { content: "1\tline", isError: false } }),
     );
     expect(store.getState().running).toEqual([]);
+    // UX U4: a read stays open (it may group with the next read) until something else comes.
+    expect(store.getState().group).toBe("● read_file a.js\n  ⎿ 1 line(s)");
+    expect(texts(store)).toEqual(["task", "Plan", "Look at"]);
+    store.end({});
     expect(texts(store)).toEqual(["task", "Plan", "Look at", "● read_file a.js\n  ⎿ 1 line(s)"]);
     store.showLastOutput();
     expect(texts(store).at(-1)).toBe("read_file a.js\n1\tline");

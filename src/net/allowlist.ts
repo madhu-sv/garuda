@@ -22,6 +22,12 @@ export const NETWORK_PRESETS: Readonly<Record<string, readonly string[]>> = {
 
 export const PRESET_NAMES = Object.keys(NETWORK_PRESETS);
 
+/** The preset that names a host (UX U2: "add npm to network.allow"), or undefined. */
+export function presetFor(host: string): string | undefined {
+  const bare = host.toLowerCase();
+  return PRESET_NAMES.find((name) => NETWORK_PRESETS[name]?.includes(bare));
+}
+
 /** The ports a command may reach through the proxy. */
 export const NETWORK_PORTS: readonly number[] = [80, 443];
 
