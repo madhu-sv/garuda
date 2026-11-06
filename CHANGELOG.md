@@ -10,6 +10,9 @@
 - undici is 8.12 (was 7.30). Its HTTP/2 default stays off for model requests: Garuda's
   20-minute wait for quiet streams was checked on HTTP/1.1. undici 8 needs Node.js 22.19 or newer;
   Garuda already needs 22.23.4.
+- The ACP SDK is 2.4 (was 1.7). Garuda speaks the same protocol, ACP version 1, and uses only its
+  stable parts. The SDK now refuses `session/new` before `initialize`, as the protocol says;
+  editors always send `initialize` first.
 - Security: sandboxed commands can no longer read `~/.config/anthropic/credentials`, where the `ant`
   CLI stores keys. The SDK 1.x reads them too when it has no key.
 
