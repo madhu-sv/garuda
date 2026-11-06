@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Security: sandboxed commands can no longer read your personal folders: Desktop, Documents,
+  Downloads, Movies, Music, Pictures (with the Photos library), Public, and Mail, Messages, Safari,
+  Calendars, Contacts, iCloud Drive and other cloud folders in `~/Library`. A project inside one of
+  them stays readable, the rest of that folder does not. On macOS each read and write rule also
+  covers the same path under `/System/Volumes/Data`, where a command could reach it before. Found
+  in a live run: a model's `find /` in an eval made macOS ask the user to let iTerm into Downloads
+  and Photos.
+- Evals: a repo task now runs in a copy of the project with no history, not a git worktree, and
+  its commands cannot read the project's checkout (except `node_modules` and venvs) or the rest of
+  the home folder except hidden entries. In a live run, a model read the user's checkout, which
+  holds the commit that the task asks for. Repo results from before this change may have read the
+  answer; run them again.
 - UX, patch 7 (docs/lld/ux.md U11, U8): `/export --html [file]` writes the session as one page:
   your requests, the answers, each tool call that opens to its output (an edit opens to its
   change), and the receipts. Every text is escaped; the page has no script and no link, and its

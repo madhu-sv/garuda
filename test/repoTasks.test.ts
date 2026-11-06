@@ -3,8 +3,10 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -319,10 +321,22 @@ describe("repo tasks: the suite from git (0.12)", () => {
     });
     expect(result.passed).toBe(false);
     expect(result.reason).toMatch(/changed protected files: test\/mul\.test\.js/);
-    // --keep leaves the worktree: the user can look at it, and git still knows it.
+    // --keep leaves the task's copy for the user to look at (0.18.1: a copy, not a worktree).
     const list = await git(host, root, ["worktree", "list", "--porcelain"]);
-    const kept = /^worktree (.+garuda-repo-task-.+)$/m.exec(list.stdout)?.[1];
-    expect(kept !== undefined && existsSync(join(kept, "test", "mul.test.js"))).toBe(true);
-    await git(host, root, ["worktree", "remove", "--force", kept as string]);
+    expect(list.stdout.match(/^worktree /gm)).toHaveLength(1);
+    const kept = readdirSync(tmpdir())
+      .filter((n) => n.startsWith("garuda-repo-task-"))
+      .map((n) => join(tmpdir(), n))
+      .sort((x, y) => statSync(y).mtimeMs - statSync(x).mtimeMs)[0] as string;
+    expect(existsSync(join(kept, "test", "mul.test.js"))).toBe(true);
+    // The negative control of the leak: the copy has one commit, and the task's own commit (the
+    // answer) is not in it. In a worktree, `git show <sha>` printed the answer.
+    const log = await git(host, kept, ["log", "--all", "--oneline"]);
+    expect(log.stdout.trim().split("\n")).toHaveLength(1);
+    const answer = await git(host, kept, ["cat-file", "-t", task.repo?.sha as string], {
+      check: false,
+    });
+    expect(answer.exitCode).not.toBe(0);
+    rmSync(kept, { recursive: true, force: true });
   }, 60_000);
 });

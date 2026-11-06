@@ -1,6 +1,6 @@
 import { constants as fsConstants, mkdirSync, realpathSync } from "node:fs";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { Runtime, type RuntimeOptions } from "../app/runtime.js";
 import { git } from "../jobs/git.js";
@@ -23,7 +23,7 @@ import { changedPaths, treeState, unexpectedPaths } from "./changes.js";
 import { roughNote } from "./compare.js";
 import { writeFiles } from "./files.js";
 import { isProtectedPath } from "./projects.js";
-import { applyTests, removeTaskWorktree, taskWorktree } from "./repoTasks.js";
+import { applyTests, isolatedTaskCopy, repoTaskReadDenials } from "./repoTasks.js";
 import {
   consistency,
   costPerPass,
@@ -60,6 +60,8 @@ export const REPO_CHECK_TIMEOUT_MS = 5 * 60_000;
 export const EVAL_TASK_TIMEOUT_MS = 10 * 60_000;
 
 export interface EvalOptions {
+  /** The home folder for the repo tasks' read denials (0.18.1). Default: the user's. Tests set it. */
+  home?: string;
   modelId: string;
   /** Makes a model client for each task. */
   model: () => ModelClient | Promise<ModelClient>;
@@ -131,7 +133,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     await writeFiles(root, task.files);
   } else {
     // Benchmark your repo (0.12): the project at the commit's parent, with its tests added.
-    root = await taskWorktree(host, task.repo.root, task.repo.base);
+    // 0.18.1: a copy with no history, not a worktree: the history held the answer.
+    root = await isolatedTaskCopy(host, task.repo.root, task.repo.base);
     await applyTests(root, task.repo.tests);
   }
   if (options.format !== undefined) await formatProject(root, options.format.biome);
@@ -146,6 +149,11 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     ...(options.network === undefined ? {} : { network: { allow: options.network } }),
     // Evals must not depend on the internet.
     web: { enabled: false },
+    // 0.18.1: a repo task's commands cannot read the project's own folder or the rest of the
+    // home folder: the checkout, and copies of it, hold the commit that the task asks for.
+    ...(task.repo === undefined
+      ? {}
+      : { sandbox: { denyRead: repoTaskReadDenials(task.repo.root, options.home ?? homedir()) } }),
     ...(options.executor === undefined ? {} : { executor: options.executor }),
     ...(options.codeIndex === undefined ? {} : { codeIndex: options.codeIndex }),
     ...(options.maxSteps === undefined ? {} : { limits: { maxSteps: options.maxSteps } }),
@@ -345,8 +353,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
 
   result.durationMs = Date.now() - started;
   if (!options.keep) {
-    if (task.repo === undefined) await rm(root, { recursive: true, force: true });
-    else await removeTaskWorktree(host, task.repo.root, root);
+    await rm(root, { recursive: true, force: true });
   }
   return result;
 }

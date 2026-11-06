@@ -8,7 +8,11 @@ Garuda runs commands in an OS sandbox: Seatbelt (`sandbox-exec`) on macOS, bubbl
 In the sandbox, a command:
 
 - can read every file, except secrets in your home folder (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`,
-  `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains, Garuda's and Claude Code's tokens and more);
+  `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains, Garuda's and Claude Code's tokens and more)
+  and, since 0.18.1, your personal folders: Desktop, Documents, Downloads, Movies, Music, Pictures (with
+  the Photos library), Public, and Mail, Messages, Safari, Calendars, Contacts, iCloud Drive and other
+  cloud folders in `~/Library`. A project inside one of them stays readable; the rest of that folder
+  does not. On macOS each rule also covers the same path under `/System/Volumes/Data`;
 - can write only in the working root, the temp folders and package caches (`~/.cache`, `~/.npm`, pnpm,
   and for a Java or Python project `~/.m2/repository`, `~/.gradle/caches` and similar);
 - cannot write `.git/hooks`, `.git/config` or `.garuda/` in the root, because those run or apply later

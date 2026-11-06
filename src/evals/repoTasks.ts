@@ -1,12 +1,13 @@
 import { mkdtempSync, realpathSync } from "node:fs";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { z } from "zod";
 import { git, shellWord } from "../jobs/git.js";
 import { MANIFEST, TEST_PATH, tail } from "../jobs/proof.js";
 import { cleanArgs, LINK_CANDIDATES } from "../jobs/worktree.js";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
+import { denyAround } from "../permissions/sandboxPaths.js";
 import type { Executor } from "../sandbox/types.js";
 import { TOOLCHAIN_ENV } from "./toolchains.js";
 import type { EvalTask } from "./types.js";
@@ -177,6 +178,64 @@ export async function taskWorktree(
     }
   }
   return dir;
+}
+
+/**
+ * The project at `commit` for an eval run (0.18.1), with no link to the project's history: the
+ * files of the commit, checked out through a temporary index, in a new repository with one
+ * commit. In a worktree, `git log --all` and the project's own folder held the answer: the
+ * commit that the task asks for. node_modules and the virtual environments are links, as before.
+ */
+export async function isolatedTaskCopy(
+  executor: Executor,
+  root: string,
+  commit: string,
+): Promise<string> {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "garuda-repo-task-")));
+  const indexDir = mkdtempSync(join(tmpdir(), "garuda-repo-index-"));
+  try {
+    const env = { GIT_INDEX_FILE: join(indexDir, "index") };
+    await git(executor, root, ["read-tree", commit], { env });
+    await git(executor, root, ["checkout-index", "--all", "--force", `--prefix=${dir}/`], { env });
+  } finally {
+    await rm(indexDir, { recursive: true, force: true });
+  }
+  await git(executor, dir, ["init", "--quiet"]);
+  await git(executor, dir, ["add", "--all"]);
+  await git(executor, dir, [
+    "-c",
+    "user.name=Garuda eval",
+    "-c",
+    "user.email=eval@garuda.invalid",
+    "commit",
+    "--quiet",
+    "--no-verify",
+    "--message",
+    "The task's start",
+  ]);
+  for (const name of LINK_CANDIDATES) {
+    try {
+      await symlink(join(root, name), join(dir, name), "dir");
+    } catch {
+      // Not in the checkout, or already there.
+    }
+  }
+  return dir;
+}
+
+/**
+ * The reads to deny in an eval run of a repo task (0.18.1): the rest of the home folder (other
+ * checkouts and copies of the project hold the answer too), and in the project's own folder
+ * everything except the links that the task copy uses. Hidden entries of the home folder stay
+ * readable: toolchains and package caches live there.
+ */
+export function repoTaskReadDenials(root: string, home: string): string[] {
+  const links = LINK_CANDIDATES.map((name) => join(root, name));
+  const inHome = root === home || root.startsWith(`${home}${sep}`);
+  return [
+    ...(inHome ? denyAround(home, links, true) : []),
+    ...(inHome ? [] : denyAround(root, links)),
+  ];
 }
 
 export async function removeTaskWorktree(

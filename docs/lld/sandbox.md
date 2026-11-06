@@ -95,7 +95,16 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 (deny file-write* (subpath <markers folder>))
 ```
 
-Paths are Scheme strings with `\` and `"` escaped.
+Paths are Scheme strings with `\` and `"` escaped. Since 0.18.1 each denied path under `/Users`
+is also denied under `/System/Volumes/Data/Users` (`withDataVolume`): macOS reaches the same folder
+through that firmlink, and a model in an eval read the user's checkout that way.
+
+The default read denials (`sandboxPaths`, 0.18.1) add `PERSONAL_IN_HOME` (Desktop, Documents,
+Downloads, Movies, Music, Pictures, Public, and Mail, Messages, Safari, Calendars, AddressBook,
+Mobile Documents and CloudStorage in Library). For a project inside one of them,
+`personalDenials` uses `denyAround`: every entry of that folder except the way to the project, as
+the folder is when the command starts. A model's `find /` in an eval had read them, and macOS asked
+the user to let iTerm into Downloads and Photos.
 
 ### Escaped processes on macOS (`reaper.ts`, `native/garuda-reap.c`, 0.17)
 
