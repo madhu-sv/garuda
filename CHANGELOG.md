@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fix: repo-task evals (`-s repo`, `garuda advise`) on macOS failed every check in 0.18.1 when the
+  project's tools live in `~/Library`. pnpm runs the version that a project asks for from
+  `~/Library/pnpm`, and the 0.18.1 rules denied all of the home folder except hidden entries. The
+  check stopped with "EPERM: process.cwd failed", so both models passed 0 of 30 in the user's run.
+  `~/Library` is readable again in these runs; Mail, Messages, Safari, iCloud Drive, the other
+  personal parts and the keychains stay denied for every sandboxed command. Run 0.18.1 repo evals
+  again.
+- `advise` gives no advice when neither model passes a task: the check itself may fail.
 - The Homebrew formula in the repository names 0.18.1 and its tarball hash.
 - `garuda advise` runs 4 tasks at a time (`--parallel <n>`); each result line starts with the
   model and a count, as in `[haiku-5-5 12/30] ✓ fix-parser: pass`. The first real run, one at a

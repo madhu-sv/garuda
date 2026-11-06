@@ -89,6 +89,8 @@ describe("repo evals", () => {
       "dev/garuda/package.json",
       "dev/garuda-live/src/",
       "Documents/",
+      "Library/pnpm/.tools/pnpm/10.28.0/",
+      "Library/Mail/",
     ]);
     const root = join(home, "dev", "garuda");
     const deny = repoTaskReadDenials(root, home);
@@ -103,6 +105,13 @@ describe("repo evals", () => {
     );
     expect(deny).not.toContain(join(root, "node_modules"));
     expect(deny).not.toContain(join(home, ".nvm"));
+    // pnpm runs a project's version from ~/Library/pnpm: with Library denied, every check failed.
+    expect(deny.filter((p) => p.startsWith(join(home, "Library")))).toEqual([]);
+    // Its personal parts stay denied by the rules of every sandboxed command.
+    const all = sandboxPaths(join(base, "copy"), { denyRead: deny }, home).denyReadPaths;
+    expect(all).toContain(join(home, "Library", "Mail"));
+    expect(all).toContain(join(home, "Library", "Keychains"));
+    expect(all).not.toContain(join(home, "Library", "pnpm"));
     // A checkout outside the home folder: only its own entries.
     const outside = tree(["node_modules/", "src/"]);
     expect(repoTaskReadDenials(outside, join(base, "nohome"))).toEqual([join(outside, "src")]);

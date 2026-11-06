@@ -44,6 +44,11 @@ export function adviceText(a: string, b: string, c: Comparison, tasks: number): 
     return `Advice: ${b} for this repo. It passes more often.${rough}`;
   if (c.verdict === "B passes less")
     return `Advice: ${a} for this repo. It passes more often.${rough}`;
+  // 0.18.2: in the first run on 0.18.1, both models passed none because the check itself could not
+  // run in the sandbox. That says nothing about the models.
+  if (c.rateA === 0 && c.rateB === 0) {
+    return `Advice: none. Neither model passed a task, so the check itself may fail: read a run's "reason" in report.json before you trust this.`;
+  }
   const ratio = c.costRatio;
   if (ratio === undefined) {
     return `Advice: no clear difference in passes, and the cost could not be compared.${rough}`;

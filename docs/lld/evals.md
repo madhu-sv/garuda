@@ -39,9 +39,13 @@ For each task (and each repeat):
    no history (`isolatedTaskCopy`: `read-tree` and `checkout-index` through a temporary index, then
    a new repository with one commit; `node_modules` and venvs linked), and its commands cannot read
    the project's checkout (except those links) or the rest of the home folder except its hidden
-   entries (`repoTaskReadDenials`, in `sandbox.denyRead`). Before, a worktree shared the project's
-   history, and a model read the user's live checkout: both hold the commit that the task asks for.
-   Results of repo runs before 0.18.1 may have read the answer.
+   entries and `~/Library` (`repoTaskReadDenials`, in `sandbox.denyRead`). Before, a worktree
+   shared the project's history, and a model read the user's live checkout: both hold the commit
+   that the task asks for. Results of repo runs before 0.18.1 may have read the answer. 0.18.1
+   denied `~/Library` too, and on macOS pnpm runs a project's own version from `~/Library/pnpm`:
+   every check failed with EPERM on its working folder. 0.18.2 keeps `~/Library` readable; its
+   personal parts and the keychains stay denied by the rules of every sandboxed command. Repo runs
+   of 0.18.1 on macOS that use pnpm (or other tools in `~/Library`) are not valid.
 2. Snapshot the protected files. Default: tests (`test/`, `tests/`, `src/test/`) and build files
    (`pom.xml`, `pyproject.toml`). A task can list its own. Since 0.17 (T11a) also a hash of every
    file (`treeState`): after the run and before the check, the changed files go to `changed`, and

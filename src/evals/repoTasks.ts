@@ -227,13 +227,17 @@ export async function isolatedTaskCopy(
  * The reads to deny in an eval run of a repo task (0.18.1): the rest of the home folder (other
  * checkouts and copies of the project hold the answer too), and in the project's own folder
  * everything except the links that the task copy uses. Hidden entries of the home folder stay
- * readable: toolchains and package caches live there.
+ * readable: toolchains and package caches live there. So does `~/Library` (0.18.2): on macOS,
+ * pnpm runs the version that a project asks for from `~/Library/pnpm`, and caches and user
+ * site-packages are there too. With it denied, every check of the user's first repo run failed
+ * with EPERM on the working folder. Its personal parts (Mail, Messages, iCloud Drive and the
+ * like) and the keychains stay denied by the rules of every sandboxed command.
  */
 export function repoTaskReadDenials(root: string, home: string): string[] {
   const links = LINK_CANDIDATES.map((name) => join(root, name));
   const inHome = root === home || root.startsWith(`${home}${sep}`);
   return [
-    ...(inHome ? denyAround(home, links, true) : []),
+    ...(inHome ? denyAround(home, [...links, join(home, "Library")], true) : []),
     ...(inHome ? [] : denyAround(root, links)),
   ];
 }

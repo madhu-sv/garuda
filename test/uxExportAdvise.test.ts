@@ -198,6 +198,13 @@ describe("garuda advise", () => {
     );
   });
 
+  it("when neither model passes a task, it gives no advice and points at the check", () => {
+    const c = compare(report("haiku", 0, 0.004), report("sonnet", 0, 0.04));
+    expect(adviceText("haiku", "sonnet", c, 12)).toMatch(
+      /^Advice: none\. Neither model passed a task, so the check itself may fail/,
+    );
+  });
+
   it("with fewer than 10 tasks it says the advice is a rough guide", () => {
     const c = compare(report("haiku", 2, 0.004), report("sonnet", 2, 0.04));
     expect(adviceText("haiku", "sonnet", c, 6)).toMatch(/With 6 tasks, this is a rough guide\.$/);
