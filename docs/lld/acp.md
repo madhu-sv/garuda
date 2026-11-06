@@ -23,7 +23,7 @@ shows and answers; it never runs a command or writes a file for Garuda.
   types, the zod schemas of every message, and the stdio framing (`ndJsonStream`). Its peer
   dependencies are zod, which Garuda already has, and an optional `@modelcontextprotocol/server`,
   which only its experimental MCP entry loads. The version is pinned in `package.json`.
-- SDK 2.x (0.18.3): the default import is the stable v1 schema; unstable features need
+- SDK 2.x (0.19.0): the default import is the stable v1 schema; unstable features need
   `/unstable`. Garuda uses only stable methods and updates (`initialize`, `authenticate`,
   `session/new`, `session/prompt`, `session/cancel`, `session/set_mode`; message and thought
   chunks, tool calls and their updates, the command list) and the stable terminal auth method,
