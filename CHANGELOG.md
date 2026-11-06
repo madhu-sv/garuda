@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Homebrew formula in the repository names 0.18.1 and its tarball hash.
+
 ## 0.18.1 (2026-11-06)
 
 A security release. In 0.18.0 and earlier, a command in the OS sandbox could read your personal
