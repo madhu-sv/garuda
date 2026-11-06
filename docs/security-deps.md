@@ -60,3 +60,21 @@ one is in `pnpm.auditConfig.ignoreGhsas` in package.json and in this table.
   from servers. The Audit workflow found it on its first run.
 - Build and test tools: `@modelcontextprotocol/server` 2.3.1 (tests only), vite 8.3.5, esbuild
   0.28 (override), `source-map-js` 1.2.2; the website's astro, starlight and mermaid.
+
+## 0.18.3 updates
+
+The three majors that Dependabot opened (#25, #26, #27), each checked against its migration guide.
+`pnpm audit --prod` finds nothing after them.
+
+- `@anthropic-ai/sdk` 0.128.0 → 1.6.0. API version `2026-10-21`; the key goes out as
+  `Authorization: Bearer`; `temperature`, `top_p` and `top_k` are refused (Garuda sends none;
+  `test/anthropicSdk1.test.ts` checks the request). The license is now Apache-2.0 (was MIT). New
+  transitive dependency: `@opentelemetry/api`. With no key, the SDK also reads the `ant` CLI's
+  profiles in `~/.config/anthropic`; its `credentials` folder is now unreadable in the sandbox.
+- `undici` 7.30.1 → 8.12.4 (Garuda's Claude client). Needs Node.js 22.19 or newer. HTTP/2 stays off
+  for model requests (`STREAM_ALLOW_H2`): the 20-minute wait for quiet streams was checked on
+  HTTP/1.1.
+- `@agentclientprotocol/sdk` 1.7.0 → 2.4.0. Garuda uses only the stable ACP v1 surface and the app
+  API that 2.x keeps. Its optional peer `@modelcontextprotocol/server` is loaded only by an
+  experimental entry that Garuda does not use.
+- Tests only: `@modelcontextprotocol/server` 2.3.1 → 2.4.0, to match that peer.

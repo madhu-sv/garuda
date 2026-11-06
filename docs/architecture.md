@@ -142,7 +142,8 @@ The rules keep the core independent of the interface, and keep risky code in one
 
 1. The loop, the app, the agents, the evals, the context and the session never import the CLI.
 2. Only `src/model/anthropic.ts` imports `@anthropic-ai/*` (N1). It also imports `undici`, for a
-   fetch that lets a stream stay quiet for up to 20 minutes while the model thinks.
+   fetch that lets a stream stay quiet for up to 20 minutes while the model thinks (over HTTP/1.1:
+   undici 8 would use HTTP/2, where that wait was not checked).
 3. Only `src/sandbox/` imports `child_process` (N8). Biome also blocks it.
 4. Only `src/mcp/` imports `@modelcontextprotocol/*`, and never its stdio transport: MCP servers start
    through the Executor.
