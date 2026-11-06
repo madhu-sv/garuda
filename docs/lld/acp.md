@@ -20,8 +20,15 @@ shows and answers; it never runs a command or writes a file for Garuda.
 - ACP protocol version 1 (the stable one). Version 2 is still marked experimental; Garuda does not
   offer it.
 - The official TypeScript SDK `@agentclientprotocol/sdk` (Apache-2.0, Zed Industries). It gives the
-  types, the zod schemas of every message, and the stdio framing (`ndJsonStream`). Its only peer
-  dependency is zod, which Garuda already has. The version is pinned in `package.json`.
+  types, the zod schemas of every message, and the stdio framing (`ndJsonStream`). Its peer
+  dependencies are zod, which Garuda already has, and an optional `@modelcontextprotocol/server`,
+  which only its experimental MCP entry loads. The version is pinned in `package.json`.
+- SDK 2.x (0.18.3): the default import is the stable v1 schema; unstable features need
+  `/unstable`. Garuda uses only stable methods and updates (`initialize`, `authenticate`,
+  `session/new`, `session/prompt`, `session/cancel`, `session/set_mode`; message and thought
+  chunks, tool calls and their updates, the command list) and the stable terminal auth method,
+  and it already used the app API (`agent()`, `app.connect`) that 2.x keeps. 2.x refuses
+  `session/new` before `initialize`, as the protocol says.
 - The SDK is imported only by `garuda acp`, so the startup time of the other commands (N3) does not
   change.
 - Methods and fields that the schema marks **UNSTABLE** are not used.

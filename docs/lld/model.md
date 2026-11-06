@@ -54,7 +54,10 @@ bytes came while the model thought, and Node's fetch closed the stream after 300
 (`UND_ERR_BODY_TIMEOUT`); a Fable review lost its final answer three times.
 The summaries alone were not enough (a later review still timed out), so the Anthropic clients use
 their own fetch (`clientOptions`, `streamFetch`: undici's fetch with an `Agent` whose `bodyTimeout`
-is `STREAM_IDLE_MS`, 20 minutes). The SDK's own 10-minute timeout until the response starts stays. They are left
+is `STREAM_IDLE_MS`, 20 minutes, and `allowH2: false`). The SDK's own 10-minute timeout until the
+response starts stays. undici 8 (0.18.3) would use HTTP/2 with the API, which offers it; the idle
+limit was built and checked on HTTP/1.1, so `STREAM_ALLOW_H2` keeps that until a check of long,
+quiet streams on HTTP/2. They are left
 out (`thinking.ts`, `withoutThinking`) only where they cannot go back unchanged: after `/models` (a
 signature belongs to its model), on a resume with another model, when redaction changed one on
 disk (a thinking-only answer is then left out: empty content is refused), and on a resume after a message that redaction changed (the signature binds the content before
@@ -76,6 +79,14 @@ The loop, the session and the tools use only these types.
 
 - The only module that imports `@anthropic-ai/sdk`. `ResolvedModel.create()` loads it with `import()` on
   the first model call, so startup does not pay for it.
+- SDK 1.x (0.18.3) sends API version `2026-10-21` and the key as `Authorization: Bearer`, not
+  `X-Api-Key`. That version refuses `temperature`, `top_p` and `top_k` (400): Garuda sends none
+  (`test/anthropicSdk1.test.ts` checks the headers and the body). It refuses `document` blocks in
+  assistant messages and `citations` in user messages; Garuda sends neither (citations from web
+  search stay in the assistant's text blocks). With no key, the SDK also reads a profile from
+  `~/.config/anthropic` (the `ant` CLI's): its `credentials` folder is unreadable in the sandbox.
+  `setup` and the model catalog keep their own `fetch` calls with `X-Api-Key` and `2023-06-01`;
+  the API takes both.
 - `stream()` calls `messages.stream`, yields each `text_delta`, then yields the final message as a
   `ModelResponse`. The abort signal goes to the SDK.
 - Mapping functions are pure and exported for tests: `toWireParams`, `toWireTools`, `toWireMessage`,

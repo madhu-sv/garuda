@@ -173,6 +173,8 @@ describe("garuda acp (0.15)", () => {
     });
     const { root } = project();
     const errors = await createClient({ name: "t" }).connectWith(server.app, async (agent) => {
+      // ACP SDK 2.x refuses session/new before initialize, as the protocol says (0.18.3).
+      await agent.request(methods.agent.initialize, { protocolVersion: PROTOCOL_VERSION });
       const relative = await agent
         .request(methods.agent.session.new, { cwd: "some/folder", mcpServers: [] })
         .catch((e: Error) => e.message);
