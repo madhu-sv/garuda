@@ -106,7 +106,16 @@ export interface EvalCommandOptions {
   addendum?: string;
   /** UX U8: `garuda advise` picks the run folder; default .garuda/evals/<run-id>. */
   outDir?: string;
+  /**
+   * `garuda advise` (0.18.2): each result line starts with "[<label> 12/30]", and the tool-call
+   * lines are left out (with runs in parallel, they mix).
+   */
+  progress?: string;
 }
+
+/** "[haiku 12/30] " before a result line for `garuda advise`; "" without a label. */
+export const progressHead = (label: string | undefined, done: number, total: number): string =>
+  label === undefined ? "" : `[${label} ${done}/${total}] `;
 
 /** A batch step can wait up to 24 hours; a whole task gets 12 hours with --batch on. */
 export const BATCH_TASK_TIMEOUT_MS = 12 * 60 * 60_000;
@@ -396,6 +405,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     );
   }
   const started = Date.now();
+  let done = 0;
   const results = await runEvals(
     tasks,
     {
@@ -426,7 +436,9 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       executor: executor.name === "host" ? "host" : "os",
       ...(options.keep ? { keep: true } : {}),
       onEvent: (taskId, event) => {
-        if (event.type === "tool_call") process.stderr.write(`  [${taskId}] ${event.call.name}\n`);
+        if (event.type === "tool_call" && options.progress === undefined) {
+          process.stderr.write(`  [${taskId}] ${event.call.name}\n`);
+        }
         // For example the output limit (0.12): shows when a run recovered from a cut-off response.
         if (event.type === "notice") process.stderr.write(`  [${taskId}] ${event.text}\n`);
         if (event.type === "model_retry")
@@ -435,10 +447,13 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
           );
       },
     },
-    (r) =>
+    (r) => {
+      done++;
+      const head = progressHead(options.progress, done, tasks.length);
       process.stderr.write(
-        `${r.passed ? "✓" : "✗"} ${r.id}: ${r.passed ? "pass" : "fail"} (${r.steps} steps)${r.reason ? `\n    ${r.reason.split("\n").slice(0, 3).join("\n    ")}` : ""}\n`,
-      ),
+        `${head}${r.passed ? "✓" : "✗"} ${r.id}: ${r.passed ? "pass" : "fail"} (${r.steps} steps)${r.reason ? `\n    ${r.reason.split("\n").slice(0, 3).join("\n    ")}` : ""}\n`,
+      );
+    },
     // A refused key or an unreachable API fails every run: stop at the first one (0.17).
     isSetupFailure,
   );
@@ -515,16 +530,32 @@ async function buildFromGit(options: EvalCommandOptions): Promise<number> {
       return 1;
     }
   }
+  // The check as an eval runs it obeys the team policy too (its sandbox rules).
+  const { loadTeamPolicy } = await import("../permissions/policy.js");
+  let team: Awaited<ReturnType<typeof loadTeamPolicy>>;
+  try {
+    team = await loadTeamPolicy();
+  } catch (error) {
+    process.stderr.write(`Team policy: ${(error as Error).message}\n`);
+    return 1;
+  }
+  const { checkAsEval } = await import("../evals/runner.js");
   process.stderr.write(
-    `Building the repo suite from ${options.commits ?? DEFAULT_COMMITS} recent commits${options.since === undefined ? "" : ` since ${options.since}`} in ${root}.\nEach candidate runs its own test files with \`${testCommand}\` twice on this machine (no sandbox), in a git worktree; your checkout does not change.\n\n`,
+    `Building the repo suite from ${options.commits ?? DEFAULT_COMMITS} recent commits${options.since === undefined ? "" : ` since ${options.since}`} in ${root}.\nEach candidate runs its own test files with \`${testCommand}\` twice on this machine (no sandbox), in a git worktree; your checkout does not change. A kept one runs a third time as an eval runs it: in a copy, in the sandbox.\n\n`,
   );
-  const { suite, checked, skipped, failure } = await buildRepoSuite(new HostExecutor(), root, {
-    testCommand,
-    ...(options.commits === undefined ? {} : { commits: options.commits }),
-    ...(options.since === undefined ? {} : { since: options.since }),
-    ...(options.maxTasks === undefined ? {} : { maxTasks: options.maxTasks }),
-    onProgress: (line) => process.stderr.write(`  ${line}\n`),
-  });
+  const { suite, checked, skipped, failure, evalFailure } = await buildRepoSuite(
+    new HostExecutor(),
+    root,
+    {
+      testCommand,
+      evalCheck: (sha, check) =>
+        checkAsEval(root, sha, check, team === undefined ? {} : { policy: team.policy }),
+      ...(options.commits === undefined ? {} : { commits: options.commits }),
+      ...(options.since === undefined ? {} : { since: options.since }),
+      ...(options.maxTasks === undefined ? {} : { maxTasks: options.maxTasks }),
+      onProgress: (line) => process.stderr.write(`  ${line}\n`),
+    },
+  );
   const file = await saveRepoSuite(suite);
   const reasons = Object.entries(skipped)
     .sort((a, b) => b[1] - a[1])
@@ -539,6 +570,13 @@ async function buildFromGit(options: EvalCommandOptions): Promise<number> {
             `The first failure at a commit (${failure.sha.slice(0, 7)}: \`${failure.command}\`):`,
             ...failure.tail.split("\n").map((line) => `  ${line}`),
             'If every commit fails like this, the tests do not run in a worktree on this machine; give a working command with --test-command ("{files}" takes the test files).',
+          ]),
+      ...(evalFailure === undefined
+        ? []
+        : [
+            `The first commit whose tests pass here but fail as an eval runs them (${evalFailure.sha.slice(0, 7)}: \`${evalFailure.command}\`):`,
+            ...evalFailure.tail.split("\n").map((line) => `  ${line}`),
+            "No model could pass such a task, so it is left out. A test that needs the network, or starts its own sandbox, fails like this.",
           ]),
       `Suite: ${file}`,
       ...(suite.tasks.length === 0

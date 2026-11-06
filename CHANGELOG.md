@@ -1,8 +1,54 @@
 # Changelog
 
-## Unreleased
+## 0.18.2 (2026-11-06)
 
+A fix release for repo evals (`garuda eval -s repo`, `garuda advise`). On macOS, 0.18.1 failed
+every check of a project whose tools live in `~/Library` (pnpm does), and Vite projects failed
+before a test ran. It also makes `garuda advise` faster and cheaper to repeat: runs in parallel,
+reuse of earlier runs, a cost estimate from real requests, and the command to go on after a stop
+at the cap. A provider outage no longer counts against a model.
+
+- Fix: repo-task evals (`-s repo`, `garuda advise`) on macOS failed every check in 0.18.1 when the
+  project's tools live in `~/Library`. pnpm runs the version that a project asks for from
+  `~/Library/pnpm`, and the 0.18.1 rules denied all of the home folder except hidden entries. The
+  check stopped with "EPERM: process.cwd failed", so both models passed 0 of 30 in the user's run.
+  `~/Library` is readable again in these runs; Mail, Messages, Safari, iCloud Drive, the other
+  personal parts and the keychains stay denied for every sandboxed command. Run 0.18.1 repo evals
+  again.
+- `advise` gives no advice when neither model passes a task: the check itself may fail.
+- Evals: a timeout while the model's API is silent is a new failure kind, `provider`. It applies
+  when a request was open at the limit, and the stream had broken and been retried or the API had
+  sent nothing for 2 minutes. Such a run is not scored, and it runs once more by itself; its
+  spending is kept. In the user's Sonnet run, 4 of 5 timeouts were such stalls, and they counted
+  against the model. A timeout also shows its steps now, not 0.
+- Fix: in repo-task evals, Vite could not write its compiled `vitest.config.ts` to
+  `node_modules/.vite-temp`, because the task's `node_modules` links to the project's and was
+  read-only. In the user's suite 10 of 30 tasks failed for both models before a test ran.
+  Commands may now write `.vite-temp`, `.vite` and `.cache` there, and nothing else.
+- `garuda eval --from-git` checks each kept commit a third time, as an eval runs it (a copy, in the
+  sandbox), and leaves out a commit whose tests fail there. Before, it checked only on the host,
+  and a task could pass the build but never an eval (2 of 30 in the user's suite: tests that start
+  their own sandbox). Build your suite again.
 - The Homebrew formula in the repository names 0.18.1 and its tarball hash.
+- `garuda advise` runs 4 tasks at a time (`--parallel <n>`); each result line starts with the
+  model and a count, as in `[haiku-5-5 12/30] ✓ fix-parser: pass`. The first real run, one at a
+  time, took 64 minutes for 30 tasks.
+- `advise` reuses an earlier run of a model when the model, the task hashes, `--repeat`, `--seed`
+  and the Garuda version and build commit are the same and every run is there. Runs of 0.18.0 and
+  before are not reused: they could read your checkout (the 0.18.1 fix).
+- The cost estimate comes from the mean cost of earlier runs of the model on the same tasks. With
+  none, it prices each request of the other model's runs (from their session files) at this
+  model's prices; else the token guess. Each line says which. (A first version scaled by the ratio
+  of list prices: 20 for Sonnet 5.5 over Haiku 5.5, but Haiku costs 5 times as much for a prompt
+  over 100 000 tokens. On a real run it estimated $19.16 where the requests give $12.62.)
+- The repriced estimate is scaled by what both models really cost on shared repo tasks before:
+  Sonnet 5.5 needs fewer steps and tokens than Haiku 5.5, and cost $6.30 where Haiku's requests at
+  its prices gave $12.62 (× 0.52). Without the factor, the user's 90-run estimate was $33.62; with
+  it, $17.37. Runs where no task passed, and built-in suites, are left out.
+- When the estimate or the first model's real cost passes `--max-cost`, `advise` prints the
+  command that goes on (`garuda advise --models a,b --repeat R --seed S --max-cost N`). The first
+  model's run is kept and reused.
+- `advise` stops when a run fails to start (for example a refused key), not at a missing report.
 
 ## 0.18.1 (2026-11-06)
 

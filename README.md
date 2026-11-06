@@ -7,7 +7,7 @@ Website and docs: https://madhu-sv.github.io/garuda/
 Garuda is a coding agent for the terminal, and for editors over the Agent Client Protocol. It reads
 and edits your code, runs commands in an OS sandbox, and keeps an audit log of its permission
 decisions. It works with Claude and with OpenAI-compatible models, local ones too. This is version
-0.18.1. Release notes: [CHANGELOG.md](CHANGELOG.md).
+0.18.2. Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## What Garuda does on your machine
 

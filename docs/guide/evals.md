@@ -39,8 +39,13 @@ The report (0.17) says how far one run's numbers can be trusted:
   a pass with extra edits is still a weaker result.
 - failures by kind (0.18.1): `check` (the check failed after the agent stopped), `protected-files`
   (the agent changed the task's tests), `step-limit`, `token-limit`, `repeated-calls`, `refusal`,
-  `timeout`, `error`, and `setup` (the key, the connection or the MCP server). A limit or a timeout
-  wins over the check that failed after it. Up to three runs of each kind are named.
+  `timeout`, `provider`, `error`, and `setup` (the key, the connection or the MCP server). A limit
+  or a timeout wins over the check that failed after it. Up to three runs of each kind are named.
+  `provider` (0.18.2): the run hit its time limit while a model request was open, after a broken
+  and retried stream or 2 minutes of silence from the API. That says nothing about the agent, so
+  the run is not scored, and it runs once more by itself; the result keeps the spending of both.
+  A command that runs until the limit is still the agent's `timeout`. A timeout now shows the
+  steps up to the stop, not 0.
 
 When the provider refuses the API key (401 or 403), or the API cannot be reached (a refused
 connection, an unknown host, a certificate error), `garuda eval` stops after that run and says
@@ -212,6 +217,21 @@ difference in passes, the one that costs clearly less per accepted change. With 
 tasks the advice says it is a rough guide. The reports, `advice.txt` and `report.html` are in
 `.garuda/evals/advise-<id>/`.
 
+Since 0.18.2:
+
+- **4 runs at a time.** Change it with `--parallel <n>`. Each result line starts with the model and
+  a count: `[haiku-5-5 12/30] ✓ fix-parser: pass`.
+- **Earlier runs are reused.** A run with the same model, task hashes, `--repeat`, `--seed` and
+  Garuda version and build, with every run there, is not run again. `advise` prints
+  `Reusing <folder>`. Runs of 0.18.0 and before are never reused.
+- **A better estimate.** It comes from earlier runs of the model on the same tasks. Else it prices
+  each request of the other model's runs at this model's prices; a run with a subagent cannot be
+  priced again and is left out. When both models ran other repo tasks before, that price is
+  scaled by how their real costs compared there (Sonnet 5.5 needs about half the tokens of
+  Haiku 5.5). Else it is a token guess. The plan says which.
+- **A command to go on.** When the estimate, or the first model's real cost, passes `--max-cost`,
+  `advise` prints the command to run next, with a higher cap. The first model's run is reused.
+
 ### Benchmark your repo (0.12)
 
 Measure Garuda on your own code. `--from-git` turns recent commits that changed code and tests into
@@ -228,7 +248,13 @@ garuda eval -s repo -m claude-sonnet-5     # run them (the A/B flags work too)
 A commit is kept only when its tests fail at the parent and pass at the commit. Garuda runs only the
 commit's test files when it knows the runner; `--test-command "make test T={files}"` works for others.
 Commits that change dependencies, binary files or more than 10 code files are skipped. Building runs your test command twice per
-candidate on this machine, with no sandbox, in git worktrees: your checkout does not change.
+candidate on this machine, with no sandbox, in git worktrees: your checkout does not change. Since
+0.18.2 a kept commit runs its tests a third time, as an eval runs them: in a copy of the commit, in
+the sandbox. A commit whose tests fail there is left out, because no model could pass it. For
+example, a test that starts its own sandbox fails like this on macOS. The output shows the first
+such failure. In an eval, commands may write Vite's and other caches in your `node_modules`
+(`.vite-temp`, `.vite` and `.cache`), and nothing else there.
+Built a suite before 0.18.2? Build it again: in one user's suite, 12 of 30 tasks could not pass.
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).
 Commands, and the check after each task, run in the scratch folders, in the OS sandbox when there is one (`--executor auto|os|host`). Results and session files go to
