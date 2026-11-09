@@ -90,6 +90,8 @@ export interface EvalCommandOptions {
   testCommand?: string;
   /** --network <entries...>: the network allowlist for sandboxed commands (0.13). */
   network?: string[];
+  /** T15: "needed" reads for the tasks (repo tasks always use them). Default "open". */
+  reads?: string;
   /** --shuffle: the task × repeat list in a random order from --seed (0.17, T11a). */
   shuffle?: boolean;
   /** --seed <n>: for --shuffle and the report's bootstrap interval. Default 1. */
@@ -123,6 +125,11 @@ export const BATCH_TASK_TIMEOUT_MS = 12 * 60 * 60_000;
 /** `garuda eval` (N5). Results go to .garuda/evals/<run-id>/ in the current folder. */
 export async function runEvalCommand(options: EvalCommandOptions): Promise<number> {
   if (options.fromGit) return buildFromGit(options);
+  // A wrong word fails before anything else (T15 step 3).
+  if (options.reads !== undefined && options.reads !== "open" && options.reads !== "needed") {
+    process.stderr.write(`--reads must be "open" or "needed", not "${options.reads}".\n`);
+    return 1;
+  }
   let repoTasks: EvalTask[] | undefined;
   if (options.list || options.suite === "repo") {
     const loaded = await repoSuite();
@@ -232,6 +239,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
     return 1;
   }
   let network: string[] | undefined;
+  const readsMode = options.reads as "open" | "needed" | undefined;
   if (options.network !== undefined) {
     network = options.network.flatMap((e) => e.split(",")).filter((e) => e.trim() !== "");
     const { problems } = expandAllowlist(network);
@@ -396,7 +404,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const stale = staleBuildNote(BUILD_COMMIT, await garudaCommit());
   if (stale !== undefined) process.stderr.write(`Warning: ${stale}\n\n`);
   process.stderr.write(
-    `${baseline === undefined ? "" : `Baseline: Claude Code ${baseline.version ?? ""} (claude -p, every tool allowed, in the sandbox, network only to api.anthropic.com).\n`}Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, mcp ${mcp === undefined ? "off" : `${mcp.server}${mcp.prepare === undefined ? "" : `, prepared with \`${mcp.prepare}\``}`}, batch ${batchMode}${addendum === undefined ? "" : `, addendum ${options.addendum} (${addendum.length} characters)`}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
+    `${baseline === undefined ? "" : `Baseline: Claude Code ${baseline.version ?? ""} (claude -p, every tool allowed, in the sandbox, network only to api.anthropic.com).\n`}Running ${chosen.length} task(s)${repeat > 1 ? ` × ${repeat}` : ""}${options.shuffle ? ` in a shuffled order (seed ${seed})` : ""} (suite ${options.task === undefined ? suite : "custom"}, code index ${index}, subagents ${subagentsMode}${sub === undefined ? "" : ` on ${sub.spec}`}, todo ${todoMode}, lsp ${lspMode}, keep-thinking ${thinkingMode}, format ${formatMode}, network ${network === undefined ? "off" : network.join(",")}, reads ${suite === "repo" ? "needed" : (readsMode ?? "open")}, mcp ${mcp === undefined ? "off" : `${mcp.server}${mcp.prepare === undefined ? "" : `, prepared with \`${mcp.prepare}\``}`}, batch ${batchMode}${addendum === undefined ? "" : `, addendum ${options.addendum} (${addendum.length} characters)`}${parallel > 1 ? `, ${parallel} at a time` : ""}) with ${modelId}. Garuda approves every call except its deny rules;\n${where}, in scratch folders.\n\n`,
   );
 
   if (batchMode === "on") {
@@ -426,6 +434,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
       lsp: lspMode === "on",
       keepThinking: thinkingMode === "on",
       ...(network === undefined ? {} : { network }),
+      ...(readsMode === undefined ? {} : { reads: readsMode }),
       ...(baseline === undefined ? {} : { agent: baseline }),
       ...(mcp === undefined ? {} : { mcp }),
       ...(addendum === undefined ? {} : { addendum }),
@@ -472,7 +481,7 @@ export async function runEvalCommand(options: EvalCommandOptions): Promise<numbe
   const report = `${formatReport(results, { seed })}\nWall time: ${Math.round(wallMs / 1000)} s${parallel > 1 ? ` (${parallel} tasks at a time)` : ""}.`;
   writeFileSync(
     join(outDir, "report.json"),
-    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true, split, ...(mcp === undefined ? {} : { mcp }), ...(addendum === undefined ? {} : { addendum: { file: options.addendum ?? "", text: addendum } }), agent: baseline === undefined ? { name: "garuda" } : { name: "claude-code", ...(baseline.version === undefined ? {} : { version: baseline.version }) } }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
+    `${JSON.stringify({ ...(await reportV2({ model: resolved.spec, provider: resolved.provider, executor: executor.name, isolation: executor.isolation, seed, shuffle: options.shuffle === true, split, ...(mcp === undefined ? {} : { mcp }), ...(addendum === undefined ? {} : { addendum: { file: options.addendum ?? "", text: addendum } }), agent: baseline === undefined ? { name: "garuda" } : { name: "claude-code", ...(baseline.version === undefined ? {} : { version: baseline.version }) } }, chosen, results)), model: modelId, suite, repeat, codeIndex: index, subagents: subagentsMode, subagentModel: sub?.spec, todo: todoMode, lsp: lspMode, keepThinking: thinkingMode, format: formatMode, network: network ?? "off", reads: suite === "repo" ? "needed" : (readsMode ?? "open"), batch: batchMode, parallel, wallMs, executor: executor.name, summary: summarize(results), results }, null, 2)}\n`,
   );
   process.stdout.write(`\n${report}\n\nSession files and report.json: ${outDir}\n`);
   return results.every((r) => r.passed) ? 0 : 2;

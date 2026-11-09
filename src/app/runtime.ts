@@ -317,6 +317,10 @@ export interface RuntimeOptions {
    * `onDeny` records it for the report. The job's approval list comes in `settings.allow`.
    */
   unattended?: { reason: string; onDeny?: (tool: string, target: CallTarget) => void };
+  /** T15: the home folder for "needed" reads (tests give a fake one). Default: the user's. */
+  readsHome?: string;
+  /** T15: false: no question after a blocked read (evals; see PermissionEngineOptions). */
+  readQuestions?: boolean;
   /**
    * The network allowlist (0.13, `settings.network`). `approved`: the list was approved elsewhere
    * (a job's approval, the eval command line), so no question. `home`: where trust.json is (tests).
@@ -581,6 +585,8 @@ export class Runtime {
       access: profileAccess(profiles),
       mode: () => this.turnMode,
       ...(options.unattended === undefined ? {} : { unattended: options.unattended }),
+      ...(options.readsHome === undefined ? {} : { home: options.readsHome }),
+      ...(options.readQuestions === undefined ? {} : { readQuestions: options.readQuestions }),
     });
     this.exploreModel = undefined;
     // Off by default: an A/B eval (hard suite, 3 runs per arm) showed no gain in steps or cost.

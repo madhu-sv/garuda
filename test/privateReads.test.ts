@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { repoTaskReadDenials } from "../src/evals/repoTasks.js";
+import { repoTaskSandbox } from "../src/evals/runner.js";
 import {
   denyAround,
   PERSONAL_IN_HOME,
@@ -80,41 +81,21 @@ describe("personal folders", () => {
 });
 
 describe("repo evals", () => {
-  it("deny the checkout except its links, other copies of the project, and the rest of home", () => {
-    const home = tree([
-      ".nvm/node",
-      "dev/garuda/node_modules/",
-      "dev/garuda/src/",
-      "dev/garuda/.git/",
-      "dev/garuda/package.json",
-      "dev/garuda-live/src/",
-      "Documents/",
-      "Library/pnpm/.tools/pnpm/10.28.0/",
-      "Library/Mail/",
-    ]);
-    const root = join(home, "dev", "garuda");
-    const deny = repoTaskReadDenials(root, home);
-    expect(deny).toEqual(
-      expect.arrayContaining([
-        join(root, "src"),
-        join(root, ".git"),
-        join(root, "package.json"),
-        join(home, "dev", "garuda-live"),
-        join(home, "Documents"),
-      ]),
-    );
-    expect(deny).not.toContain(join(root, "node_modules"));
-    expect(deny).not.toContain(join(home, ".nvm"));
-    // pnpm runs a project's version from ~/Library/pnpm: with Library denied, every check failed.
-    expect(deny.filter((p) => p.startsWith(join(home, "Library")))).toEqual([]);
-    // Its personal parts stay denied by the rules of every sandboxed command.
-    const all = sandboxPaths(join(base, "copy"), { denyRead: deny }, home).denyReadPaths;
-    expect(all).toContain(join(home, "Library", "Mail"));
-    expect(all).toContain(join(home, "Library", "Keychains"));
-    expect(all).not.toContain(join(home, "Library", "pnpm"));
-    // A checkout outside the home folder: only its own entries.
+  it("in the home folder: no denials of their own, as needed reads hide the rest (T15 step 3)", () => {
+    const home = tree(["dev/garuda/node_modules/", "dev/garuda/src/", "Documents/"]);
+    expect(repoTaskReadDenials(join(home, "dev", "garuda"), home)).toEqual([]);
+    expect(repoTaskSandbox(join(home, "dev", "garuda"), home)).toMatchObject({ reads: "needed" });
+    expect(repoTaskSandbox(join(home, "dev", "garuda"), home)).not.toHaveProperty("denyRead");
+  });
+
+  it("outside the home folder: the checkout's own entries, not its links", () => {
     const outside = tree(["node_modules/", "src/"]);
-    expect(repoTaskReadDenials(outside, join(base, "nohome"))).toEqual([join(outside, "src")]);
+    const home = join(base, "nohome");
+    expect(repoTaskReadDenials(outside, home)).toEqual([join(outside, "src")]);
+    expect(repoTaskSandbox(outside, home)).toMatchObject({
+      reads: "needed",
+      denyRead: [join(outside, "src")],
+    });
   });
 });
 

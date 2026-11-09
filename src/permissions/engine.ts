@@ -63,6 +63,12 @@ export interface PermissionEngineOptions {
    * reason instead, and `onDeny` records it for the job report.
    */
   unattended?: { reason: string; onDeny?: (tool: string, target: CallTarget) => void };
+  /**
+   * T15: false turns off the question after a blocked read (`allowReads` allows nothing). Evals set
+   * it: their approver answers every question with yes, and a yes would let a repo task read the
+   * user's checkout, which holds the answer. Default true.
+   */
+  readQuestions?: boolean;
 }
 
 /** What the model reads when a job denies a call that its approval list does not cover (0.7). */
@@ -102,6 +108,7 @@ export class PermissionEngine implements PermissionGate {
   private readonly unattended: PermissionEngineOptions["unattended"];
   private readonly sessionRules: Rule[] = [];
   private readonly home: string;
+  private readonly readQuestions: boolean;
   /** T15 step 2: paths that the user let commands read for this session ("needed" mode). */
   private readonly sessionReadPaths = new Set<string>();
   /** The network proxy for sandboxed commands (0.13), when it runs. */
@@ -118,6 +125,7 @@ export class PermissionEngine implements PermissionGate {
     this.mode = options.mode ?? (() => "build");
     this.unattended = options.unattended;
     this.home = options.home ?? homedir();
+    this.readQuestions = options.readQuestions ?? true;
   }
 
   async check(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision> {
@@ -463,7 +471,8 @@ export class PermissionEngine implements PermissionGate {
         allowed.push(path);
         continue;
       }
-      if (this.unattended !== undefined || path === home || hiddenPlaces().includes(path)) continue;
+      if (!this.readQuestions || this.unattended !== undefined) continue;
+      if (path === home || hiddenPlaces().includes(path)) continue;
       const shown = shortPath(path, home);
       const target = { kind: "path" as const, path };
       const choice = await this.approver.ask(

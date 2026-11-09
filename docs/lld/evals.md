@@ -38,8 +38,12 @@ For each task (and each repeat):
    the project at the commit's parent, with the commit's test files added. Since 0.18.1 the copy has
    no history (`isolatedTaskCopy`: `read-tree` and `checkout-index` through a temporary index, then
    a new repository with one commit; `node_modules` and venvs linked), and its commands cannot read
-   the project's checkout (except those links) or the rest of the home folder except its hidden
-   entries and `~/Library` (`repoTaskReadDenials`, in `sandbox.denyRead`). Before, a worktree
+   the project's checkout (except those links) or the rest of the home folder. Since T15 step 3
+   this is "needed" reads (`repoTaskSandbox`, docs/lld/reads.md), with no read questions
+   (`readQuestions: false`) and no user `readPaths`; `repoTaskReadDenials` denies only a checkout
+   outside the home folder. Other suites take `--reads open|needed` (default `open`), and
+   report.json has `reads`. From 0.18.1 to T15 step 2 the rule was a deny list: the rest of the
+   home folder except its hidden entries and `~/Library`. Before, a worktree
    shared the project's history, and a model read the user's live checkout: both hold the commit
    that the task asks for. Results of repo runs before 0.18.1 may have read the answer. 0.18.1
    denied `~/Library` too, and on macOS pnpm runs a project's own version from `~/Library/pnpm`:

@@ -13,6 +13,14 @@
   general sandbox hint (whose `outside_sandbox` advice would drop the whole sandbox). In chat it
   asks "Let commands read ~/x in this session?" and says which `readPaths` line keeps it. Jobs and
   evals get no question; an eval run that failed this way has the new failure kind `sandbox`.
+- Evals (T15, step 3): repo tasks run with "needed" reads in place of their own deny list (the
+  home folder except its hidden entries and `~/Library`). The checkout and the rest of the home
+  folder stay hidden; the task copy and the links to `node_modules` and venvs stay readable. Your
+  own `sandbox.readPaths` do not apply in evals. `garuda eval --reads open|needed` sets the mode
+  for the other suites, and report.json shows it. Fixed on the way: an eval's auto approver would
+  have said yes to step 2's read question, so a blocked command could have read the checkout. Evals
+  now ask no read questions. The Claude Code baseline can read its own program (a native install
+  keeps it in `~/.local/share/claude`).
 - The Homebrew formula in the repository names 0.19.1 and its tarball hash.
 
 ## 0.19.1 (2026-11-09)

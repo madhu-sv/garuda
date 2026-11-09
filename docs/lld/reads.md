@@ -287,3 +287,27 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
   finder dropped a final dot that was part of the path ("…/.zshrc.: No such file"). Now a final dot
   is dropped only before a space or the line's end. The home folder shows as `~` in notes.
 
+
+## As built (step 3)
+
+- Repo-task evals run in `"needed"` mode (`repoTaskSandbox` in src/evals/runner.ts), in the agent's
+  runs and in the checks that build the suite (`checkAsEval`). The settings come from the eval, not
+  from files, so a user's own `readPaths` do not apply.
+- `repoTaskReadDenials` no longer denies the home folder (with its exceptions for hidden entries
+  and `~/Library`): the mode hides it. In the home folder the original checkout is hidden too, as
+  only the links' targets (`node_modules` and the like) are readable. A checkout outside the home
+  folder keeps its own rule: the checkout's entries except the links, as the mode covers only the
+  home folder and other volumes.
+- `garuda eval --reads open|needed` sets the mode for the other suites (default `open`). A wrong
+  word fails before anything else. The start line and report.json show `reads`; the repo suite
+  always shows `needed`.
+- A hole that step 2 left, found here: evals answer with `AutoApprover("once")` and are not
+  unattended, so `allowReads` would have asked it and got a yes for every blocked path. A command
+  could then read the checkout that holds the answer. The engine option `readQuestions: false`
+  (Runtime option of the same name) turns the question off; both eval runtimes set it. Step 2's
+  "no question in evals" is true only from here.
+- The Claude Code baseline: its real program is readable too (`withProgram`). A native install
+  links `~/.local/bin/claude` to a file in `~/.local/share/claude`, outside the scope.
+- Checked on Linux in bubblewrap with a fake home folder: a repo task's check read the task copy
+  and ran node; a private file in the home folder and the original checkout were "No such file or
+  directory".
