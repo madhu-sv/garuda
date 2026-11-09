@@ -282,4 +282,8 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
   scope first, and the detection counts only write paths inside the scope as readable.
 - Checked on Linux in bubblewrap: a blocked `cat` got the read note and no `outside_sandbox`
   advice; after a yes, the same command read the file.
+- The user's live test on macOS (2026-11-09): the question, a yes for the session, the next read,
+  and the note for `ls ~` worked. A typo, `head ~/.zshrc.`, then asked about `~/.zshrc`: the
+  finder dropped a final dot that was part of the path ("…/.zshrc.: No such file"). Now a final dot
+  is dropped only before a space or the line's end. The home folder shows as `~` in notes.
 

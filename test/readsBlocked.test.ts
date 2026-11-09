@@ -70,11 +70,21 @@ describe("finding blocked reads in a command's output", () => {
     ]);
     expect(findBlockedReads(out, { ...policy, reads: undefined })).toEqual([]);
     expect(findBlockedReads(`ls: ${home}: Operation not permitted`, policy)).toEqual([home]);
+    // A typo with a dot at the end: the path that failed is ".zshrc.", which does not exist, so
+    // there is no question about ".zshrc" (found in the user's live test).
+    expect(
+      findBlockedReads(`head: ${home}/notes/a.txt.: No such file or directory`, policy),
+    ).toEqual([]);
+    // A dot that ends a sentence is not part of the path.
+    expect(
+      findBlockedReads(`cannot open ${home}/notes/a.txt. Operation not permitted`, policy),
+    ).toEqual([join(home, "notes/a.txt")]);
   });
 
   it("the note names the paths and readPaths, and never suggests outside_sandbox", () => {
     const a = join(home, "notes/a.txt");
     expect(shortPath(a, home)).toBe("~/notes/a.txt");
+    expect(shortPath(home, home)).toBe("~");
     const note = readsHint([a], [], home);
     expect(note).toContain("The sandbox blocked reads of ~/notes/a.txt");
     expect(note).toContain('"sandbox.readPaths"');

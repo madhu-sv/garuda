@@ -227,7 +227,12 @@ export function findBlockedReads(
   for (const line of output.split("\n")) {
     if (!READ_ERROR.test(line)) continue;
     for (const match of line.matchAll(PATH_IN_TEXT)) {
-      let path = match[0].replace(/[.]+$/, "");
+      // A dot at the end ends a sentence only before a space or the line's end. In "head:
+      // ~/.zshrc.: No such file" it is part of the path (a typo of the user's), and the path that
+      // failed is ".zshrc.", not ".zshrc".
+      const after = line[(match.index ?? 0) + match[0].length];
+      const ends = after === undefined || /\s/.test(after);
+      let path = ends ? match[0].replace(/[.]+$/, "") : match[0];
       if (path.startsWith("~/")) path = join(scope.home, path.slice(2));
       if (!bases.some((b) => inside(path, b))) continue;
       if (readable.some((r) => inside(path, r))) continue;
@@ -252,7 +257,8 @@ function pathExists(path: string): boolean {
 
 /** A path for people: `~/x` in the home folder. */
 export function shortPath(path: string, home: string): string {
-  return inside(path, home) && path !== home ? `~/${path.slice(home.length + 1)}` : path;
+  if (path === home) return "~";
+  return inside(path, home) ? `~/${path.slice(home.length + 1)}` : path;
 }
 
 /**
