@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.19.1 (2026-11-09)
+
+A security fix and accessibility. Sandboxed commands can no longer read the keys that only
+publishing needs (Cargo, RubyGems, Maven's master password), and on Linux they can no longer reach
+the keyring through the session bus. The chat is complete for screen readers, can run with less
+motion, and uses the banner's saffron as its accent.
 
 - Security: sandboxed commands can no longer read the keys that only publishing needs:
   `~/.cargo/credentials.toml` (and `credentials`), `~/.gem/credentials` and
