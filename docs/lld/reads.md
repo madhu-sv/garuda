@@ -108,21 +108,28 @@ Everything else in the home folder is denied, and so are two places outside it:
 
 ## Secrets that are not files
 
-Two gaps exist in both modes today. They need a fix whatever the user decides about T15.
+**The macOS keychain: no gap (measured 2026-11-09).** A command could try to ask the keychain
+service instead of reading the keychain files: `security find-generic-password -s <service> -w`.
+The probe on the user's Mac (macOS, Garuda 0.19.0): a test item `garuda-probe` in the login
+keychain; the same command in the sandbox answered "The specified item could not be found in the
+keychain" (exit 44), and outside the sandbox the item was there. The `security` tool reads the
+keychain file to search it, and the sandbox denies `~/Library/Keychains`. Items in the
+data-protection keychain belong to apps by their signing entitlements, which a sandboxed command
+does not have. So no Mach-service rule is needed. The probe stays in the tests' notes, to run again
+on a new macOS version:
 
-**The macOS keychain.** Garuda denies the keychain files (`~/Library/Keychains`), but a command
-does not need them: `security find-generic-password -s <service> -w` asks the `securityd`
-service, and the profile allows every Mach service. A keychain item that the `security` tool
-created can trust that tool, so macOS may answer with no question. Command-line tools keep tokens
-this way; the GitHub CLI is one. The fix: deny the lookup of the security services in the profile
-(`(deny mach-lookup (global-name "com.apple.SecurityServer") …)`; the exact names come from the
-probe below). Cost to check: `xcodebuild` signs builds for a device with a keychain identity, and
-git's `osxkeychain` helper stops. Simulator builds use an ad-hoc signature and need no keychain.
+```sh
+security add-generic-password -s garuda-probe -a probe -w not-a-secret
+g -p 'Run this command and show its output: security find-generic-password -s garuda-probe -w'
+security delete-generic-password -s garuda-probe
+```
 
-**The Linux session bus.** `secret-tool lookup …` asks the Secret Service on the session bus,
-whose socket is `/run/user/<uid>/bus`. bubblewrap's `--unshare-net` does not cover a socket in the
-file system. The fix: an empty tmpfs over `/run/user/<uid>` (both modes). Cost: nothing that a
-build needs uses the session bus.
+**The Linux session bus (not measured).** `secret-tool lookup …` asks the Secret Service on the
+session bus, whose socket is `/run/user/<uid>/bus`, and the keyring can answer with no file read.
+bubblewrap's `--unshare-net` does not cover a socket in the file system. The fix: an empty tmpfs
+over `/run/user/<uid>`, in both modes. Cost: nothing that a build needs uses the session bus. To
+check on a Linux desktop with a keyring: store a test item with `secret-tool store`, then look it
+up through Garuda as in the macOS probe.
 
 **Credential files inside toolchain folders.** The deny list misses these, and they sit in folders
 that builds read:
@@ -138,16 +145,6 @@ that builds read:
 | `.nuget/NuGet/NuGet.Config` | feed passwords, but also feed URLs | Sometimes |
 
 The first three join `DENY_READ_IN_HOME` in both modes. The last four are open question 3.
-
-**The probe for the keychain** (on the Mac; it uses a test item, not a real secret):
-
-```sh
-security add-generic-password -s garuda-probe -a probe -w not-a-secret
-g -p 'Run this command and show its output: security find-generic-password -s garuda-probe -w'
-security delete-generic-password -s garuda-probe
-```
-
-If the output shows `not-a-secret`, the gap is real, and the fix goes in a patch before T15.
 
 ## The rules on each system
 
@@ -230,13 +227,13 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
 3. The mixed credential files (`.m2/settings.xml`, `.gradle/gradle.properties`, `.yarnrc.yml`,
    `NuGet.Config`): deny them in `"needed"` mode with a note that names `readPaths`, or keep them
    readable? (Proposal: deny; a build that needs one fails with a clear note.)
-4. The keychain fix: deny the security services in both modes, even though device builds with
-   `xcodebuild` then need `outside_sandbox`? (Proposal: yes; ad-hoc and simulator builds work.)
+4. The session-bus fix on Linux in both modes, before T15 itself? (Proposal: yes, with the three
+   publish-only credential files, in one small security patch.)
 
 ## Plan
 
-1. The probe; then the non-file secrets fix (keychain lookup, session bus, the three publish-only
-   credential files), in both modes. A patch release, because it is a security fix.
+1. The session bus on Linux and the three publish-only credential files, in both modes. A patch
+   release, because it is a security fix. (The macOS keychain probe found no gap.)
 2. `sandbox.reads` and `sandbox.readPaths`, the macOS and Linux rules, and tests that run real
    commands in the sandbox on each system (a denied read, a readable toolchain, the metadata rule).
 3. The blocked-read note, the chat question and the `sandbox` failure kind.
