@@ -9,6 +9,10 @@
   the mode with `requireNeededReads`. In this mode `~/.m2/settings.xml`,
   `~/.gradle/gradle.properties`, `~/.yarnrc.yml` and NuGet's config are unreadable unless
   `readPaths` names them. MCP servers keep open reads for now. Design: docs/lld/reads.md.
+- Sandbox (T15, step 2): when "needed" reads block a home path, Garuda names it instead of the
+  general sandbox hint (whose `outside_sandbox` advice would drop the whole sandbox). In chat it
+  asks "Let commands read ~/x in this session?" and says which `readPaths` line keeps it. Jobs and
+  evals get no question; an eval run that failed this way has the new failure kind `sandbox`.
 - The Homebrew formula in the repository names 0.19.1 and its tarball hash.
 
 ## 0.19.1 (2026-11-09)

@@ -261,3 +261,25 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
   and python ran; a private file in the home folder was "No such file or directory"; `ls ~`
   showed nothing private. The macOS check is the user's live test.
 
+## As built (step 2)
+
+- `findBlockedReads` (src/permissions/reads.ts) finds the blocked paths in a sandboxed command's
+  output: paths on lines with a read error ("Operation not permitted", "EPERM", "No such file or
+  directory" …) that exist on the host and are outside the scope. On Linux a blocked path looks
+  missing in the sandbox, so "exists on the host" is the test, not the message. The deny list's
+  secrets are left out (no question for them); the four mixed files are in.
+- The bash tool replaces the general sandbox hint with `readsHint` (the paths, "sandbox.readPaths",
+  and "do not use outside_sandbox": that advice would run the whole command unsandboxed) and asks
+  through `allowReads`: "Let commands read ~/x in this session?", yes for the session or no. A yes
+  adds the path to the engine's session paths; the next command reads it. Keeping it for the
+  project is the user's own line in `.garuda/settings.json` (as for the network, decision D4 of the
+  UX work); `readsKeepHint` names it. No question in jobs and evals, for the home folder itself or
+  for a hidden place.
+- The eval failure kind `sandbox` (`EvalResult.blockedReads`).
+- One design change from step 1, found by these tests: only a write path that is the home folder
+  itself turns the mode off. A writable parent (the temp folder that holds a test's home) did too,
+  and on Linux it covered the empty home folder. bubblewrap now mounts the write paths outside the
+  scope first, and the detection counts only write paths inside the scope as readable.
+- Checked on Linux in bubblewrap: a blocked `cat` got the read note and no `outside_sandbox`
+  advice; after a yes, the same command read the file.
+

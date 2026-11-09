@@ -126,7 +126,8 @@ describe("the rule helpers", () => {
     ]);
     expect(homeIsWritable(scope, ["/tmp"])).toBe(false);
     expect(homeIsWritable(scope, ["/Users/me"])).toBe(true);
-    expect(homeIsWritable(scope, ["/Users"])).toBe(true);
+    // A writable parent does not turn the mode off (a test's home in the temp folder).
+    expect(homeIsWritable(scope, ["/Users"])).toBe(false);
   });
 });
 
@@ -192,6 +193,10 @@ describe("bubblewrap", () => {
     const readOnly = at("--remount-ro", "/home/me");
     const net = args.indexOf("--unshare-net");
     expect(tmpfs).toBeGreaterThan(0);
+    // A writable folder outside the home folder comes first: it must not cover the empty home.
+    const tmp = at("--bind", "/tmp", "/tmp");
+    expect(tmp).toBeGreaterThanOrEqual(0);
+    expect(tmp).toBeLessThan(tmpfs);
     expect(at("--tmpfs", "/mnt")).toBeGreaterThan(0);
     expect(nvm).toBeGreaterThan(tmpfs);
     expect(project).toBeGreaterThan(nvm);
@@ -205,7 +210,7 @@ describe("bubblewrap", () => {
     expect(bwrapArgs("make", openPolicy, () => "dir")).not.toContain("--remount-ro\u0000");
     expect(bwrapArgs("make", openPolicy, () => "dir").join(" ")).not.toContain("--tmpfs /home/me ");
     expect(bwrapArgs("make", p, () => undefined).join(" ")).not.toContain("--tmpfs /home/me");
-    const writable = bwrapArgs("make", { ...p, writePaths: ["/home"] }, () => "dir").join(" ");
+    const writable = bwrapArgs("make", { ...p, writePaths: ["/home/me"] }, () => "dir").join(" ");
     expect(writable).not.toContain("--tmpfs /home/me ");
   });
 });
@@ -274,7 +279,7 @@ describe.runIf(osExecutor !== undefined)("'needed' mode in this machine's sandbo
     executor.run(command, {
       root,
       sandbox: true,
-      // Not the temp folder: the fake home is in it, and a write path is readable.
+      // Not the temp folder: the fake home is in it, and Seatbelt would let a write there.
       writePaths: [root],
       denyWritePaths: [],
       denyReadPaths: [],

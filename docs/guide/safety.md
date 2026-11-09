@@ -54,8 +54,11 @@ Settings:
   config are unreadable in this mode, because they can hold passwords. Add a path with
   `"readPaths": ["~/notes/spec.md"]`; that also brings one of those four files back. To use the mode
   in every project, put `"requireNeededReads": true` in `~/.garuda/policy.json`. The mode does not
-  apply to MCP servers yet. When a tool fails with "Operation not permitted" (macOS) or "No such
-  file or directory" (Linux) on a home path, add it to `readPaths`.
+  apply to MCP servers yet. When a command fails on a home path that the mode blocked, Garuda names
+  the path. In chat it asks "Let commands read ~/x in this session?" (yes for this session, or no)
+  and says which line keeps it for the project; the model is told not to work around it. A job or
+  an eval gets no question: the path stays blocked, and an eval run that failed this way has the
+  failure kind `sandbox`. The deny list's secrets (`~/.ssh` …) are never offered.
 - macOS sandbox probe (0.14): at startup Garuda runs `true` through `/usr/bin/sandbox-exec` once. When
   that fails (for example in a nested sandbox), `auto` falls back to the host with a notice that gives
   the first line of the error.

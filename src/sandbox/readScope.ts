@@ -41,9 +41,11 @@ export function readAncestors(scope: ReadScope, extra: readonly string[] = []): 
 }
 
 /**
- * True when a write path opens the home folder itself (or a parent of it): then the scope cannot
- * hide the home folder, because the user made all of it writable.
+ * True when a write path is the home folder itself (`"~"` in `sandbox.writePaths`): the user made
+ * all of it writable, so the scope does not hide it. A writable parent (a temp folder that holds a
+ * test's home) does not count: bubblewrap mounts it first, and Seatbelt's read rules come after
+ * its write rules.
  */
 export function homeIsWritable(scope: ReadScope, writePaths: readonly string[]): boolean {
-  return writePaths.some((p) => inside(scope.home, p));
+  return writePaths.includes(scope.home);
 }

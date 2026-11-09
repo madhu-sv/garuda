@@ -146,9 +146,10 @@ The bash tool tells the model when Garuda killed such processes, or when the che
 
 ```text
 --ro-bind / /  --dev /dev
---tmpfs <home>  --tmpfs <hidden place>   "needed" reads (T15): empty folders first
+--bind <p> <p>               for each existing write path outside the home folder and hidden places
+--tmpfs <home>  --tmpfs <hidden place>   "needed" reads (T15): empty folders
 --ro-bind <p> <p>            for each existing readable path of the read scope
---bind <p> <p>               for each existing write path
+--bind <p> <p>               for each existing write path inside them
 --ro-bind <p> <p>            for each existing protected path
 --tmpfs <dir> --remount-ro <dir>   or   --ro-bind /dev/null <file>   for each denied read path
 --remount-ro <home>  --remount-ro <hidden place>   "needed" reads: a write there still fails
@@ -174,8 +175,9 @@ file-read* <readable paths and the write paths there>)` and `(allow file-read-me
 on the way>)` (`readRules`, each path also under `/System/Volumes/Data`); a tool can `stat` those
 folders but not list them. bubblewrap empties the home folder and the hidden places with a tmpfs,
 mounts the readable paths back read-only, and makes the empty folders read-only last, so a write to
-an unlisted home path fails as before instead of landing in the tmpfs. A write path that opens the
-home folder itself turns the mode off (`homeIsWritable`). A blocked read shows as "Operation not
+an unlisted home path fails as before instead of landing in the tmpfs. A write path that is the
+home folder itself (`"~"`) turns the mode off (`homeIsWritable`); a writable parent (a temp folder
+that holds a test's home) does not: bubblewrap mounts it first, so it cannot cover the empty home. A blocked read shows as "Operation not
 permitted" on macOS and "No such file or directory" on Linux.
 
 The user's runtime folder `/run/user/<uid>` is a denied read path on Linux (0.19.1,

@@ -283,6 +283,17 @@ names. A project's `sandbox.readPaths` is a loosening part (`SettingsRisk.readPa
 present, so older pinned hashes stay valid). MCP servers build their own policy and keep open
 reads for now.
 
+Blocked reads (T15 step 2): the bash tool runs `findBlockedReads` on a sandboxed command's output
+(paths on lines with a read error, that exist on the host, outside the scope and its write paths;
+not the deny list's own paths, except the `NEEDED_MODE_DENY` files; at most five) and calls the
+gate's `allowReads`. The engine asks once per path with two choices, "session" and "deny" (tool
+`sandbox_read`, logged in the audit log like other decisions), and adds an allowed path to
+`sessionReadPaths`, which `execPolicy` merges into the readable paths. No question with an
+`unattended` engine (jobs, evals), for the home folder itself, or for a hidden place. The tool
+result gets `readsHint` instead of the general sandbox hint (whose `outside_sandbox` advice would
+run the whole command unsandboxed), `readsKeepHint` after a yes, and `blockedReads` in its command
+facts. `PermissionEngineOptions.home` sets the home folder (tests use a fake one).
+
 The team policy's `denyPaths` (0130, K6): `execPolicy` adds `policyDeniedPaths(root, denyPaths)` to
 both `denyReadPaths` and `denyWritePaths`. The patterns are matched against the disk when a command
 starts (globby, no .gitignore), because the OS sandboxes need real paths. Every folder is searched,

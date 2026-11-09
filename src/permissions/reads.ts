@@ -1,6 +1,6 @@
-import { realpathSync } from "node:fs";
+import { lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, sep } from "node:path";
-import type { ReadScope } from "../sandbox/readScope.js";
+import { type ReadScope, writableInScope } from "../sandbox/readScope.js";
 
 /**
  * Reads only where needed (T15, docs/lld/reads.md). In `"needed"` mode a sandboxed command reads,
@@ -195,4 +195,96 @@ export function neededReads(input: NeededReadsInput): ReadScope {
     }
   }
   return { home, allow: [...allow].sort(), hide };
+}
+
+/** Error words that a blocked read gives: "Operation not permitted" on macOS, a missing file on Linux. */
+const READ_ERROR =
+  /Operation not permitted|EPERM|EACCES|Permission denied|No such file or directory|ENOENT|not found/i;
+const PATH_IN_TEXT = /(~\/[^\s'"`:,;)\]]+|\/[^\s'"`:,;)\]]+)/g;
+
+/**
+ * The paths that "needed" mode blocked, from a command's output (T15 step 2): paths on lines with
+ * a read error that exist on this machine but are outside the read scope. Not the deny list's
+ * own paths (secrets stay secret, no question), except the four `NEEDED_MODE_DENY` files, which
+ * `readPaths` can bring back. At most five, in the order they appear.
+ */
+export function findBlockedReads(
+  output: string,
+  policy: {
+    reads?: ReadScope | undefined;
+    writePaths: readonly string[];
+    denyReadPaths: readonly string[];
+  },
+  exists: (path: string) => boolean = pathExists,
+): string[] {
+  const scope = policy.reads;
+  if (scope === undefined) return [];
+  const bases = [scope.home, ...scope.hide];
+  // Write paths count only inside the scope (a writable parent such as /tmp does not open it).
+  const readable = [...scope.allow, ...writableInScope(scope, policy.writePaths)];
+  const neededDenials = NEEDED_MODE_DENY.map((p) => join(scope.home, p));
+  const found: string[] = [];
+  for (const line of output.split("\n")) {
+    if (!READ_ERROR.test(line)) continue;
+    for (const match of line.matchAll(PATH_IN_TEXT)) {
+      let path = match[0].replace(/[.]+$/, "");
+      if (path.startsWith("~/")) path = join(scope.home, path.slice(2));
+      if (!bases.some((b) => inside(path, b))) continue;
+      if (readable.some((r) => inside(path, r))) continue;
+      const denied = policy.denyReadPaths.some((d) => inside(path, d));
+      if (denied && !neededDenials.some((d) => inside(path, d))) continue;
+      if (!exists(path) || found.includes(path)) continue;
+      found.push(path);
+      if (found.length === 5) return found;
+    }
+  }
+  return found;
+}
+
+function pathExists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A path for people: `~/x` in the home folder. */
+export function shortPath(path: string, home: string): string {
+  return inside(path, home) && path !== home ? `~/${path.slice(home.length + 1)}` : path;
+}
+
+/**
+ * The note for the model after blocked reads (T15 step 2), in place of the general sandbox hint,
+ * whose advice (`outside_sandbox`) would run the whole command with no sandbox.
+ */
+export function readsHint(
+  blocked: readonly string[],
+  allowed: readonly string[],
+  home: string,
+): string {
+  const show = (list: readonly string[]) => list.map((p) => shortPath(p, home)).join(", ");
+  const denied = blocked.filter((p) => !allowed.includes(p));
+  const parts: string[] = [];
+  if (allowed.length > 0) {
+    parts.push(
+      `The user let commands read ${show(allowed)} for this session. Run the command again.`,
+    );
+  }
+  if (denied.length > 0) {
+    const whole = denied.includes(home)
+      ? " Commands may not read the whole home folder in this mode."
+      : "";
+    parts.push(
+      `The sandbox blocked reads of ${show(denied)}: in this project commands read only where needed ("sandbox.reads": "needed").${whole} Do not work around it, and do not use outside_sandbox for it. If the command needs the path, tell the user: they can add it to "sandbox.readPaths" in .garuda/settings.json.`,
+    );
+  }
+  return parts.join(" ");
+}
+
+/** The notice after a "this session" answer: how to keep a path for the project. */
+export function readsKeepHint(paths: readonly string[], home: string): string {
+  const list = paths.map((p) => `"${shortPath(p, home)}"`).join(", ");
+  return `Commands may read ${paths.map((p) => shortPath(p, home)).join(", ")} in this session. To keep it for this project, add ${list} to "sandbox.readPaths" in .garuda/settings.json.`;
 }

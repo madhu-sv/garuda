@@ -186,6 +186,8 @@ export interface CommandFacts {
   sandboxed: boolean;
   /** Hosts that Garuda's network proxy blocked during the command. */
   blockedHosts: string[];
+  /** T15 step 2: paths that "needed" reads blocked during the command. */
+  blockedReads?: string[];
 }
 
 /** A tool with its generic types erased, as the registry stores it. */

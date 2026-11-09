@@ -79,6 +79,8 @@ export interface EvalResult {
   unexpected?: string[];
   /** Calls of the `--mcp` server's tools in the run (0.17). Absent without `--mcp`. */
   mcpCalls?: number;
+  /** T15 step 2: home paths that "needed" reads blocked during the run (no one answers in evals). */
+  blockedReads?: string[];
   /** Runs of this task that the provider stalled and that ran again (0.18.2). Their spending is in. */
   providerStalls?: number;
   /** The names of the tools the agent called, in order (0.17, T11d: the proposer's input). */

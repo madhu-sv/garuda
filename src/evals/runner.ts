@@ -309,6 +309,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   });
   const store = new FileSessionStore(root);
   const watch = new ModelWatch();
+  const blockedReads = new Set<string>();
   let mcpCalls = 0;
   const tools: string[] = [];
   // `prepare`: a runtime only for the `--mcp-prepare` command, without the MCP server.
@@ -341,6 +342,10 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
           if (event.call.name.startsWith("mcp__")) mcpCalls++;
         }
         watch.see(event);
+        // T15 step 2: reads that "needed" mode blocked (nobody answers in an eval).
+        if (event.type === "tool_result") {
+          for (const path of event.outcome.command?.blockedReads ?? []) blockedReads.add(path);
+        }
         options.onEvent?.(task.id, event);
       },
     });
@@ -439,6 +444,7 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     }
   } finally {
     if (tools.length > 0) result.tools = tools;
+    if (blockedReads.size > 0) result.blockedReads = [...blockedReads];
     if (options.mcp !== undefined) {
       result.mcpCalls = mcpCalls;
       // A server that did not start makes the run an A/B of nothing: say so, and stop the eval.
@@ -600,6 +606,7 @@ export type FailureKind =
   | "error"
   | "timeout"
   | "provider"
+  | "sandbox"
   | "step-limit"
   | "token-limit"
   | "repeated-calls"
@@ -616,6 +623,7 @@ export const FAILURE_KINDS: readonly FailureKind[] = [
   "refusal",
   "timeout",
   "provider",
+  "sandbox",
   "error",
   "setup",
 ];
@@ -627,6 +635,8 @@ export function failureKind(result: EvalResult): FailureKind | undefined {
     if (isProviderStall(result)) return "provider";
     return isSetupFailure(result) ? "setup" : "error";
   }
+  // T15 step 2: the sandbox refused a path the run needed ("needed" reads); not the model's fault.
+  if ((result.blockedReads ?? []).length > 0) return "sandbox";
   switch (result.stopReason) {
     case "timeout":
       return "timeout";

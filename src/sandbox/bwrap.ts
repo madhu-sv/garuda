@@ -43,17 +43,22 @@ export function bwrapArgv(
   kind: (path: string) => "dir" | "file" | undefined = pathKind,
 ): string[] {
   const args = ["--ro-bind", "/", "/", "--dev", "/dev"];
-  // Reads only where needed (T15): the home folder and the hidden places as empty folders, then
-  // the readable paths read-only again. bubblewrap makes the mount points in the empty folders.
+  // Later mounts cover earlier ones: writable paths, then read-only holes, then hidden paths.
+  // Reads only where needed (T15): write paths outside the home folder and the hidden places
+  // first (a writable parent such as the temp folder must not cover them), then those folders
+  // empty, the readable paths read-only again, then the write paths inside them. bubblewrap
+  // makes the mount points in the empty folders.
   const hidden = hiddenBases(policy, kind);
+  const inHidden = (path: string) => hidden.some((b) => path === b || path.startsWith(`${b}/`));
+  for (const path of policy.writePaths)
+    if (!inHidden(path) && kind(path) !== undefined) args.push("--bind", path, path);
   for (const base of hidden) args.push("--tmpfs", base);
   if (hidden.length > 0 && policy.reads !== undefined) {
     for (const path of policy.reads.allow)
       if (kind(path) !== undefined) args.push("--ro-bind", path, path);
   }
-  // Later mounts cover earlier ones: writable paths, then read-only holes, then hidden paths.
   for (const path of policy.writePaths)
-    if (kind(path) !== undefined) args.push("--bind", path, path);
+    if (inHidden(path) && kind(path) !== undefined) args.push("--bind", path, path);
   // The staging copy over the project (0.17, review T5): the command sees the project's paths,
   // but every write goes to the copy. The holes below then apply inside the copy.
   for (const mount of policy.mounts ?? []) args.push("--bind", mount.source, mount.target);

@@ -115,6 +115,11 @@ export interface PermissionGate {
   writeScopeDenial(path: string): Promise<string | undefined>;
   /** The network allowlist (0.13): hosts that the proxy blocked since the last call. */
   takeNetworkBlocks?(): { host: string; port: number; reason: string }[];
+  /**
+   * Reads only where needed (T15 step 2): ask the user to let commands read these blocked paths
+   * for this session; the allowed ones come back. Absent (a subagent's gate): no question.
+   */
+  allowReads?(paths: readonly string[], signal: AbortSignal): Promise<string[]>;
 }
 
 /**

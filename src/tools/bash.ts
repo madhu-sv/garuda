@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { findBlockedReads, readsHint, readsKeepHint } from "../permissions/reads.js";
 import { commandParts } from "../permissions/rules.js";
 import type { ExecResult } from "../sandbox/types.js";
 import type { Tool } from "./types.js";
@@ -40,6 +41,7 @@ export type BashOutput =
       sandboxed?: boolean;
       /** Hosts that the network proxy blocked during the command (UX U1). */
       blockedHosts?: string[];
+      blockedReads?: string[];
     })
   | {
       daemon: {
@@ -234,8 +236,18 @@ export function createBashTool({
       const blocks = sandboxed ? (permissions.takeNetworkBlocks?.() ?? []) : [];
       const network = sandboxed ? networkHint(blocks, strict) : undefined;
       if (network !== undefined) hints.push(network);
+      // Reads only where needed (T15 step 2): name the blocked paths, and ask in chat.
+      const blockedReads =
+        sandboxed && policy.reads !== undefined
+          ? findBlockedReads(`${result.stdout.text}\n${result.stderr.text}`, policy)
+          : [];
+      if (blockedReads.length > 0 && policy.reads !== undefined) {
+        const allowed = (await permissions.allowReads?.(blockedReads, signal)) ?? [];
+        hints.push(readsHint(blockedReads, allowed, policy.reads.home));
+        if (allowed.length > 0) hints.push(readsKeepHint(allowed, policy.reads.home));
+      }
       const blocked =
-        sandboxed && network === undefined
+        sandboxed && network === undefined && blockedReads.length === 0
           ? sandboxHint(result, policy.proxy !== undefined, strict)
           : undefined;
       if (blocked !== undefined) hints.push(blocked);
@@ -256,6 +268,7 @@ export function createBashTool({
         hints,
         sandboxed,
         blockedHosts: [...new Set(blocks.map((b) => b.host))],
+        ...(blockedReads.length === 0 ? {} : { blockedReads }),
       };
     },
 
@@ -266,6 +279,7 @@ export function createBashTool({
         timedOut: result.timedOut,
         sandboxed: result.sandboxed ?? false,
         blockedHosts: result.blockedHosts ?? [],
+        ...(result.blockedReads === undefined ? {} : { blockedReads: result.blockedReads }),
       };
     },
 
