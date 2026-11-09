@@ -422,6 +422,11 @@ broke or nothing came for 120 s. The run is then an error run (`stopReason` "err
 stalled task once more; `withStalledRun` adds the stalled run's tokens and cost and sets
 `providerStalls`. A timeout records `ModelWatch.steps`: it showed 0 before.
 
+**Blocked reads (T15 step 2).** `runEvalTask` collects `outcome.command.blockedReads` from the
+tool results into `EvalResult.blockedReads`. `failureKind` gives `sandbox` for a failed run that has
+them, after the error kinds and before the stop reasons: "needed" reads refused a path that a
+command read, and nobody answers a question in an eval.
+
 **Published reports.** The reports of the 0.18 blog post are in
 `docs/quality-baseline/evals/0.18/`, one folder per run, with a README. Two string changes only:
 the checkout path before `sessionFile` is removed, and the macOS temp folder is `<tmp>/`.

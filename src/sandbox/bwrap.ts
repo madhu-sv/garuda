@@ -1,10 +1,12 @@
 import { existsSync, statSync } from "node:fs";
 import { type Launch, ProcessExecutor, plain } from "./process.js";
+import { homeIsWritable, scopeBases } from "./readScope.js";
 import type { ExecPolicy } from "./types.js";
 
 /**
  * The Linux sandbox: bubblewrap. The whole file system is mounted read-only,
- * then `writePaths` are mounted writable again. Denied read paths are covered with an
+ * then `writePaths` are mounted writable again. In "needed" mode (T15) the home folder and other
+ * volumes are empty first, with only the readable paths mounted back. Denied read paths are covered with an
  * empty folder or /dev/null. --unshare-net leaves only a loopback interface, and --unshare-pid
  * gives the command its own process space.
  */
@@ -42,8 +44,21 @@ export function bwrapArgv(
 ): string[] {
   const args = ["--ro-bind", "/", "/", "--dev", "/dev"];
   // Later mounts cover earlier ones: writable paths, then read-only holes, then hidden paths.
+  // Reads only where needed (T15): write paths outside the home folder and the hidden places
+  // first (a writable parent such as the temp folder must not cover them), then those folders
+  // empty, the readable paths read-only again, then the write paths inside them. bubblewrap
+  // makes the mount points in the empty folders.
+  const hidden = hiddenBases(policy, kind);
+  const inHidden = (path: string) => hidden.some((b) => path === b || path.startsWith(`${b}/`));
   for (const path of policy.writePaths)
-    if (kind(path) !== undefined) args.push("--bind", path, path);
+    if (!inHidden(path) && kind(path) !== undefined) args.push("--bind", path, path);
+  for (const base of hidden) args.push("--tmpfs", base);
+  if (hidden.length > 0 && policy.reads !== undefined) {
+    for (const path of policy.reads.allow)
+      if (kind(path) !== undefined) args.push("--ro-bind", path, path);
+  }
+  for (const path of policy.writePaths)
+    if (inHidden(path) && kind(path) !== undefined) args.push("--bind", path, path);
   // The staging copy over the project (0.17, review T5): the command sees the project's paths,
   // but every write goes to the copy. The holes below then apply inside the copy.
   for (const mount of policy.mounts ?? []) args.push("--bind", mount.source, mount.target);
@@ -62,6 +77,9 @@ export function bwrapArgv(
     if (k === "dir") args.push("--tmpfs", path, "--remount-ro", path);
     else if (k === "file") args.push("--ro-bind", "/dev/null", path);
   }
+  // The empty folders read-only last (T15): a write to an unlisted home path fails, as before,
+  // and does not land in a tmpfs that vanishes. The mounts inside keep their own flags.
+  for (const base of hidden) args.push("--remount-ro", base);
   if (!policy.network) args.push("--unshare-net");
   // Its own process space and /proc (0.14, review): the command sees only its own processes, not
   // Garuda's or the user's. bwrap stays in Garuda's process group on the host, and it is pid 1
@@ -98,6 +116,19 @@ function withBridge(argv: string[], policy: ExecPolicy): string[] {
     String(proxy.port),
     ...argv,
   ];
+}
+
+/**
+ * The folders that "needed" mode empties: the home folder and each hidden place that exists.
+ * None when a write path opens the home folder itself (the user made all of it writable).
+ */
+function hiddenBases(
+  policy: ExecPolicy,
+  kind: (path: string) => "dir" | "file" | undefined,
+): string[] {
+  const scope = policy.reads;
+  if (scope === undefined || homeIsWritable(scope, policy.writePaths)) return [];
+  return scopeBases(scope).filter((base) => kind(base) === "dir");
 }
 
 function pathKind(path: string): "dir" | "file" | undefined {

@@ -29,6 +29,8 @@ export interface SettingsRisk {
    * they are commands like a hook's. Each as "name: command words".
    */
   formatterCommands?: string[];
+  /** T15: `sandbox.readPaths`, readable in "needed" mode (only when present, for old hashes). */
+  readPaths?: string[];
 }
 
 export function settingsRisk(settings: Settings): SettingsRisk | undefined {
@@ -44,13 +46,16 @@ export function settingsRisk(settings: Settings): SettingsRisk | undefined {
   );
   // Only when present, so the hash of settings without them (pinned before 0.14.1) stays the same.
   if (formatterCommands.length > 0) risk.formatterCommands = formatterCommands;
+  const readPaths = settings.sandbox?.readPaths ?? [];
+  if (readPaths.length > 0) risk.readPaths = [...readPaths];
   const none =
     !risk.executorHost &&
     risk.allow.length === 0 &&
     risk.writePaths.length === 0 &&
     risk.envAllow.length === 0 &&
     !risk.allowLocalhost &&
-    risk.formatterCommands === undefined;
+    risk.formatterCommands === undefined &&
+    risk.readPaths === undefined;
   return none ? undefined : risk;
 }
 
@@ -72,6 +77,11 @@ export function settingsRiskLines(risk: SettingsRisk): string[] {
     lines.push(`env.allow (commands see these variables): ${risk.envAllow.join(", ")}`);
   }
   if (risk.allowLocalhost) lines.push("web.allowLocalhost (web_fetch may reach this machine)");
+  if (risk.readPaths !== undefined) {
+    lines.push(
+      `sandbox.readPaths (commands may read there in "needed" mode): ${risk.readPaths.map(cleanLine).join(", ")}`,
+    );
+  }
   if (risk.formatterCommands !== undefined) {
     lines.push(
       `formatters.commands (run after each edit): ${risk.formatterCommands.map(cleanLine).join("; ")}`,
@@ -83,7 +93,7 @@ export function settingsRiskLines(risk: SettingsRisk): string[] {
 /** The settings without the parts that loosen safety. */
 export function withoutRisk(settings: Settings): Settings {
   const { sandbox, web, formatters, ...rest } = settings;
-  const { writePaths: _writePaths, ...sandboxRest } = sandbox ?? {};
+  const { writePaths: _writePaths, readPaths: _readPaths, ...sandboxRest } = sandbox ?? {};
   // Keep "name": false (turns a built-in formatter off); drop the project's own commands.
   const keptCommands = Object.fromEntries(
     Object.entries(formatters?.commands ?? {}).filter(([, f]) => f === false),

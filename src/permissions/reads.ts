@@ -1,0 +1,296 @@
+import { lstatSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, sep } from "node:path";
+import { type ReadScope, writableInScope } from "../sandbox/readScope.js";
+
+/**
+ * Reads only where needed (T15, docs/lld/reads.md). In `"needed"` mode a sandboxed command reads,
+ * in the home folder, only the project, the toolchain prefixes on PATH, the folders that tools
+ * name in the environment, a fixed list of toolchain folders and caches, Garuda's skills and
+ * `sandbox.readPaths`. Other volumes are hidden too. The deny list still wins inside all of them.
+ */
+
+export type ReadsMode = "open" | "needed";
+
+/** The fixed list (design note, "What is readable"): toolchains and caches, by ecosystem. */
+export const NEEDED_IN_HOME = [
+  // Node
+  ".nvm",
+  ".fnm",
+  ".local/share/fnm",
+  ".volta",
+  ".bun",
+  ".deno",
+  ".npm",
+  ".yarn",
+  ".local/share/pnpm",
+  "Library/pnpm",
+  ".cache/node-gyp",
+  "Library/Caches/node-gyp",
+  ".cache/ms-playwright",
+  "Library/Caches/ms-playwright",
+  "Library/Caches/typescript",
+  "Library/Caches/Yarn",
+  ".cache/yarn",
+  // Python
+  ".pyenv",
+  ".local/lib",
+  ".local/share/uv",
+  ".cache/uv",
+  ".cache/pip",
+  "Library/Caches/pip",
+  ".cache/pypoetry",
+  "Library/Caches/pypoetry",
+  ".virtualenvs",
+  ".conda",
+  "miniconda3",
+  "miniforge3",
+  "anaconda3",
+  // JVM: the caches, not the folders' own settings files (decision 3)
+  ".m2/repository",
+  ".gradle/caches",
+  ".gradle/wrapper",
+  ".gradle/jdks",
+  ".sdkman",
+  ".jdks",
+  "Library/Java",
+  ".ivy2",
+  ".sbt",
+  ".cache/coursier",
+  "Library/Caches/Coursier",
+  // Go, Rust
+  "go",
+  ".cache/go-build",
+  "Library/Caches/go-build",
+  ".cargo/bin",
+  ".cargo/registry",
+  ".cargo/git",
+  ".rustup",
+  // Ruby
+  ".rbenv",
+  ".rvm",
+  ".gem/ruby",
+  ".bundle/cache",
+  // Mobile
+  "Library/Android/sdk",
+  "Android/Sdk",
+  ".android/avd",
+  "Library/Developer",
+  ".pub-cache",
+  ".cocoapods",
+  "Library/Caches/CocoaPods",
+  ".swiftpm",
+  "Library/org.swift.swiftpm",
+  // .NET
+  ".dotnet",
+  ".nuget/packages",
+  // General
+  ".local/bin",
+  ".gitconfig",
+  ".gitignore_global",
+  ".gitignore",
+  ".config/git",
+  ".terminfo",
+  "Library/Caches/Homebrew",
+  // Garuda: skill and agent scripts run in the sandbox
+  ".garuda/skills",
+  ".garuda/agents",
+  ".claude/skills",
+  ".claude/agents",
+];
+
+/** Variables that name a toolchain's folder; each value in the home folder is readable. */
+export const NEEDED_ENV = [
+  "NVM_DIR",
+  "VOLTA_HOME",
+  "PNPM_HOME",
+  "BUN_INSTALL",
+  "PYENV_ROOT",
+  "VIRTUAL_ENV",
+  "CONDA_PREFIX",
+  "GOPATH",
+  "GOMODCACHE",
+  "CARGO_HOME",
+  "RUSTUP_HOME",
+  "SDKMAN_DIR",
+  "JAVA_HOME",
+  "GRADLE_USER_HOME",
+  "MAVEN_HOME",
+  "ANDROID_HOME",
+  "ANDROID_SDK_ROOT",
+  "PUB_CACHE",
+  "XDG_CACHE_HOME",
+  "XDG_DATA_HOME",
+];
+
+/**
+ * Settings files that can hold passwords but that builds also read for other settings
+ * (decision 3): denied in "needed" mode, also when a variable such as GRADLE_USER_HOME opens their
+ * folder. A build that needs one gets it back with `sandbox.readPaths`.
+ */
+export const NEEDED_MODE_DENY = [
+  ".m2/settings.xml",
+  ".gradle/gradle.properties",
+  ".yarnrc.yml",
+  ".nuget/NuGet/NuGet.Config",
+];
+
+/** The project's links that a task copy or a worktree has (as `LINK_CANDIDATES` in jobs). */
+const PROJECT_LINKS = ["node_modules", ".venv", "venv"];
+
+/** Other volumes: external disks and backups. */
+export function hiddenPlaces(platform: NodeJS.Platform = process.platform): string[] {
+  if (platform === "darwin") return ["/Volumes"];
+  if (platform === "linux") return ["/media", "/mnt"];
+  return [];
+}
+
+const inside = (path: string, base: string) => path === base || path.startsWith(`${base}${sep}`);
+
+/** A real path when it exists, else the path itself. */
+function real(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+export interface NeededReadsInput {
+  home: string;
+  root: string;
+  writePaths: readonly string[];
+  /** `sandbox.readPaths`, already absolute. */
+  readPaths: readonly string[];
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+}
+
+/** The read scope of "needed" mode for one project. */
+export function neededReads(input: NeededReadsInput): ReadScope {
+  const env = input.env ?? process.env;
+  const home = real(input.home);
+  const homeAsGiven = input.home;
+  const hide = hiddenPlaces(input.platform).filter((h) => !inside(home, h));
+  const candidates: string[] = [input.root, ...input.writePaths, ...input.readPaths];
+  for (const name of PROJECT_LINKS) candidates.push(join(input.root, name));
+  // The toolchain prefixes on PATH: ~/.nvm/versions/node/v22/bin gives .../v22 (npm's modules).
+  for (const entry of (env.PATH ?? "").split(":")) {
+    if (!isAbsolute(entry)) continue;
+    candidates.push(basename(entry) === "bin" ? dirname(entry) : entry);
+  }
+  for (const name of NEEDED_ENV) {
+    const value = env[name];
+    if (value !== undefined && isAbsolute(value)) candidates.push(value);
+  }
+  for (const entry of NEEDED_IN_HOME) candidates.push(join(home, entry));
+  const allow = new Set<string>();
+  // The home folder as tools name it, when it is a link (macOS: /var -> /private/var for a test).
+  const asReal = (p: string) =>
+    homeAsGiven !== home && inside(p, homeAsGiven) ? join(home, p.slice(homeAsGiven.length)) : p;
+  for (const path of candidates) {
+    // A link in the home folder that points elsewhere in it: both are needed.
+    for (const p of new Set([asReal(path), real(path)])) {
+      if (inside(p, home) && p !== home) allow.add(p);
+      else if (hide.some((h) => inside(p, h) && p !== h)) allow.add(p);
+    }
+  }
+  return { home, allow: [...allow].sort(), hide };
+}
+
+/** Error words that a blocked read gives: "Operation not permitted" on macOS, a missing file on Linux. */
+const READ_ERROR =
+  /Operation not permitted|EPERM|EACCES|Permission denied|No such file or directory|ENOENT|not found/i;
+const PATH_IN_TEXT = /(~\/[^\s'"`:,;)\]]+|\/[^\s'"`:,;)\]]+)/g;
+
+/**
+ * The paths that "needed" mode blocked, from a command's output (T15 step 2): paths on lines with
+ * a read error that exist on this machine but are outside the read scope. Not the deny list's
+ * own paths (secrets stay secret, no question), except the four `NEEDED_MODE_DENY` files, which
+ * `readPaths` can bring back. At most five, in the order they appear.
+ */
+export function findBlockedReads(
+  output: string,
+  policy: {
+    reads?: ReadScope | undefined;
+    writePaths: readonly string[];
+    denyReadPaths: readonly string[];
+  },
+  exists: (path: string) => boolean = pathExists,
+): string[] {
+  const scope = policy.reads;
+  if (scope === undefined) return [];
+  const bases = [scope.home, ...scope.hide];
+  // Write paths count only inside the scope (a writable parent such as /tmp does not open it).
+  const readable = [...scope.allow, ...writableInScope(scope, policy.writePaths)];
+  const neededDenials = NEEDED_MODE_DENY.map((p) => join(scope.home, p));
+  const found: string[] = [];
+  for (const line of output.split("\n")) {
+    if (!READ_ERROR.test(line)) continue;
+    for (const match of line.matchAll(PATH_IN_TEXT)) {
+      // A dot at the end ends a sentence only before a space or the line's end. In "head:
+      // ~/.zshrc.: No such file" it is part of the path (a typo of the user's), and the path that
+      // failed is ".zshrc.", not ".zshrc".
+      const after = line[(match.index ?? 0) + match[0].length];
+      const ends = after === undefined || /\s/.test(after);
+      let path = ends ? match[0].replace(/[.]+$/, "") : match[0];
+      if (path.startsWith("~/")) path = join(scope.home, path.slice(2));
+      if (!bases.some((b) => inside(path, b))) continue;
+      if (readable.some((r) => inside(path, r))) continue;
+      const denied = policy.denyReadPaths.some((d) => inside(path, d));
+      if (denied && !neededDenials.some((d) => inside(path, d))) continue;
+      if (!exists(path) || found.includes(path)) continue;
+      found.push(path);
+      if (found.length === 5) return found;
+    }
+  }
+  return found;
+}
+
+function pathExists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A path for people: `~/x` in the home folder. */
+export function shortPath(path: string, home: string): string {
+  if (path === home) return "~";
+  return inside(path, home) ? `~/${path.slice(home.length + 1)}` : path;
+}
+
+/**
+ * The note for the model after blocked reads (T15 step 2), in place of the general sandbox hint,
+ * whose advice (`outside_sandbox`) would run the whole command with no sandbox.
+ */
+export function readsHint(
+  blocked: readonly string[],
+  allowed: readonly string[],
+  home: string,
+): string {
+  const show = (list: readonly string[]) => list.map((p) => shortPath(p, home)).join(", ");
+  const denied = blocked.filter((p) => !allowed.includes(p));
+  const parts: string[] = [];
+  if (allowed.length > 0) {
+    parts.push(
+      `The user let commands read ${show(allowed)} for this session. Run the command again.`,
+    );
+  }
+  if (denied.length > 0) {
+    const whole = denied.includes(home)
+      ? " Commands may not read the whole home folder in this mode."
+      : "";
+    parts.push(
+      `The sandbox blocked reads of ${show(denied)}: in this project commands read only where needed ("sandbox.reads": "needed").${whole} Do not work around it, and do not use outside_sandbox for it. If the command needs the path, tell the user: they can add it to "sandbox.readPaths" in .garuda/settings.json.`,
+    );
+  }
+  return parts.join(" ");
+}
+
+/** The notice after a "this session" answer: how to keep a path for the project. */
+export function readsKeepHint(paths: readonly string[], home: string): string {
+  const list = paths.map((p) => `"${shortPath(p, home)}"`).join(", ");
+  return `Commands may read ${paths.map((p) => shortPath(p, home)).join(", ")} in this session. To keep it for this project, add ${list} to "sandbox.readPaths" in .garuda/settings.json.`;
+}

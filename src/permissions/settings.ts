@@ -51,6 +51,10 @@ const schema = z.strictObject({
     .strictObject({
       writePaths: z.array(z.string()).optional(),
       denyRead: z.array(z.string()).optional(),
+      /** T15 (docs/lld/reads.md): "needed" lets commands read only what builds need. */
+      reads: z.enum(["open", "needed"]).optional(),
+      /** T15: extra readable paths in "needed" mode. Outside the project, a project needs a yes. */
+      readPaths: z.array(z.string()).optional(),
     })
     .optional(),
   /** Code index tools for the model: "off", "lookup" or "all" (true = "all", false = "off"). */
@@ -284,6 +288,8 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
           sandbox: {
             ...(sandbox.writePaths === undefined ? {} : { writePaths: sandbox.writePaths }),
             ...(sandbox.denyRead === undefined ? {} : { denyRead: sandbox.denyRead }),
+            ...(sandbox.reads === undefined ? {} : { reads: sandbox.reads }),
+            ...(sandbox.readPaths === undefined ? {} : { readPaths: sandbox.readPaths }),
           },
         }),
     ...(codeIndex === undefined
