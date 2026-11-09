@@ -1,7 +1,7 @@
 # Reads only where needed (T15): design
 
-Status: proposed (2026-11-09). Nothing here is built yet. The user decides the open questions at
-the end, and the default after the measurement.
+Status: designed (2026-11-09); the user's decisions are below. Nothing here is built yet. The user
+decides the default after the measurement.
 
 ## The problem
 
@@ -60,7 +60,7 @@ Two settings in `sandbox`:
   project setting that adds a path outside the project loosens safety, so it needs the user's yes
   in a terminal, as other such settings do (0.14).
 - A team policy can require `"needed"`; then a project or user setting cannot turn it off. The
-  strict profile does not imply it (decide: open question 1).
+  strict profile does not imply it (decision 1).
 
 The deny list stays in both modes and wins over every allow rule: a secret inside a readable folder
 stays unreadable.
@@ -144,7 +144,8 @@ that builds read:
 | `.yarnrc.yml` | `npmAuthToken`, but also registry settings | Sometimes |
 | `.nuget/NuGet/NuGet.Config` | feed passwords, but also feed URLs | Sometimes |
 
-The first three join `DENY_READ_IN_HOME` in both modes. The last four are open question 3.
+The first three join `DENY_READ_IN_HOME` in both modes. The last four are denied in `"needed"` mode
+(decision 3).
 
 ## The rules on each system
 
@@ -220,15 +221,17 @@ build, and `uv` and conda projects.
 Acceptance: for each suite, the pass-rate difference interval contains 0 and its point estimate is
 at most 2 points below; no run fails with kind `sandbox`; every live check passes.
 
-## Open questions for the user
+## Decisions (the user, 2026-11-09)
 
-1. Should the strict profile imply `"needed"`? (Proposal: yes, once the measurement passes.)
-2. The chat question for a blocked read, or only the note? (Proposal: both, as for the network.)
-3. The mixed credential files (`.m2/settings.xml`, `.gradle/gradle.properties`, `.yarnrc.yml`,
-   `NuGet.Config`): deny them in `"needed"` mode with a note that names `readPaths`, or keep them
-   readable? (Proposal: deny; a build that needs one fails with a clear note.)
-4. The session-bus fix on Linux in both modes, before T15 itself? (Proposal: yes, with the three
-   publish-only credential files, in one small security patch.)
+1. **The strict profile does not imply `"needed"`.** Strict is not optional for a team that sets
+   it, and `"needed"` can rule out tools that an org or a team relies on. The two stay separate
+   settings, and a team policy can require either one.
+2. **A blocked read in chat: a question and a note**, as for the network.
+3. **The four mixed credential files are denied in `"needed"` mode** (`.m2/settings.xml`,
+   `.gradle/gradle.properties`, `.yarnrc.yml`, `NuGet.Config`), with a note that names
+   `sandbox.readPaths`.
+4. **A security patch release first**, in both modes: the Linux runtime folder hidden, and the
+   three publish-only credential files denied.
 
 ## Plan
 

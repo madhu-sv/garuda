@@ -24,7 +24,7 @@ Low-level design documents:
 | Tools | `src/tools/` | [tools.md](lld/tools.md) |
 | Permissions | `src/permissions/` | [permissions.md](lld/permissions.md) |
 | Sandbox (Executor) | `src/sandbox/` | [sandbox.md](lld/sandbox.md) |
-| Reads only where needed (T15, proposed): the `sandbox.reads` mode, secrets that are not files | `src/sandbox/`, `src/permissions/sandboxPaths.ts` | [reads.md](lld/reads.md) |
+| Reads only where needed (T15, designed): the `sandbox.reads` mode, secrets that are not files | `src/sandbox/`, `src/permissions/sandboxPaths.ts` | [reads.md](lld/reads.md) |
 | Sessions | `src/session/` | [session.md](lld/session.md) |
 | Context (prompt, memory, compaction) | `src/context/` | [context.md](lld/context.md) |
 | Code index | `src/knowledge/` | [knowledge.md](lld/knowledge.md) |
