@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Chat: screen-reader mode (`GARUDA_SCREEN_READER=1`) now uses words for every mark: "Tool:" and
+  "Result:" for tool lines, "Choice 1 of 3: … (selected)" in questions, "Allowed:" and "Denied:"
+  for the answer, "Done:", "Now:" and "To do:" in the plan, and a footer with no symbols. It also
+  stops the spinner.
+- Chat: less motion with `GARUDA_MOTION=reduce` or `"ui": { "motion": "reduce" }`: no spinner
+  frames; the live line says "Working (12 s)" and changes once a second.
+- Chat: the banner's saffron is the accent of the spinner, the receipt border, the plan's current
+  step, Garuda's ✦ and the selected choice. Yellow in a 16-color terminal; none with `NO_COLOR`.
 - The Homebrew formula in the repository names 0.19.0 and its tarball hash.
 
 ## 0.19.0 (2026-11-06)

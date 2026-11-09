@@ -4,6 +4,9 @@ import type { AgentEvent } from "../loop/runAgent.js";
 import { serverCallText, serverResultSummary } from "../model/serverTools.js";
 import type { ToolUseBlock } from "../model/types.js";
 import type { ToolOutcome } from "../tools/types.js";
+import { accentAnsi } from "./accent.js";
+import { colorLevel } from "./banner.js";
+import { marks } from "./marks.js";
 import { receiptText, screenReaderMode } from "./receiptView.js";
 
 /**
@@ -77,14 +80,14 @@ export class PlainRenderer implements Renderer {
       case "tool_call":
         this.endThinking();
         this.line(
-          `${this.paint("cyan", "●")} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`,
+          `${this.paint("cyan", marks().call)} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`,
         );
         return;
       case "tool_result": {
         const text = summariseResult(event.call, event.outcome);
         if (this.details || event.outcome.isError) {
           this.line(
-            `  ${this.paint("dim", "⎿")} ${event.outcome.isError ? this.paint("red", text) : this.paint("dim", text)}`,
+            `  ${this.paint("dim", marks().result)} ${event.outcome.isError ? this.paint("red", text) : this.paint("dim", text)}`,
           );
         }
         for (const line of todoLines(event.call, event.outcome)) this.line(`    ${line}`);
@@ -104,9 +107,11 @@ export class PlainRenderer implements Renderer {
       case "server_tool": {
         const { call, result } = serverToolText(event);
         const failed = event.result?.error !== undefined;
-        this.line(`${this.paint("cyan", "●")} ${this.paint("bold", call)}`);
+        this.line(`${this.paint("cyan", marks().call)} ${this.paint("bold", call)}`);
         if (this.details || failed) {
-          this.line(`  ${this.paint("dim", "⎿")} ${this.paint(failed ? "red" : "dim", result)}`);
+          this.line(
+            `  ${this.paint("dim", marks().result)} ${this.paint(failed ? "red" : "dim", result)}`,
+          );
         }
         return;
       }
@@ -153,20 +158,25 @@ export class PlainRenderer implements Renderer {
     this.err.write(`${text}\n`);
   }
 
-  private paint(style: Style, text: string): string {
-    return this.color ? styleText(style, text) : text;
+  private paint(style: Style | "accent", text: string): string {
+    if (!this.color) return text;
+    // `-p` writes its lines to stderr: the accent follows that stream's colors.
+    return style === "accent"
+      ? accentAnsi(text, colorLevel(process.stderr))
+      : styleText(style, text);
   }
 }
 
 /** The steps of a todo list, with symbols, for the live view. Empty for other tools. */
 export function todoLines(call: ToolUseBlock, outcome: ToolOutcome): string[] {
   if (call.name !== "todo_write" || outcome.isError) return [];
-  const marks: Record<string, string> = { "[x]": "✔", "[>]": "▶", "[ ]": "○" };
+  const m = marks();
+  const byState: Record<string, string> = { "[x]": m.done, "[>]": m.now, "[ ]": m.open };
   return outcome.content
     .split("\n")
     .map((line) => /^(\[[x> ]\]) (.*)$/.exec(line))
-    .filter((m): m is RegExpExecArray => m !== null)
-    .map((m) => `${marks[m[1] ?? ""] ?? "○"} ${m[2] ?? ""}`);
+    .filter((x): x is RegExpExecArray => x !== null)
+    .map((x) => `${byState[x[1] ?? ""] ?? m.open} ${x[2] ?? ""}`);
 }
 
 /** Two short lines for a server tool call (0.6): `web_search (Claude) "query"`, `5 results`. */

@@ -1,8 +1,10 @@
 import { Box, Static, Text, useInput, usePaste } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { accentInk } from "../accent.js";
 import { terminalPaint } from "../approver.js";
 import { unifiedDiff } from "../diffView.js";
 import { focusEvent } from "../focus.js";
+import { type Marks, marks } from "../marks.js";
 import { screenReaderMode } from "../receiptView.js";
 import { contextBar, contextLevel } from "../uiState.js";
 import type { HunkStagingState } from "./hunkStaging.js";
@@ -21,7 +23,8 @@ export function App({ store }: { store: ChatStore }) {
     if (store.getState().approval === undefined) store.editLine({ type: "insert", text });
   });
   const spinning = state.busy && state.approval === undefined;
-  const frame = useSpinner(spinning);
+  const { frame, seconds } = useSpinner(spinning, store.reducedMotion);
+  const accent = accentInk();
 
   return (
     <>
@@ -31,12 +34,19 @@ export function App({ store }: { store: ChatStore }) {
         {state.group !== undefined && <Text>{state.group}</Text>}
         {state.running.map((tool) => (
           <Text key={tool.id}>
-            <Text color="cyan">{frame}</Text> {tool.line}
+            <Text {...(accent === undefined ? {} : { color: accent })}>{frame}</Text> {tool.line}
           </Text>
         ))}
         {spinning && state.running.length === 0 && state.streaming === "" && (
           <Text dimColor>
-            <Text color="cyan">{frame}</Text> Working… (Ctrl-C stops)
+            {store.reducedMotion ? (
+              workingText(seconds)
+            ) : (
+              <>
+                <Text {...(accent === undefined ? {} : { color: accent })}>{frame}</Text> Working…
+                (Ctrl-C stops)
+              </>
+            )}
           </Text>
         )}
         {state.approval !== undefined && state.approval.hunkReview !== undefined && (
@@ -118,7 +128,9 @@ function ItemView({ item }: { item: Item }) {
         <Box marginTop={1}>
           <Text>
             {item.lead === true && (
-              <Text color="yellow">{screenReaderMode() ? "Garuda: " : GARUDA_MARK}</Text>
+              <Text color={accentInk() ?? "yellow"}>
+                {screenReaderMode() ? "Garuda: " : GARUDA_MARK}
+              </Text>
             )}
             {item.text}
           </Text>
@@ -168,13 +180,14 @@ function ApprovalView({
   selected: number;
   hasHunks?: boolean;
 }) {
+  const accent = accentInk();
+  const m = marks();
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text bold>{question}</Text>
       {choices.map((c, i) => (
-        <Text key={c.choice} {...(i === selected ? { color: "cyan" } : {})}>
-          {i === selected ? "❯ " : "  "}
-          {i + 1}. {c.label}
+        <Text key={c.choice} {...(i === selected && accent !== undefined ? { color: accent } : {})}>
+          {choiceText(c.label, i, choices.length, i === selected, m)}
         </Text>
       ))}
       <Text dimColor>
@@ -185,6 +198,23 @@ function ApprovalView({
       </Text>
     </Box>
   );
+}
+
+/**
+ * One choice of a question (UX U12): "❯ 1. Allow once", or for a screen reader "Choice 1 of 3:
+ * Allow once (selected)", so the position and the selection are words.
+ */
+export function choiceText(
+  label: string,
+  index: number,
+  count: number,
+  selected: boolean,
+  m: Marks = marks(),
+): string {
+  if (m.call !== "●") {
+    return `Choice ${index + 1} of ${count}: ${label}${selected ? " (selected)" : ""}`;
+  }
+  return `${selected ? m.selected : m.unselected}${index + 1}. ${label}`;
 }
 
 /** The key hint under the choices: numbers, and the letter for each choice shown. */
@@ -210,9 +240,10 @@ function PaletteView({ palette }: { palette: PaletteState }) {
       {rows.length === 0 && <Text dimColor> No command matches.</Text>}
       {rows.map((entry, i) => {
         const selected = first + i === palette.selected;
+        const accent = selected ? accentInk() : undefined;
         return (
-          <Text key={entry.name} {...(selected ? { color: "cyan" } : {})}>
-            {selected ? "❯ " : "  "}
+          <Text key={entry.name} {...(accent === undefined ? {} : { color: accent })}>
+            {selected ? marks().selected : marks().unselected}
             {`/${entry.name}`.padEnd(width + 1)}
             <Text dimColor>{entry.hint}</Text>
           </Text>
@@ -275,6 +306,7 @@ function Footer({ state }: { state: ChatState }) {
   const { model, sandbox, contextPercent, costUsd, mode } = state.status;
   const keys = footerKeys(state.busy, state.keyHints);
   const level = contextPercent === undefined ? "ok" : contextLevel(contextPercent);
+  const screenReader = screenReaderMode();
   return (
     <Text>
       {" "}
@@ -283,9 +315,7 @@ function Footer({ state }: { state: ChatState }) {
           PLAN{" "}
         </Text>
       ) : null}
-      <Text
-        dimColor
-      >{`${model} · ${sandbox === "no sandbox" ? sandbox : `⛨ ${sandbox.replace(/^sandbox /, "")}`}`}</Text>
+      <Text dimColor>{`${model} · ${sandboxText(sandbox, screenReader)}`}</Text>
       {contextPercent !== undefined && (
         <>
           <Text dimColor> · </Text>
@@ -295,7 +325,7 @@ function Footer({ state }: { state: ChatState }) {
               ? { dimColor: true }
               : { color: level === "full" ? "red" : "yellow" })}
           >
-            {`${contextBar(contextPercent)} ${contextPercent}%`}
+            {contextText(contextPercent, screenReader)}
           </Text>
         </>
       )}
@@ -308,6 +338,22 @@ function Footer({ state }: { state: ChatState }) {
   );
 }
 
+/** The footer's sandbox: "⛨ seatbelt"; for a screen reader the words, "sandbox seatbelt" (U12). */
+export function sandboxText(sandbox: string, screenReader: boolean): string {
+  if (sandbox === "no sandbox" || screenReader) return sandbox;
+  return `⛨ ${sandbox.replace(/^sandbox /, "")}`;
+}
+
+/** The footer's context: "▓░░░░░░░░░ 4%"; for a screen reader "context 4%" (U12). */
+export function contextText(percent: number, screenReader: boolean): string {
+  return screenReader ? `context ${percent}%` : `${contextBar(percent)} ${percent}%`;
+}
+
+/** The live line with reduced motion (U12): no frames, the seconds of the turn. */
+export function workingText(seconds: number): string {
+  return `Working (${seconds} s) · Ctrl-C stops`;
+}
+
 /** The footer's key text (UX U10): full hints in the first chats, then "? keys". */
 export function footerKeys(busy: boolean, hints: boolean): string {
   if (busy) return "Esc stop · Ctrl-O output";
@@ -315,15 +361,28 @@ export function footerKeys(busy: boolean, hints: boolean): string {
 }
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+/** With reduced motion (U12), a running tool has this still mark. */
+export const STILL_FRAME = "•";
 
-function useSpinner(active: boolean): string {
+/**
+ * The spinner's frame, and the seconds since it started. With reduced motion there are no frames,
+ * and the view changes once a second, not twelve times.
+ */
+function useSpinner(active: boolean, reduced: boolean): { frame: string; seconds: number } {
   const [i, setI] = useState(0);
+  const [seconds, setSeconds] = useState(0);
   useEffect(() => {
-    if (!active) return;
-    const timer = setInterval(() => setI((n) => (n + 1) % FRAMES.length), 80);
+    if (!active) {
+      setSeconds(0);
+      return;
+    }
+    const started = Date.now();
+    const timer = reduced
+      ? setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000)
+      : setInterval(() => setI((n) => (n + 1) % FRAMES.length), 80);
     return () => clearInterval(timer);
-  }, [active]);
-  return FRAMES[i] ?? "⠋";
+  }, [active, reduced]);
+  return { frame: reduced ? STILL_FRAME : (FRAMES[i] ?? "⠋"), seconds };
 }
 
 const firstLine = (text: string) => {

@@ -89,6 +89,14 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   each, and the total cost.
 - Your requests have a bar (`▌`) on every line; Garuda's answer starts with `✦` (0.18.1). With
   `GARUDA_SCREEN_READER=1` they read "You:" and "Garuda:".
+- Screen readers (`GARUDA_SCREEN_READER=1`): tool lines start with "Tool:" and "Result:", a
+  question's choices read "Choice 1 of 3: Allow once (selected)", the plan reads "Done:", "Now:"
+  and "To do:", and the footer has words, not symbols. The spinner stops too.
+- Less motion: `GARUDA_MOTION=reduce` (for every project; put it in your shell's profile) or
+  `"ui": { "motion": "reduce" }` in `.garuda/settings.json` stops the spinner. The live line says
+  "Working (12 s)" and changes once a second.
+- The spinner, the receipt's border, the plan's current step and the selected choice use
+  Garuda's saffron (yellow in a 16-color terminal; no color with `NO_COLOR`).
 - When Garuda runs from a checkout and `dist/` is older than it, the banner says "run pnpm build
   first".
 - Type-ahead: type during a task and press Enter to queue the next task.

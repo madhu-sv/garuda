@@ -7,7 +7,7 @@ import { formatUsd } from "./report.js";
  * never the only signal: every state also has a word or a mark.
  */
 
-export type ReceiptStyle = "dim" | "green" | "red" | "yellow" | "bold";
+export type ReceiptStyle = "dim" | "green" | "red" | "yellow" | "bold" | "accent";
 
 export interface ReceiptViewOptions {
   /** The terminal's columns; undefined (no terminal) gives plain lines. */
@@ -174,7 +174,8 @@ export function receiptText(receipt: Receipt, options: ReceiptViewOptions = {}):
   const label = 9;
   // "│ " + label + text + " │"
   const room = width - 4 - label;
-  const border = (text: string) => paint("yellow", text);
+  // UX U12: the border in the chat's accent (yellow on a 16-color terminal).
+  const border = (text: string) => paint("accent", text);
   // "╭─ head ───── $0.0041 ─╮" and "╰─ foot ──────────────╯", each `width` cells.
   const edge = (left: string, text: string, right: string, end: string) => {
     const tail = right === "" ? "" : ` ${right} ─`;

@@ -1,4 +1,5 @@
 import type { ToolUseBlock } from "../../model/types.js";
+import { marks } from "../marks.js";
 import { summariseCall } from "../renderer.js";
 import type { Paint } from "./markdown.js";
 
@@ -48,16 +49,17 @@ export function groupLine(
 ): string {
   const head = GROUPS[name]?.(calls.length) ?? `${name} ×${calls.length}`;
   const room = Math.max(20, columns - head.length - 6);
-  return `${paint("cyan", "●")} ${paint("bold", head)}  ${paint("dim", groupTargets(calls, room))}`;
+  return `${paint("cyan", marks().call)} ${paint("bold", head)}  ${paint("dim", groupTargets(calls, room))}`;
 }
 
-/** The plan from a todo_write result, painted: done green, current yellow, open dim. */
+/** The plan from a todo_write result, painted: done green, current in the accent, open dim. */
 export function planText(lines: readonly string[], paint: Paint): string {
+  const m = marks();
   const painted = lines.map((line) =>
-    line.startsWith("✔")
+    line.startsWith(m.done)
       ? paint("green", line)
-      : line.startsWith("▶")
-        ? paint("yellow", line)
+      : line.startsWith(m.now)
+        ? paint("accent", line)
         : paint("dim", line),
   );
   return [paint("bold", "Plan"), ...painted.map((l) => `  ${l}`)].join("\n");

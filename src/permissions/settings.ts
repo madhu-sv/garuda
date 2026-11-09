@@ -95,7 +95,13 @@ const schema = z.strictObject({
   /** Language server diagnostics after edits (0.4). enabled: default false. */
   lsp: z.strictObject({ enabled: z.boolean().optional() }).optional(),
   /** The chat's look (0.18.1). clearOnStart: default true (the Ink chat starts on a clear screen). */
-  ui: z.strictObject({ clearOnStart: z.boolean().optional() }).optional(),
+  ui: z
+    .strictObject({
+      clearOnStart: z.boolean().optional(),
+      /** UX U12: "reduce" stops the spinner (also GARUDA_MOTION=reduce). Default "full". */
+      motion: z.enum(["full", "reduce"]).optional(),
+    })
+    .optional(),
   /**
    * The project's formatter after edits (0.10). enabled: default false (A/B first). commands: by
    * name, false turns a detected formatter off; a command adds one or replaces a detected one.
@@ -207,7 +213,7 @@ export interface Settings {
   agents?: { enabled: boolean };
   notifications?: { channel?: NotifyChoice; afterSeconds?: number };
   /** The chat's look (0.18.1). */
-  ui?: { clearOnStart?: boolean };
+  ui?: { clearOnStart?: boolean; motion?: "full" | "reduce" };
   thinking?: { keepBlocks?: boolean; enabled?: boolean; effort?: Effort; show?: boolean };
   formatters?: { enabled: boolean; commands: Record<string, FormatterSetting> };
 }
@@ -290,7 +296,14 @@ export function parseSettings(json: unknown, source = SETTINGS_FILE): Settings {
     ...(commands?.mode === undefined ? {} : { commands: { mode: commands.mode } }),
     ...(todo?.enabled === undefined ? {} : { todo: { enabled: todo.enabled } }),
     ...(lsp?.enabled === undefined ? {} : { lsp: { enabled: lsp.enabled } }),
-    ...(ui?.clearOnStart === undefined ? {} : { ui: { clearOnStart: ui.clearOnStart } }),
+    ...(ui?.clearOnStart === undefined && ui?.motion === undefined
+      ? {}
+      : {
+          ui: {
+            ...(ui.clearOnStart === undefined ? {} : { clearOnStart: ui.clearOnStart }),
+            ...(ui.motion === undefined ? {} : { motion: ui.motion }),
+          },
+        }),
     ...(undo?.enabled === undefined ? {} : { undo: { enabled: undo.enabled } }),
     ...(skills?.enabled === undefined ? {} : { skills: { enabled: skills.enabled } }),
     ...(agents?.enabled === undefined ? {} : { agents: { enabled: agents.enabled } }),

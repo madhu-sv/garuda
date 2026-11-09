@@ -102,8 +102,9 @@ const WORDMARK = [
 /** Below this width the wordmark does not fit well: show the card only. */
 export const WORDMARK_MIN_COLUMNS = 60;
 
-// Deep saffron to gold.
-const FROM = [255, 122, 24] as const;
+// Deep saffron to gold. The saffron is also the chat's accent (UX U12, src/cli/accent.ts).
+export const SAFFRON = [255, 122, 24] as const;
+const FROM = SAFFRON;
 const TO = [255, 209, 102] as const;
 
 /** How many colors this terminal can show. NO_COLOR and pipes get none. */

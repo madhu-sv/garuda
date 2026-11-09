@@ -492,6 +492,28 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
   `continueCommand` prints the next command with the cap × 1.25, rounded up. An eval exit code of
   1 (a setup error) stops `advise`; 2 (some runs fail) does not.
 
+## As built (patch 8)
+
+- **Accent.** `src/cli/accent.ts`: `ACCENT_HEX` is the banner's saffron (`SAFFRON` in
+  `banner.ts`, `#ff7a18`). `accentInk(level)` gives Ink the hex color with true color, `yellow`
+  with 16 colors and no color under `NO_COLOR` or on a pipe (`colorLevel`); `accentAnsi` does the
+  same for lines built as ANSI strings. `Paint` has a new style, `accent`. It colours the spinner,
+  the receipt border (`ReceiptStyle` "accent"), the plan's current step (`planText`), Garuda's ✦
+  and the selected choice in a question and in the palette. Cyan stays for links, paths, the
+  tool mark and the user's bar. Saffron rather than the gold end of the gradient: gold is hard to
+  read on a light background.
+- **Reduced motion.** `motionReduced(env, ui)` in `src/cli/marks.ts`: `GARUDA_MOTION=reduce`,
+  `"ui": { "motion": "reduce" }` in the project's settings, or screen-reader mode (a screen
+  reader reads a changed line again). The store gets it as `reducedMotion`; `useSpinner` then
+  ticks once a second, a running tool has the still mark `•`, and the live line is
+  `workingText(seconds)`: "Working (12 s) · Ctrl-C stops".
+- **Screen-reader mode, the rest.** `marks(screenReader)` gives the symbols or words: `●` →
+  "Tool:", `⎿` → "Result:", `✔`/`✗` after a question → "Allowed:"/"Denied:", the plan's
+  `✔ ▶ ○` → "Done:", "Now:", "To do:", and the palette's `❯` → "(selected)". The chat's store,
+  the grouped tool lines, `-p` (`PlainRenderer`, `todoLines`) and `planText` use them. A question's
+  choices read "Choice 1 of 3: Allow once (selected)" (`choiceText`). The footer has no symbols:
+  "sandbox seatbelt" (`sandboxText`) and "context 4%" (`contextText`).
+
 ## Also built: the start screen (0.18.1)
 
 The user asked for a full-screen start, a centred banner and a visible chat box. After a
@@ -513,7 +535,7 @@ the wordmark got a drop shadow and a double size from 130 columns, and screen-re
 | 5 | U5 diffs, step 1 and 2. |
 | 6 | U7 morning brief, U9 first-run tour. |
 | 7 | U11 HTML export, then U8 `garuda advise` (it uses the HTML report). |
-| 8 | U12, and the brand accent. |
+| 8 | U12, and the brand accent. Done. |
 
 Each patch updates the CHANGELOG, this note's "As built", the CLI LLD, the chat guide and the
 architecture doc, as usual.

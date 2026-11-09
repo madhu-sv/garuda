@@ -239,7 +239,9 @@ interface ChatState {
   at least as wide as the wordmark. `rows` gives up to 6 blank lines above on a tall screen. No
   centring and no wordmark in screen-reader mode. `InputLine` draws a round box
   (cyan, dim while busy) with `INPUT_HINT` or `INPUT_HINT_BUSY` when empty; no box under
-  `INPUT_BOX_MIN_COLUMNS` (40) or for a screen reader. The footer starts one space in, under the
+  `INPUT_BOX_MIN_COLUMNS` (40) or for a screen reader. Patch 8 (UX U12) adds the accent
+  (`accent.ts`), reduced motion and the screen-reader marks (`marks.ts`); docs/lld/ux.md has the
+  details. The footer starts one space in, under the
   box's border. The chat does not use the alternate screen: the terminal's scrollback stays.
 - `/export --html` (UX U11, `exportHtml.ts`) and `garuda advise` (UX U8, `advise.ts`; `index.ts`
   registers the command).
