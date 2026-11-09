@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Security: sandboxed commands can no longer read the keys that only publishing needs:
+  `~/.cargo/credentials.toml` (and `credentials`), `~/.gem/credentials` and
+  `~/.m2/settings-security.xml`. On Linux, the user's runtime folder `/run/user/<uid>` is hidden:
+  through its session bus, `secret-tool` could ask the keyring for a secret with no file read.
+  Builds read none of these. The macOS keychain needed no change: a probe on macOS showed that the
+  sandbox already blocks `security find-generic-password` (docs/lld/reads.md).
 - Chat: screen-reader mode (`GARUDA_SCREEN_READER=1`) now uses words for every mark: "Tool:" and
   "Result:" for tool lines, "Choice 1 of 3: … (selected)" in questions, "Allowed:" and "Denied:"
   for the answer, "Done:", "Now:" and "To do:" in the plan, and a footer with no symbols. It also
