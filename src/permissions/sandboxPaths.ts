@@ -21,6 +21,11 @@ export const DENY_READ_IN_HOME = [
   ".config/gh",
   // The `ant` CLI's and the Anthropic SDK's stored keys (SDK 1.x reads them too, 0.19.0).
   ".config/anthropic/credentials",
+  // Keys that only publishing needs (0.19.1, docs/lld/reads.md): builds never read them.
+  ".cargo/credentials.toml",
+  ".cargo/credentials",
+  ".gem/credentials",
+  ".m2/settings-security.xml",
   ".netrc",
   ".npmrc",
   ".pypirc",
@@ -126,25 +131,44 @@ export interface SandboxSettings {
   denyRead?: string[];
 }
 
+/**
+ * The user's runtime folder on Linux (0.19.1, docs/lld/reads.md): it holds the session bus, and
+ * through it the keyring answers `secret-tool lookup` with no file read. Hidden from commands,
+ * unless a write path (the project, a TMPDIR) is inside it. Nothing on other systems.
+ */
+export function runtimeDenials(
+  writePaths: readonly string[],
+  platform: NodeJS.Platform = process.platform,
+  uid: number | null = process.getuid?.() ?? null,
+): string[] {
+  if (platform !== "linux" || uid === null) return [];
+  const dir = `/run/user/${uid}`;
+  const inside = (p: string) => p === dir || p.startsWith(`${dir}${sep}`);
+  return writePaths.some(inside) ? [] : [dir];
+}
+
 export function sandboxPaths(
   root: string,
   settings: SandboxSettings = {},
   home: string = homedir(),
+  platform: NodeJS.Platform = process.platform,
 ): SandboxPaths {
   const expand = (path: string) =>
     path === "~" ? home : path.startsWith("~/") ? join(home, path.slice(2)) : resolve(root, path);
   const temp = [...new Set([real(tmpdir()), real("/tmp")])];
+  const writePaths = unique([
+    root,
+    ...temp,
+    ...WRITE_IN_HOME.map((p) => join(home, p)),
+    ...(settings.writePaths ?? []).map(expand),
+  ]);
   return {
-    writePaths: unique([
-      root,
-      ...temp,
-      ...WRITE_IN_HOME.map((p) => join(home, p)),
-      ...(settings.writePaths ?? []).map(expand),
-    ]),
+    writePaths,
     denyWritePaths: PROTECTED_IN_ROOT.map((p) => join(root, p)),
     denyReadPaths: unique([
       ...DENY_READ_IN_HOME.map((p) => join(home, p)),
       ...personalDenials(home, root),
+      ...runtimeDenials(writePaths, platform),
       ...(settings.denyRead ?? []).map(expand),
     ]),
   };

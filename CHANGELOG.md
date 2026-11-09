@@ -1,7 +1,26 @@
 # Changelog
 
-## Unreleased
+## 0.19.1 (2026-11-09)
 
+A security fix and accessibility. Sandboxed commands can no longer read the keys that only
+publishing needs (Cargo, RubyGems, Maven's master password), and on Linux they can no longer reach
+the keyring through the session bus. The chat is complete for screen readers, can run with less
+motion, and uses the banner's saffron as its accent.
+
+- Security: sandboxed commands can no longer read the keys that only publishing needs:
+  `~/.cargo/credentials.toml` (and `credentials`), `~/.gem/credentials` and
+  `~/.m2/settings-security.xml`. On Linux, the user's runtime folder `/run/user/<uid>` is hidden:
+  through its session bus, `secret-tool` could ask the keyring for a secret with no file read.
+  Builds read none of these. The macOS keychain needed no change: a probe on macOS showed that the
+  sandbox already blocks `security find-generic-password` (docs/lld/reads.md).
+- Chat: screen-reader mode (`GARUDA_SCREEN_READER=1`) now uses words for every mark: "Tool:" and
+  "Result:" for tool lines, "Choice 1 of 3: … (selected)" in questions, "Allowed:" and "Denied:"
+  for the answer, "Done:", "Now:" and "To do:" in the plan, and a footer with no symbols. It also
+  stops the spinner.
+- Chat: less motion with `GARUDA_MOTION=reduce` or `"ui": { "motion": "reduce" }`: no spinner
+  frames; the live line says "Working (12 s)" and changes once a second.
+- Chat: the banner's saffron is the accent of the spinner, the receipt border, the plan's current
+  step, Garuda's ✦ and the selected choice. Yellow in a 16-color terminal; none with `NO_COLOR`.
 - The Homebrew formula in the repository names 0.19.0 and its tarball hash.
 
 ## 0.19.0 (2026-11-06)

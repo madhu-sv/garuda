@@ -3,6 +3,7 @@ import { createElement } from "react";
 import type { Runtime } from "../../app/runtime.js";
 import type { SwitchApprover } from "../approver.js";
 import { FOCUS_REPORTING_OFF, FOCUS_REPORTING_ON, type FocusTracker } from "../focus.js";
+import { motionReduced } from "../marks.js";
 import type { Notifier } from "../notify.js";
 import type { Renderer } from "../renderer.js";
 import { runChat, statusOf } from "./controller.js";
@@ -46,7 +47,11 @@ export async function runInkChat(
   if (clearOnStart && process.stdout.isTTY === true) {
     process.stdout.write(clearScreenKeepingScrollback(process.stdout.rows || 24));
   }
-  const store = new ChatStore(statusOf(runtime), { keyHints });
+  const store = new ChatStore(statusOf(runtime), {
+    keyHints,
+    // UX U12: GARUDA_MOTION, the project's ui.motion, or screen-reader mode.
+    reducedMotion: motionReduced(process.env, runtime.uiSettings),
+  });
   store.print(banner);
   if (firstInput !== undefined) store.enqueue(firstInput);
   approver.current = store;

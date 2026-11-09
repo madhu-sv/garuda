@@ -4,6 +4,7 @@ import type { ToolUseBlock } from "../../model/types.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../../permissions/types.js";
 import { colorPreview, header } from "../approver.js";
 import { hunkCount } from "../diffView.js";
+import { marks, motionReduced } from "../marks.js";
 import { receiptText, screenReaderMode } from "../receiptView.js";
 import type { Renderer } from "../renderer.js";
 import {
@@ -134,6 +135,8 @@ export class ChatStore implements Renderer, Approver, Interruptible {
   /** Ctrl-G and /editor (0.6): the chat sets it; it edits the text in the user's editor. */
   externalEdit: ((text: string) => { text?: string; problem?: string }) | undefined;
   private readonly paint: Paint;
+  /** UX U12: the view draws no spinner frames. */
+  readonly reducedMotion: boolean;
   private readonly columns: () => number;
   /** The turn's answer has started (its first text item got the mark). */
   private answered = true;
@@ -155,8 +158,11 @@ export class ChatStore implements Renderer, Approver, Interruptible {
       history?: string[];
       /** Keys in this time after a question appears do not answer it (type-ahead). */
       approvalKeyDelayMs?: number;
+      /** UX U12: no spinner frames; the live line counts seconds. Default: motionReduced(). */
+      reducedMotion?: boolean;
     } = {},
   ) {
+    this.reducedMotion = options.reducedMotion ?? motionReduced();
     this.paint = options.paint ?? ansi;
     this.now = options.now ?? Date.now;
     this.columns = options.columns ?? (() => process.stdout.columns || 80);
@@ -457,8 +463,9 @@ export class ChatStore implements Renderer, Approver, Interruptible {
       }
       case "tool_result": {
         const summary = summariseResult(event.call, event.outcome);
-        const line = `${this.paint("cyan", "●")} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`;
-        const result = `  ${this.paint("dim", "⎿")} ${event.outcome.isError ? this.paint("red", summary) : this.paint("dim", summary)}`;
+        const m = marks();
+        const line = `${this.paint("cyan", m.call)} ${this.paint("bold", event.call.name)} ${summariseCall(event.call)}`;
+        const result = `  ${this.paint("dim", m.result)} ${event.outcome.isError ? this.paint("red", summary) : this.paint("dim", summary)}`;
         const shown = this.details || event.outcome.isError ? [result] : [];
         const text = [line, ...shown].join("\n");
         this.lastOutput = {
@@ -503,12 +510,12 @@ export class ChatStore implements Renderer, Approver, Interruptible {
         this.closeGroup();
         const { call, result } = serverToolText(event);
         const failed = event.result?.error !== undefined;
-        const head = `${this.paint("cyan", "●")} ${this.paint("bold", call)}`;
+        const head = `${this.paint("cyan", marks().call)} ${this.paint("bold", call)}`;
         this.add({
           kind: "tool",
           text:
             this.details || failed
-              ? `${head}\n  ${this.paint("dim", "⎿")} ${this.paint(failed ? "red" : "dim", result)}`
+              ? `${head}\n  ${this.paint("dim", marks().result)} ${this.paint(failed ? "red" : "dim", result)}`
               : head,
         });
         this.lastOutput = { title: call, text: serverToolOutput(event) };
@@ -675,7 +682,9 @@ export class ChatStore implements Renderer, Approver, Interruptible {
           kind: "note",
           level: "info",
           text:
-            choice === "deny" ? this.paint("red", `✗ ${label}`) : this.paint("green", `✔ ${label}`),
+            choice === "deny"
+              ? this.paint("red", `${marks().denied} ${label}`)
+              : this.paint("green", `${marks().allowed} ${label}`),
         });
         resolve(choice);
       };

@@ -1,4 +1,5 @@
 import { styleText } from "node:util";
+import { accentAnsi } from "../accent.js";
 
 /**
  * Basic markdown for model text in the chat (0.2). Streaming text is cut into blocks at
@@ -7,9 +8,12 @@ import { styleText } from "node:util";
  */
 
 type Style = Parameters<typeof styleText>[0];
-export type Paint = (style: Style, text: string) => string;
+/** A style of `styleText`, or the chat's accent (UX U12). */
+export type PaintStyle = Style | "accent";
+export type Paint = (style: PaintStyle, text: string) => string;
 
-export const ansi: Paint = (style, text) => styleText(style, text, { validateStream: false });
+export const ansi: Paint = (style, text) =>
+  style === "accent" ? accentAnsi(text) : styleText(style, text, { validateStream: false });
 export const noColor: Paint = (_style, text) => text;
 
 /** Cut finished blocks off the front of `buffer`. `rest` is the open block. */

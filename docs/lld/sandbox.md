@@ -165,6 +165,12 @@ pid 1 inside, so the group kill still stops every process in the sandbox. A pid 
 group, so a timeout or Ctrl-C reaches it. Limit: bubblewrap needs each mount point to exist, so a protected
 path that does not exist yet (for example `.git/hooks` with no `.git`) is not protected.
 
+The user's runtime folder `/run/user/<uid>` is a denied read path on Linux (0.19.1,
+`runtimeDenials`), so it gets an empty read-only tmpfs. It holds the session bus, through which the
+keyring answers `secret-tool lookup` with no file read; `--unshare-net` does not cover a Unix socket
+in the file system. It is left alone when a write path (the project, a `TMPDIR`) is inside it.
+Garuda's own proxy socket is in the temp folder, not there.
+
 ## Network allowlist (0.13)
 
 `ExecPolicy.proxy` (`{ port, socketPath, bridge? }`) is set by the permission engine when the runtime
