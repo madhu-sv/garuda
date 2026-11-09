@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Homebrew formula in the repository names 0.19.1 and its tarball hash.
+
 ## 0.19.1 (2026-11-09)
 
 A security fix and accessibility. Sandboxed commands can no longer read the keys that only
