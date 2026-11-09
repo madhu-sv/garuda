@@ -51,6 +51,11 @@ export interface TeamPolicy {
   disallowedCommands?: string[];
   /** Require OS sandbox for all bash commands (disallowing outsideSandbox: true). */
   requireSandbox?: boolean;
+  /**
+   * T15 (docs/lld/reads.md): commands read only where needed (`sandbox.reads: "needed"`), whatever
+   * a project says. Separate from the strict profile: a team chooses each one.
+   */
+  requireNeededReads?: boolean;
   /** Patterns of paths that may not be read or written, regardless of user settings. */
   denyPaths?: string[];
   /** Allowed models (if set, any model not matching at least one pattern is forbidden). */
@@ -81,6 +86,7 @@ const policySchema = z.strictObject({
   profile: z.enum(PROFILES).optional(),
   disallowedCommands: z.array(z.string()).optional(),
   requireSandbox: z.boolean().optional(),
+  requireNeededReads: z.boolean().optional(),
   denyPaths: z.array(z.string()).optional(),
   allowedModels: z.array(z.string()).optional(),
   network: z
@@ -116,6 +122,9 @@ export function parsePolicy(json: unknown): TeamPolicy {
       ? {}
       : { disallowedCommands: data.disallowedCommands }),
     ...(data.requireSandbox === undefined ? {} : { requireSandbox: data.requireSandbox }),
+    ...(data.requireNeededReads === undefined
+      ? {}
+      : { requireNeededReads: data.requireNeededReads }),
     ...(data.denyPaths === undefined ? {} : { denyPaths: data.denyPaths }),
     ...(data.allowedModels === undefined ? {} : { allowedModels: data.allowedModels }),
     ...(data.network === undefined
@@ -194,6 +203,7 @@ export function mergePolicies(
   const disallowedCommands = union(user.disallowedCommands, managed.disallowedCommands);
   const denyPaths = union(user.denyPaths, managed.denyPaths);
   const requireSandbox = either(user.requireSandbox, managed.requireSandbox);
+  const requireNeededReads = either(user.requireNeededReads, managed.requireNeededReads);
   const allowedModels = managed.allowedModels ?? user.allowedModels;
   const blockedHosts = union(user.network?.blockedHosts, managed.network?.blockedHosts);
   const strictAllowlist = either(user.network?.strictAllowlist, managed.network?.strictAllowlist);
@@ -210,6 +220,7 @@ export function mergePolicies(
     ...(profile === undefined ? {} : { profile }),
     ...(disallowedCommands === undefined ? {} : { disallowedCommands }),
     ...(requireSandbox === undefined ? {} : { requireSandbox }),
+    ...(requireNeededReads === undefined ? {} : { requireNeededReads }),
     ...(denyPaths === undefined ? {} : { denyPaths }),
     ...(allowedModels === undefined ? {} : { allowedModels }),
     ...(blockedHosts === undefined && strictAllowlist === undefined

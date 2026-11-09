@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Sandbox (T15, step 1; off by default while it is measured): `"sandbox": { "reads": "needed" }`
+  lets commands read, in the home folder, only the project, the toolchains on `PATH`, the folders
+  that tools name in the environment, the package caches and Garuda's skills; other volumes are
+  hidden too. `sandbox.readPaths` adds paths (a project's need your yes). A team policy can require
+  the mode with `requireNeededReads`. In this mode `~/.m2/settings.xml`,
+  `~/.gradle/gradle.properties`, `~/.yarnrc.yml` and NuGet's config are unreadable unless
+  `readPaths` names them. MCP servers keep open reads for now. Design: docs/lld/reads.md.
 - The Homebrew formula in the repository names 0.19.1 and its tarball hash.
 
 ## 0.19.1 (2026-11-09)

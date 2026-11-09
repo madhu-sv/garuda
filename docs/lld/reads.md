@@ -242,3 +242,22 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
 3. The blocked-read note, the chat question and the `sandbox` failure kind.
 4. Repo-task evals on the mode.
 5. The measurement; the results go in this note; the user decides the default.
+
+## As built (step 1)
+
+- `sandbox.reads` and `sandbox.readPaths` in the settings; `requireNeededReads` in the team
+  policy (merged like `requireSandbox`). A project's `readPaths` need a yes, as `writePaths` do.
+- `src/permissions/reads.ts` (`neededReads`, `NEEDED_IN_HOME`, `NEEDED_ENV`, `NEEDED_MODE_DENY`,
+  `hiddenPlaces`) and `src/sandbox/readScope.ts` (`ReadScope`, the rule helpers). The engine adds
+  the scope to `ExecPolicy.reads` in the sandbox only.
+- The rules as above, with two changes from the plan: the write paths in the home folder are
+  readable too, and a write path that opens the home folder itself turns the mode off (the user
+  made all of it writable). `.gitignore_global` and `.gitignore` in the home folder are on the
+  fixed list (git reads the global excludes file).
+- A file of `NEEDED_MODE_DENY` that `readPaths` names comes back (the deny list wins otherwise).
+- Not yet: MCP servers keep open reads; the blocked-read note, the chat question and the
+  `sandbox` failure kind are step 2.
+- Checked on Linux (bubblewrap, the real engine and home folder): node, npm with a script, git
+  and python ran; a private file in the home folder was "No such file or directory"; `ls ~`
+  showed nothing private. The macOS check is the user's live test.
+

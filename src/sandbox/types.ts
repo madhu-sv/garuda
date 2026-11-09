@@ -5,6 +5,7 @@
  */
 
 import type { DaemonInfo, DaemonManager, DaemonStatus } from "./daemon.js";
+import type { ReadScope } from "./readScope.js";
 
 /** How strongly an executor enforces its policy. The permission engine reads this. */
 export type Isolation = "none" | "os" | "container";
@@ -13,7 +14,8 @@ export type Isolation = "none" | "os" | "container";
  * What one command may do. The permission engine builds it.
  * All executors apply `root`, `envAllowlist`, `timeoutMs` and `maxOutputBytes`.
  * An OS sandbox also enforces the file and network rules, when `sandbox` is true.
- * Reads are allowed everywhere except `denyReadPaths` (0.2 decision: writes-only scope).
+ * Reads are allowed everywhere except `denyReadPaths` (0.2 decision: writes-only scope), unless
+ * `reads` narrows them (T15).
  */
 export interface ExecPolicy {
   /** Absolute working root. The command starts here. */
@@ -26,6 +28,12 @@ export interface ExecPolicy {
   denyWritePaths: string[];
   /** Absolute paths the command may not read, for example ~/.ssh. */
   denyReadPaths: string[];
+  /**
+   * Reads only where needed (T15, docs/lld/reads.md): in the home folder and the hidden places,
+   * only `allow` (and the write paths there) is readable. Applied before `denyReadPaths`, so the
+   * deny list still wins inside a readable folder. Absent: reads are open, as before.
+   */
+  reads?: ReadScope;
   /**
    * A scheduled job's write scope (0.17, review T6): `root` is read-only, except `paths` in it.
    * Applied after `writePaths` (so a writable parent such as /tmp does not open the root) and

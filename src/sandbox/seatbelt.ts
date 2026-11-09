@@ -1,4 +1,11 @@
 import { type Launch, ProcessExecutor, plain } from "./process.js";
+import {
+  homeIsWritable,
+  type ReadScope,
+  readAncestors,
+  scopeBases,
+  writableInScope,
+} from "./readScope.js";
 import type { Reaper, Tracker } from "./reaper.js";
 import type { ExecPolicy } from "./types.js";
 
@@ -61,6 +68,7 @@ export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = [
   if (policy.denyWritePaths.length > 0) {
     lines.push(`(deny file-write* ${paths(withDataVolume(policy.denyWritePaths))})`);
   }
+  if (policy.reads !== undefined) lines.push(...readRules(policy.reads, policy.writePaths));
   if (policy.denyReadPaths.length > 0) {
     lines.push(`(deny file-read* ${paths(withDataVolume(policy.denyReadPaths))})`);
   }
@@ -80,6 +88,30 @@ export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = [
   }
   lines.push(...extra);
   return lines.join("\n");
+}
+
+/**
+ * Reads only where needed (T15, docs/lld/reads.md): the home folder and the hidden places denied,
+ * then the readable paths (and the write paths there) allowed again, then a metadata-only rule for
+ * the folders on the way to them. The last matching rule wins, so the deny list that follows still
+ * wins inside a readable folder. A write path that opens the home folder itself turns this off.
+ */
+export function readRules(scope: ReadScope, writePaths: readonly string[]): string[] {
+  if (homeIsWritable(scope, writePaths)) return [];
+  const paths = (list: readonly string[]) =>
+    withDataVolume(list)
+      .map((p) => `(subpath ${quote(p)})`)
+      .join(" ");
+  const literals = (list: readonly string[]) =>
+    withDataVolume(list)
+      .map((p) => `(literal ${quote(p)})`)
+      .join(" ");
+  const readable = [...new Set([...scope.allow, ...writableInScope(scope, writePaths)])];
+  const lines = [`(deny file-read* ${paths(scopeBases(scope))})`];
+  if (readable.length > 0) lines.push(`(allow file-read* ${paths(readable)})`);
+  const ancestors = readAncestors(scope, readable);
+  if (ancestors.length > 0) lines.push(`(allow file-read-metadata ${literals(ancestors)})`);
+  return lines;
 }
 
 /**

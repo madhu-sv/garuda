@@ -1,4 +1,5 @@
-import { sep } from "node:path";
+import { homedir } from "node:os";
+import { join, sep } from "node:path";
 import type { AuditLogger } from "../audit/logger.js";
 import type { ProfileAccess } from "../lang/profiles.js";
 import type { ExecPolicy, Isolation, NetworkProxyPolicy } from "../sandbox/types.js";
@@ -10,8 +11,9 @@ import {
   isSandboxRequiredByPolicy,
   type TeamPolicy,
 } from "./policy.js";
+import { NEEDED_MODE_DENY, neededReads, type ReadsMode } from "./reads.js";
 import { formatRule, type Rule, ruleMatches } from "./rules.js";
-import { policyDeniedPaths, sandboxPaths } from "./sandboxPaths.js";
+import { expandPath, policyDeniedPaths, sandboxPaths } from "./sandboxPaths.js";
 import { isProtectedFromWrites, isSensitive } from "./sensitive.js";
 import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 import type {
@@ -442,6 +444,15 @@ export class PermissionEngine implements PermissionGate {
   }
 
   /**
+   * The read mode of sandboxed commands (T15): the team policy's `requireNeededReads` wins, else
+   * the settings' `sandbox.reads`, else "open".
+   */
+  readsMode(): ReadsMode {
+    if (this.policy?.requireNeededReads === true) return "needed";
+    return this.settings.sandbox?.reads ?? "open";
+  }
+
+  /**
    * The policy for one command. `readOnlyRoot` (plan mode, language servers): the project is
    * read-only; temp folders and package caches stay writable.
    */
@@ -478,11 +489,28 @@ export class PermissionEngine implements PermissionGate {
       if (problem !== undefined)
         throw new Error(`The job's write scope cannot be used: ${problem}.`);
     }
+    // Reads only where needed (T15): the scope, and the mixed credential files denied (decision 3).
+    const home = homedir();
+    const readPaths = (this.settings.sandbox?.readPaths ?? []).map((p) =>
+      expandPath(this.root, home, p),
+    );
+    const reads =
+      sandbox && this.readsMode() === "needed"
+        ? neededReads({ home, root: this.root, writePaths, readPaths })
+        : undefined;
+    // A file that `readPaths` names comes back: that is how a build that needs one gets it.
+    const named = (file: string) =>
+      readPaths.some((p) => file === p || file.startsWith(`${p}${sep}`));
+    const neededDenials =
+      reads === undefined
+        ? []
+        : NEEDED_MODE_DENY.map((p) => join(home, p)).filter((file) => !named(file));
     return {
       root: this.root,
       sandbox,
       ...paths,
-      denyReadPaths: [...paths.denyReadPaths, ...denied],
+      denyReadPaths: [...paths.denyReadPaths, ...neededDenials, ...denied],
+      ...(reads === undefined ? {} : { reads }),
       writePaths,
       ...(scope === undefined ? {} : { writeScope: scope }),
       denyWritePaths,

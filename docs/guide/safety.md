@@ -46,6 +46,16 @@ Settings:
   with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again (unless an allow rule covers it).
 - `sandbox.writePaths` and `sandbox.denyRead` add paths. `~/` is the home folder; other relative paths
   start at the root.
+- Reads only where needed (T15, being measured; off by default): with `"sandbox": { "reads":
+  "needed" }`, a command reads in your home folder only the project, the toolchains on your `PATH`
+  (nvm, pyenv, Cargo …), the folders that tools name in the environment (`CARGO_HOME`, `JAVA_HOME`
+  …), the package caches, and Garuda's skills. Other volumes (`/Volumes`, `/media`, `/mnt`) are
+  hidden too. `~/.m2/settings.xml`, `~/.gradle/gradle.properties`, `~/.yarnrc.yml` and NuGet's
+  config are unreadable in this mode, because they can hold passwords. Add a path with
+  `"readPaths": ["~/notes/spec.md"]`; that also brings one of those four files back. To use the mode
+  in every project, put `"requireNeededReads": true` in `~/.garuda/policy.json`. The mode does not
+  apply to MCP servers yet. When a tool fails with "Operation not permitted" (macOS) or "No such
+  file or directory" (Linux) on a home path, add it to `readPaths`.
 - macOS sandbox probe (0.14): at startup Garuda runs `true` through `/usr/bin/sandbox-exec` once. When
   that fails (for example in a nested sandbox), `auto` falls back to the host with a notice that gives
   the first line of the error.
@@ -158,8 +168,8 @@ Put rules in `.garuda/settings.json` in the project. Deny rules always win.
   `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, `TZ`, plus the names in `env.allow`. API keys stay out.
 - With no terminal on stdin (a pipe or CI), Garuda cannot ask, so it denies calls that need approval.
 - The project's file comes with the repository, so its parts that loosen safety need your yes first:
-  `executor: "host"`, `permissions.allow`, `sandbox.writePaths`, `env.allow` and
-  `web.allowLocalhost`. At startup the chat (and `-p` in a terminal) shows them and asks: yes for this
+  `executor: "host"`, `permissions.allow`, `sandbox.writePaths`, `sandbox.readPaths`, `env.allow`
+  and `web.allowLocalhost`. At startup the chat (and `-p` in a terminal) shows them and asks: yes for this
   run, yes and remember (pinned in `~/.garuda/trust.json`; a change asks again), or no. Without a yes,
   Garuda leaves those parts out and says so; the rest of the file (deny rules, limits, features)
   applies. A scheduled job uses them only when they are pinned. Settings that `garuda init` writes
@@ -214,6 +224,8 @@ A team policy sets limits that a project cannot loosen, and an audit log records
     `["rm -rf *", "git push *--force*"]`). A compound command is denied when one of its parts matches.
   - `requireSandbox`: When `true`, no command runs outside the OS sandbox: `outside_sandbox` is
     denied, and on a machine with no OS sandbox every command is denied.
+  - `requireNeededReads` (T15): When `true`, sandboxed commands read only where needed (see
+    Sandbox), whatever a project's settings say. It is separate from the strict profile.
   - `profile` (0.17): `"strict"` requires the OS sandbox. Without one, Garuda stops at startup and
     runs no command on the host; `"executor": "host"` is an error; the `bash` tool has no
     `outside_sandbox`. Strict wins in a merge. A project's `.garuda/settings.json` can also set

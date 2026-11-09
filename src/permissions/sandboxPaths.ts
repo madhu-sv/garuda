@@ -129,6 +129,10 @@ export interface SandboxSettings {
   writePaths?: string[];
   /** Extra paths commands may not read. */
   denyRead?: string[];
+  /** T15: "needed" lets commands read only what builds need (docs/lld/reads.md). Default "open". */
+  reads?: "open" | "needed";
+  /** T15: extra readable paths in "needed" mode. `~/` is the home folder; relative to the root. */
+  readPaths?: string[];
 }
 
 /**
@@ -147,14 +151,22 @@ export function runtimeDenials(
   return writePaths.some(inside) ? [] : [dir];
 }
 
+/** A settings path: `~` and `~/…` are in the home folder; relative paths start at the root. */
+export function expandPath(root: string, home: string, path: string): string {
+  return path === "~"
+    ? home
+    : path.startsWith("~/")
+      ? join(home, path.slice(2))
+      : resolve(root, path);
+}
+
 export function sandboxPaths(
   root: string,
   settings: SandboxSettings = {},
   home: string = homedir(),
   platform: NodeJS.Platform = process.platform,
 ): SandboxPaths {
-  const expand = (path: string) =>
-    path === "~" ? home : path.startsWith("~/") ? join(home, path.slice(2)) : resolve(root, path);
+  const expand = (path: string) => expandPath(root, home, path);
   const temp = [...new Set([real(tmpdir()), real("/tmp")])];
   const writePaths = unique([
     root,
