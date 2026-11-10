@@ -21,6 +21,10 @@
   have said yes to step 2's read question, so a blocked command could have read the checkout. Evals
   now ask no read questions. The Claude Code baseline can read its own program (a native install
   keeps it in `~/.local/share/claude`).
+- Evals (T15, step 4): repo-task commands may write `node_modules/.vitest` too. Vitest 5 reads an
+  API token from `~/Library/Application Support/vitest` (Linux: `~/.local/share/vitest`) and else
+  makes one there. "Needed" reads hide the first, and the first measurement run passed 0 of 72
+  scored runs. The token in the home folder stays unreadable.
 - The Homebrew formula in the repository names 0.19.1 and its tarball hash.
 
 ## 0.19.1 (2026-11-09)

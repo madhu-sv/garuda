@@ -255,7 +255,8 @@ candidate on this machine, with no sandbox, in git worktrees: your checkout does
 the sandbox. A commit whose tests fail there is left out, because no model could pass it. For
 example, a test that starts its own sandbox fails like this on macOS. The output shows the first
 such failure. In an eval, commands may write Vite's and other caches in your `node_modules`
-(`.vite-temp`, `.vite` and `.cache`), and nothing else there.
+(`.vite-temp`, `.vite`, `.cache` and `.vitest`, where Vitest 5 keeps its API token), and nothing
+else there.
 Repo tasks always run with "needed" reads (T15, docs/lld/reads.md): in your home folder a command
 reads only the task copy, the links to your `node_modules` and venvs, the toolchains and the
 caches. Your checkout and the rest of your home folder are hidden. Your own `sandbox.readPaths`

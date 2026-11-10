@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -33,6 +34,7 @@ import { git } from "../src/jobs/git.js";
 import { cleanArgs } from "../src/jobs/worktree.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { HostExecutor } from "../src/sandbox/host.js";
+import { findOsSandbox } from "../src/sandbox/index.js";
 
 /** Benchmark your repo (0.12, W3): eval tasks from the project's own commits. */
 
@@ -391,11 +393,54 @@ describe("repo tasks: caches in node_modules (0.18.2)", () => {
     symlinkSync(deps, join(project, "node_modules"), "dir");
     const paths = repoTaskWritePaths(project);
     // vitest.config.ts compiles into node_modules/.vite-temp: without it, 10 of 30 tasks failed.
-    expect(paths).toEqual([join(deps, ".vite-temp"), join(deps, ".vite"), join(deps, ".cache")]);
+    // .vitest: Vitest 5's API token, when "needed" reads hide the one in the home folder (T15).
+    expect(paths).toEqual([
+      join(deps, ".vite-temp"),
+      join(deps, ".vite"),
+      join(deps, ".cache"),
+      join(deps, ".vitest"),
+    ]);
     for (const path of paths) expect(existsSync(path)).toBe(true);
     expect(repoTaskSandbox(project, join(base, "nohome")).writePaths).toEqual(paths);
     // Only those: the rest of node_modules stays read-only.
     expect(paths).not.toContain(deps);
     expect(repoTaskWritePaths(join(base, "no-modules"))).toEqual([]);
   });
+});
+
+// Vitest 5's API token (T15 step 4): the user's first "needed" repo run passed 0 of 72 scored runs.
+const osSandbox = findOsSandbox();
+describe.runIf("executor" in osSandbox)("repo tasks: Vitest's token in the real sandbox", () => {
+  it("the home folder's token is hidden, and the check can make one in node_modules/.vitest", async () => {
+    const home = join(base, "token-home");
+    const repo = join(home, "dev", "p");
+    const deps = join(repo, "node_modules");
+    const dataDir =
+      process.platform === "darwin" ? "Library/Application Support/vitest" : ".local/share/vitest";
+    mkdirSync(join(home, dataDir), { recursive: true });
+    writeFileSync(join(home, dataDir, ".vitest-secret-token"), "secret\n");
+    // A real node_modules in the checkout, as in the user's project; the task copy links to it.
+    mkdirSync(deps, { recursive: true });
+    writeFileSync(join(repo, ".gitignore"), "node_modules\n");
+    writeFileSync(join(repo, "a.txt"), "a\n");
+    const host = new HostExecutor();
+    const id = ["-c", "user.name=Test", "-c", "user.email=t@example.com"];
+    await git(host, repo, ["init", "-q"]);
+    await git(host, repo, ["add", "-A"]);
+    await git(host, repo, [...id, "commit", "-qm", "init"]);
+    const sha = (await git(host, repo, ["rev-parse", "HEAD"])).stdout.trim();
+    // As Vitest does: the home folder's token first, else a new one in node_modules/.vitest.
+    const script = [
+      "const fs = require('node:fs');",
+      `try { fs.readFileSync(${JSON.stringify(join(home, dataDir, ".vitest-secret-token"))}); console.log('READ'); process.exit(3); } catch {}`,
+      "fs.mkdirSync('node_modules/.vitest', { recursive: true });",
+      "fs.writeFileSync('node_modules/.vitest/.vitest-secret-token', 'new');",
+      "console.log('MADE');",
+    ].join(" ");
+    const check = `node -e ${JSON.stringify(script)}`;
+    const result = await checkAsEval(repo, sha, check, { home });
+    expect(result.tail).toContain("MADE");
+    expect(result.ok).toBe(true);
+    expect(readFileSync(join(deps, ".vitest", ".vitest-secret-token"), "utf8")).toBe("new");
+  }, 60_000);
 });

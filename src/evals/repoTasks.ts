@@ -242,8 +242,11 @@ export function repoTaskReadDenials(root: string, home: string): string[] {
  * `vitest.config.ts` into `.vite-temp`, Vitest keeps its results in `.vite`, Babel and others use
  * `.cache`. In a task copy, `node_modules` links to the project's own, which a command cannot
  * write: in the user's run, 10 of 30 tasks failed for both models before a test ran.
+ * `.vitest` (T15 step 4): Vitest 5 reads an API token from `~/Library/Application Support/vitest`
+ * (Linux: `~/.local/share/vitest`) and else creates one in `node_modules/.vitest`. "Needed" reads
+ * hide the first, so without the second every check failed (0 of 72 scored runs passed).
  */
-export const NODE_MODULES_CACHES = [".vite-temp", ".vite", ".cache"];
+export const NODE_MODULES_CACHES = [".vite-temp", ".vite", ".cache", ".vitest"];
 
 /**
  * The cache folders of the project's `node_modules` that a repo task's commands may write, as real

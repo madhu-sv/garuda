@@ -311,3 +311,21 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
 - Checked on Linux in bubblewrap with a fake home folder: a repo task's check read the task copy
   and ran node; a private file in the home folder and the original checkout were "No such file or
   directory".
+
+## Measurement, first run (2026-11-09, macOS, Haiku 5.5, repo suite, `--repeat 3`)
+
+- 0.19.1 (the old deny list): 81 of 88 scored runs passed (2 API stalls). Step 3 ("needed"): 0 of
+  72 scored runs passed (18 API stalls, `provider`). The rerun shows whether the stalls repeat.
+- Cause: Vitest 5 reads an API token from `~/Library/Application Support/vitest/.vitest-secret-token`
+  and else creates one in `node_modules/.vitest`. "Needed" mode hides the first. In an eval,
+  `node_modules` links to the project's own, where commands could write only `.vite-temp`, `.vite`
+  and `.cache`. In chat the project's `node_modules` is writable, so only evals failed. 0.19.1
+  passed because the token already existed and `~/Library` was readable.
+- Fix: `.vitest` joins `NODE_MODULES_CACHES`. The token in the home folder stays unreadable; Vitest
+  makes its own. A test runs the same logic in the real sandbox.
+- A gap in step 2: the runs got the kind `check`, not `sandbox`. Vitest's message has no read-error
+  word, and the path has a space ("Application Support"), so `findBlockedReads` saw nothing. A
+  failure kind from output text cannot find every blocked read; the paired compare is the real test.
+- One run's blocked reads were `~/.garuda` and `~/.garuda/evals`: the model looked for earlier eval
+  results there. "Needed" mode blocked it, as designed.
+- The run is to be repeated with the fix.
