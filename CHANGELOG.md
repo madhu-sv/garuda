@@ -3,6 +3,7 @@
 ## Unreleased
 
 - The Homebrew formula in the repository names 0.20.0 and its tarball hash.
+- Design note for mobile apps (T14): docs/lld/mobile.md. Nothing is built yet.
 
 ## 0.20.0 (2026-11-10)
 
