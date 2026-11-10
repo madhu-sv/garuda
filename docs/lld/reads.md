@@ -350,7 +350,10 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
   no run got the kind `sandbox`. The `medium` suite's Python tasks failed the same way.
 - Fix: `Library/Python` joins the fixed list, and with it pipx's venvs (`.local/pipx`,
   `.local/share/pipx`), which the links in `~/.local/bin` point to.
-- The `python` and `medium` pairs are to be repeated with the fix. `basic`, `hard` and `java` meet
-  the acceptance rule.
+- The rerun with the fix (2026-11-10): `python` 15/15 in both modes, `medium` 30/30 in both.
+
+Every suite now meets the acceptance rule: the interval contains 0, no point estimate is below 0,
+and no run failed with the kind `sandbox`. Still open from "The measurement": the live checks that
+no suite covers (an Xcode simulator build, an Android Gradle build, `uv` and conda projects).
 - A lesson for the default: a blocked read can fail silently. The paired measurement found both
   gaps (Vitest's token, the macOS user site); neither gave a read error.
