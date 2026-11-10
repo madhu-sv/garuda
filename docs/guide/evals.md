@@ -25,7 +25,7 @@ garuda eval -s hard --keep-thinking off    # A/B: drop Claude's thinking blocks,
 garuda eval -s hard --format on            # A/B: Biome formats after each edit (and --format off)
 garuda eval -s hard --repeat 3 --shuffle --seed 7  # repeats in a random order from seed 7
 garuda eval --split heldout --repeat 3             # the held-out set (10 harder tasks)
-garuda eval -s hard --repeat 3 --reads needed      # A/B: commands read only where needed (T15)
+garuda eval -s hard --repeat 3 --reads open        # A/B: commands read the whole home folder (T15)
 ```
 
 The report (0.17) says how far one run's numbers can be trusted:
@@ -261,7 +261,7 @@ Repo tasks always run with "needed" reads (T15, docs/lld/reads.md): in your home
 reads only the task copy, the links to your `node_modules` and venvs, the toolchains and the
 caches. Your checkout and the rest of your home folder are hidden. Your own `sandbox.readPaths`
 do not apply, so the results compare across machines. The other suites take `--reads open|needed`
-(default `open`); the report shows `reads`.
+(default `needed`, as in chat since 0.20.0); the report shows `reads`.
 Built a suite before 0.18.2? Build it again: in one user's suite, 12 of 30 tasks could not pass.
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).

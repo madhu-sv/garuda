@@ -232,6 +232,9 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
    `sandbox.readPaths`.
 4. **A security patch release first**, in both modes: the Linux runtime folder hidden, and the
    three publish-only credential files denied.
+5. **"Needed" is the default from 0.20.0** (2026-11-10, after the measurement). Mobile builds stay
+   in T14: they do not work in the sandbox in either mode yet (no Xcode or Android profile,
+   `DerivedData` and `~/.android` not writable, the simulator's services not tested).
 
 ## Plan
 
@@ -357,3 +360,17 @@ and no run failed with the kind `sandbox`. Still open from "The measurement": th
 no suite covers (an Xcode simulator build, an Android Gradle build, `uv` and conda projects).
 - A lesson for the default: a blocked read can fail silently. The paired measurement found both
   gaps (Vitest's token, the macOS user site); neither gave a read error.
+
+## As built (step 5: the default, 0.20.0)
+
+- `readsMode()` is "needed" when nothing sets it. The team policy's `requireNeededReads` still wins.
+- A project's `"reads": "open"` is now a loosening part (`SettingsRisk.readsOpen`, only when
+  present, so old hashes stay valid): it needs the user's yes and is pinned to its hash like
+  `readPaths`. Until then it is left out, and the default applies. A `"needed"` written out needs
+  no yes.
+- `garuda eval --reads` defaults to "needed", so evals measure what users run.
+- Found by the default: the baseline's `withProgram` added the folder of a program outside the
+  home folder, and bubblewrap mounted it read-only over `/tmp`, where the program wrote. bubblewrap
+  now mounts only readable paths inside the emptied folders, and `withProgram` adds only a folder
+  in the scope.
+- Still open before the release: the live checks with `uv` and conda.

@@ -54,8 +54,10 @@ export function bwrapArgv(
     if (!inHidden(path) && kind(path) !== undefined) args.push("--bind", path, path);
   for (const base of hidden) args.push("--tmpfs", base);
   if (hidden.length > 0 && policy.reads !== undefined) {
+    // Only inside the emptied folders: a read-only mount elsewhere would cover a write path there
+    // (the baseline's program in /tmp did, 0.20.0).
     for (const path of policy.reads.allow)
-      if (kind(path) !== undefined) args.push("--ro-bind", path, path);
+      if (inHidden(path) && kind(path) !== undefined) args.push("--ro-bind", path, path);
   }
   for (const path of policy.writePaths)
     if (inHidden(path) && kind(path) !== undefined) args.push("--bind", path, path);

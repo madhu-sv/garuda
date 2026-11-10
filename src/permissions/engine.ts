@@ -506,11 +506,12 @@ export class PermissionEngine implements PermissionGate {
 
   /**
    * The read mode of sandboxed commands (T15): the team policy's `requireNeededReads` wins, else
-   * the settings' `sandbox.reads`, else "open".
+   * the settings' `sandbox.reads`, else "needed" (the default since 0.20.0, after the measurement
+   * in docs/lld/reads.md). A project's "open" needs the user's yes (projectSettings.ts).
    */
   readsMode(): ReadsMode {
     if (this.policy?.requireNeededReads === true) return "needed";
-    return this.settings.sandbox?.reads ?? "open";
+    return this.settings.sandbox?.reads ?? "needed";
   }
 
   /**

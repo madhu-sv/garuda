@@ -175,7 +175,7 @@ async function main(): Promise<void> {
     )
     .option(
       "--reads <mode>",
-      'sandbox reads: "open" (default) or "needed" (T15); repo tasks always use "needed"',
+      'sandbox reads: "needed" (default since 0.20.0) or "open" (T15); repo tasks always use "needed"',
     )
     .option(
       "--test-command <cmd>",

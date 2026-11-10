@@ -2,7 +2,15 @@
 
 ## Unreleased
 
-- Sandbox (T15, step 1; off by default while it is measured): `"sandbox": { "reads": "needed" }`
+- Sandbox (T15): **commands read only where needed by default.** In the home folder a sandboxed
+  command reads the project, the toolchains on `PATH`, the folders that tools name in the
+  environment, the package caches and Garuda's skills; other volumes are hidden. Measured on macOS
+  with Haiku 5.5 on six suites (repo, basic, hard, medium, python, java): no pass-rate drop
+  (docs/lld/reads.md). To read the whole home folder in one project, set `"sandbox": { "reads":
+  "open" }` in its settings: Garuda asks once, because a cloned project could set it too. Mobile
+  builds (Xcode, Android) do not work in the sandbox yet, in either mode (T14). A job asks no
+  question: if a job's command needs a path in the home folder, add it to `sandbox.readPaths`.
+- Sandbox (T15, step 1): `"sandbox": { "reads": "needed" }`
   lets commands read, in the home folder, only the project, the toolchains on `PATH`, the folders
   that tools name in the environment, the package caches and Garuda's skills; other volumes are
   hidden too. `sandbox.readPaths` adds paths (a project's need your yes). A team policy can require

@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import type { ExecPolicy, ExecResult, Executor } from "../../sandbox/types.js";
 
 /**
@@ -112,7 +112,12 @@ export function withProgram(policy: ExecPolicy, command: string): ExecPolicy {
   } catch {
     return policy;
   }
-  if (policy.reads.allow.includes(folder)) return policy;
+  // Outside the home folder and the hidden places it is readable anyway.
+  const scope = policy.reads;
+  const inScope = [scope.home, ...scope.hide].some(
+    (b) => folder === b || folder.startsWith(`${b}${sep}`),
+  );
+  if (!inScope || scope.allow.includes(folder)) return policy;
   return { ...policy, reads: { ...policy.reads, allow: [...policy.reads.allow, folder] } };
 }
 

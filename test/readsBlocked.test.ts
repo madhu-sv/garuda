@@ -147,7 +147,13 @@ describe("the bash tool's note, with the message macOS gives", () => {
     expect(text).toContain("The sandbox blocked reads of ~/notes/a.txt");
     expect(text).not.toContain("run it again with outside_sandbox: true");
     // In open mode the same output gets the general hint, as before (the negative control).
-    const open = new PermissionEngine({ root, home, approver: approver("deny"), isolation: "os" });
+    const open = new PermissionEngine({
+      root,
+      home,
+      approver: approver("deny"),
+      settings: parseSettings({ sandbox: { reads: "open" } }),
+      isolation: "os",
+    });
     const before = await bash.run(
       { command: "head notes" },
       {

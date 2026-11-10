@@ -390,6 +390,12 @@ describe("the baseline with needed reads (T15 step 3)", () => {
     expect(
       withProgram({ ...policy, reads: scope }, join(home, ".local/bin/claude")).reads?.allow,
     ).toEqual([join(home, ".local/bin"), versions]);
+    // A program outside the home folder: readable anyway, nothing to add.
+    const elsewhere = realpathSync(mkdtempSync(join(temp, "bin-")));
+    writeFileSync(join(elsewhere, "claude"), "");
+    expect(
+      withProgram({ ...policy, reads: scope }, join(elsewhere, "claude")).reads?.allow,
+    ).toEqual([join(home, ".local/bin")]);
     // Open reads: nothing to add.
     expect(withProgram(policy, join(home, ".local/bin/claude"))).toBe(policy);
   });

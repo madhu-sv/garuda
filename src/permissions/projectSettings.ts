@@ -31,6 +31,11 @@ export interface SettingsRisk {
   formatterCommands?: string[];
   /** T15: `sandbox.readPaths`, readable in "needed" mode (only when present, for old hashes). */
   readPaths?: string[];
+  /**
+   * T15 (0.20.0): `sandbox.reads: "open"`. "Needed" is the default, so "open" turns a protection
+   * off: commands may read the whole home folder except the deny list. Only when present.
+   */
+  readsOpen?: true;
 }
 
 export function settingsRisk(settings: Settings): SettingsRisk | undefined {
@@ -48,6 +53,7 @@ export function settingsRisk(settings: Settings): SettingsRisk | undefined {
   if (formatterCommands.length > 0) risk.formatterCommands = formatterCommands;
   const readPaths = settings.sandbox?.readPaths ?? [];
   if (readPaths.length > 0) risk.readPaths = [...readPaths];
+  if (settings.sandbox?.reads === "open") risk.readsOpen = true;
   const none =
     !risk.executorHost &&
     risk.allow.length === 0 &&
@@ -55,7 +61,8 @@ export function settingsRisk(settings: Settings): SettingsRisk | undefined {
     risk.envAllow.length === 0 &&
     !risk.allowLocalhost &&
     risk.formatterCommands === undefined &&
-    risk.readPaths === undefined;
+    risk.readPaths === undefined &&
+    risk.readsOpen === undefined;
   return none ? undefined : risk;
 }
 
@@ -82,6 +89,9 @@ export function settingsRiskLines(risk: SettingsRisk): string[] {
       `sandbox.readPaths (commands may read there in "needed" mode): ${risk.readPaths.map(cleanLine).join(", ")}`,
     );
   }
+  if (risk.readsOpen === true) {
+    lines.push('sandbox.reads: "open" (commands may read your whole home folder, except secrets)');
+  }
   if (risk.formatterCommands !== undefined) {
     lines.push(
       `formatters.commands (run after each edit): ${risk.formatterCommands.map(cleanLine).join("; ")}`,
@@ -93,7 +103,9 @@ export function settingsRiskLines(risk: SettingsRisk): string[] {
 /** The settings without the parts that loosen safety. */
 export function withoutRisk(settings: Settings): Settings {
   const { sandbox, web, formatters, ...rest } = settings;
-  const { writePaths: _writePaths, readPaths: _readPaths, ...sandboxRest } = sandbox ?? {};
+  const { writePaths: _writePaths, readPaths: _readPaths, reads, ...sandboxKept } = sandbox ?? {};
+  // "open" loosens (the default is "needed"); "needed" written out is kept.
+  const sandboxRest = reads === "needed" ? { ...sandboxKept, reads } : sandboxKept;
   // Keep "name": false (turns a built-in formatter off); drop the project's own commands.
   const keptCommands = Object.fromEntries(
     Object.entries(formatters?.commands ?? {}).filter(([, f]) => f === false),
