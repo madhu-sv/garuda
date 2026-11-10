@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Homebrew formula in the repository names 0.20.0 and its tarball hash.
+
 ## 0.20.0 (2026-11-10)
 
 Commands read only where needed. In the home folder a sandboxed command now reads the project, its
