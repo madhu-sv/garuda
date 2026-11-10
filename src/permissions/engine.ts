@@ -612,7 +612,11 @@ export class PermissionEngine implements PermissionGate {
    */
   serverPolicy(): ExecPolicy {
     // No network allowlist (0.13): a language server needs no downloads.
-    const { proxy: _proxy, ...policy } = this.execPolicy(0, { readOnlyRoot: true });
+    // Open reads (T15, as for MCP servers): Garuda starts the server, not the model, and servers
+    // live anywhere (~/.garuda/lsp, Garuda's own node_modules, a JDK). With "needed" reads as the
+    // default, every language server test failed on CI, where the checkout is in the home folder.
+    // The deny list still applies.
+    const { proxy: _proxy, reads: _reads, ...policy } = this.execPolicy(0, { readOnlyRoot: true });
     return { ...policy, maxOutputBytes: 0 };
   }
 }

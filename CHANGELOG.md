@@ -10,6 +10,7 @@
   "open" }` in its settings: Garuda asks once, because a cloned project could set it too. Mobile
   builds (Xcode, Android) do not work in the sandbox yet, in either mode (T14). A job asks no
   question: if a job's command needs a path in the home folder, add it to `sandbox.readPaths`.
+  MCP servers and language servers keep open reads (the deny list still applies).
 - Sandbox (T15, step 1): `"sandbox": { "reads": "needed" }`
   lets commands read, in the home folder, only the project, the toolchains on `PATH`, the folders
   that tools name in the environment, the package caches and Garuda's skills; other volumes are

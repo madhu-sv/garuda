@@ -56,7 +56,7 @@ Settings:
   whole home folder again in one project (except the secrets), set `"sandbox": { "reads": "open" }`
   in its `.garuda/settings.json`; Garuda asks once, because a cloned project could set it too. To
   keep the mode in every project whatever their settings say, put `"requireNeededReads": true` in
-  `~/.garuda/policy.json`. The mode does not apply to MCP servers yet. Mobile builds (Xcode, the iOS
+  `~/.garuda/policy.json`. The mode does not apply to MCP servers and language servers yet: Garuda starts them, not the model. Mobile builds (Xcode, the iOS
   simulator, Android signing) are not supported in the sandbox yet, in either mode (T14). When a command fails on a home path that the mode blocked, Garuda names
   the path. In chat it asks "Let commands read ~/x in this session?" (yes for this session, or no)
   and says which line keeps it for the project; the model is told not to work around it. A job or

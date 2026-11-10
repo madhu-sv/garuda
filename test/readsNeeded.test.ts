@@ -280,6 +280,10 @@ describe("settings, policy and the engine", () => {
     // The default since 0.20.0 is "needed"; "open" turns it off.
     expect(engine({}).execPolicy(1_000).reads).toBeDefined();
     expect(engine({ sandbox: { reads: "open" } }).execPolicy(1_000).reads).toBeUndefined();
+    // Language servers keep open reads, as MCP servers do; the deny list still applies.
+    const server = engine({}).serverPolicy();
+    expect(server.reads).toBeUndefined();
+    expect(server.denyReadPaths).toContain(join(homedir(), ".ssh"));
     const needed = engine({ sandbox: { reads: "needed" } }).execPolicy(1_000);
     expect(needed.reads?.home).toBe(realpathSync(homedir()));
     // The mixed credential files are denied in this mode (decision 3).

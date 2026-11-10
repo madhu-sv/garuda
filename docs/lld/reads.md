@@ -373,4 +373,11 @@ no suite covers (an Xcode simulator build, an Android Gradle build, `uv` and con
   home folder, and bubblewrap mounted it read-only over `/tmp`, where the program wrote. bubblewrap
   now mounts only readable paths inside the emptied folders, and `withProgram` adds only a folder
   in the scope.
+- Language servers keep open reads, as MCP servers do (`serverPolicy` drops the scope). Garuda
+  starts them, not the model, and they live anywhere: `~/.garuda/lsp`, Garuda's own
+  `node_modules`, a JDK. With the scope, every language server test failed on CI, where the
+  checkout is in the home folder (`/home/runner/work`); the container that ran the tests before had
+  its checkout outside the home folder. The deny list still applies to servers.
+- A check for that case: the full suite also runs with `HOME` set to a folder that holds the
+  checkout.
 - Still open before the release: the live checks with `uv` and conda.
