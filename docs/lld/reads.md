@@ -380,4 +380,5 @@ no suite covers (an Xcode simulator build, an Android Gradle build, `uv` and con
   its checkout outside the home folder. The deny list still applies to servers.
 - A check for that case: the full suite also runs with `HOME` set to a folder that holds the
   checkout.
-- Still open before the release: the live checks with `uv` and conda.
+- The live checks with `uv` and conda were skipped: the user uses neither (2026-11-10). They stay
+  open for a user who does.
