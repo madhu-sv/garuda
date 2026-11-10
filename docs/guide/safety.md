@@ -46,15 +46,18 @@ Settings:
   with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again (unless an allow rule covers it).
 - `sandbox.writePaths` and `sandbox.denyRead` add paths. `~/` is the home folder; other relative paths
   start at the root.
-- Reads only where needed (T15, being measured; off by default): with `"sandbox": { "reads":
-  "needed" }`, a command reads in your home folder only the project, the toolchains on your `PATH`
+- Reads only where needed (T15; the default since 0.20.0): a command reads in your home folder
+  only the project, the toolchains on your `PATH`
   (nvm, pyenv, Cargo …), the folders that tools name in the environment (`CARGO_HOME`, `JAVA_HOME`
   …), the package caches, and Garuda's skills. Other volumes (`/Volumes`, `/media`, `/mnt`) are
   hidden too. `~/.m2/settings.xml`, `~/.gradle/gradle.properties`, `~/.yarnrc.yml` and NuGet's
   config are unreadable in this mode, because they can hold passwords. Add a path with
-  `"readPaths": ["~/notes/spec.md"]`; that also brings one of those four files back. To use the mode
-  in every project, put `"requireNeededReads": true` in `~/.garuda/policy.json`. The mode does not
-  apply to MCP servers yet. When a command fails on a home path that the mode blocked, Garuda names
+  `"readPaths": ["~/notes/spec.md"]`; that also brings one of those four files back. To read the
+  whole home folder again in one project (except the secrets), set `"sandbox": { "reads": "open" }`
+  in its `.garuda/settings.json`; Garuda asks once, because a cloned project could set it too. To
+  keep the mode in every project whatever their settings say, put `"requireNeededReads": true` in
+  `~/.garuda/policy.json`. The mode does not apply to MCP servers and language servers yet: Garuda starts them, not the model. Mobile builds (Xcode, the iOS
+  simulator, Android signing) are not supported in the sandbox yet, in either mode (T14). When a command fails on a home path that the mode blocked, Garuda names
   the path. In chat it asks "Let commands read ~/x in this session?" (yes for this session, or no)
   and says which line keeps it for the project; the model is told not to work around it. A job or
   an eval gets no question: the path stays blocked, and an eval run that failed this way has the
@@ -228,7 +231,7 @@ A team policy sets limits that a project cannot loosen, and an audit log records
   - `requireSandbox`: When `true`, no command runs outside the OS sandbox: `outside_sandbox` is
     denied, and on a machine with no OS sandbox every command is denied.
   - `requireNeededReads` (T15): When `true`, sandboxed commands read only where needed (see
-    Sandbox), whatever a project's settings say. It is separate from the strict profile.
+    Sandbox), also when a project sets `"reads": "open"`. It is separate from the strict profile.
   - `profile` (0.17): `"strict"` requires the OS sandbox. Without one, Garuda stops at startup and
     runs no command on the host; `"executor": "host"` is an error; the `bash` tool has no
     `outside_sandbox`. Strict wins in a merge. A project's `.garuda/settings.json` can also set

@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-- Sandbox (T15, step 1; off by default while it is measured): `"sandbox": { "reads": "needed" }`
+- Sandbox (T15): **commands read only where needed by default.** In the home folder a sandboxed
+  command reads the project, the toolchains on `PATH`, the folders that tools name in the
+  environment, the package caches and Garuda's skills; other volumes are hidden. Measured on macOS
+  with Haiku 5.5 on six suites (repo, basic, hard, medium, python, java): no pass-rate drop
+  (docs/lld/reads.md). To read the whole home folder in one project, set `"sandbox": { "reads":
+  "open" }` in its settings: Garuda asks once, because a cloned project could set it too. Mobile
+  builds (Xcode, Android) do not work in the sandbox yet, in either mode (T14). A job asks no
+  question: if a job's command needs a path in the home folder, add it to `sandbox.readPaths`.
+  MCP servers and language servers keep open reads (the deny list still applies).
+- Sandbox (T15, step 1): `"sandbox": { "reads": "needed" }`
   lets commands read, in the home folder, only the project, the toolchains on `PATH`, the folders
   that tools name in the environment, the package caches and Garuda's skills; other volumes are
   hidden too. `sandbox.readPaths` adds paths (a project's need your yes). A team policy can require
@@ -13,6 +22,21 @@
   general sandbox hint (whose `outside_sandbox` advice would drop the whole sandbox). In chat it
   asks "Let commands read ~/x in this session?" and says which `readPaths` line keeps it. Jobs and
   evals get no question; an eval run that failed this way has the new failure kind `sandbox`.
+- Evals (T15, step 3): repo tasks run with "needed" reads in place of their own deny list (the
+  home folder except its hidden entries and `~/Library`). The checkout and the rest of the home
+  folder stay hidden; the task copy and the links to `node_modules` and venvs stay readable. Your
+  own `sandbox.readPaths` do not apply in evals. `garuda eval --reads open|needed` sets the mode
+  for the other suites, and report.json shows it. Fixed on the way: an eval's auto approver would
+  have said yes to step 2's read question, so a blocked command could have read the checkout. Evals
+  now ask no read questions. The Claude Code baseline can read its own program (a native install
+  keeps it in `~/.local/share/claude`).
+- Evals (T15, step 4): repo-task commands may write `node_modules/.vitest` too. Vitest 5 reads an
+  API token from `~/Library/Application Support/vitest` (Linux: `~/.local/share/vitest`) and else
+  makes one there. "Needed" reads hide the first, and the first measurement run passed 0 of 72
+  scored runs. The token in the home folder stays unreadable.
+- Sandbox (T15, step 4): "needed" reads include `~/Library/Python` (macOS `pip install --user`)
+  and pipx's venvs (`~/.local/pipx`, `~/.local/share/pipx`). Without the first, every pytest task
+  of the measurement failed with "No module named pytest".
 - The Homebrew formula in the repository names 0.19.1 and its tarball hash.
 
 ## 0.19.1 (2026-11-09)

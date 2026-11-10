@@ -34,6 +34,12 @@ export const NEEDED_IN_HOME = [
   // Python
   ".pyenv",
   ".local/lib",
+  // macOS: `pip install --user` with Apple's or python.org's Python (T15 step 4: without it, every
+  // pytest task failed with "No module named pytest", and Python gave no read error).
+  "Library/Python",
+  // pipx: ~/.local/bin links to the venvs of each tool here.
+  ".local/pipx",
+  ".local/share/pipx",
   ".local/share/uv",
   ".cache/uv",
   ".cache/pip",

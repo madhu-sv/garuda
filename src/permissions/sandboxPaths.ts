@@ -129,7 +129,7 @@ export interface SandboxSettings {
   writePaths?: string[];
   /** Extra paths commands may not read. */
   denyRead?: string[];
-  /** T15: "needed" lets commands read only what builds need (docs/lld/reads.md). Default "open". */
+  /** T15: "needed" lets commands read only what builds need (docs/lld/reads.md). Default "needed" (0.20.0). */
   reads?: "open" | "needed";
   /** T15: extra readable paths in "needed" mode. `~/` is the home folder; relative to the root. */
   readPaths?: string[];

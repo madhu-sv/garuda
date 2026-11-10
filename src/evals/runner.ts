@@ -119,6 +119,8 @@ export interface EvalOptions {
    * Garuda's proxy. Other hosts are denied (no question). Default: none, as in the product.
    */
   network?: string[];
+  /** T15: "needed" reads for tasks that are not repo tasks (those always use them). */
+  reads?: "open" | "needed";
   /**
    * The agent (0.17, T11b): Garuda (default) or the Claude Code baseline. The baseline runs in
    * the run's executor with the same scratch folder, time limit and grading; the model, the
@@ -190,12 +192,17 @@ export class ModelWatch {
 }
 
 /**
- * The sandbox settings of a repo task (0.18.1, 0.18.2): no reads of the project's checkout or the
- * rest of the home folder, and writes to the caches in the project's `node_modules`.
+ * The sandbox settings of a repo task: "needed" reads (T15 step 3), so the checkout and the rest
+ * of the home folder are unreadable except the toolchains, the caches and the project's links;
+ * the checkout denied also when it is outside the home folder; and writes to the caches in the
+ * project's `node_modules` (0.18.2). The user's own `readPaths` do not apply: results compare
+ * across machines.
  */
 export function repoTaskSandbox(repoRoot: string, home: string) {
+  const deny = repoTaskReadDenials(repoRoot, home);
   return {
-    denyRead: repoTaskReadDenials(repoRoot, home),
+    reads: "needed" as const,
+    ...(deny.length === 0 ? {} : { denyRead: deny }),
     writePaths: repoTaskWritePaths(repoRoot),
   };
 }
@@ -225,6 +232,9 @@ export async function checkAsEval(
         throw new Error("checkAsEval asks no model.");
       },
       approver: new AutoApprover("once"),
+      // T15: no read questions: the auto approver would say yes to every one.
+      readQuestions: false,
+      ...(options.home === undefined ? {} : { readsHome: options.home }),
       store: new FileSessionStore(root),
       settings: parseSettings({
         permissions: { deny: EVAL_DENY_RULES },
@@ -283,7 +293,9 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
     // 0.18.1: a repo task's commands cannot read the project's own folder or the rest of the
     // home folder: the checkout, and copies of it, hold the commit that the task asks for.
     ...(task.repo === undefined
-      ? {}
+      ? options.reads === undefined
+        ? {}
+        : { sandbox: { reads: options.reads } }
       : { sandbox: repoTaskSandbox(task.repo.root, options.home ?? homedir()) }),
     ...(options.executor === undefined ? {} : { executor: options.executor }),
     ...(options.codeIndex === undefined ? {} : { codeIndex: options.codeIndex }),
@@ -322,6 +334,9 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
       ...(options.subagentModel === undefined ? {} : { subagentModel: options.subagentModel }),
       approver: new AutoApprover("once"),
+      // T15: no read questions: the auto approver would say yes to every one.
+      readQuestions: false,
+      ...(options.home === undefined ? {} : { readsHome: options.home }),
       store,
       settings,
       // The user's own MCP servers must not change eval results; `--mcp` allows one by name.

@@ -25,6 +25,7 @@ garuda eval -s hard --keep-thinking off    # A/B: drop Claude's thinking blocks,
 garuda eval -s hard --format on            # A/B: Biome formats after each edit (and --format off)
 garuda eval -s hard --repeat 3 --shuffle --seed 7  # repeats in a random order from seed 7
 garuda eval --split heldout --repeat 3             # the held-out set (10 harder tasks)
+garuda eval -s hard --repeat 3 --reads open        # A/B: commands read the whole home folder (T15)
 ```
 
 The report (0.17) says how far one run's numbers can be trusted:
@@ -254,7 +255,13 @@ candidate on this machine, with no sandbox, in git worktrees: your checkout does
 the sandbox. A commit whose tests fail there is left out, because no model could pass it. For
 example, a test that starts its own sandbox fails like this on macOS. The output shows the first
 such failure. In an eval, commands may write Vite's and other caches in your `node_modules`
-(`.vite-temp`, `.vite` and `.cache`), and nothing else there.
+(`.vite-temp`, `.vite`, `.cache` and `.vitest`, where Vitest 5 keeps its API token), and nothing
+else there.
+Repo tasks always run with "needed" reads (T15, docs/lld/reads.md): in your home folder a command
+reads only the task copy, the links to your `node_modules` and venvs, the toolchains and the
+caches. Your checkout and the rest of your home folder are hidden. Your own `sandbox.readPaths`
+do not apply, so the results compare across machines. The other suites take `--reads open|needed`
+(default `needed`, as in chat since 0.20.0); the report shows `reads`.
 Built a suite before 0.18.2? Build it again: in one user's suite, 12 of 30 tasks could not pass.
 
 The runner approves every call except its deny rules (`rm -rf`, `sudo`, `git push`, `curl`, `wget`).

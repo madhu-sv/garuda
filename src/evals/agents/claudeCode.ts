@@ -1,6 +1,7 @@
+import { realpathSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import type { ExecPolicy, ExecResult, Executor } from "../../sandbox/types.js";
 
 /**
@@ -99,6 +100,27 @@ export function parseClaudeResult(stdout: string): ClaudeOutcome {
   return { ...base, stopReason: "error", reason: `Claude Code failed: ${text.slice(0, 300)}` };
 }
 
+/**
+ * With "needed" reads (T15 step 3), the folder of the real `claude` program too. A native install
+ * puts a link in ~/.local/bin to a file in ~/.local/share/claude, which the scope does not hold.
+ */
+export function withProgram(policy: ExecPolicy, command: string): ExecPolicy {
+  if (policy.reads === undefined) return policy;
+  let folder: string;
+  try {
+    folder = dirname(realpathSync(command));
+  } catch {
+    return policy;
+  }
+  // Outside the home folder and the hidden places it is readable anyway.
+  const scope = policy.reads;
+  const inScope = [scope.home, ...scope.hide].some(
+    (b) => folder === b || folder.startsWith(`${b}${sep}`),
+  );
+  if (!inScope || scope.allow.includes(folder)) return policy;
+  return { ...policy, reads: { ...policy.reads, allow: [...policy.reads.allow, folder] } };
+}
+
 /** Run Claude Code once in `policy` (the run's OS sandbox), with a new config folder. */
 export async function runClaudeCode(
   executor: Executor,
@@ -117,7 +139,7 @@ export async function runClaudeCode(
     );
     const result = await executor.run(
       claudeCommand(agent, prompt, maxTurns),
-      { ...policy, maxOutputBytes: MAX_OUTPUT_BYTES },
+      { ...withProgram(policy, agent.command), maxOutputBytes: MAX_OUTPUT_BYTES },
       {
         signal,
         env: {

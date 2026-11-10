@@ -85,7 +85,7 @@ In the home folder, the union of:
 | Ecosystem | Folders (in the home folder) |
 | --- | --- |
 | Node | `.nvm`, `.fnm`, `.volta`, `.bun`, `.deno`, `.npm`, `.yarn`, `.local/share/pnpm`, `Library/pnpm`, `.cache/node-gyp`, `Library/Caches/node-gyp`, `.cache/ms-playwright`, `Library/Caches/ms-playwright`, `Library/Caches/typescript`, `Library/Caches/Yarn`, `.cache/yarn` |
-| Python | `.pyenv`, `.local/lib`, `.local/share/uv`, `.cache/uv`, `.cache/pip`, `Library/Caches/pip`, `.cache/pypoetry`, `Library/Caches/pypoetry`, `.virtualenvs`, `.conda`, `miniconda3`, `miniforge3`, `anaconda3` |
+| Python | `.pyenv`, `.local/lib`, `Library/Python` (macOS `pip install --user`), `.local/pipx`, `.local/share/pipx`, `.local/share/uv`, `.cache/uv`, `.cache/pip`, `Library/Caches/pip`, `.cache/pypoetry`, `Library/Caches/pypoetry`, `.virtualenvs`, `.conda`, `miniconda3`, `miniforge3`, `anaconda3` |
 | JVM | `.m2/repository`, `.gradle/caches`, `.gradle/wrapper`, `.gradle/jdks`, `.sdkman`, `.jdks`, `Library/Java`, `.ivy2`, `.sbt`, `.cache/coursier`, `Library/Caches/Coursier` |
 | Go, Rust | `go`, `.cache/go-build`, `Library/Caches/go-build`, `.cargo/bin`, `.cargo/registry`, `.cargo/git`, `.rustup` |
 | Ruby | `.rbenv`, `.rvm`, `.gem/ruby`, `.bundle/cache` |
@@ -232,6 +232,9 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
    `sandbox.readPaths`.
 4. **A security patch release first**, in both modes: the Linux runtime folder hidden, and the
    three publish-only credential files denied.
+5. **"Needed" is the default from 0.20.0** (2026-11-10, after the measurement). Mobile builds stay
+   in T14: they do not work in the sandbox in either mode yet (no Xcode or Android profile,
+   `DerivedData` and `~/.android` not writable, the simulator's services not tested).
 
 ## Plan
 
@@ -287,3 +290,94 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
   finder dropped a final dot that was part of the path ("…/.zshrc.: No such file"). Now a final dot
   is dropped only before a space or the line's end. The home folder shows as `~` in notes.
 
+
+## As built (step 3)
+
+- Repo-task evals run in `"needed"` mode (`repoTaskSandbox` in src/evals/runner.ts), in the agent's
+  runs and in the checks that build the suite (`checkAsEval`). The settings come from the eval, not
+  from files, so a user's own `readPaths` do not apply.
+- `repoTaskReadDenials` no longer denies the home folder (with its exceptions for hidden entries
+  and `~/Library`): the mode hides it. In the home folder the original checkout is hidden too, as
+  only the links' targets (`node_modules` and the like) are readable. A checkout outside the home
+  folder keeps its own rule: the checkout's entries except the links, as the mode covers only the
+  home folder and other volumes.
+- `garuda eval --reads open|needed` sets the mode for the other suites (default `open`). A wrong
+  word fails before anything else. The start line and report.json show `reads`; the repo suite
+  always shows `needed`.
+- A hole that step 2 left, found here: evals answer with `AutoApprover("once")` and are not
+  unattended, so `allowReads` would have asked it and got a yes for every blocked path. A command
+  could then read the checkout that holds the answer. The engine option `readQuestions: false`
+  (Runtime option of the same name) turns the question off; both eval runtimes set it. Step 2's
+  "no question in evals" is true only from here.
+- The Claude Code baseline: its real program is readable too (`withProgram`). A native install
+  links `~/.local/bin/claude` to a file in `~/.local/share/claude`, outside the scope.
+- Checked on Linux in bubblewrap with a fake home folder: a repo task's check read the task copy
+  and ran node; a private file in the home folder and the original checkout were "No such file or
+  directory".
+
+## Measurement, first run (2026-11-09, macOS, Haiku 5.5, repo suite, `--repeat 3`)
+
+- 0.19.1 (the old deny list): 81 of 88 scored runs passed (2 API stalls). Step 3 ("needed"): 0 of
+  72 scored runs passed (18 API stalls, `provider`). The rerun shows whether the stalls repeat.
+- Cause: Vitest 5 reads an API token from `~/Library/Application Support/vitest/.vitest-secret-token`
+  and else creates one in `node_modules/.vitest`. "Needed" mode hides the first. In an eval,
+  `node_modules` links to the project's own, where commands could write only `.vite-temp`, `.vite`
+  and `.cache`. In chat the project's `node_modules` is writable, so only evals failed. 0.19.1
+  passed because the token already existed and `~/Library` was readable.
+- Fix: `.vitest` joins `NODE_MODULES_CACHES`. The token in the home folder stays unreadable; Vitest
+  makes its own. A test runs the same logic in the real sandbox.
+- A gap in step 2: the runs got the kind `check`, not `sandbox`. Vitest's message has no read-error
+  word, and the path has a space ("Application Support"), so `findBlockedReads` saw nothing. A
+  failure kind from output text cannot find every blocked read; the paired compare is the real test.
+- One run's blocked reads were `~/.garuda` and `~/.garuda/evals`: the model looked for earlier eval
+  results there. "Needed" mode blocked it, as designed.
+- The rerun with the fix (2026-11-10): 84 of 90 passed, against 81 of 88 for 0.19.1. B − A +3
+  points (95% interval 0 to +7); cost per accepted change ×0.99; no API stalls; no kind `sandbox`.
+  The two tasks that fail in both arms (0/3 each) fail the same way with open reads. The blocked
+  reads were `~/.garuda/models.json`, in a task that also fails with it readable.
+
+## Measurement, the other suites (2026-11-10, macOS, Haiku 5.5, `--repeat 3 --parallel 4`)
+
+| Suite | open | needed | B − A (95% interval) |
+| --- | --- | --- | --- |
+| `basic` | 30/30 | 30/30 | 0 |
+| `hard` | 18/18 | 18/18 | 0 |
+| `medium` | 29/30 | 21/30 | −27 pts (−53 to 0) |
+| `python` | 15/15 | 0/15 | all fail |
+| `java` | 15/15 | 15/15 | 0 |
+
+- Every failure in "needed" mode was the check's "No module named pytest". The Mac's `python3` is
+  the Command Line Tools Python, and `pip install --user` puts pytest in
+  `~/Library/Python/<version>/lib/python/site-packages`. The fixed list had the Linux user folder
+  (`.local/lib`), not the macOS one. Python skips a user folder it cannot read with no error, so
+  no run got the kind `sandbox`. The `medium` suite's Python tasks failed the same way.
+- Fix: `Library/Python` joins the fixed list, and with it pipx's venvs (`.local/pipx`,
+  `.local/share/pipx`), which the links in `~/.local/bin` point to.
+- The rerun with the fix (2026-11-10): `python` 15/15 in both modes, `medium` 30/30 in both.
+
+Every suite now meets the acceptance rule: the interval contains 0, no point estimate is below 0,
+and no run failed with the kind `sandbox`. Still open from "The measurement": the live checks that
+no suite covers (an Xcode simulator build, an Android Gradle build, `uv` and conda projects).
+- A lesson for the default: a blocked read can fail silently. The paired measurement found both
+  gaps (Vitest's token, the macOS user site); neither gave a read error.
+
+## As built (step 5: the default, 0.20.0)
+
+- `readsMode()` is "needed" when nothing sets it. The team policy's `requireNeededReads` still wins.
+- A project's `"reads": "open"` is now a loosening part (`SettingsRisk.readsOpen`, only when
+  present, so old hashes stay valid): it needs the user's yes and is pinned to its hash like
+  `readPaths`. Until then it is left out, and the default applies. A `"needed"` written out needs
+  no yes.
+- `garuda eval --reads` defaults to "needed", so evals measure what users run.
+- Found by the default: the baseline's `withProgram` added the folder of a program outside the
+  home folder, and bubblewrap mounted it read-only over `/tmp`, where the program wrote. bubblewrap
+  now mounts only readable paths inside the emptied folders, and `withProgram` adds only a folder
+  in the scope.
+- Language servers keep open reads, as MCP servers do (`serverPolicy` drops the scope). Garuda
+  starts them, not the model, and they live anywhere: `~/.garuda/lsp`, Garuda's own
+  `node_modules`, a JDK. With the scope, every language server test failed on CI, where the
+  checkout is in the home folder (`/home/runner/work`); the container that ran the tests before had
+  its checkout outside the home folder. The deny list still applies to servers.
+- A check for that case: the full suite also runs with `HOME` set to a folder that holds the
+  checkout.
+- Still open before the release: the live checks with `uv` and conda.

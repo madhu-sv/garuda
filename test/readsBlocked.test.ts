@@ -1,7 +1,9 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { Runtime } from "../src/app/runtime.js";
+import { type EvalCommandOptions, runEvalCommand } from "../src/cli/evalCommand.js";
 import { failureKind } from "../src/evals/runner.js";
 import type { EvalResult } from "../src/evals/types.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
@@ -16,6 +18,7 @@ import { parseSettings } from "../src/permissions/settings.js";
 import type { ApprovalChoice, ApprovalRequest, Approver } from "../src/permissions/types.js";
 import { findOsSandbox } from "../src/sandbox/index.js";
 import { FileTracker } from "../src/session/fileTracker.js";
+import { FileSessionStore } from "../src/session/store.js";
 import { createBashTool } from "../src/tools/bash.js";
 
 /** T15 step 2 (docs/lld/reads.md): a blocked read gets a note, a question in chat, and an eval kind. */
@@ -144,7 +147,13 @@ describe("the bash tool's note, with the message macOS gives", () => {
     expect(text).toContain("The sandbox blocked reads of ~/notes/a.txt");
     expect(text).not.toContain("run it again with outside_sandbox: true");
     // In open mode the same output gets the general hint, as before (the negative control).
-    const open = new PermissionEngine({ root, home, approver: approver("deny"), isolation: "os" });
+    const open = new PermissionEngine({
+      root,
+      home,
+      approver: approver("deny"),
+      settings: parseSettings({ sandbox: { reads: "open" } }),
+      isolation: "os",
+    });
     const before = await bash.run(
       { command: "head notes" },
       {
@@ -206,6 +215,78 @@ describe("the question in chat", () => {
     expect(gate.execPolicy(1_000).denyReadPaths).toContain(file);
     await gate.allowReads([file], signal);
     expect(gate.execPolicy(1_000).denyReadPaths).not.toContain(file);
+  });
+});
+
+describe("evals ask no read questions (T15 step 3)", () => {
+  const home = fakeHome(["notes/a.txt"]);
+  const root = join(home, "proj");
+  mkdirSync(root, { recursive: true });
+  const signal = new AbortController().signal;
+  const a = join(home, "notes/a.txt");
+
+  it("readQuestions: false allows nothing, even with an approver that says yes", async () => {
+    const yes = approver("session");
+    const gate = new PermissionEngine({
+      root,
+      home,
+      approver: yes,
+      settings: parseSettings({ sandbox: { reads: "needed" } }),
+      readQuestions: false,
+    });
+    expect(await gate.allowReads([a], signal)).toEqual([]);
+    expect(gate.execPolicy(1_000).reads?.allow).not.toContain(a);
+    expect(yes.asked).toHaveLength(0);
+  });
+
+  it("the runtime passes it to the engine", async () => {
+    const yes = approver("session");
+    const make = (readQuestions?: boolean) =>
+      Runtime.create({
+        root,
+        modelId: "none",
+        model: async () => {
+          throw new Error("no model");
+        },
+        approver: yes,
+        store: new FileSessionStore(root),
+        settings: parseSettings({ executor: "host", sandbox: { reads: "needed" } }),
+        mcp: false,
+        hooks: false,
+        profiles: [],
+        readsHome: home,
+        ...(readQuestions === undefined ? {} : { readQuestions }),
+      });
+    const engineOf = (r: Runtime) =>
+      (r as unknown as { permissions: PermissionEngine }).permissions;
+    const off = await make(false);
+    const on = await make();
+    try {
+      expect(await engineOf(off).allowReads([a], signal)).toEqual([]);
+      expect(yes.asked).toHaveLength(0);
+      // The negative control: without the option the same approver lets the path in.
+      expect(await engineOf(on).allowReads([a], signal)).toEqual([a]);
+    } finally {
+      await off.close();
+      await on.close();
+    }
+  });
+});
+
+describe("garuda eval --reads", () => {
+  it("takes open or needed, and refuses other words before it runs anything", async () => {
+    const errors: string[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      errors.push(String(chunk));
+      return true;
+    });
+    try {
+      const code = await runEvalCommand({ suite: "basic", reads: "closed" } as EvalCommandOptions);
+      expect(code).toBe(1);
+      expect(errors.join("")).toContain('--reads must be "open" or "needed", not "closed".');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

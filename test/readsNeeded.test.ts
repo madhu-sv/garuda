@@ -12,7 +12,11 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { PermissionEngine } from "../src/permissions/engine.js";
 import { mergePolicies, parsePolicy } from "../src/permissions/policy.js";
-import { settingsRisk, withoutRisk } from "../src/permissions/projectSettings.js";
+import {
+  settingsRisk,
+  settingsRiskLines,
+  withoutRisk,
+} from "../src/permissions/projectSettings.js";
 import { hiddenPlaces, NEEDED_MODE_DENY, neededReads } from "../src/permissions/reads.js";
 import { parseSettings } from "../src/permissions/settings.js";
 import { bwrapArgs } from "../src/sandbox/bwrap.js";
@@ -79,6 +83,12 @@ describe("what 'needed' mode reads", () => {
         join(home, ".npm"),
         join(home, ".gradle", "caches"),
         join(home, ".garuda", "skills"),
+        // pip install --user on macOS: pytest for every Python task (T15 step 4).
+        join(home, "Library", "Python"),
+        join(home, ".local", "lib"),
+        // pipx: the venvs that ~/.local/bin links to.
+        join(home, ".local", "pipx"),
+        join(home, ".local", "share", "pipx"),
         join(home, "notes", "spec.md"),
       ]),
     );
@@ -203,6 +213,13 @@ describe("bubblewrap", () => {
     expect(secret).toBeGreaterThan(project);
     expect(readOnly).toBeGreaterThan(secret);
     expect(net).toBeGreaterThan(readOnly);
+    // A readable path outside the emptied folders is not mounted: it would make /tmp/x read-only.
+    const outside = bwrapArgs(
+      "make",
+      { ...p, reads: { ...linux, allow: [...linux.allow, "/tmp/x"] } },
+      () => "dir",
+    );
+    expect(outside.join(" ")).not.toContain("--ro-bind /tmp/x");
   });
 
   it("does nothing in open mode, for a missing folder, or with a writable home", () => {
@@ -228,6 +245,21 @@ describe("settings, policy and the engine", () => {
     expect(settingsRisk(parseSettings({ sandbox: { reads: "needed" } }))).toBeUndefined();
   });
 
+  it('a project\'s "open" needs a yes: since 0.20.0 it turns the default protection off', () => {
+    const open = parseSettings({ sandbox: { reads: "open", writePaths: [] } });
+    const risk = settingsRisk(open);
+    expect(risk?.readsOpen).toBe(true);
+    expect(settingsRiskLines(risk as NonNullable<typeof risk>).join("\n")).toContain(
+      'sandbox.reads: "open"',
+    );
+    // Until the yes, the mode is left out, so the default ("needed") applies.
+    expect(withoutRisk(open).sandbox?.reads).toBeUndefined();
+    // The hash of settings without it stays the same (no readsOpen key).
+    expect(settingsRisk(parseSettings({ sandbox: { writePaths: ["/x"] } }))).not.toHaveProperty(
+      "readsOpen",
+    );
+  });
+
   it("a team policy can require the mode; it merges like requireSandbox", () => {
     expect(parsePolicy({ requireNeededReads: true }).requireNeededReads).toBe(true);
     expect(
@@ -245,7 +277,13 @@ describe("settings, policy and the engine", () => {
         settings: parseSettings(settings),
         ...(team === undefined ? {} : { policy: parsePolicy(team) }),
       });
-    expect(engine({}).execPolicy(1_000).reads).toBeUndefined();
+    // The default since 0.20.0 is "needed"; "open" turns it off.
+    expect(engine({}).execPolicy(1_000).reads).toBeDefined();
+    expect(engine({ sandbox: { reads: "open" } }).execPolicy(1_000).reads).toBeUndefined();
+    // Language servers keep open reads, as MCP servers do; the deny list still applies.
+    const server = engine({}).serverPolicy();
+    expect(server.reads).toBeUndefined();
+    expect(server.denyReadPaths).toContain(join(homedir(), ".ssh"));
     const needed = engine({ sandbox: { reads: "needed" } }).execPolicy(1_000);
     expect(needed.reads?.home).toBe(realpathSync(homedir()));
     // The mixed credential files are denied in this mode (decision 3).

@@ -174,6 +174,10 @@ async function main(): Promise<void> {
       "presets (npm, pypi, maven, go, cargo, github) or hosts that sandboxed commands may reach",
     )
     .option(
+      "--reads <mode>",
+      'sandbox reads: "needed" (default since 0.20.0) or "open" (T15); repo tasks always use "needed"',
+    )
+    .option(
       "--test-command <cmd>",
       "with --from-git: the test command; {files} takes the test files (default: detected)",
     )

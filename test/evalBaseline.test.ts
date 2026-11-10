@@ -4,7 +4,9 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +18,7 @@ import {
   type ClaudeCodeAgent,
   claudeCommand,
   parseClaudeResult,
+  withProgram,
 } from "../src/evals/agents/claudeCode.js";
 import { compareReports, formatComparison, type LoadedReport } from "../src/evals/compare.js";
 import { isConnectionFailure, isSetupFailure, runEvals, runEvalTask } from "../src/evals/runner.js";
@@ -361,5 +364,39 @@ describe("compare polish (the user's live run)", () => {
     expect(text).toContain(
       "Every draw gave the same pass-rate difference, so the interval shows no uncertainty",
     );
+  });
+});
+
+describe("the baseline with needed reads (T15 step 3)", () => {
+  it("the real program's folder is readable: a native install links ~/.local/bin to ~/.local/share", () => {
+    const home = realpathSync(mkdtempSync(join(temp, "home-")));
+    const versions = join(home, ".local/share/claude/versions");
+    mkdirSync(versions, { recursive: true });
+    mkdirSync(join(home, ".local/bin"), { recursive: true });
+    writeFileSync(join(versions, "2.1.0"), "");
+    symlinkSync(join(versions, "2.1.0"), join(home, ".local/bin/claude"));
+    const policy = {
+      root: home,
+      sandbox: true,
+      writePaths: [],
+      denyWritePaths: [],
+      denyReadPaths: [],
+      network: false,
+      envAllowlist: [],
+      timeoutMs: 1,
+      maxOutputBytes: 1,
+    };
+    const scope = { home, allow: [join(home, ".local/bin")], hide: [] };
+    expect(
+      withProgram({ ...policy, reads: scope }, join(home, ".local/bin/claude")).reads?.allow,
+    ).toEqual([join(home, ".local/bin"), versions]);
+    // A program outside the home folder: readable anyway, nothing to add.
+    const elsewhere = realpathSync(mkdtempSync(join(temp, "bin-")));
+    writeFileSync(join(elsewhere, "claude"), "");
+    expect(
+      withProgram({ ...policy, reads: scope }, join(elsewhere, "claude")).reads?.allow,
+    ).toEqual([join(home, ".local/bin")]);
+    // Open reads: nothing to add.
+    expect(withProgram(policy, join(home, ".local/bin/claude"))).toBe(policy);
   });
 });
