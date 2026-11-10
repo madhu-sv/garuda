@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.20.0 (2026-11-10)
+
+Commands read only where needed. In the home folder a sandboxed command now reads the project, its
+toolchains and the package caches, not your other projects or files. Measured first: six eval
+suites on macOS, with no pass-rate drop. A project can turn it off for itself only with your yes.
 
 - Sandbox (T15): **commands read only where needed by default.** In the home folder a sandboxed
   command reads the project, the toolchains on `PATH`, the folders that tools name in the
