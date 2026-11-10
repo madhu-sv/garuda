@@ -85,7 +85,7 @@ In the home folder, the union of:
 | Ecosystem | Folders (in the home folder) |
 | --- | --- |
 | Node | `.nvm`, `.fnm`, `.volta`, `.bun`, `.deno`, `.npm`, `.yarn`, `.local/share/pnpm`, `Library/pnpm`, `.cache/node-gyp`, `Library/Caches/node-gyp`, `.cache/ms-playwright`, `Library/Caches/ms-playwright`, `Library/Caches/typescript`, `Library/Caches/Yarn`, `.cache/yarn` |
-| Python | `.pyenv`, `.local/lib`, `.local/share/uv`, `.cache/uv`, `.cache/pip`, `Library/Caches/pip`, `.cache/pypoetry`, `Library/Caches/pypoetry`, `.virtualenvs`, `.conda`, `miniconda3`, `miniforge3`, `anaconda3` |
+| Python | `.pyenv`, `.local/lib`, `Library/Python` (macOS `pip install --user`), `.local/pipx`, `.local/share/pipx`, `.local/share/uv`, `.cache/uv`, `.cache/pip`, `Library/Caches/pip`, `.cache/pypoetry`, `Library/Caches/pypoetry`, `.virtualenvs`, `.conda`, `miniconda3`, `miniforge3`, `anaconda3` |
 | JVM | `.m2/repository`, `.gradle/caches`, `.gradle/wrapper`, `.gradle/jdks`, `.sdkman`, `.jdks`, `Library/Java`, `.ivy2`, `.sbt`, `.cache/coursier`, `Library/Caches/Coursier` |
 | Go, Rust | `go`, `.cache/go-build`, `Library/Caches/go-build`, `.cargo/bin`, `.cargo/registry`, `.cargo/git`, `.rustup` |
 | Ruby | `.rbenv`, `.rvm`, `.gem/ruby`, `.bundle/cache` |
@@ -328,4 +328,29 @@ at most 2 points below; no run fails with kind `sandbox`; every live check passe
   failure kind from output text cannot find every blocked read; the paired compare is the real test.
 - One run's blocked reads were `~/.garuda` and `~/.garuda/evals`: the model looked for earlier eval
   results there. "Needed" mode blocked it, as designed.
-- The run is to be repeated with the fix.
+- The rerun with the fix (2026-11-10): 84 of 90 passed, against 81 of 88 for 0.19.1. B − A +3
+  points (95% interval 0 to +7); cost per accepted change ×0.99; no API stalls; no kind `sandbox`.
+  The two tasks that fail in both arms (0/3 each) fail the same way with open reads. The blocked
+  reads were `~/.garuda/models.json`, in a task that also fails with it readable.
+
+## Measurement, the other suites (2026-11-10, macOS, Haiku 5.5, `--repeat 3 --parallel 4`)
+
+| Suite | open | needed | B − A (95% interval) |
+| --- | --- | --- | --- |
+| `basic` | 30/30 | 30/30 | 0 |
+| `hard` | 18/18 | 18/18 | 0 |
+| `medium` | 29/30 | 21/30 | −27 pts (−53 to 0) |
+| `python` | 15/15 | 0/15 | all fail |
+| `java` | 15/15 | 15/15 | 0 |
+
+- Every failure in "needed" mode was the check's "No module named pytest". The Mac's `python3` is
+  the Command Line Tools Python, and `pip install --user` puts pytest in
+  `~/Library/Python/<version>/lib/python/site-packages`. The fixed list had the Linux user folder
+  (`.local/lib`), not the macOS one. Python skips a user folder it cannot read with no error, so
+  no run got the kind `sandbox`. The `medium` suite's Python tasks failed the same way.
+- Fix: `Library/Python` joins the fixed list, and with it pipx's venvs (`.local/pipx`,
+  `.local/share/pipx`), which the links in `~/.local/bin` point to.
+- The `python` and `medium` pairs are to be repeated with the fix. `basic`, `hard` and `java` meet
+  the acceptance rule.
+- A lesson for the default: a blocked read can fail silently. The paired measurement found both
+  gaps (Vitest's token, the macOS user site); neither gave a read error.

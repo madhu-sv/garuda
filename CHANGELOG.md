@@ -25,6 +25,9 @@
   API token from `~/Library/Application Support/vitest` (Linux: `~/.local/share/vitest`) and else
   makes one there. "Needed" reads hide the first, and the first measurement run passed 0 of 72
   scored runs. The token in the home folder stays unreadable.
+- Sandbox (T15, step 4): "needed" reads include `~/Library/Python` (macOS `pip install --user`)
+  and pipx's venvs (`~/.local/pipx`, `~/.local/share/pipx`). Without the first, every pytest task
+  of the measurement failed with "No module named pytest".
 - The Homebrew formula in the repository names 0.19.1 and its tarball hash.
 
 ## 0.19.1 (2026-11-09)

@@ -79,6 +79,12 @@ describe("what 'needed' mode reads", () => {
         join(home, ".npm"),
         join(home, ".gradle", "caches"),
         join(home, ".garuda", "skills"),
+        // pip install --user on macOS: pytest for every Python task (T15 step 4).
+        join(home, "Library", "Python"),
+        join(home, ".local", "lib"),
+        // pipx: the venvs that ~/.local/bin links to.
+        join(home, ".local", "pipx"),
+        join(home, ".local", "share", "pipx"),
         join(home, "notes", "spec.md"),
       ]),
     );
