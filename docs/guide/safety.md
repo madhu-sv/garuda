@@ -25,9 +25,11 @@ In the sandbox, a command:
 - cannot start apps on macOS (`open`, `osascript`), because an app started that way runs outside the
   sandbox (0.14);
 - cannot drive the iOS simulator on macOS (`xcrun simctl`, `xcodebuild` with a simulator
-  destination) or reach an adb server on `localhost:5037` (0.20.1). The simulator's service runs
-  outside the sandbox: in a probe, a sandboxed `simctl` read a file that the sandbox hides and wrote
-  one in the home folder. With your yes, such a command runs with `outside_sandbox`;
+  destination) (0.20.1). The simulator's service runs outside the sandbox: in a probe, a sandboxed
+  `simctl` read a file that the sandbox hides and wrote one in the home folder. With your yes, such
+  a command runs with `outside_sandbox`. A limit on macOS: a sandboxed command can reach an adb
+  server that you started (`localhost:5037`), and through it your devices. Stop it with
+  `adb kill-server` while Garuda works. On Linux each command has its own network;
 - sees only its own processes on Linux, not Garuda's or yours (0.14);
 - does not outlive the call (a daemon, below, is the exception you ask for): Garuda stops the
   command's processes when it ends, also ones that left its process group (on macOS since 0.17,

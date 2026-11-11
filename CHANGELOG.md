@@ -8,9 +8,11 @@
   `~/.android/adbkey` (the key your devices trust for adb), `~/.emulator_console_auth_token`,
   App Store Connect API keys (`~/.appstoreconnect`), fastlane's session (`~/.fastlane`), Expo's
   login (`~/.expo/state.json`) and Dart's publish credentials. On macOS they can no longer reach the
-  iOS simulator's service or an adb server on `localhost:5037`: in a probe, a sandboxed
-  `xcrun simctl` read a file that the sandbox hides and wrote one in the home folder. With your
-  yes, such a command still runs outside the sandbox.
+  iOS simulator's service: in a probe, a sandboxed `xcrun simctl` read a file that the sandbox
+  hides and wrote one in the home folder. With your yes, such a command still runs outside the
+  sandbox. A known limit on macOS: a sandboxed command can still reach an adb server that you
+  started (a Seatbelt rule for its port blocked all of localhost); stop it with `adb kill-server`
+  while Garuda works. On Linux each command has its own network, so adb is out of reach.
 - Chat: the question "Let commands read ~/x in this session?" starts on "No". In probes, Enter
   allowed the read.
 - After a blocked read, the model no longer gets the hint "Use read_file, glob and grep" for a

@@ -48,10 +48,9 @@ export class SeatbeltExecutor extends ProcessExecutor {
   }
 }
 
-/** Simulator and device services stay out of reach (0.20.1, docs/lld/mobile.md). */
+/** The simulator's service stays out of reach (0.20.1, docs/lld/mobile.md). */
 export const SIMULATOR_RULE =
   '(deny mach-lookup (global-name-regex #"^com\\.apple\\.CoreSimulator\\."))';
-export const ADB_RULE = '(deny network-outbound (remote ip "localhost:5037"))';
 
 /** The profile; `extra` (the markers of IPI-04) goes last, so it wins over the rules above. */
 export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = []): string {
@@ -89,9 +88,9 @@ export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = [
       '(allow network-outbound (remote ip "localhost:*"))',
       '(allow network-inbound (local ip "localhost:*"))',
       '(allow network-bind (local ip "localhost:*"))',
-      // No device control (0.20.1): an adb server that the user started outside the sandbox
-      // listens here and acts on real devices. After "allow localhost": the last rule wins.
-      ADB_RULE,
+      // No port rule for adb (localhost:5037) here: after these rules Seatbelt then denied all of
+      // localhost (the user's test, 0.20.1), and the proxy and local test servers failed. A
+      // sandboxed command can reach an adb server that the user started (docs/lld/mobile.md).
     );
   }
   // No simulator control (0.20.1, docs/lld/mobile.md): CoreSimulator's service runs outside the
