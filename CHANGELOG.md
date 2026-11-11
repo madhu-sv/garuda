@@ -13,6 +13,8 @@
   yes, such a command still runs outside the sandbox.
 - Chat: the question "Let commands read ~/x in this session?" starts on "No". In probes, Enter
   allowed the read.
+- After a blocked read, the model no longer gets the hint "Use read_file, glob and grep" for a
+  command that only reads: it invited a work-around of the block.
 
 ## 0.20.0 (2026-11-10)
 

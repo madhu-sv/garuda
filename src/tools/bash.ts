@@ -91,6 +91,9 @@ export function stripRootCd(command: string, root: string): { command: string; s
 }
 
 /** Errors that a sandbox block gives: no network, or a write outside the allowed paths. */
+const READER_HINT =
+  "This command only reads files. Use read_file, glob and grep for that: they need no approval, and edit_file accepts only files that read_file has read.";
+
 const SANDBOX_BLOCK =
   /Operation not permitted|Read-only file system|EROFS|EPERM|EAI_AGAIN|ENOTFOUND|ENETUNREACH|Network is unreachable|Could not resolve host|Temporary failure in name resolution|getaddrinfo/;
 
@@ -131,9 +134,7 @@ export function commandHints(command: string, strippedCd: boolean): string[] {
     );
   }
   if (programs.length > 0 && programs.every((p) => READERS.has(p))) {
-    hints.push(
-      "This command only reads files. Use read_file, glob and grep for that: they need no approval, and edit_file accepts only files that read_file has read.",
-    );
+    hints.push(READER_HINT);
   } else if (programs.slice(1).some((p) => p === "head" || p === "tail")) {
     hints.push(
       "The exit code above comes from head or tail, not from your command. Do not pipe into them: Garuda already cuts long output.",
@@ -242,6 +243,9 @@ export function createBashTool({
           ? findBlockedReads(`${result.stdout.text}\n${result.stderr.text}`, policy)
           : [];
       if (blockedReads.length > 0 && policy.reads !== undefined) {
+        // The reader hint would invite a work-around of the blocked read (the user's probe, 0.20.1).
+        const reader = hints.indexOf(READER_HINT);
+        if (reader >= 0) hints.splice(reader, 1);
         const allowed = (await permissions.allowReads?.(blockedReads, signal)) ?? [];
         hints.push(readsHint(blockedReads, allowed, policy.reads.home));
         if (allowed.length > 0) hints.push(readsKeepHint(allowed, policy.reads.home));

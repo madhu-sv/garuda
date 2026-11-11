@@ -382,3 +382,9 @@ no suite covers (an Xcode simulator build, an Android Gradle build, `uv` and con
   checkout.
 - The live checks with `uv` and conda were skipped: the user uses neither (2026-11-10). They stay
   open for a user who does.
+
+## After 0.20.0
+
+- 0.20.1: the read question starts on "deny" (`ApprovalRequest.defaultChoice`): in the T14 probes,
+  Enter allowed a read three times. After a blocked read the bash tool drops its reader hint ("Use
+  read_file, glob and grep"), which invited a work-around next to the note that forbids one.
