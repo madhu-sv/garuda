@@ -10,7 +10,9 @@ In the sandbox, a command:
 - can read every file, except secrets in your home folder (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`,
   `~/.docker`, `~/.netrc`, `~/.npmrc`, `~/.git-credentials`, keychains, Garuda's and Claude Code's tokens,
   the `ant` CLI's stored keys in `~/.config/anthropic/credentials`, the publishing keys of Cargo,
-  RubyGems and Maven, on Linux the session bus that the keyring answers on, and more)
+  RubyGems and Maven, the mobile keys (`~/.android/adbkey`, App Store Connect API keys, fastlane's and
+  Expo's logins, Dart's publish credentials), on Linux the session bus that the keyring answers on,
+  and more)
   and, since 0.18.1, your personal folders: Desktop, Documents, Downloads, Movies, Music, Pictures (with
   the Photos library), Public, and Mail, Messages, Safari, Calendars, Contacts, iCloud Drive and other
   cloud folders in `~/Library`. A project inside one of them stays readable; the rest of that folder
@@ -22,6 +24,10 @@ In the sandbox, a command:
 - has no network (localhost works on macOS), unless you open a network allowlist (0.13, below);
 - cannot start apps on macOS (`open`, `osascript`), because an app started that way runs outside the
   sandbox (0.14);
+- cannot drive the iOS simulator on macOS (`xcrun simctl`, `xcodebuild` with a simulator
+  destination) or reach an adb server on `localhost:5037` (0.20.1). The simulator's service runs
+  outside the sandbox: in a probe, a sandboxed `simctl` read a file that the sandbox hides and wrote
+  one in the home folder. With your yes, such a command runs with `outside_sandbox`;
 - sees only its own processes on Linux, not Garuda's or yours (0.14);
 - does not outlive the call (a daemon, below, is the exception you ask for): Garuda stops the
   command's processes when it ends, also ones that left its process group (on macOS since 0.17,

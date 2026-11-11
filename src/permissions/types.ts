@@ -147,6 +147,11 @@ export interface ApprovalRequest {
   /** Labels that replace the default choice labels. */
   labels?: Partial<Record<ApprovalChoice, string>>;
   /**
+   * The choice under the cursor when the question opens. Default: the first. The read question
+   * (T15) starts on "deny": in the user's probes, Enter let a command read a file three times.
+   */
+  defaultChoice?: ApprovalChoice;
+  /**
    * Present when the preview's hunks can be accepted one by one. Before it answers "once", an
    * approver that let the user pick hunks calls this with the accepted ones (0-based). Not called:
    * the whole change.

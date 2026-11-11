@@ -11,6 +11,27 @@ import type { ExecPolicy } from "../src/sandbox/types.js";
 
 const home = "/home/me";
 
+describe("mobile publishing and device keys (0.20.1, docs/lld/mobile.md)", () => {
+  it("are unreadable for sandboxed commands", () => {
+    const deny = sandboxPaths("/home/me/p", {}, home, "linux").denyReadPaths;
+    for (const file of [
+      ".android/adbkey",
+      ".emulator_console_auth_token",
+      ".appstoreconnect",
+      ".fastlane",
+      ".expo/state.json",
+      "Library/Application Support/dart/pub-credentials.json",
+      ".config/dart/pub-credentials.json",
+      ".pub-cache/credentials.json",
+    ]) {
+      expect(deny).toContain(join(home, file));
+    }
+    // What builds read stays readable: the SDK's other files and the package cache.
+    expect(deny).not.toContain(join(home, ".android"));
+    expect(deny).not.toContain(join(home, ".pub-cache"));
+  });
+});
+
 describe("keys that only publishing needs", () => {
   it("are unreadable for sandboxed commands", () => {
     const deny = sandboxPaths("/home/me/p", {}, home, "linux").denyReadPaths;

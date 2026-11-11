@@ -54,6 +54,7 @@ export class TerminalApprover implements Approver {
       return await select<ApprovalChoice>(
         {
           message: request.question ?? "Allow?",
+          ...(request.defaultChoice === undefined ? {} : { default: request.defaultChoice }),
           choices: (
             [
               { name: request.labels?.once ?? "Yes, once", value: "once" },

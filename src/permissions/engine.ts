@@ -483,6 +483,7 @@ export class PermissionEngine implements PermissionGate {
           question: `Let commands read ${shown} in this session?`,
           preview: `A command in the sandbox could not read ${shown}: in this project commands read only where needed ("sandbox.reads": "needed").`,
           choices: ["session", "deny"],
+          defaultChoice: "deny",
           isolation: this.isolation,
         },
         signal,

@@ -3,6 +3,16 @@
 ## Unreleased
 
 - The Homebrew formula in the repository names 0.20.0 and its tarball hash.
+- Design note for mobile apps (T14): docs/lld/mobile.md. Nothing is built yet.
+- Security: sandboxed commands can no longer read the mobile publishing and device keys:
+  `~/.android/adbkey` (the key your devices trust for adb), `~/.emulator_console_auth_token`,
+  App Store Connect API keys (`~/.appstoreconnect`), fastlane's session (`~/.fastlane`), Expo's
+  login (`~/.expo/state.json`) and Dart's publish credentials. On macOS they can no longer reach the
+  iOS simulator's service or an adb server on `localhost:5037`: in a probe, a sandboxed
+  `xcrun simctl` read a file that the sandbox hides and wrote one in the home folder. With your
+  yes, such a command still runs outside the sandbox.
+- Chat: the question "Let commands read ~/x in this session?" starts on "No". In probes, Enter
+  allowed the read.
 
 ## 0.20.0 (2026-11-10)
 

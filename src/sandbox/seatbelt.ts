@@ -48,6 +48,11 @@ export class SeatbeltExecutor extends ProcessExecutor {
   }
 }
 
+/** Simulator and device services stay out of reach (0.20.1, docs/lld/mobile.md). */
+export const SIMULATOR_RULE =
+  '(deny mach-lookup (global-name-regex #"^com\\.apple\\.CoreSimulator\\."))';
+export const ADB_RULE = '(deny network-outbound (remote ip "localhost:5037"))';
+
 /** The profile; `extra` (the markers of IPI-04) goes last, so it wins over the rules above. */
 export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = []): string {
   const paths = (list: readonly string[]) => list.map((p) => `(subpath ${quote(p)})`).join(" ");
@@ -84,8 +89,16 @@ export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = [
       '(allow network-outbound (remote ip "localhost:*"))',
       '(allow network-inbound (local ip "localhost:*"))',
       '(allow network-bind (local ip "localhost:*"))',
+      // No device control (0.20.1): an adb server that the user started outside the sandbox
+      // listens here and acts on real devices. After "allow localhost": the last rule wins.
+      ADB_RULE,
     );
   }
+  // No simulator control (0.20.1, docs/lld/mobile.md): CoreSimulator's service runs outside the
+  // sandbox with the user's rights. In the user's probes a sandboxed `simctl` read a hidden file
+  // (`addmedia`) and wrote one in the home folder (`io screenshot`). With the user's yes,
+  // `outside_sandbox` still runs it.
+  lines.push(SIMULATOR_RULE);
   lines.push(...extra);
   return lines.join("\n");
 }
