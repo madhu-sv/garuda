@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.20.1 (2026-11-11)
+
+A security fix for mobile developers. Sandboxed commands can no longer read the keys that your
+devices trust or that publish your apps, and on macOS they can no longer drive the iOS simulator:
+in a probe, the simulator read and wrote files for a sandboxed command. The question about a
+blocked read now starts on "No".
 
 - The Homebrew formula in the repository names 0.20.0 and its tarball hash.
 - Design note for mobile apps (T14): docs/lld/mobile.md. Nothing is built yet.
