@@ -192,6 +192,7 @@ describe("the question in chat", () => {
       tool: "sandbox_read",
       title: "Let commands read ~/notes/a.txt?",
       choices: ["session", "deny"],
+      defaultChoice: "deny",
     });
     expect(gate.execPolicy(1_000).reads?.allow).toContain(a);
     expect(await gate.allowReads([a], signal)).toEqual([a]);

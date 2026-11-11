@@ -92,6 +92,19 @@ describe("Seatbelt profile", () => {
     }
   });
 
+  it("keeps the simulator service and the adb port out of reach (0.20.1)", () => {
+    for (const network of [false, true]) {
+      expect(seatbeltProfile(policy({ network }))).toContain(
+        '(deny mach-lookup (global-name-regex #"^com\\.apple\\.CoreSimulator\\."))',
+      );
+    }
+    const profile = seatbeltProfile(policy({ network: false }));
+    const adb = profile.indexOf('(deny network-outbound (remote ip "localhost:5037"))');
+    expect(adb).toBeGreaterThan(0);
+    // The last matching rule wins: the port rule must come after "allow localhost".
+    expect(adb).toBeGreaterThan(profile.lastIndexOf("(allow network-outbound"));
+  });
+
   it("keeps the network when the policy allows it, and quotes paths", () => {
     const profile = seatbeltProfile(policy({ network: true, writePaths: ['/a "b"\\c'] }));
     expect(profile).not.toContain("network-outbound");

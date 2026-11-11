@@ -39,6 +39,16 @@ export const DENY_READ_IN_HOME = [
   // Claude Code: its config can hold MCP server tokens in env values; its credentials on Linux.
   ".claude.json",
   ".claude/.credentials.json",
+  // Mobile publishing and device keys (0.20.1, docs/lld/mobile.md): builds never read them.
+  // adbkey is the key that the user's devices trust; the token controls a running emulator.
+  ".android/adbkey",
+  ".emulator_console_auth_token",
+  ".appstoreconnect",
+  ".fastlane",
+  ".expo/state.json",
+  "Library/Application Support/dart/pub-credentials.json",
+  ".config/dart/pub-credentials.json",
+  ".pub-cache/credentials.json",
 ];
 
 /**

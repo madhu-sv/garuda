@@ -698,7 +698,10 @@ export class ChatStore implements Renderer, Approver, Interruptible {
             ? `Yes, allow ${host} for this session`
             : c.label),
       }));
-      this.update({ approval: { request, choices, selected: 0, shownAt: this.now() } });
+      const start = choices.findIndex((c) => c.choice === request.defaultChoice);
+      this.update({
+        approval: { request, choices, selected: Math.max(start, 0), shownAt: this.now() },
+      });
     });
   }
 

@@ -110,3 +110,31 @@ action without a yes.
 2. Part 0 and, if probe 1 or 4 confirms it, the denied simulator services and adb port: 0.20.1.
 3. The Android profile, the iOS profile and part 4; then the `mobile` eval suite and its
    measurement; then the guide page: 0.21.
+
+## Probe results (the user's Mac, 2026-11-10 and 11; Xcode 27, iOS 27.2 simulator)
+
+- Control: `head -c 4 ~/garuda-probe6.png` in the sandbox: blocked.
+- `xcrun simctl list devices booted`: works in the sandbox (the Mach lookup is allowed).
+- `xcrun simctl io booted screenshot ~/garuda-probe5.png`: exit 0, and the file was in the home
+  folder, which the sandbox cannot write. **Write escape.**
+- `xcrun simctl addmedia booted ~/garuda-probe6.png`: exit 0 for a file that the control showed
+  blocked. **Read escape.**
+- `xcrun simctl spawn booted /bin/cat …`: the simulator's runtime has no `/bin/cat`; no result.
+- adb: not probed (no Android SDK on the Mac). The port rule is on the safe side.
+- Two traps for later probes: a chat started in the home folder turns "needed" reads off (the
+  project is writable), and `test -r` asks only the permission bits, so it says "readable" in the
+  sandbox. Open the file, as `head -c` does.
+- The read question started on "Yes, for this session": Enter allowed the read in three probes.
+
+## As built (part 0, 0.20.1)
+
+- The keys of finding 1 and `~/.emulator_console_auth_token` (it controls a running emulator) are
+  in `DENY_READ_IN_HOME`, in both read modes.
+- Seatbelt: `(deny mach-lookup (global-name-regex #"^com\.apple\.CoreSimulator\."))` in every
+  profile, and `(deny network-outbound (remote ip "localhost:5037"))` after the rules that allow
+  localhost (the last matching rule wins). bubblewrap needs no rule: a sandboxed command has its own
+  network namespace, so a host adb server is out of reach.
+- `ApprovalRequest.defaultChoice`: the chat and the terminal approver start on it. The read
+  question starts on "deny".
+- To check on the Mac before the release: the Seatbelt tests (the profile must still load), then
+  `!xcrun simctl list devices` must fail in the sandbox.

@@ -205,6 +205,36 @@ describe("chat store", () => {
   });
 });
 
+describe("the cursor's first choice (0.20.1)", () => {
+  it("starts on the request's default choice, so Enter gives it; else on the first", async () => {
+    let t = 1_000;
+    const store = newStore(() => t);
+    const enter = { return: true, escape: false, upArrow: false, downArrow: false } as never;
+    const read: ApprovalRequest = {
+      tool: "sandbox_read",
+      target: { kind: "path", path: "/h/x" },
+      preview: "x",
+      isolation: "os",
+      choices: ["session", "deny"],
+      defaultChoice: "deny",
+    };
+    const answer = store.ask(read, new AbortController().signal);
+    t += 500;
+    onKey(store, store.getState(), "", enter);
+    // In the user's probes, Enter let a command read a file three times.
+    expect(await answer).toBe("deny");
+    const { defaultChoice: _d, ...plain } = read;
+    const second = store.ask(plain, new AbortController().signal);
+    // The next question opens after the first one's answer, a moment later.
+    for (let i = 0; i < 50 && store.getState().approval === undefined; i++) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    t += 500;
+    onKey(store, store.getState(), "", enter);
+    expect(await second).toBe("session");
+  });
+});
+
 describe("keys typed before the chat was ready", () => {
   it("treats each line end in a chunk as Enter", async () => {
     const store = newStore();
