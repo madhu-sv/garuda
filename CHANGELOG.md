@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.20.1 (2026-11-11)
+
+A security fix for mobile developers. Sandboxed commands can no longer read the keys that your
+devices trust or that publish your apps, and on macOS they can no longer drive the iOS simulator:
+in a probe, the simulator read and wrote files for a sandboxed command. The question about a
+blocked read now starts on "No".
 
 - The Homebrew formula in the repository names 0.20.0 and its tarball hash.
 - Design note for mobile apps (T14): docs/lld/mobile.md. Nothing is built yet.
@@ -8,11 +13,15 @@
   `~/.android/adbkey` (the key your devices trust for adb), `~/.emulator_console_auth_token`,
   App Store Connect API keys (`~/.appstoreconnect`), fastlane's session (`~/.fastlane`), Expo's
   login (`~/.expo/state.json`) and Dart's publish credentials. On macOS they can no longer reach the
-  iOS simulator's service or an adb server on `localhost:5037`: in a probe, a sandboxed
-  `xcrun simctl` read a file that the sandbox hides and wrote one in the home folder. With your
-  yes, such a command still runs outside the sandbox.
+  iOS simulator's service: in a probe, a sandboxed `xcrun simctl` read a file that the sandbox
+  hides and wrote one in the home folder. With your yes, such a command still runs outside the
+  sandbox. A known limit on macOS: a sandboxed command can still reach an adb server that you
+  started (a Seatbelt rule for its port blocked all of localhost); stop it with `adb kill-server`
+  while Garuda works. On Linux each command has its own network, so adb is out of reach.
 - Chat: the question "Let commands read ~/x in this session?" starts on "No". In probes, Enter
   allowed the read.
+- After a blocked read, the model no longer gets the hint "Use read_file, glob and grep" for a
+  command that only reads: it invited a work-around of the block.
 
 ## 0.20.0 (2026-11-10)
 

@@ -146,6 +146,8 @@ describe("the bash tool's note, with the message macOS gives", () => {
     const text = bash.toText?.(result) ?? "";
     expect(text).toContain("The sandbox blocked reads of ~/notes/a.txt");
     expect(text).not.toContain("run it again with outside_sandbox: true");
+    // Not the reader hint either: it would invite a work-around (the user's probe, 0.20.1).
+    expect(text).not.toContain("This command only reads files");
     // In open mode the same output gets the general hint, as before (the negative control).
     const open = new PermissionEngine({
       root,
@@ -165,6 +167,7 @@ describe("the bash tool's note, with the message macOS gives", () => {
       },
     );
     expect(bash.toText?.(before)).toContain("run it again with outside_sandbox: true");
+    expect(bash.toText?.(before)).toContain("This command only reads files");
   });
 });
 

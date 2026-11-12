@@ -120,7 +120,9 @@ action without a yes.
 - `xcrun simctl addmedia booted ~/garuda-probe6.png`: exit 0 for a file that the control showed
   blocked. **Read escape.**
 - `xcrun simctl spawn booted /bin/cat …`: the simulator's runtime has no `/bin/cat`; no result.
-- adb: not probed (no Android SDK on the Mac). The port rule is on the safe side.
+- adb (after the Android platform tools were installed): with `adb start-server` outside, a
+  sandboxed `adb devices` printed "List of devices attached" and exit 0. **The sandbox reaches the
+  adb server**, and through it any attached device.
 - Two traps for later probes: a chat started in the home folder turns "needed" reads off (the
   project is writable), and `test -r` asks only the permission bits, so it says "readable" in the
   sandbox. Open the file, as `head -c` does.
@@ -131,9 +133,17 @@ action without a yes.
 - The keys of finding 1 and `~/.emulator_console_auth_token` (it controls a running emulator) are
   in `DENY_READ_IN_HOME`, in both read modes.
 - Seatbelt: `(deny mach-lookup (global-name-regex #"^com\.apple\.CoreSimulator\."))` in every
-  profile, and `(deny network-outbound (remote ip "localhost:5037"))` after the rules that allow
-  localhost (the last matching rule wins). bubblewrap needs no rule: a sandboxed command has its own
-  network namespace, so a host adb server is out of reach.
+  profile.
+- No adb port rule. Tests with `sandbox-exec` and two local servers (8765, and 5037 in place of
+  adb) on the user's Mac: `(deny network-outbound (remote ip "localhost:5037"))` alone under
+  `(allow default)` blocks only 5037, but after Garuda's `(deny … "*:*")` and
+  `(allow … "localhost:*")` it blocks all of localhost, so the proxy and the local test servers
+  failed (four network tests). Placed before them it blocks nothing. `remote tcp` behaves the same;
+  `require-not` in the allow rule does not block 5037; `127.0.0.1:5037` is rejected ("host must be *
+  or localhost"). So 0.20.1 names it as a limit: stop the adb server with `adb kill-server` while
+  Garuda works. bubblewrap needs no rule: a sandboxed command has its own network namespace.
+- Next for adb (T14): a macOS CI job that tests Seatbelt rules with real sockets, so a candidate
+  rule needs no hand test; or the network rules written as denials only (the form that worked).
 - `ApprovalRequest.defaultChoice`: the chat and the terminal approver start on it. The read
   question starts on "deny".
 - To check on the Mac before the release: the Seatbelt tests (the profile must still load), then
