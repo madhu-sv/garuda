@@ -4,8 +4,8 @@
 class Garuda < Formula
   desc "Terminal coding agent with an OS sandbox, approvals and an audit log"
   homepage "https://madhu-sv.github.io/garuda/"
-  url "https://registry.npmjs.org/@garuda-agent/garuda/-/garuda-0.20.0.tgz"
-  sha256 "ca00c1434905b58e1a1398e94b099452f75f2030ed775d206eed73e6cd172807"
+  url "https://registry.npmjs.org/@garuda-agent/garuda/-/garuda-0.20.1.tgz"
+  sha256 "b8035b2cea23cf8793861aa3ec727f808228b9f29e20c284eb8d070a5ddc0ca1"
   license "Apache-2.0"
 
   depends_on "node"
