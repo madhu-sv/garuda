@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Homebrew formula in the repository names 0.20.1 and its tarball hash.
+
 ## 0.20.1 (2026-11-11)
 
 A security fix for mobile developers. Sandboxed commands can no longer read the keys that your
