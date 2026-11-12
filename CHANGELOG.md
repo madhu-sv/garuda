@@ -3,6 +3,8 @@
 ## Unreleased
 
 - The Homebrew formula in the repository names 0.20.1 and its tarball hash.
+- The release guide says to wait for the registry after the Publish step (0.20.1 appeared four
+  minutes later), and to check the package before the formula.
 
 ## 0.20.1 (2026-11-11)
 

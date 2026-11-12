@@ -30,7 +30,12 @@ command is `garuda`. Homebrew installs the same npm package through the tap
    to the publish job, which checks that `npm pack` holds `native/bin/garuda-reap`. Then it checks that the tag matches the version,
    runs `pnpm check`, and publishes with npm trusted publishing. The repository holds no npm token.
    npm adds a provenance statement that links the package to the workflow run.
-4. Update the Homebrew formula (below).
+4. Wait for the registry. For 0.20.1 the Publish step ended at 13:12, and the registry recorded the
+   version at 13:16: for those minutes `npm view @garuda-agent/garuda@<version>` answers 404 and
+   `latest` does not move. That is a delay, not a failure; publish nothing by hand.
+5. Check the package: `npm pack @garuda-agent/garuda@<version>`; its gitHead is the merge commit,
+   and it holds `native/bin/garuda-reap`. Its sha256 goes into the formula.
+6. Update the Homebrew formula (below).
 
 ## The first publish (done for 0.14.1)
 
