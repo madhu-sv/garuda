@@ -12,6 +12,12 @@
   mode was unclear). In plan mode the input line starts with `plan ›`. A switch with Shift+Tab
   during a turn applies from the next turn: the footer shows `BUILD now · PLAN next turn`, and a
   note says so.
+- Android projects (T14, not measured yet): a Gradle project that uses the Android plugin gets an
+  `android` profile in place of `gradle`: unit tests with `./gradlew testDebugUnitTest --offline`,
+  a build with `compileDebugSources`, the SDK variables, `~/.gradle/android` writable, and
+  `~/.android/debug.keystore` and `analytics.settings` readable (`~/.android` is never writable).
+  A new network preset, `google`, names Google's Maven repository. Garuda no longer asks to open a
+  folder that holds paths it reads already (the Android plugin's warning names `~/.android`).
 - The Homebrew formula in the repository names 0.20.2 and its tarball hash.
 - Website: Astro 7.4.7, which fixes two advisories (GHSA-r3h5-4585-7x3w, moderate, in the
   `@astrojs/node` image endpoint, which the static site does not use; GHSA-mh32-jxcr-mh9f, low).

@@ -388,3 +388,6 @@ no suite covers (an Xcode simulator build, an Android Gradle build, `uv` and con
 - 0.20.1: the read question starts on "deny" (`ApprovalRequest.defaultChoice`): in the T14 probes,
   Enter allowed a read three times. After a blocked read the bash tool drops its reader hint ("Use
   read_file, glob and grep"), which invited a work-around next to the note that forbids one.
+- T14: Garuda does not offer a folder that holds readable paths (other than the home folder,
+  whose note says that it never opens). The Android plugin's warning names `~/.android`; the files
+  that the build reads there are open through the profile, and a yes would open the rest.

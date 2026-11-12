@@ -558,9 +558,17 @@ export class PermissionEngine implements PermissionGate {
       ...(this.settings.sandbox?.readPaths ?? []).map((p) => expandPath(this.root, home, p)),
       ...this.sessionReadPaths,
     ];
+    // The profiles' files (T14), such as Android's debug keystore: readable, not named, so they
+    // do not bring back a NEEDED_MODE_DENY file.
+    const profileReads = this.access.readPaths ?? [];
     const reads =
       sandbox && this.readsMode() === "needed"
-        ? neededReads({ home, root: this.root, writePaths, readPaths })
+        ? neededReads({
+            home,
+            root: this.root,
+            writePaths,
+            readPaths: [...readPaths, ...profileReads],
+          })
         : undefined;
     // A file that `readPaths` names comes back: that is how a build that needs one gets it.
     const named = (file: string) =>

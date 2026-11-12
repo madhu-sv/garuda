@@ -9,6 +9,8 @@ export const NETWORK_PRESETS: Readonly<Record<string, readonly string[]>> = {
   npm: ["registry.npmjs.org", "registry.yarnpkg.com"],
   pypi: ["pypi.org", "files.pythonhosted.org"],
   maven: ["repo.maven.apache.org", "repo1.maven.org", "plugins.gradle.org", "services.gradle.org"],
+  // Google's Maven repository: the Android Gradle plugin and AndroidX (T14).
+  google: ["maven.google.com", "dl.google.com"],
   go: ["proxy.golang.org", "sum.golang.org"],
   cargo: ["crates.io", "index.crates.io", "static.crates.io"],
   github: [
