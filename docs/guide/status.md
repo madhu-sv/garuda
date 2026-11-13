@@ -37,10 +37,11 @@ What each release added, and the known limits of this version.
 | Publishing keys unreadable and the Linux session bus hidden in the sandbox (a security fix); the chat complete for screen readers, reduced motion, and the saffron accent (UX U12) | Done (0.19.1) |
 | Commands read only where needed by default (T15): the project, toolchains and caches in the home folder; measured on six eval suites | Done (0.20.0) |
 | Mobile publishing and device keys unreadable, and no iOS simulator from the sandbox (a security fix, T14 part 0); the read question starts on "No" | Done (0.20.1) |
+| Gradle builds in the sandbox start their own daemons, never one outside it (a security fix); Gradle tests run in the sandbox | Done (0.20.2) |
 
 The rows labelled 0.14–0.17 are branch labels, not versions: the "0.15" and "0.16" branches (code
-intelligence, language plugins) shipped in 0.14.0. The last ten rows are versions 0.15.0,
-0.16.0, 0.17.0, 0.18.0, 0.18.1, 0.18.2, 0.19.0, 0.19.1, 0.20.0 and 0.20.1.
+intelligence, language plugins) shipped in 0.14.0. The last eleven rows are versions 0.15.0,
+0.16.0, 0.17.0, 0.18.0, 0.18.1, 0.18.2, 0.19.0, 0.19.1, 0.20.0, 0.20.1 and 0.20.2.
 
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
@@ -52,7 +53,7 @@ headings in the user guide keep the branch labels (0.14–0.17).
 Before 0.14.0, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
 permissions, tools, sandbox, audit, loop, agents), in plan mode. 0.14.1 adds the cli and extensions
 areas and fixes the open findings of all nine areas (see [CHANGELOG.md](../../CHANGELOG.md)). Known limits
-in 0.20.1:
+in 0.20.2:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Reads: outside the home folder and other volumes, a command in the sandbox reads everything except

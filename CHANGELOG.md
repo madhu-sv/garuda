@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.20.2 (2026-11-13)
+
+A security fix for Gradle projects. A Gradle build in the sandbox could run in a Gradle daemon that
+you or your IDE had started outside it, and then the build ran with your full rights. Sandboxed
+Gradle now starts its own daemons. Gradle tests now run in the sandbox too.
 
 - Security: a Gradle build in the sandbox can no longer run in a Gradle daemon outside it. In a
   probe on macOS, a sandboxed `./gradlew` handed its build to the daemon that a normal terminal
