@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Homebrew formula in the repository names 0.20.2 and its tarball hash.
+
 ## 0.20.2 (2026-11-13)
 
 A security fix for Gradle projects. A Gradle build in the sandbox could run in a Gradle daemon that
