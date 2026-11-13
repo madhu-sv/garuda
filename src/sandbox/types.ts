@@ -35,6 +35,11 @@ export interface ExecPolicy {
    */
   reads?: ReadScope;
   /**
+   * The sandbox's own Gradle daemon registry (T14): sandboxed commands get it in `GRADLE_OPTS`, so
+   * Gradle never hands a build to a daemon outside the sandbox.
+   */
+  gradleRegistry?: string;
+  /**
    * A scheduled job's write scope (0.17, review T6): `root` is read-only, except `paths` in it.
    * Applied after `writePaths` (so a writable parent such as /tmp does not open the root) and
    * before `denyWritePaths` and `denyReadPaths` (so protected and denied paths in a scope folder

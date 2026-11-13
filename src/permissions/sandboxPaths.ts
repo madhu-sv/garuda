@@ -39,6 +39,10 @@ export const DENY_READ_IN_HOME = [
   // Claude Code: its config can hold MCP server tokens in env values; its credentials on Linux.
   ".claude.json",
   ".claude/.credentials.json",
+  // Kotlin's compile daemon (T14): its run files let a client hand a compilation, with compiler
+  // plugins, to a daemon outside the sandbox. Without them Gradle compiles in its own process.
+  "Library/Application Support/kotlin/daemon",
+  ".local/share/kotlin/daemon",
   // Mobile publishing and device keys (0.20.1, docs/lld/mobile.md): builds never read them.
   // adbkey is the key that the user's devices trust; the token controls a running emulator.
   ".android/adbkey",
@@ -170,6 +174,29 @@ export function expandPath(root: string, home: string, path: string): string {
       : resolve(root, path);
 }
 
+/**
+ * Gradle's daemons (T14, docs/lld/mobile.md). A client finds a running daemon, and the token that
+ * the daemon asks for, in `<gradle home>/daemon`; on the user's Mac a sandboxed `./gradlew` handed
+ * its build to a daemon that the user had started, and the build wrote in the home folder. So the
+ * sandbox hides that registry, and sandboxed Gradle gets its own (`GRADLE_OPTS`), where it starts
+ * daemons inside the sandbox. A custom `GRADLE_USER_HOME` gets the same rules. The sandbox's
+ * registry is in the temp folder, which commands may write already: nothing is made in the home
+ * folder, and a client outside never looks there.
+ */
+export function gradleDaemonPaths(
+  home: string,
+  env: NodeJS.ProcessEnv = process.env,
+  temp: string = real(tmpdir()),
+): { registry: string; denied: string[] } {
+  const custom = env.GRADLE_USER_HOME;
+  const gradleHome = custom !== undefined && isAbsolute(custom) ? custom : join(home, ".gradle");
+  const user = process.getuid?.() ?? "user";
+  return {
+    registry: join(temp, `garuda-gradle-daemon-${user}`),
+    denied: [...new Set([join(home, ".gradle", "daemon"), join(gradleHome, "daemon")])],
+  };
+}
+
 export function sandboxPaths(
   root: string,
   settings: SandboxSettings = {},
@@ -178,6 +205,7 @@ export function sandboxPaths(
 ): SandboxPaths {
   const expand = (path: string) => expandPath(root, home, path);
   const temp = [...new Set([real(tmpdir()), real("/tmp")])];
+  const gradle = gradleDaemonPaths(home);
   const writePaths = unique([
     root,
     ...temp,
@@ -186,9 +214,12 @@ export function sandboxPaths(
   ]);
   return {
     writePaths,
-    denyWritePaths: PROTECTED_IN_ROOT.map((p) => join(root, p)),
+    // The daemon registry is not writable either, also where a write path covers it (a fake home in
+    // a temp folder; `~/.gradle` in sandbox.writePaths). On macOS a read rule does not stop writes.
+    denyWritePaths: [...PROTECTED_IN_ROOT.map((p) => join(root, p)), ...gradle.denied],
     denyReadPaths: unique([
       ...DENY_READ_IN_HOME.map((p) => join(home, p)),
+      ...gradle.denied,
       ...personalDenials(home, root),
       ...runtimeDenials(writePaths, platform),
       ...(settings.denyRead ?? []).map(expand),

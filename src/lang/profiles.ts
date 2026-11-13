@@ -66,7 +66,9 @@ const PYTHON_ENV = ["VIRTUAL_ENV"];
  * ~/.m2/settings.xml and ~/.gradle/init.d stay read-only.
  */
 const MAVEN_CACHES = [".m2/repository", ".m2/wrapper"];
-const GRADLE_CACHES = ["caches", "wrapper", "daemon", "native", "jdks", ".tmp", "notifications"];
+// Not "daemon": the user's daemon registry stays hidden from the sandbox, which has its own (T14).
+// "workers": a test process makes its working folder there (the user's Mac check, T14).
+const GRADLE_CACHES = ["caches", "wrapper", "native", "jdks", ".tmp", "notifications", "workers"];
 /** pip and uv caches are under ~/.cache and ~/Library/Caches, which every profile may write. */
 const PYTHON_CACHES = [".local/share/uv"];
 

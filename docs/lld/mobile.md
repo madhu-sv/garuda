@@ -148,3 +148,24 @@ action without a yes.
   question starts on "deny".
 - To check on the Mac before the release: the Seatbelt tests (the profile must still load), then
   `!xcrun simctl list devices` must fail in the sandbox.
+
+## Gradle's daemons (found in the Android check, fixed in 0.20.2)
+
+- The probe: a task in the probe project wrote `~/garuda-probe-gradle.txt`. With a daemon that a
+  normal terminal had started (PID 59320, `./gradlew --status`: IDLE), a sandboxed
+  `./gradlew probeWrite --offline` succeeded, and the file said "written by pid 59320". **The build
+  ran outside the sandbox.** This holds for every Gradle project, not only Android, and IDEs leave
+  daemons running. After `./gradlew --stop`, the sandboxed client started its own daemon (a child,
+  so sandboxed) and the write failed with "Operation not permitted".
+- With `GRADLE_OPTS=-Dorg.gradle.daemon.registry.base=$TMPDIR/garuda-gd` and the outside daemon
+  still running, the sandboxed client started its own daemon, and the write failed: the option
+  works.
+- The fix (`gradleDaemonPaths` in sandboxPaths.ts, `commandEnv` in process.ts): the user's
+  registry (`~/.gradle/daemon`, and under a custom `GRADLE_USER_HOME`) is denied for reads and
+  writes in both read modes; sandboxed commands get `GRADLE_OPTS` with their own registry,
+  `<temp>/garuda-gradle-daemon-<uid>`, in the temp folder that they may write already (nothing is
+  made in the home folder, and tests do not touch the user's). Without the
+  registry a client has no daemon address and no token. Kotlin's daemon run files
+  (`~/Library/Application Support/kotlin/daemon`, `~/.local/share/kotlin/daemon`) are denied too;
+  Gradle then compiles Kotlin in its own process. On Linux a sandboxed command has its own network
+  namespace, so a daemon outside is out of reach there anyway.

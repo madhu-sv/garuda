@@ -102,7 +102,7 @@ export abstract class ProcessExecutor implements Executor {
     const { file, args, tracker } = this.launchTracked(argv, policy);
     const child = spawn(file, args, {
       cwd: policy.root,
-      env: { ...allowedEnv(policy.envAllowlist), ...proxyEnv(policy), ...env },
+      env: { ...commandEnv(policy), ...env },
       stdio: ["pipe", "pipe", "pipe"],
       detached: true,
     });
@@ -154,7 +154,7 @@ export abstract class ProcessExecutor implements Executor {
       const { file, args, tracker } = this.launchTracked(["bash", "-c", command], policy);
       const child = spawn(file, args, {
         cwd: policy.root,
-        env: { ...allowedEnv(policy.envAllowlist), ...proxyEnv(policy), ...options.env },
+        env: { ...commandEnv(policy), ...options.env },
         stdio: ["ignore", "pipe", "pipe"],
         detached: true,
       });
@@ -293,6 +293,18 @@ export function proxyEnv(
     MAVEN_OPTS: add("MAVEN_OPTS"),
     GRADLE_OPTS: add("GRADLE_OPTS"),
   };
+}
+
+/**
+ * A command's environment: the allowlisted variables, the proxy's, and for a sandboxed command
+ * the sandbox's own Gradle daemon registry in `GRADLE_OPTS` (T14), after any other options.
+ */
+export function commandEnv(policy: ExecPolicy): Record<string, string> {
+  const env = { ...allowedEnv(policy.envAllowlist), ...proxyEnv(policy) };
+  if (!policy.sandbox || policy.gradleRegistry === undefined) return env;
+  const registry = `-Dorg.gradle.daemon.registry.base=${policy.gradleRegistry}`;
+  env.GRADLE_OPTS = env.GRADLE_OPTS === undefined ? registry : `${env.GRADLE_OPTS} ${registry}`;
+  return env;
 }
 
 /** The program itself, with no isolation. */

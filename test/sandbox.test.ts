@@ -32,7 +32,13 @@ describe("sandbox paths", () => {
     const p = sandboxPaths("/repo", {}, "/home/u");
     expect(p.writePaths[0]).toBe("/repo");
     expect(p.writePaths).toContain("/home/u/.cache");
-    expect(p.denyWritePaths).toEqual(["/repo/.git/hooks", "/repo/.git/config", "/repo/.garuda"]);
+    // And Gradle's daemon registry (0.20.2; a custom GRADLE_USER_HOME adds its own).
+    expect(p.denyWritePaths.slice(0, 4)).toEqual([
+      "/repo/.git/hooks",
+      "/repo/.git/config",
+      "/repo/.garuda",
+      "/home/u/.gradle/daemon",
+    ]);
     expect(p.denyReadPaths).toContain("/home/u/.ssh");
     expect(p.denyReadPaths).toContain("/home/u/.aws");
     // Tokens of Garuda and Claude Code (0.5); skills in ~/.garuda and ~/.claude stay readable.
