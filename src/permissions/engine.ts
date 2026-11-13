@@ -13,7 +13,7 @@ import {
 } from "./policy.js";
 import { hiddenPlaces, NEEDED_MODE_DENY, neededReads, type ReadsMode, shortPath } from "./reads.js";
 import { formatRule, type Rule, ruleMatches } from "./rules.js";
-import { expandPath, policyDeniedPaths, sandboxPaths } from "./sandboxPaths.js";
+import { expandPath, gradleDaemonPaths, policyDeniedPaths, sandboxPaths } from "./sandboxPaths.js";
 import { isProtectedFromWrites, isSensitive } from "./sensitive.js";
 import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 import type {
@@ -575,6 +575,8 @@ export class PermissionEngine implements PermissionGate {
       ...paths,
       denyReadPaths: [...paths.denyReadPaths, ...neededDenials, ...denied],
       ...(reads === undefined ? {} : { reads }),
+      // The same home folder as sandboxPaths, which makes the registry writable (T14).
+      ...(sandbox ? { gradleRegistry: gradleDaemonPaths(homedir()).registry } : {}),
       writePaths,
       ...(scope === undefined ? {} : { writeScope: scope }),
       denyWritePaths,

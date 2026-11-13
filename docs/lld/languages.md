@@ -44,7 +44,7 @@ engine, which adds it to every `ExecPolicy`.
 | Profile | Writable paths (under the home folder) | Environment variables |
 | --- | --- | --- |
 | `maven` | `.m2/repository`, `.m2/wrapper` | `JAVA_HOME` |
-| `gradle` | `.gradle/` `caches`, `wrapper`, `daemon`, `native`, `jdks`, `.tmp`, `notifications` (under `GRADLE_USER_HOME` when it is an absolute path) | `JAVA_HOME`, `GRADLE_USER_HOME` |
+| `gradle` | `.gradle/` `caches`, `wrapper`, `native`, `jdks`, `.tmp`, `notifications`, `workers` (a test process's working folder; under `GRADLE_USER_HOME` when it is an absolute path); not `daemon` (0.20.2, below) | `JAVA_HOME`, `GRADLE_USER_HOME` |
 | `python` | `.local/share/uv` | `VIRTUAL_ENV` |
 
 pip, uv and Poetry caches are in `~/.cache` and `~/Library/Caches`, which every sandboxed command may
@@ -61,8 +61,14 @@ with read-only holes: on Linux, bubblewrap can only protect paths that exist.
 
 ## Limits
 
-- Gradle is not tested in the sandbox yet. Its daemon talks to the client over a localhost socket, which
-  the Seatbelt profile allows. If a Gradle build fails in the sandbox, run it with `outside_sandbox: true`.
+- Gradle's daemons (0.20.2, docs/lld/mobile.md): a client finds a running daemon, and its token, in
+  `<gradle home>/daemon`. On the user's Mac a sandboxed `./gradlew` handed its build to a daemon that
+  the user had started, and the build ran outside the sandbox. So that folder is unreadable and
+  unwritable for sandboxed commands (`gradleDaemonPaths`), and `GRADLE_OPTS` gives them their own
+  registry (`-Dorg.gradle.daemon.registry.base=<temp>/garuda-gradle-daemon-<uid>`, in the writable temp
+  folder, so nothing is made in the home folder): Gradle then
+  starts its daemons inside the sandbox. Kotlin's daemon folders are denied for the same reason. A
+  command that drops the option fails on the hidden registry; it does not escape.
 - A custom Maven repository path (`<localRepository>` in `settings.xml`) is not detected. Add it with
   `sandbox.writePaths` in the settings.
 - Only the working root is checked. A multi-module project whose build file is in a subfolder gets no

@@ -1,7 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.20.2 (2026-11-13)
 
+A security fix for Gradle projects. A Gradle build in the sandbox could run in a Gradle daemon that
+you or your IDE had started outside it, and then the build ran with your full rights. Sandboxed
+Gradle now starts its own daemons. Gradle tests now run in the sandbox too.
+
+- Security: a Gradle build in the sandbox can no longer run in a Gradle daemon outside it. In a
+  probe on macOS, a sandboxed `./gradlew` handed its build to the daemon that a normal terminal
+  had left running (IDEs do the same), and the build wrote in the home folder. Sandboxed commands
+  now get their own daemon registry (`GRADLE_OPTS`), and the user's registry, `~/.gradle/daemon`,
+  is hidden from them. Kotlin's compile daemon is kept out the same way. Gradle tests in the sandbox
+  also need `~/.gradle/workers`, which the Gradle profile now makes writable.
 - The Homebrew formula in the repository names 0.20.1 and its tarball hash.
 - The release guide says to wait for the registry after the Publish step (0.20.1 appeared four
   minutes later), and to check the package before the formula.

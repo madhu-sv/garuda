@@ -24,6 +24,10 @@ In the sandbox, a command:
 - has no network (localhost works on macOS), unless you open a network allowlist (0.13, below);
 - cannot start apps on macOS (`open`, `osascript`), because an app started that way runs outside the
   sandbox (0.14);
+- cannot hand a build to a Gradle daemon that runs outside the sandbox (0.20.2): Gradle in the
+  sandbox gets its own daemon registry and starts its own daemons. In a probe, a sandboxed
+  `./gradlew` used the daemon that a normal terminal had left running, and the build wrote in the
+  home folder. Kotlin's compile daemon is kept out the same way;
 - cannot drive the iOS simulator on macOS (`xcrun simctl`, `xcodebuild` with a simulator
   destination) (0.20.1). The simulator's service runs outside the sandbox: in a probe, a sandboxed
   `simctl` read a file that the sandbox hides and wrote one in the home folder. With your yes, such

@@ -135,7 +135,7 @@ The banner shows what it found, for example `Java (Maven)`.
 | Found | Test command | The sandbox may also write |
 | --- | --- | --- |
 | `pom.xml` | `mvn -B -q -o test` (or `./mvnw`) | `~/.m2/repository`, `~/.m2/wrapper` |
-| `build.gradle(.kts)`, `settings.gradle(.kts)` | `gradle test --offline -q` (or `./gradlew`) | `~/.gradle/caches`, `wrapper`, `daemon` and other cache folders |
+| `build.gradle(.kts)`, `settings.gradle(.kts)` | `gradle test --offline -q` (or `./gradlew`) | `~/.gradle/caches`, `wrapper` and other cache folders (Gradle in the sandbox uses its own daemons, 0.20.2) |
 | `pyproject.toml`, `setup.py`, `requirements.txt` … | `python3 -m pytest -q` (or the project's `.venv`, `uv run`, `poetry run`) | `~/.local/share/uv` |
 
 - The commands run offline, because the sandbox has no network. When a dependency is missing, the model
