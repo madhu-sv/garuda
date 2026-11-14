@@ -69,7 +69,7 @@
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
-    "@agentclientprotocol/sdk": "2.4.0",
+    "@agentclientprotocol/sdk": "2.6.0",
     "@anthropic-ai/sdk": "^1.6.0",
     "@inquirer/prompts": "^8.7.2",
     "@modelcontextprotocol/client": "^2.3.1",
