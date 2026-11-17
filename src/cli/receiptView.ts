@@ -96,6 +96,15 @@ function filesParts(receipt: Receipt, room: number): Part[] {
 function testsParts(receipt: Receipt): Part[] | undefined {
   const t = receipt.tests;
   if (t === undefined) return undefined;
+  // Not "passed" without a count of tests that ran (review, 2026-11).
+  if (t.ran === "none") {
+    return [
+      [`${t.command} `],
+      ["○ no tests ran", "yellow"],
+      [t.reason === undefined ? "" : ` (${t.reason})`],
+    ];
+  }
+  if (t.ran === "uncounted") return [[`${t.command} `], ["exit 0"], [", no test count"]];
   const count =
     t.total === undefined
       ? ""

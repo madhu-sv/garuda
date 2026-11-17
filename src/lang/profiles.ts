@@ -15,7 +15,7 @@ import { isAbsolute, join } from "node:path";
  * The profiles do not start hooks and do not install anything.
  */
 
-export type ProfileId = "maven" | "gradle" | "python";
+export type ProfileId = "maven" | "gradle" | "android" | "python";
 
 export interface LanguageProfile {
   id: ProfileId;
@@ -32,6 +32,11 @@ export interface ProfileAccess {
   writePaths: string[];
   /** Environment variables that commands may see. */
   envAllow: string[];
+  /**
+   * Absolute paths that sandboxed commands may read in "needed" mode (T14): files outside the
+   * project and the toolchain folders that a build reads, such as Android's debug keystore.
+   */
+  readPaths?: string[];
 }
 
 export interface DetectOptions {
@@ -59,6 +64,34 @@ const PYTHON_MARKERS = [
 /** Environment variables that Java and Python tools read to find themselves. No secrets. */
 const JAVA_ENV = ["JAVA_HOME"];
 const GRADLE_ENV = ["JAVA_HOME", "GRADLE_USER_HOME"];
+const ANDROID_ENV = [...GRADLE_ENV, "ANDROID_HOME", "ANDROID_SDK_ROOT", "ANDROID_USER_HOME"];
+
+/** The build files that name the Android Gradle plugin, at the root and in `app/`. */
+const ANDROID_FILES = [
+  "build.gradle",
+  "build.gradle.kts",
+  "settings.gradle",
+  "settings.gradle.kts",
+  "app/build.gradle",
+  "app/build.gradle.kts",
+  "gradle/libs.versions.toml",
+];
+/** The plugin ids, the version catalog's aliases and the old buildscript classpath. */
+const ANDROID_PLUGIN =
+  /com\.android\.(application|library|tools\.build)|plugins\.android\.(application|library)\b/;
+
+/** True when one of a few build files names the Android Gradle plugin (no deep scan, N3). */
+export function isAndroid(root: string): boolean {
+  for (const name of ANDROID_FILES) {
+    try {
+      if (ANDROID_PLUGIN.test(readFileSync(join(root, name), "utf8").slice(0, 200_000)))
+        return true;
+    } catch {
+      // Not there.
+    }
+  }
+  return false;
+}
 const PYTHON_ENV = ["VIRTUAL_ENV"];
 
 /**
@@ -99,7 +132,34 @@ export function detectProfiles(root: string, options: DetectOptions = {}): Langu
     });
   }
 
-  if (GRADLE_MARKERS.some(has)) {
+  if (GRADLE_MARKERS.some(has) && isAndroid(root)) {
+    const gradle = has("gradlew") ? "./gradlew" : "gradle";
+    const gradleHome = userHome(env.GRADLE_USER_HOME, join(home, ".gradle"));
+    const androidHome = userHome(env.ANDROID_USER_HOME, join(home, ".android"));
+    profiles.push({
+      id: "android",
+      label: "Android (Gradle)",
+      test: `${gradle} testDebugUnitTest --offline`,
+      build: `${gradle} compileDebugSources --offline`,
+      notes: [
+        `Android project with Gradle. Run the unit tests with \`${gradle} testDebugUnitTest --offline\`; one test`,
+        `class: \`${gradle} testDebugUnitTest --offline --tests 'com.example.FooTest'\`. Compile with`,
+        `\`${gradle} compileDebugSources --offline\`. --offline uses the downloaded dependencies. If Gradle`,
+        'reports a missing dependency, ask the user to add the "google" and "maven" presets to the network',
+        "allowlist, or run the command without --offline and with outside_sandbox: true.",
+        "Instrumented tests (connectedAndroidTest), the emulator and adb need a device: they run only",
+        "outside the sandbox, with the user's yes. Prefer unit tests. Do not change ~/.android.",
+      ],
+      access: {
+        // `android`: the plugin's FakeDependency.jar (the user's Mac check).
+        writePaths: [...GRADLE_CACHES, "android"].map((p) => join(gradleHome, p)),
+        envAllow: ANDROID_ENV,
+        // The debug build signs with the keystore; the plugin reads its analytics settings. The
+        // sandbox never writes ~/.android (docs/lld/mobile.md).
+        readPaths: [join(androidHome, "debug.keystore"), join(androidHome, "analytics.settings")],
+      },
+    });
+  } else if (GRADLE_MARKERS.some(has)) {
     const gradle = has("gradlew") ? "./gradlew" : "gradle";
     const gradleHome = userHome(env.GRADLE_USER_HOME, join(home, ".gradle"));
     profiles.push({
@@ -165,9 +225,11 @@ function userHome(value: string | undefined, fallback: string): string {
 
 /** The access of all profiles together. */
 export function profileAccess(profiles: readonly LanguageProfile[]): ProfileAccess {
+  const readPaths = [...new Set(profiles.flatMap((p) => p.access.readPaths ?? []))];
   return {
     writePaths: [...new Set(profiles.flatMap((p) => p.access.writePaths))],
     envAllow: [...new Set(profiles.flatMap((p) => p.access.envAllow))],
+    ...(readPaths.length === 0 ? {} : { readPaths }),
   };
 }
 

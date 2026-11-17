@@ -91,11 +91,14 @@ describe("reduced motion", () => {
     );
     const ui = render(<App store={store} />);
     store.begin("work", false);
-    // Wait for the first second to be counted, up to 4 s: a busy CI runner's timer can be late, and
-    // a fixed 1.15 s wait failed there (Ubuntu CI, 2026-11).
-    for (let i = 0; i < 40 && !ui.frames.join("\n").includes(workingText(1)); i++) await wait(100);
+    // Wait for a counted second, up to 4 s: a busy runner's timer can be late, and a fixed 1.15 s
+    // wait failed on Ubuntu CI (2026-11). The count comes from the clock, so a late tick can skip a
+    // number (0 s, then 2 s): any count from 1 s on is right.
+    const counted = () => /Working \([1-9]\d* s\) · Ctrl-C stops/.test(ui.frames.join("\n"));
+    for (let i = 0; i < 40 && !counted(); i++) await wait(100);
     const frames = ui.frames.join("\n");
-    expect(frames).toContain(workingText(1));
+    expect(counted()).toBe(true);
+    expect(frames).toContain(workingText(0));
     expect(frames).not.toMatch(BRAILLE);
     // A running tool has the still mark.
     store.event({ type: "tool_call", call: toolUse("bash", { command: "sleep 1" }, "s") } as never);

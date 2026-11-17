@@ -161,7 +161,8 @@ response: batch responses at half the token price.
   in `.gitignore` does not protect it (fixed in 0.12; before, a job's tests after the change could not
   find `vitest`).
 - After the commit, `proveJob` (in `finishJob`, not after Ctrl-C) runs the tests again, then
-  `riskFlags` (pure): STOP = not `done`, an error, tests fail after; look = no test command, test files
+  `riskFlags` (pure): STOP = not `done`, an error, tests fail after, the test command ran no test
+  after the job (`noTestsRan`, review 2026-11); look = no test command, test files
   deleted or changed, manifests or lock files, CI/container/`.env` files, more than 20 files or 500 lines,
   denied calls, tests fixed by the job, no file changed.
 - The review (`job.review` not false, and a commit): `runtime.askModel(reviewerSystem(stack),

@@ -268,16 +268,25 @@ export const INPUT_BOX_MIN_COLUMNS = 40;
 function InputLine({ state }: { state: ChatState }) {
   const { text, cursor } = state.editor;
   const at = text[cursor];
+  // Plan mode where the user types, too (review 2026-11).
+  const marker =
+    state.status.mode === "plan" ? (
+      <Text color="yellow" bold>
+        plan ›{" "}
+      </Text>
+    ) : (
+      <Text color="cyan">› </Text>
+    );
   const line =
     text === "" ? (
       <Text>
-        <Text color="cyan">› </Text>
+        {marker}
         <Text inverse> </Text>
         <Text dimColor>{state.busy ? INPUT_HINT_BUSY : INPUT_HINT}</Text>
       </Text>
     ) : (
       <Text>
-        <Text color="cyan">› </Text>
+        {marker}
         {text.slice(0, cursor)}
         <Text inverse>{at === undefined || at === "\n" ? " " : at}</Text>
         {at === "\n" ? "\n" : ""}
@@ -303,18 +312,24 @@ function InputLine({ state }: { state: ChatState }) {
 
 function Footer({ state }: { state: ChatState }) {
   // One space in, so the footer lines up with the chat box's border.
-  const { model, sandbox, contextPercent, costUsd, mode } = state.status;
+  const { model, sandbox, contextPercent, costUsd } = state.status;
   const keys = footerKeys(state.busy, state.keyHints);
   const level = contextPercent === undefined ? "ok" : contextLevel(contextPercent);
   const screenReader = screenReaderMode();
+  const modes = footerModes(state.status, state.busy);
   return (
     <Text>
       {" "}
-      {mode === "plan" ? (
-        <Text color="yellow" bold>
-          PLAN{" "}
+      {modes.map((m, i) => (
+        <Text key={m.mode + String(i)}>
+          {i > 0 ? <Text dimColor> · </Text> : null}
+          <Text bold {...(m.mode === "plan" ? { color: "yellow" } : {})}>
+            {modeWord(m.mode, screenReader)}
+          </Text>
+          {m.label === "" ? null : <Text dimColor>{` ${m.label}`}</Text>}
         </Text>
-      ) : null}
+      ))}
+      <Text> </Text>
       <Text dimColor>{`${model} · ${sandboxText(sandbox, screenReader)}`}</Text>
       {contextPercent !== undefined && (
         <>
@@ -336,6 +351,30 @@ function Footer({ state }: { state: ChatState }) {
       </Text>
     </Text>
   );
+}
+
+/**
+ * The footer's mode (review 2026-11: Plan or Build was unclear): always named. While a turn runs
+ * in the other mode after Shift+Tab: "BUILD now · PLAN next turn".
+ */
+export function footerModes(
+  status: { mode?: "plan"; turnMode?: "plan" | "build" },
+  busy: boolean,
+): { mode: "plan" | "build"; label: string }[] {
+  const next = status.mode === "plan" ? "plan" : "build";
+  if (busy && status.turnMode !== undefined && status.turnMode !== next) {
+    return [
+      { mode: status.turnMode, label: "now" },
+      { mode: next, label: "next turn" },
+    ];
+  }
+  return [{ mode: next, label: "" }];
+}
+
+/** "PLAN" or "BUILD"; for a screen reader "Plan mode" or "Build mode". */
+export function modeWord(mode: "plan" | "build", screenReader: boolean): string {
+  if (screenReader) return mode === "plan" ? "Plan mode" : "Build mode";
+  return mode === "plan" ? "PLAN" : "BUILD";
 }
 
 /** The footer's sandbox: "⛨ seatbelt"; for a screen reader the words, "sandbox seatbelt" (U12). */
