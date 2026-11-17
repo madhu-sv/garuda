@@ -91,7 +91,9 @@ describe("reduced motion", () => {
     );
     const ui = render(<App store={store} />);
     store.begin("work", false);
-    await wait(1_150);
+    // Wait for the first second to be counted, up to 4 s: a busy CI runner's timer can be late, and
+    // a fixed 1.15 s wait failed there (Ubuntu CI, 2026-11).
+    for (let i = 0; i < 40 && !ui.frames.join("\n").includes(workingText(1)); i++) await wait(100);
     const frames = ui.frames.join("\n");
     expect(frames).toContain(workingText(1));
     expect(frames).not.toMatch(BRAILLE);
