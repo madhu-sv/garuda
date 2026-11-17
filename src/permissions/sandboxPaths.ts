@@ -1,6 +1,6 @@
 import { readdirSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { isAbsolute, join, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { globbySync } from "globby";
 import { CASE_INSENSITIVE_FS, fullGlob } from "./rules.js";
 
@@ -210,7 +210,9 @@ export function sandboxPaths(
     root,
     ...temp,
     ...WRITE_IN_HOME.map((p) => join(home, p)),
-    ...(settings.writePaths ?? []).map(expand),
+    // Real paths (T14): Seatbelt compares real paths, so on macOS a rule for /var/folders/… (a
+    // link to /private/var) never matched; the user's iOS check found it.
+    ...(settings.writePaths ?? []).map((p) => realPath(expand(p))),
   ]);
   return {
     writePaths,
@@ -222,7 +224,8 @@ export function sandboxPaths(
       ...gradle.denied,
       ...personalDenials(home, root),
       ...runtimeDenials(writePaths, platform),
-      ...(settings.denyRead ?? []).map(expand),
+      // Both spellings: a denial that matches nothing would leave the file readable.
+      ...(settings.denyRead ?? []).flatMap((p) => [expand(p), realPath(expand(p))]),
     ]),
   };
 }
@@ -233,6 +236,25 @@ function real(path: string): string {
     return realpathSync(path);
   } catch {
     return path;
+  }
+}
+
+/**
+ * The real path of a path that may not exist yet (a cache folder a build makes): the nearest
+ * folder that exists, resolved, with the rest added back.
+ */
+export function realPath(path: string): string {
+  let head = path;
+  const rest: string[] = [];
+  for (;;) {
+    try {
+      return join(realpathSync(head), ...rest);
+    } catch {
+      const parent = dirname(head);
+      if (parent === head) return path;
+      rest.unshift(basename(head));
+      head = parent;
+    }
   }
 }
 

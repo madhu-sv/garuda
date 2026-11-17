@@ -56,7 +56,8 @@ Settings:
 
 - `executor`: `auto` (default) uses the sandbox when it works on this machine, else runs on the host
   with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again (unless an allow rule covers it).
-- `sandbox.writePaths` and `sandbox.denyRead` add paths. `~/` is the home folder; other relative paths
+- `sandbox.writePaths` and `sandbox.denyRead` add paths (a path through a link counts as its real
+  path, so `/var/folders/…` on macOS works). `~/` is the home folder; other relative paths
   start at the root.
 - Reads only where needed (T15; the default since 0.20.0): a command reads in your home folder
   only the project, the toolchains on your `PATH`
