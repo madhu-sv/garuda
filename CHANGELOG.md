@@ -15,6 +15,8 @@
 - The Homebrew formula in the repository names 0.20.2 and its tarball hash.
 - Website: Astro 7.4.7, which fixes two advisories (GHSA-r3h5-4585-7x3w, moderate, in the
   `@astrojs/node` image endpoint, which the static site does not use; GHSA-mh32-jxcr-mh9f, low).
+- Tests: Vitest runs only `test/`. A copy of the repository inside the checkout ran its old tests
+  too, and they failed.
 
 ## 0.20.2 (2026-11-13)
 
