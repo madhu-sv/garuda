@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Receipts no longer say "✓ passed" when no test ran (a finding of the 2026-11 review). A
+  successful test command passes only with a count of tests that ran. A run that ran none (a count
+  of 0, or Gradle `UP-TO-DATE` and `NO-SOURCE`, go's "no test files", Maven's "No tests to run",
+  pytest's exit code 5) shows "○ no tests ran"; a success with no count shows "exit 0, no test
+  count". `-p --json` gets `status` and `reason`, and its `passed` is true only for tests that ran
+  and passed. A job's tests that ran no test after the job stop a "ready" verdict.
 - The Homebrew formula in the repository names 0.20.2 and its tarball hash.
 
 ## 0.20.2 (2026-11-13)

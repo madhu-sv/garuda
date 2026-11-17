@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseTestCount } from "../app/receipt.js";
 import { JOBS_DIR, type Job, listJobs } from "./job.js";
+import { noTestsRan } from "./proof.js";
 import { formatCost, jobCost, sumCosts } from "./text.js";
 
 /**
@@ -17,7 +18,10 @@ export const FIRST_BRIEF_MS = 24 * 3_600_000;
 
 export type BriefPaint = (style: "green" | "red" | "dim" | "bold", text: string) => string;
 
-/** "tests 120 → 126", "tests pass", "tests fail after the change", or "no tests". */
+/**
+ * "tests 120 → 126", "tests pass", "no tests ran" (a successful run with no test, review
+ * 2026-11), "tests fail after the change", or "no tests".
+ */
 export function testsText(job: Job): string {
   const proof = job.result?.proof;
   const after = proof?.after;
@@ -26,6 +30,7 @@ export function testsText(job: Job): string {
     tail === undefined ? undefined : parseTestCount(tail)?.total;
   const before = count(proof?.before?.tail);
   const now = count(after.tail);
+  if (noTestsRan(after) !== undefined) return "no tests ran";
   const passed = after.exitCode === 0 && !after.timedOut;
   if (before !== undefined && now !== undefined && passed) return `tests ${before} → ${now}`;
   return passed ? "tests pass" : "tests fail after the change";

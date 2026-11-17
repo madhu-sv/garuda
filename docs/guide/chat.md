@@ -150,7 +150,10 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   Files come from the undo snapshots (with undo off: "no file list"). Tests: the last command of
   the turn that ran the project's test command or a known runner (vitest, jest, node:test, pytest,
   Maven, Gradle, go test, cargo test); the count comes from the runner's summary line when Garuda
-  knows it. Sandbox: the turn's commands by where they ran, and a Network row for hosts that the
+  knows it. "✓ passed" needs that count to be above 0: a run that the runner says ran no test (a
+  count of 0; Gradle's test tasks `UP-TO-DATE`, `NO-SOURCE` or `FROM-CACHE`; go's "no test files";
+  Maven's "No tests to run"; pytest's exit code 5) shows "○ no tests ran", and a successful run with no
+  count shows "exit 0, no test count". Sandbox: the turn's commands by where they ran, and a Network row for hosts that the
   allowlist's proxy blocked. A kept change is a turn that changed files and was not undone; "each"
   is the session cost divided by them. Under 60 columns, in a pipe and with
   `GARUDA_SCREEN_READER=1`, the receipt is plain lines. `-p --json` has it as `receipt` in the result.

@@ -353,7 +353,7 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
 | ID | Question | Suggested default |
 | --- | --- | --- |
 | D1 | Receipt for which turns? | Turns that changed files or ran commands. Others keep the one line. Narrowed after the first live run: commands count only when tests ran, one ran outside the sandbox, or a host was blocked. |
-| D2 | Test counts: parse the known runners, or only ✓ and ✗? | Parse the six runners above. Unknown runners: ✓ and ✗ only. |
+| D2 | Test counts: parse the known runners, or only ✓ and ✗? | Parse the six runners above. Unknown runners: ✓ and ✗ only. Since the review of 2026-11: "✓ passed" only with a count above 0; else "○ no tests ran" or "exit 0, no test count". |
 | D3 | Watch mode: start a deny-all proxy in every sandboxed chat (loads `node:http`, against N3 today), or guess the host from the error text? | The proxy. Error text is not reliable. Load it on the first bash call, not at start. |
 | D4 | "Allow for this project" writes to `.garuda/settings.json` (in git, so the team sees it) or to `~/.garuda/trust.json` (only this user)? | `.garuda/settings.json`, so it is visible in review. |
 | D5 | A "kept change" for the bottom line: a turn that changed files and was not undone? | Yes. |
@@ -539,3 +539,19 @@ the wordmark got a drop shadow and a double size from 130 columns, and screen-re
 
 Each patch updates the CHANGELOG, this note's "As built", the CLI LLD, the chat guide and the
 architecture doc, as usual.
+
+## After review 2026-11: no "passed" without tests
+
+- The review found that a receipt said "Tests passed" when no test ran: `passed` was the exit code
+  alone. Our own Android check showed it: `./gradlew testDebugUnitTest` was `UP-TO-DATE`, ran no
+  test, and succeeded.
+- `ReceiptTests.passed` is now true only with a count of tests that ran. `ran: "none"` (with
+  `reason`) for a count of 0 or a runner's words (`noTestsReason`: every Gradle test task
+  `UP-TO-DATE`, `NO-SOURCE`, `FROM-CACHE` or `SKIPPED`; go's `[no test files]` with no `ok` line;
+  Maven's "No tests to run"; Jest's "No tests found"; Vitest's "No test files found"; pytest's exit
+  code 5). `ran: "uncounted"` for a success with no count (Gradle usually prints none). The view
+  shows "○ no tests ran (reason)" or "exit 0, no test count"; `-p --json` has `status` (`passed`,
+  `failed`, `timed_out`, `no_tests`, `uncounted`) and `reason`.
+- Jobs: `noTestsRan` in `jobs/proof.ts`. A run with no test does not pass; after the job it is a
+  STOP flag ("ran no test after the job"), so the verdict is never "ready" on it; the report and
+  the morning brief say "no tests ran".
