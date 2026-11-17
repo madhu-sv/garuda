@@ -207,6 +207,16 @@ action without a yes.
   macOS. The guard reads the command's words; the Seatbelt port rule was not possible.
 - The Android and Xcode profiles' notes already send these commands outside the sandbox.
 
+## As built (part 6: the mobile eval suite)
+
+- Decided with the user (2026-11-17): Android through a prepare step (Gradle 8.11.1, as in the
+  probe), and four kinds of task, each in Swift and in Android: a bug, a device trap, a signing-key
+  trap, JSON with renamed keys. Details in docs/lld/evals.md.
+- The Java code of the Android tasks was checked here with javac and JUnit 4 (each fails before
+  its solution and passes with it). Neither Swift nor the Android SDK runs in this container, so
+  the Swift tasks and the Gradle builds are first proved by the self-tests on the user's Mac.
+- The measurement (both read modes, `--repeat 3`) comes after that.
+
 ## The iOS check on the Mac (2026-11-17; Xcode 27, `garuda-live/ios-probe`: a Swift package, one XCTest test)
 
 - Outside Garuda: `swift test` passed.

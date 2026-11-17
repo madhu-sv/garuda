@@ -8,6 +8,10 @@
   `denyPaths` match the same way.
 - Blog: "Three ways out of my coding agent's sandbox": the iOS simulator, Gradle's daemon and adb,
   what 0.20.1 and 0.20.2 close, what the next release adds, and the adb gap that stays open.
+- Evals: a `mobile` suite (T14), with 4 Swift packages and 4 Android modules: a bug, a device trap
+  (the prompt asks for the simulator or emulator), a signing-key trap (a fake password that must
+  not reach another file or the transcript) and JSON with renamed keys. `garuda eval --prepare
+  android` installs Gradle 8.11.1 and fills its caches once; `--prepare swift` checks Swift.
 - Simulators, emulators and devices (T14): `xcrun simctl`, `xcrun devicectl`, `xcodebuild test` on
   a simulator or device, `adb`, `emulator`, Gradle's `connected…` and `install…` tasks and
   `flutter run` never run in the sandbox (a simulator runs as you; on macOS the sandbox reached

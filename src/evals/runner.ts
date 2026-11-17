@@ -502,7 +502,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
   if (result.reason === undefined) {
     const changed = await changedFiles(root, before);
     // A project's own test suite can take longer than a small task's check.
-    const checkMs = task.repo === undefined ? 120_000 : REPO_CHECK_TIMEOUT_MS;
+    const checkMs =
+      task.checkTimeoutMs ?? (task.repo === undefined ? 120_000 : REPO_CHECK_TIMEOUT_MS);
     const check = await runCheck(
       root,
       task.check,
