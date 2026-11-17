@@ -281,6 +281,8 @@ export function policyDeniedPaths(
     followSymbolicLinks: false,
     gitignore: false,
     caseSensitiveMatch: !ignoreCase,
+    // GHSA-fc5q-39xc-vjpf: no extglobs, as in the glob tool (src/tools/files.ts).
+    extglob: false,
   });
   if (found.length > MAX_POLICY_DENIED_PATHS) throw new PolicyPathsOverflow(found.length);
   return found;

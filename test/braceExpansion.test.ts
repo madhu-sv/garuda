@@ -1,5 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { assertSafePattern, braceExpansion, MAX_BRACE_PATTERNS } from "../src/tools/files.js";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
+import { policyDeniedPaths } from "../src/permissions/sandboxPaths.js";
+import {
+  assertSafePattern,
+  braceExpansion,
+  listFiles,
+  MAX_BRACE_PATTERNS,
+} from "../src/tools/files.js";
 
 describe("brace expansion limit (0.17, GHSA-vfj7-8cjw-p6xm)", () => {
   it("bounds the patterns from groups, nesting and ranges, never too low", () => {
@@ -26,5 +35,29 @@ describe("brace expansion limit (0.17, GHSA-vfj7-8cjw-p6xm)", () => {
     // The limit itself is allowed: 10 alternatives, 100 alternatives.
     expect(() => assertSafePattern("{0,1,2,3,4,5,6,7,8,9}{0,1,2,3,4,5,6,7,8,9}*.ts")).not.toThrow();
     expect(MAX_BRACE_PATTERNS).toBe(1000);
+  });
+});
+
+describe("no extglobs (GHSA-fc5q-39xc-vjpf)", () => {
+  // picomatch has no fix: `+(*a)` on a long name backtracks for seconds, and the event loop stops.
+  const base = realpathSync(mkdtempSync(join(tmpdir(), "garuda-extglob-")));
+  afterAll(() => rmSync(base, { recursive: true, force: true }));
+  writeFileSync(join(base, `${"a".repeat(27)}b`), "");
+
+  it("the glob tool's search ends at once", async () => {
+    for (const pattern of ["+(*a)", "*(*a)"]) {
+      const started = Date.now();
+      expect(await listFiles(base, pattern, base)).toEqual([]);
+      expect(Date.now() - started, pattern).toBeLessThan(1_000);
+    }
+    // Plain globs still work.
+    expect(await listFiles(base, "*b", base)).toEqual([join(base, `${"a".repeat(27)}b`)]);
+  });
+
+  it("the policy's denyPaths too", () => {
+    const started = Date.now();
+    expect(policyDeniedPaths(base, ["+(*a)"])).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(policyDeniedPaths(base, ["*b"])).toEqual([join(base, `${"a".repeat(27)}b`)]);
   });
 });

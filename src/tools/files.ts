@@ -16,6 +16,10 @@ export async function listFiles(base: string, pattern: string, root: string): Pr
     onlyFiles: true,
     followSymbolicLinks: false,
     ignore: ["**/.git/**"],
+    // GHSA-fc5q-39xc-vjpf (picomatch, no fixed version): an extglob such as `+(*a)` from the
+    // model blocked Node for 10 s on one file name of 29 characters, and longer names take far
+    // longer. So `+(…)`, `*(…)` and the like are not extglobs here.
+    extglob: false,
   });
   return paths.filter((path) => isInside(root, path));
 }
