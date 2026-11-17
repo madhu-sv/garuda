@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Receipt } from "../app/receipt.js";
+import type { Receipt, ReceiptTests } from "../app/receipt.js";
 import type { AgentEvent, AgentStopReason } from "../loop/runAgent.js";
 import type { McpState } from "../mcp/manager.js";
 import type { ModelResponse, Usage } from "../model/types.js";
@@ -82,6 +82,9 @@ export function receiptJson(r: Receipt): Record<string, unknown> {
           tests: {
             command: r.tests.command,
             passed: r.tests.passed,
+            // passed, failed, timed_out, no_tests or uncounted (exit 0 with no test count).
+            status: testStatus(r.tests),
+            ...(r.tests.reason === undefined ? {} : { reason: r.tests.reason }),
             ...(r.tests.timedOut === true ? { timed_out: true } : {}),
             ...(r.tests.total === undefined
               ? {}
@@ -390,4 +393,12 @@ export function resultLine(
     ...(stop?.terminal === undefined ? {} : { terminal_reason: stop.terminal }),
     ...(info.receipt === undefined ? {} : { receipt: receiptJson(info.receipt) }),
   };
+}
+
+/** The tests' outcome in one word, for the JSON result (review, 2026-11). */
+export function testStatus(t: ReceiptTests): string {
+  if (t.ran === "none") return "no_tests";
+  if (t.ran === "uncounted") return "uncounted";
+  if (t.timedOut === true) return "timed_out";
+  return t.passed ? "passed" : "failed";
 }

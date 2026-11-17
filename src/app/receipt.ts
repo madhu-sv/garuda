@@ -36,7 +36,19 @@ export interface ReceiptFile {
 export interface ReceiptTests {
   /** The command as the model ran it, cut to one short line. */
   command: string;
+  /**
+   * True only when the command succeeded and its output counted at least one test (review,
+   * 2026-11: a receipt said "Tests passed" when no test ran).
+   */
   passed: boolean;
+  /**
+   * Why a successful command did not pass: "none", no test ran (a count of 0, or the runner said
+   * so); "uncounted", the output had no test count, so Garuda cannot say that tests ran. Absent
+   * when tests passed or failed, and in records before this field.
+   */
+  ran?: "none" | "uncounted";
+  /** For "none": the runner's words, for example "Gradle: up to date". */
+  reason?: string;
   timedOut?: boolean;
   total?: number;
   failed?: number;
@@ -112,6 +124,31 @@ export function parseTestCount(output: string): { total: number; failed: number 
   return undefined;
 }
 
+/**
+ * A runner's own words for "no test ran" in a successful run (or pytest's exit code 5). Gradle's
+ * test tasks count only when every test task in the output was skipped that way.
+ */
+export function noTestsReason(output: string, exitCode: number | null): string | undefined {
+  if (exitCode === 5 && /\bno tests ran\b/.test(output)) return "pytest: no tests collected";
+  if (exitCode !== 0) return undefined;
+  if (/\bNo test files found\b/.test(output)) return "no test files found";
+  if (/\bNo tests found\b/.test(output)) return "no tests found";
+  if (/\bNo tests to run\b/.test(output)) return "Maven: no tests to run";
+  if (/\[no test files\]/.test(output) && !/^ok\s/m.test(output)) return "go: no test files";
+  const tasks = [
+    ...output.matchAll(
+      /^> Task :\S*[Tt]est\S*(?:\s+(UP-TO-DATE|NO-SOURCE|FROM-CACHE|SKIPPED))?\s*$/gm,
+    ),
+  ];
+  if (tasks.length > 0 && tasks.every((t) => t[1] !== undefined)) {
+    const kinds = new Set(tasks.map((t) => t[1]));
+    if (kinds.has("NO-SOURCE") && kinds.size === 1) return "Gradle: no test sources";
+    if (kinds.has("FROM-CACHE") && kinds.size === 1) return "Gradle: results from the build cache";
+    return "Gradle: up to date";
+  }
+  return undefined;
+}
+
 /** The facts of one turn's commands, from the loop's events. */
 export class ReceiptCollector {
   private readonly calls = new Map<string, string>();
@@ -139,13 +176,24 @@ export class ReceiptCollector {
     for (const host of facts.blockedHosts) this.blockedHosts.add(host);
     if (!isTestCommand(command, this.projectTest)) return;
     const count = parseTestCount(output);
-    const passed = facts.exitCode === 0 && !facts.timedOut;
-    this.tests = {
-      command: shortCommand(command),
-      passed,
-      ...(facts.timedOut ? { timedOut: true } : {}),
-      ...(count === undefined ? {} : { total: count.total, failed: count.failed }),
-    };
+    const counts = count === undefined ? {} : { total: count.total, failed: count.failed };
+    const base = { command: shortCommand(command), ...counts };
+    const none = facts.timedOut ? undefined : noTestsReason(output, facts.exitCode);
+    if (none !== undefined || (facts.exitCode === 0 && !facts.timedOut && count?.total === 0)) {
+      this.tests = {
+        ...base,
+        passed: false,
+        ran: "none",
+        ...(none === undefined ? {} : { reason: none }),
+      };
+      return;
+    }
+    const succeeded = facts.exitCode === 0 && !facts.timedOut;
+    if (succeeded && count === undefined) {
+      this.tests = { ...base, passed: false, ran: "uncounted" };
+      return;
+    }
+    this.tests = { ...base, passed: succeeded, ...(facts.timedOut ? { timedOut: true } : {}) };
   }
 }
 

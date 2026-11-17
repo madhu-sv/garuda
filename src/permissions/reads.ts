@@ -242,6 +242,10 @@ export function findBlockedReads(
       if (path.startsWith("~/")) path = join(scope.home, path.slice(2));
       if (!bases.some((b) => inside(path, b))) continue;
       if (readable.some((r) => inside(path, r))) continue;
+      // A folder that holds readable paths: what the build needs there is open already, and a yes
+      // would open the rest (the Android plugin's warning names ~/.android, T14).
+      // Not the home folder itself: its note says that it never opens.
+      if (!bases.includes(path) && readable.some((r) => r.startsWith(`${path}${sep}`))) continue;
       const denied = policy.denyReadPaths.some((d) => inside(path, d));
       if (denied && !neededDenials.some((d) => inside(path, d))) continue;
       if (!exists(path) || found.includes(path)) continue;

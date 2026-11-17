@@ -73,6 +73,16 @@ describe("finding blocked reads in a command's output", () => {
     ]);
     expect(findBlockedReads(out, { ...policy, reads: undefined })).toEqual([]);
     expect(findBlockedReads(`ls: ${home}: Operation not permitted`, policy)).toEqual([home]);
+    // A folder that holds a readable path is not offered: the needed file is open already, and a
+    // yes would open the rest (the Android plugin names ~/.android, T14). Its own files still are.
+    const tools = join(home, "tools");
+    expect(
+      findBlockedReads(`ensure ${home}/notes is writable: Operation not permitted`, {
+        ...policy,
+        reads: { home, allow: [join(home, "notes/b.txt")], hide: [] },
+      }),
+    ).toEqual([]);
+    expect(findBlockedReads(`cat: ${tools}: Operation not permitted`, policy)).toEqual([]);
     // A typo with a dot at the end: the path that failed is ".zshrc.", which does not exist, so
     // there is no question about ".zshrc" (found in the user's live test).
     expect(

@@ -150,7 +150,10 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   Files come from the undo snapshots (with undo off: "no file list"). Tests: the last command of
   the turn that ran the project's test command or a known runner (vitest, jest, node:test, pytest,
   Maven, Gradle, go test, cargo test); the count comes from the runner's summary line when Garuda
-  knows it. Sandbox: the turn's commands by where they ran, and a Network row for hosts that the
+  knows it. "✓ passed" needs that count to be above 0: a run that the runner says ran no test (a
+  count of 0; Gradle's test tasks `UP-TO-DATE`, `NO-SOURCE` or `FROM-CACHE`; go's "no test files";
+  Maven's "No tests to run"; pytest's exit code 5) shows "○ no tests ran", and a successful run with no
+  count shows "exit 0, no test count". Sandbox: the turn's commands by where they ran, and a Network row for hosts that the
   allowlist's proxy blocked. A kept change is a turn that changed files and was not undone; "each"
   is the session cost divided by them. Under 60 columns, in a pipe and with
   `GARUDA_SCREEN_READER=1`, the receipt is plain lines. `-p --json` has it as `receipt` in the result.
@@ -197,7 +200,10 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
 In plan mode the agent reads the code and writes a plan; it cannot change anything.
 
 - `/plan` and `/build` switch the mode; in the chat, Shift+Tab toggles it. `garuda --plan` starts in plan
-  mode. The footer shows `PLAN`. `/plan <task>` switches and plans the task at once (`/build <task>` too).
+  mode. The footer always names the mode, `BUILD` or `PLAN` (with `GARUDA_SCREEN_READER=1`: "Build
+  mode", "Plan mode"), and in plan mode the input line starts with `plan ›`. A switch applies from
+  the next turn: after Shift+Tab during a turn, the footer shows `BUILD now · PLAN next turn`, and a
+  note says so. `/plan <task>` switches and plans the task at once (`/build <task>` too).
 - Allowed: reading tools, and bash in the sandbox, which then cannot write the project (temp folders and
   package caches only), so read-only commands and many tests still work. Denied, with no question: file
   edits and writes, `remember`, commands outside the sandbox, and web_fetch or MCP tools without an allow

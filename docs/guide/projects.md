@@ -136,6 +136,7 @@ The banner shows what it found, for example `Java (Maven)`.
 | --- | --- | --- |
 | `pom.xml` | `mvn -B -q -o test` (or `./mvnw`) | `~/.m2/repository`, `~/.m2/wrapper` |
 | `build.gradle(.kts)`, `settings.gradle(.kts)` | `gradle test --offline -q` (or `./gradlew`) | `~/.gradle/caches`, `wrapper` and other cache folders (Gradle in the sandbox uses its own daemons, 0.20.2) |
+| An Android Gradle project (the Android plugin in the root or `app/` build file, the settings or the version catalog) | `./gradlew testDebugUnitTest --offline` (T14; in place of the Gradle row) | the same Gradle caches and `~/.gradle/android`; `~/.android/debug.keystore` and `analytics.settings` are readable, `~/.android` never writable |
 | `pyproject.toml`, `setup.py`, `requirements.txt` … | `python3 -m pytest -q` (or the project's `.venv`, `uv run`, `poetry run`) | `~/.local/share/uv` |
 
 - The commands run offline, because the sandbox has no network. When a dependency is missing, the model
@@ -143,3 +144,7 @@ The banner shows what it found, for example `Java (Maven)`.
 - Settings files and init scripts (`~/.m2/settings.xml`, `~/.gradle/init.d`, `gradle.properties`) stay
   read-only: the build tool runs them later, outside the sandbox.
 - `GARUDA.md` can override the detected commands. Gradle in the sandbox is not tested yet.
+- Android (T14, not measured yet): the first build needs Google's Maven repository. Add the
+  `google` and `maven` presets to the network allowlist, or approve one online run outside the
+  sandbox. Instrumented tests, the emulator and adb need a device, so they run only outside the
+  sandbox, with your yes.

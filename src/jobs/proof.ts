@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
+import { noTestsReason, parseTestCount } from "../app/receipt.js";
 import type { LanguageProfile } from "../lang/profiles.js";
 import type { JobResult } from "./job.js";
 
@@ -71,15 +72,29 @@ function hasNodeTests(root: string): boolean {
   return false;
 }
 
+/**
+ * Why a successful test run ran no test (review, 2026-11), from its output's last lines: the
+ * runner's words, or a count of 0. Undefined when it failed, or when tests ran.
+ */
+export function noTestsRan(run: TestRun | undefined): string | undefined {
+  if (run === undefined || run.timedOut) return undefined;
+  const reason = noTestsReason(run.tail, run.exitCode);
+  if (reason !== undefined) return reason;
+  return run.exitCode === 0 && parseTestCount(run.tail)?.total === 0 ? "0 tests" : undefined;
+}
+
 /** A test run's summary for the report and the reviewer. */
 export function testSummary(run: TestRun | undefined): string {
   if (run === undefined) return "not run";
   if (run.timedOut) return `stopped after ${Math.round(run.durationMs / 1000)} s (too long)`;
+  const none = noTestsRan(run);
+  if (none !== undefined) return `no tests ran (${none}) in ${Math.round(run.durationMs / 1000)} s`;
   return `${run.exitCode === 0 ? "pass" : `fail (exit code ${run.exitCode})`} in ${Math.round(run.durationMs / 1000)} s`;
 }
 
+/** The run succeeded and ran tests: a run with no test does not pass (review, 2026-11). */
 export const passed = (run: TestRun | undefined) =>
-  run !== undefined && !run.timedOut && run.exitCode === 0;
+  run !== undefined && !run.timedOut && run.exitCode === 0 && noTestsRan(run) === undefined;
 
 /** Test files by path (0.11; also the repo benchmark, 0.12). */
 export const TEST_PATH =
@@ -108,6 +123,11 @@ export function riskFlags(input: {
   if (result.error !== undefined) flags.push({ level: "stop", text: `Error: ${result.error}` });
   if (test === undefined) {
     flags.push({ level: "look", text: "No test command: nothing proves the change works." });
+  } else if (after !== undefined && noTestsRan(after) !== undefined) {
+    flags.push({
+      level: "stop",
+      text: `The test command ran no test after the job (${noTestsRan(after)}): nothing proves the change works.`,
+    });
   } else if (after !== undefined && !passed(after)) {
     flags.push({
       level: "stop",

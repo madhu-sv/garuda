@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+- Receipts no longer say "✓ passed" when no test ran (a finding of the 2026-11 review). A
+  successful test command passes only with a count of tests that ran. A run that ran none (a count
+  of 0, or Gradle `UP-TO-DATE` and `NO-SOURCE`, go's "no test files", Maven's "No tests to run",
+  pytest's exit code 5) shows "○ no tests ran"; a success with no count shows "exit 0, no test
+  count". `-p --json` gets `status` and `reason`, and its `passed` is true only for tests that ran
+  and passed. A job's tests that ran no test after the job stop a "ready" verdict.
+- Chat: the footer always names the mode, `BUILD` or `PLAN` (a finding of the 2026-11 review: the
+  mode was unclear). In plan mode the input line starts with `plan ›`. A switch with Shift+Tab
+  during a turn applies from the next turn: the footer shows `BUILD now · PLAN next turn`, and a
+  note says so.
+- Android projects (T14, not measured yet): a Gradle project that uses the Android plugin gets an
+  `android` profile in place of `gradle`: unit tests with `./gradlew testDebugUnitTest --offline`,
+  a build with `compileDebugSources`, the SDK variables, `~/.gradle/android` writable, and
+  `~/.android/debug.keystore` and `analytics.settings` readable (`~/.android` is never writable).
+  A new network preset, `google`, names Google's Maven repository. Garuda no longer asks to open a
+  folder that holds paths it reads already (the Android plugin's warning names `~/.android`).
+- The Homebrew formula in the repository names 0.20.2 and its tarball hash.
+- Website: Astro 7.4.7, which fixes two advisories (GHSA-r3h5-4585-7x3w, moderate, in the
+  `@astrojs/node` image endpoint, which the static site does not use; GHSA-mh32-jxcr-mh9f, low).
+- Tests: Vitest runs only `test/`. A copy of the repository inside the checkout ran its old tests
+  too, and they failed.
+- Tests: the reduced-motion test waits up to 4 s for a counted second and accepts any count from
+  1 s on. On busy CI runners the count was late, or jumped from 0 s to 2 s.
+
 ## 0.20.2 (2026-11-13)
 
 A security fix for Gradle projects. A Gradle build in the sandbox could run in a Gradle daemon that

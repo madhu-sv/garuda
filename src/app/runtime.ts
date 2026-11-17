@@ -935,6 +935,11 @@ export class Runtime {
     return this.selectedMode;
   }
 
+  /** The mode of the turn that runs now, or of the last turn (review 2026-11: the chat shows it). */
+  get activeMode(): AgentMode {
+    return this.turnMode;
+  }
+
   /** Switch the mode. It applies from the next turn, never in the middle of one. */
   setMode(mode: AgentMode): void {
     this.selectedMode = mode;
