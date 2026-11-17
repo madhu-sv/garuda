@@ -169,3 +169,29 @@ action without a yes.
   (`~/Library/Application Support/kotlin/daemon`, `~/.local/share/kotlin/daemon`) are denied too;
   Gradle then compiles Kotlin in its own process. On Linux a sandboxed command has its own network
   namespace, so a daemon outside is out of reach there anyway.
+## As built (part 1: the Android profile)
+
+- `isAndroid(root)` reads at most seven build files (the root and `app/` Gradle files, the settings
+  file, `gradle/libs.versions.toml`) for the plugin ids, the catalog aliases or the old
+  `com.android.tools.build` classpath. An Android project gets the `android` profile in place of
+  `gradle` (a module other than `app/` is not read: N3).
+- Commands: `testDebugUnitTest --offline`; build `compileDebugSources --offline`, which needs no
+  signing. The notes name the `google` and `maven` presets for the first download, and say that
+  instrumented tests, the emulator and adb run only outside the sandbox.
+- `ProfileAccess.readPaths` (new): the profile makes `debug.keystore` readable in "needed" mode;
+  `~/.android` is never writable, and `adbkey` stays denied. The engine adds the profile's paths to
+  the scope, but they do not bring back a `NEEDED_MODE_DENY` file.
+- The `google` network preset: `maven.google.com`, `dl.google.com`.
+- Not yet checked on a real project: whether the Android Gradle plugin writes in `~/.android`
+  during unit tests (analytics settings, a cache). The Mac check with a new Android Studio project
+  answers it.
+
+## The Android check on the Mac (2026-11-12 and 13)
+
+- The probe project (`garuda-live/android-probe`: AGP 8.7.3, SDK 35, one class and one JUnit test,
+  Gradle 8.11.1, JDK 17) built and tested outside Garuda.
+- In the sandbox, with no daemon outside: the Android plugin failed on
+  `~/.gradle/android/FakeDependency.jar` ("Operation not permitted"), so the profile makes
+  `~/.gradle/android` writable. It also warns "Unable to initialize metrics, ensure ~/.android is
+  writable" and reads `~/.android/analytics.settings`, which the profile makes readable (the
+  warning stays harmless: `~/.android` is never writable).

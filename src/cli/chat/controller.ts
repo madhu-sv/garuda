@@ -28,10 +28,7 @@ export async function runChat(
   tour?: readonly string[],
 ): Promise<void> {
   let tourTasks = tour;
-  store.onToggleMode = () => {
-    runtime.setMode(runtime.mode === "plan" ? "build" : "plan");
-    return statusOf(runtime);
-  };
+  store.onToggleMode = modeToggler(store, runtime);
   const list = rootLister(runtime.root);
   const args = new CommandArgs(runtime);
   const files = rootFiles(runtime.root);
@@ -155,6 +152,33 @@ async function runShell(runtime: Runtime, store: ChatStore, command: string): Pr
   }
 }
 
+/** Shift+Tab: switch the mode, say what it does and when (review 2026-11), and give the status. */
+export function modeToggler(store: ChatStore, runtime: Runtime): () => Status {
+  return () => {
+    runtime.setMode(runtime.mode === "plan" ? "build" : "plan");
+    store.info(
+      modeSwitchText(runtime.mode, store.getState().busy ? runtime.activeMode : undefined),
+    );
+    return statusOf(runtime);
+  };
+}
+
+/**
+ * The note after Shift+Tab: what the mode does, and, while a turn runs in the other mode, that
+ * the switch applies from the next turn.
+ */
+export function modeSwitchText(mode: "plan" | "build", running?: "plan" | "build"): string {
+  const what =
+    mode === "plan"
+      ? "Plan mode: the agent reads and plans, and changes no files."
+      : "Build mode: the agent changes files and runs commands, with the usual approvals.";
+  const when =
+    running !== undefined && running !== mode
+      ? ` From the next turn: this turn stays in ${running} mode.`
+      : "";
+  return `${what}${when} Shift+Tab switches back.`;
+}
+
 export function statusOf(runtime: Runtime): Status {
   const session = runtime.session;
   const status: Status = {
@@ -162,6 +186,7 @@ export function statusOf(runtime: Runtime): Status {
     sandbox:
       runtime.executor.isolation === "none" ? "no sandbox" : `sandbox ${runtime.executor.name}`,
     ...(runtime.mode === "plan" ? { mode: "plan" as const } : {}),
+    turnMode: runtime.activeMode,
   };
   if (session !== undefined) {
     status.contextPercent = Math.round(

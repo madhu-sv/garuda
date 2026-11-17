@@ -113,7 +113,8 @@ the sandbox reach named hosts through Garuda's own proxy, with no question:
 { "network": { "allow": ["npm", "pypi", "api.example.com", "*.example.org"] } }
 ```
 
-- Presets: `npm`, `pypi`, `maven`, `go`, `cargo`, `github` (each names its registry hosts). A host with
+- Presets: `npm`, `pypi`, `maven`, `google` (Google's Maven repository, for Android), `go`, `cargo`,
+  `github` (each names its registry hosts). A host with
   `*.` matches its subdomains. Only ports 80 and 443.
 - Off by default. The first turn shows the list and asks; "remember" pins it to the list in
   `~/.garuda/trust.json`, so a changed list asks again. The model then gets a note that names the hosts,
