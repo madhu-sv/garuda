@@ -23,6 +23,8 @@
   `@astrojs/node` image endpoint, which the static site does not use; GHSA-mh32-jxcr-mh9f, low).
 - Tests: Vitest runs only `test/`. A copy of the repository inside the checkout ran its old tests
   too, and they failed.
+- Tests: the reduced-motion test waits up to 4 s for a counted second and accepts any count from
+  1 s on. On busy CI runners the count was late, or jumped from 0 s to 2 s.
 
 ## 0.20.2 (2026-11-13)
 
