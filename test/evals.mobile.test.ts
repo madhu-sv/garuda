@@ -107,29 +107,86 @@ describe("the tasks' gradlew", () => {
     expect(statSync(join(root, "README.md")).mode & 0o111).toBe(0);
   });
 
-  it("runs the prepared Gradle, sets Android Studio's SDK, and never downloads", async () => {
+  // A fake home, fake JDKs, a fake SDK and a fake Gradle: nothing of this machine's is used.
+  async function setup() {
     const root = folder();
     await writeFiles(root, { gradlew: GRADLEW });
-    // A fake home and a fake Gradle: nothing of the user's is read.
     const home = folder();
-    // Only the fake home: no GRADLE_USER_HOME or ANDROID_HOME from this machine.
-    const gradlew = (args: string) =>
-      runCheck(root, `env -u GRADLE_USER_HOME -u ANDROID_HOME HOME='${home}' ./gradlew ${args}`);
-    const missing = await gradlew("tasks");
-    expect(missing.ok).toBe(false);
-    expect(missing.output).toContain("garuda eval --prepare android");
+    const jdk = (version: string) => {
+      const dir = folder();
+      mkdirSync(join(dir, "bin"), { recursive: true });
+      writeFileSync(
+        join(dir, "bin", "java"),
+        `#!/bin/sh\necho 'openjdk version "${version}" 2026-10-24' >&2\n`,
+        { mode: 0o755 },
+      );
+      return dir;
+    };
+    const run = (args: string, env: string) =>
+      runCheck(
+        root,
+        `env -u GRADLE_USER_HOME -u ANDROID_HOME -u ANDROID_SDK_ROOT -u JAVA_HOME HOME='${home}' ${env} ./gradlew ${args}`,
+      );
+    return { root, home, jdk, run };
+  }
+  function gradle(home: string) {
     const bin = join(home, ".gradle", "wrapper", "dists", `gradle-${EVAL_GRADLE}-bin`, "x");
     mkdirSync(join(bin, `gradle-${EVAL_GRADLE}`, "bin"), { recursive: true });
     writeFileSync(
       join(bin, `gradle-${EVAL_GRADLE}`, "bin", "gradle"),
-      '#!/bin/sh\necho "gradle $* sdk=$ANDROID_HOME"\n',
+      '#!/bin/sh\necho "gradle $* java=${JAVA_HOME:-none} sdk=${ANDROID_HOME:-none}"\n',
       { mode: 0o755 },
     );
-    mkdirSync(join(home, "Library", "Android", "sdk"), { recursive: true });
-    const out = await gradlew("testDebugUnitTest");
-    expect(out.output).toBe(
-      `gradle testDebugUnitTest sdk=${join(home, "Library", "Android", "sdk")}`,
+  }
+
+  it("stops with the prepare step's name when Gradle is missing; it never downloads", async () => {
+    const { run } = await setup();
+    const missing = await run("tasks", "GARUDA_EVAL_JDKS= GARUDA_EVAL_SDKS=");
+    expect(missing.ok).toBe(false);
+    expect(missing.output).toContain("garuda eval --prepare android");
+  });
+
+  it("keeps a JAVA_HOME from 17 to 23, and picks the first SDK with platforms", async () => {
+    const { home, jdk, run } = await setup();
+    gradle(home);
+    const java21 = jdk("21.0.5");
+    const empty = folder();
+    const sdk = folder();
+    mkdirSync(join(sdk, "platforms"));
+    const out = await run(
+      "testDebugUnitTest",
+      `JAVA_HOME='${java21}' GARUDA_EVAL_JDKS= GARUDA_EVAL_SDKS='${empty} ${sdk}'`,
     );
+    expect(out.output).toBe(`gradle testDebugUnitTest java=${java21} sdk=${sdk}`);
+  });
+
+  it("Java 27 (the user's Mac): another JDK from the list, else a clear message", async () => {
+    const { home, jdk, run } = await setup();
+    gradle(home);
+    const java27 = jdk("27.0.1.0.3");
+    const java11 = jdk("11.0.25");
+    const java17 = jdk("17.0.13");
+    const picked = await run(
+      "tasks",
+      `JAVA_HOME='${java27}' GARUDA_EVAL_JDKS='${java27} ${java11} ${java17}' GARUDA_EVAL_SDKS=`,
+    );
+    expect(picked.output).toBe(`gradle tasks java=${java17} sdk=none`);
+    // Only Java 27, also on the PATH: no bare "27.0.1.0.3" from Gradle, but what to do.
+    const none = await run(
+      "tasks",
+      `JAVA_HOME='${java27}' GARUDA_EVAL_JDKS= GARUDA_EVAL_SDKS= PATH='${java27}/bin':"$PATH"`,
+    );
+    expect(none.ok).toBe(false);
+    expect(none.output).toContain(`Gradle ${EVAL_GRADLE} needs Java 17 to 23`);
+    expect(none.output).toContain("java -version: 27");
+    expect(none.output).toContain("brew install openjdk@21");
+    // A java from 17 to 23 on the PATH serves, with no JAVA_HOME.
+    const java22 = jdk("22.0.2");
+    const path = await run(
+      "tasks",
+      `GARUDA_EVAL_JDKS= GARUDA_EVAL_SDKS= PATH='${java22}/bin':"$PATH"`,
+    );
+    expect(path.output).toBe("gradle tasks java=none sdk=none");
   });
 });
 

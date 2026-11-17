@@ -103,8 +103,15 @@ export const EVAL_GRADLE = "8.11.1";
 
 /**
  * The tasks' `gradlew`: Gradle from the wrapper's folder in `~/.gradle`, never a download. A real
- * wrapper needs gradle-wrapper.jar, which a task cannot hold. `ANDROID_HOME` defaults to Android
- * Studio's SDK on macOS.
+ * wrapper needs gradle-wrapper.jar, which a task cannot hold.
+ *
+ * Gradle ${EVAL_GRADLE} runs only on Java 17 to 23 (on the user's Mac, Homebrew's Java 27 failed
+ * with a bare "27.0.1.0.3"). So the script picks a JDK: `JAVA_HOME` when it is in range, else the
+ * first in `GARUDA_EVAL_JDKS` (default: Homebrew's openjdk@21 and @17, then `java_home -v 21` and
+ * `-v 17`), else the `java` on the PATH when it is in range; else it stops with a clear message.
+ * `ANDROID_HOME`, when unset, is the first SDK in `GARUDA_EVAL_SDKS` that has a `platforms`
+ * folder (default: `ANDROID_SDK_ROOT`, Android Studio's and Homebrew's places). Tests set both
+ * lists, so they do not depend on this machine.
  */
 export const GRADLEW = `#!/bin/sh
 # Garuda eval task: Gradle ${EVAL_GRADLE}, installed by \`garuda eval --prepare android\` (no download here).
@@ -113,9 +120,40 @@ if [ -z "$dist" ]; then
   echo "Gradle ${EVAL_GRADLE} is missing: run \\\`garuda eval --prepare android\\\` once." >&2
   exit 1
 fi
-if [ -z "$ANDROID_HOME" ] && [ -d "$HOME/Library/Android/sdk" ]; then
-  ANDROID_HOME="$HOME/Library/Android/sdk"
-  export ANDROID_HOME
+major() {
+  "$1" -version 2>&1 | sed -n 's/.*version "\\([0-9][0-9]*\\).*/\\1/p' | head -n 1
+}
+in_range() {
+  m=$(major "$1")
+  [ -n "$m" ] && [ "$m" -ge 17 ] && [ "$m" -le 23 ]
+}
+if [ -z "$JAVA_HOME" ] || ! in_range "$JAVA_HOME/bin/java"; then
+  JAVA_HOME=
+  brew_jdk=libexec/openjdk.jdk/Contents/Home
+  jdks=\${GARUDA_EVAL_JDKS-"/opt/homebrew/opt/openjdk@21/$brew_jdk /opt/homebrew/opt/openjdk@17/$brew_jdk /usr/local/opt/openjdk@21/$brew_jdk /usr/local/opt/openjdk@17/$brew_jdk $(/usr/libexec/java_home -v 21 2>/dev/null) $(/usr/libexec/java_home -v 17 2>/dev/null)"}
+  for home in $jdks; do
+    if in_range "$home/bin/java"; then
+      JAVA_HOME=$home
+      break
+    fi
+  done
+  if [ -n "$JAVA_HOME" ]; then
+    export JAVA_HOME
+  elif ! in_range java; then
+    echo "Gradle ${EVAL_GRADLE} needs Java 17 to 23, and this machine has none (java -version: $(major java))." >&2
+    echo "Install one, for example \\\`brew install openjdk@21\\\`, or set JAVA_HOME to one." >&2
+    exit 1
+  fi
+fi
+if [ -z "$ANDROID_HOME" ]; then
+  sdks=\${GARUDA_EVAL_SDKS-"$ANDROID_SDK_ROOT $HOME/Library/Android/sdk /opt/homebrew/share/android-commandlinetools /usr/local/share/android-commandlinetools $HOME/Android/Sdk"}
+  for sdk in $sdks; do
+    if [ -d "$sdk/platforms" ]; then
+      ANDROID_HOME=$sdk
+      export ANDROID_HOME
+      break
+    fi
+  done
 fi
 exec "$dist/bin/gradle" "$@"
 `;

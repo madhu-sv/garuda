@@ -112,7 +112,7 @@ export const TOOLCHAINS: Readonly<Record<ToolchainId, Toolchain>> = {
     probe: ANDROID_CHECK,
     probeTimeoutMs: 5 * 60_000,
     prepare: ANDROID_PREPARE,
-    hint: `The Android tasks need JDK 17 or later (JAVA_HOME), the Android SDK with platform 35 (ANDROID_HOME, or Android Studio's ~/Library/Android/sdk), and Gradle ${EVAL_GRADLE} with the Android plugin in Gradle's caches. Run \`garuda eval --prepare android\` once: it downloads them (network).`,
+    hint: `The Android tasks need a JDK from 17 to 23 (JAVA_HOME, or Homebrew's openjdk@21 or @17: \`brew install openjdk@21\`), the Android SDK with platform 35 (ANDROID_HOME, Android Studio's ~/Library/Android/sdk or Homebrew's android-commandlinetools), and Gradle ${EVAL_GRADLE} with the Android plugin in Gradle's caches. Run \`garuda eval --prepare android\` once: it downloads them (network).`,
   },
 };
 

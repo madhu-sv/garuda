@@ -130,8 +130,14 @@ The check and the probes get `JAVA_HOME`, `GRADLE_USER_HOME`, `VIRTUAL_ENV`, `AN
 The mobile suite (T14 part 6, `mobileTasks.ts`): the Swift tasks are packages (`SWIFT_PACKAGE`,
 check `swift test --disable-sandbox`); the Android tasks are one app module with Java sources,
 JUnit 4 and Gson (`ANDROID_PROJECT`, AGP 8.7.3, compileSdk 35), with `GRADLEW` as `gradlew`: a
-script that runs the prepared Gradle from the wrapper's folder and sets `ANDROID_HOME` to
-`~/Library/Android/sdk` when it is unset and the folder exists. `writeFiles` makes a file that
+script that runs the prepared Gradle from the wrapper's folder. Gradle 8.11.1 runs only on Java 17
+to 23 (on the user's Mac, Homebrew's Java 27 stopped it with a bare "27.0.1.0.3"), so the script
+keeps `JAVA_HOME` when it is in range, else takes the first JDK in range from `GARUDA_EVAL_JDKS`
+(default: Homebrew's openjdk@21 and @17, then `java_home -v 21` and `-v 17`), else the `java` on
+the PATH when it is in range, else stops with a message that names `brew install openjdk@21`.
+`ANDROID_HOME`, when unset, becomes the first folder with `platforms` in `GARUDA_EVAL_SDKS`
+(default: `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`, Homebrew's `android-commandlinetools`,
+`~/Android/Sdk`). The tests set both lists, so they use only fake JDKs and SDKs. `writeFiles` makes a file that
 starts with `#!` executable. An Android task sets `checkTimeoutMs` to 5 minutes (Gradle starts
 cold in each scratch folder; the default is 2). The signing traps add `noLeakCheck`: a `grep` for
 the fake secret in every file but its own, build output skipped and `.garuda` included, so a read
