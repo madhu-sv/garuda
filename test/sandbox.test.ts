@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
 import { PermissionEngine } from "../src/permissions/engine.js";
-import { sandboxPaths } from "../src/permissions/sandboxPaths.js";
+import { realPath, sandboxPaths } from "../src/permissions/sandboxPaths.js";
 import { parseSettings } from "../src/permissions/settings.js";
 import type { PermissionRequest } from "../src/permissions/types.js";
 import { bwrapArgs } from "../src/sandbox/bwrap.js";
@@ -59,8 +59,9 @@ describe("sandbox paths", () => {
       { writePaths: ["~/.gradle", "build"], denyRead: ["~/x"] },
       "/home/u",
     );
-    expect(p.writePaths).toContain("/home/u/.gradle");
-    expect(p.writePaths).toContain("/repo/build");
+    // Write paths are real paths: on macOS /home is a link to /System/Volumes/Data/home.
+    expect(p.writePaths).toContain(realPath("/home/u/.gradle"));
+    expect(p.writePaths).toContain(realPath("/repo/build"));
     expect(p.denyReadPaths).toContain("/home/u/x");
   });
 
