@@ -200,7 +200,10 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
 In plan mode the agent reads the code and writes a plan; it cannot change anything.
 
 - `/plan` and `/build` switch the mode; in the chat, Shift+Tab toggles it. `garuda --plan` starts in plan
-  mode. The footer shows `PLAN`. `/plan <task>` switches and plans the task at once (`/build <task>` too).
+  mode. The footer always names the mode, `BUILD` or `PLAN` (with `GARUDA_SCREEN_READER=1`: "Build
+  mode", "Plan mode"), and in plan mode the input line starts with `plan ›`. A switch applies from
+  the next turn: after Shift+Tab during a turn, the footer shows `BUILD now · PLAN next turn`, and a
+  note says so. `/plan <task>` switches and plans the task at once (`/build <task>` too).
 - Allowed: reading tools, and bash in the sandbox, which then cannot write the project (temp folders and
   package caches only), so read-only commands and many tests still work. Denied, with no question: file
   edits and writes, `remember`, commands outside the sandbox, and web_fetch or MCP tools without an allow

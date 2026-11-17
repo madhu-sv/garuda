@@ -8,6 +8,10 @@
   pytest's exit code 5) shows "○ no tests ran"; a success with no count shows "exit 0, no test
   count". `-p --json` gets `status` and `reason`, and its `passed` is true only for tests that ran
   and passed. A job's tests that ran no test after the job stop a "ready" verdict.
+- Chat: the footer always names the mode, `BUILD` or `PLAN` (a finding of the 2026-11 review: the
+  mode was unclear). In plan mode the input line starts with `plan ›`. A switch with Shift+Tab
+  during a turn applies from the next turn: the footer shows `BUILD now · PLAN next turn`, and a
+  note says so.
 - The Homebrew formula in the repository names 0.20.2 and its tarball hash.
 
 ## 0.20.2 (2026-11-13)

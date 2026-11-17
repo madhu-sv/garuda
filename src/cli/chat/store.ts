@@ -79,8 +79,13 @@ export const APPROVAL_CHOICES: readonly { choice: ApprovalChoice; label: string 
 export interface Status {
   model: string;
   sandbox: string;
-  /** Shown only in plan mode (0.4). */
+  /** The mode for the next turn: "plan", or absent for build (0.4). */
   mode?: "plan";
+  /**
+   * The mode of the running turn (review 2026-11). A switch applies from the next turn, so while a
+   * turn runs the footer shows both when they differ.
+   */
+  turnMode?: "plan" | "build";
   contextPercent?: number;
   costUsd?: number;
 }

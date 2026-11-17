@@ -292,7 +292,11 @@ sonnet-5.5 · ⛨ seatbelt · no network · ▓▓▓▓▓▓░░░░ 62% �
 - The key hints show for the first 5 chats. After that, `?` on an empty input line shows them.
 - The context bar turns yellow at 70% and red at 80%, where compaction starts. The number is
   always there too.
-- In plan mode, the `PLAN` badge stays first.
+- In plan mode, the `PLAN` badge stays first. Since the review of 2026-11 the footer always names
+  the mode (`footerModes`, `modeWord`): `BUILD` too, and while a turn runs in the other mode after
+  Shift+Tab, `BUILD now · PLAN next turn` (`Status.turnMode`, from `Runtime.activeMode`). The input
+  line starts with `plan ›` in plan mode. Shift+Tab adds a note (`modeSwitchText`): what the mode
+  does, and "From the next turn" while a turn runs.
 
 ## U11: HTML export
 
