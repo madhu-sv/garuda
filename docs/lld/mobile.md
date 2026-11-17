@@ -195,3 +195,33 @@ action without a yes.
   `~/.gradle/android` writable. It also warns "Unable to initialize metrics, ensure ~/.android is
   writable" and reads `~/.android/analytics.settings`, which the profile makes readable (the
   warning stays harmless: `~/.android` is never writable).
+
+## The iOS check on the Mac (2026-11-17; Xcode 27, `garuda-live/ios-probe`: a Swift package, one XCTest test)
+
+- Outside Garuda: `swift test` passed.
+- In the sandbox: `swift build` failed ("sandbox_apply: Operation not permitted": SwiftPM's own
+  sandbox for the manifest cannot start inside Seatbelt); `swift build --disable-sandbox` and
+  `swift test --disable-sandbox` passed.
+- `xcodebuild build -destination 'generic/platform=iOS Simulator'`: the simulator service was
+  unreachable (the 0.20.1 rule), and xcodebuild went on ("Simulator device support disabled"). It
+  failed on clang's module cache in the per-user cache folder (`/var/folders/…/C/clang/ModuleCache`).
+  A project write path under `/var/folders` did not help, because Seatbelt compares real paths
+  (`/private/var`): a Garuda bug, fixed for `sandbox.writePaths` and `denyRead` (`realPath`). With
+  the real path, the next error was Xcode's own manifest sandbox; with
+  `-IDEPackageSupportDisableManifestSandbox=YES` the build ended with `** BUILD SUCCEEDED **`.
+- `xcodebuild test` with a simulator destination needs the simulator: outside the sandbox only.
+
+## As built (part 2: Swift and Xcode)
+
+- `swift` profile (`Package.swift`): `swift test --disable-sandbox`, `swift build --disable-sandbox`.
+- `xcode` profile (`*.xcodeproj`, `*.xcworkspace`; a workspace first): the build above, with
+  `-project` or `-workspace` and the project's name as the guessed scheme (the notes say to check
+  with `xcodebuild -list`); the test command needs the simulator, so the notes say to run it with
+  `outside_sandbox: true` and the user's yes. With both markers, `swift` comes first, so jobs and
+  the tour use tests that run in the sandbox.
+- Both profiles: clang's module cache writable on macOS (`clangModuleCache`: the temp folder's
+  sibling `C`, as a real path), and `DEVELOPER_DIR` visible. `~/Library/org.swift.swiftpm` stays
+  read-only: its `security` folder holds the fingerprints of trusted packages (SwiftPM then warns
+  that user-level cache features are off).
+- Receipts: `swift test` and `xcodebuild test` are test commands; XCTest's last "Executed N tests,
+  with M failures" and Swift Testing's "Test run with N tests" add up (the probe: 1 test, not 0).

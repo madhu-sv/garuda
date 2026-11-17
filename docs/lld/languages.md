@@ -18,6 +18,8 @@ tree, so startup stays fast (N3). A project with several markers gets several pr
 | `maven` — Java (Maven) | `pom.xml` | `mvn -B -q -o test` (`./mvnw` when the wrapper exists) | `mvn -B -q -o compile` |
 | `gradle` — Java (Gradle) | `build.gradle`, `build.gradle.kts`, `settings.gradle`, `settings.gradle.kts` | `gradle test --offline -q` (`./gradlew` when the wrapper exists) | `gradle build -x test --offline -q` |
 | `android` — Android (Gradle), T14, in place of `gradle` | a Gradle marker, and `isAndroid`: `com.android.application`, `com.android.library`, `com.android.tools.build` or the catalog alias `plugins.android.application`/`library` in `build.gradle(.kts)`, `settings.gradle(.kts)`, `app/build.gradle(.kts)` or `gradle/libs.versions.toml` (no deep scan) | `gradle testDebugUnitTest --offline` | `gradle compileDebugSources --offline` (no signing) |
+| `swift` — Swift (SwiftPM), T14 | `Package.swift` | `swift test --disable-sandbox` | `swift build --disable-sandbox` |
+| `xcode` — iOS (Xcode), T14 | a `*.xcodeproj` or `*.xcworkspace` in the root (a workspace first; after `swift` when both) | `xcodebuild test -project P -scheme S -destination 'platform=iOS Simulator,name=<device>' -derivedDataPath .build/xcode`, only outside the sandbox (the simulator) | `xcodebuild build … -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/xcode -skipPackagePluginValidation -skipMacroValidation -IDEPackageSupportDisableManifestSandbox=YES CODE_SIGNING_ALLOWED=NO` |
 | `python` — Python | `pyproject.toml`, `setup.py`, `setup.cfg`, `requirements.txt`, `pytest.ini`, `tox.ini`, `Pipfile` | `<python> -m pytest -q` | — |
 
 The Python interpreter is the project's own when there is one: `.venv/bin/python`, then
@@ -47,6 +49,7 @@ engine, which adds it to every `ExecPolicy`.
 | `maven` | `.m2/repository`, `.m2/wrapper` | `JAVA_HOME` |
 | `gradle` | `.gradle/` `caches`, `wrapper`, `native`, `jdks`, `.tmp`, `notifications`, `workers` (a test process's working folder; under `GRADLE_USER_HOME` when it is an absolute path); not `daemon` (0.20.2, below) | `JAVA_HOME`, `GRADLE_USER_HOME` |
 | `android` | as `gradle`, and `.gradle/android` (the plugin's `FakeDependency.jar`); readable in "needed" mode (`ProfileAccess.readPaths`): `debug.keystore` and `analytics.settings` in `ANDROID_USER_HOME` or `~/.android` | as `gradle`, and `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_USER_HOME` |
+| `swift`, `xcode` | on macOS, clang's module cache: `<temp folder's sibling C>/clang/ModuleCache`, as a real path (`clangModuleCache`) | `DEVELOPER_DIR` |
 | `python` | `.local/share/uv` | `VIRTUAL_ENV` |
 
 pip, uv and Poetry caches are in `~/.cache` and `~/Library/Caches`, which every sandboxed command may

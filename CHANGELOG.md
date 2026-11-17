@@ -8,6 +8,12 @@
   `denyPaths` match the same way.
 - Blog: "Three ways out of my coding agent's sandbox": the iOS simulator, Gradle's daemon and adb,
   what 0.20.1 and 0.20.2 close, what the next release adds, and the adb gap that stays open.
+- iOS and Swift (T14, not measured yet): a `Package.swift` gets a `swift` profile
+  (`swift test --disable-sandbox`: SwiftPM's own sandbox cannot start inside Garuda's), and an Xcode
+  project gets an `xcode` profile that builds for the iOS simulator in the sandbox (derived data in
+  `.build/xcode`, Xcode's manifest sandbox off, no code signing). Tests that need the simulator run
+  only outside the sandbox, with your yes. clang's module cache is writable on macOS. Receipts count
+  XCTest and Swift Testing results.
 - Sandbox: `sandbox.writePaths` and `sandbox.denyRead` now hold for a path through a link. Seatbelt
   compares real paths, and on macOS `/var` is a link to `/private/var`: a write path under
   `/var/folders` never matched, and a denied file named through a link stayed readable.
