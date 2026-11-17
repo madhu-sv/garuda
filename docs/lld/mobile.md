@@ -199,8 +199,8 @@ action without a yes.
 ## As built (part 4: simulators, emulators and devices)
 
 - `src/permissions/devices.ts` (`deviceAction`) and step 3a of the engine (docs/lld/permissions.md):
-  in the sandbox, denied with a note that names `outside_sandbox`; outside it, a question that says
-  what the command drives; in jobs, with a write scope and in evals (`deviceQuestions: false`),
+  in the sandbox, denied with a note that names `outside_sandbox`; outside it, the question has a warning (`ApprovalRequest.warning`)
+  that says what the command drives; in jobs, with a write scope and in evals (`deviceQuestions: false`),
   denied also with an allow rule. Plan mode denies them too.
 - The named limit of 0.20.1 stays smaller, not closed: `adb` itself no longer runs in the sandbox,
   but another program (a script that opens localhost:5037) can still reach a running adb server on

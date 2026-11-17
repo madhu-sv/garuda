@@ -11,9 +11,11 @@
 - Simulators, emulators and devices (T14): `xcrun simctl`, `xcrun devicectl`, `xcodebuild test` on
   a simulator or device, `adb`, `emulator`, Gradle's `connected…` and `install…` tasks and
   `flutter run` never run in the sandbox (a simulator runs as you; on macOS the sandbox reached
-  adb). Outside the sandbox Garuda asks, and the question says what the command drives. Jobs and
+  adb). Outside the sandbox Garuda asks, with a warning under the command that says what it drives
+  (the chat keeps it on screen after your answer). Jobs and
   evals never run them, also with an allow rule. The adb limit of 0.20.1 stays for other programs:
-  a script in the sandbox can still reach a running adb server on macOS.
+  a script in the sandbox can still reach a running adb server on macOS. A `!` command that you type
+  gets a note for you: run it in your own terminal, or ask the agent.
 - iOS and Swift (T14, not measured yet): a `Package.swift` gets a `swift` profile
   (`swift test --disable-sandbox`: SwiftPM's own sandbox cannot start inside Garuda's), and an Xcode
   project gets an `xcode` profile that builds for the iOS simulator in the sandbox (derived data in

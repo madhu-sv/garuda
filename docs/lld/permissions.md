@@ -60,7 +60,7 @@ Order of checks — the first match decides:
 | 1 | Path target is sensitive and no allow rule *with a pattern* names it (F20) | deny |
 | 2 | A write to a path inside `.git/` | deny |
 | 3 | A deny rule matches (F19) | deny |
-| 3a | A simulator, emulator or device action (`deviceAction`, `devices.ts`; T14 part 4): in the sandbox, or with nobody to ask (a job, a write scope, or `deviceQuestions: false` in evals), also with an allow rule | deny; outside the sandbox it goes on to step 6 or 7, and the question names the device |
+| 3a | A simulator, emulator or device action (`deviceAction`, `devices.ts`; T14 part 4): in the sandbox, or with nobody to ask (a job, a write scope, or `deviceQuestions: false` in evals), also with an allow rule | deny; outside the sandbox it goes on to step 6 or 7, and the question has a warning that names the device |
 | 3b | Plan mode (0.4) and the tool is not read-only | see below; never asks |
 | 4 | Read-only tool (F17) | allow |
 | 5 | Command target, not `outsideSandbox`, and the executor has isolation | allow (`sandbox`) |
@@ -318,10 +318,14 @@ language servers and job tests, which use the same `execPolicy`.
 actions. Why: a booted simulator runs as the user (`simctl spawn` reads any file), and on macOS
 adb's server is reachable on localhost from the sandbox. So these never run in the sandbox: the
 model reads `deviceDenial` (the way is `outside_sandbox: true`; in the strict profile there is none).
-Outside the sandbox the user gets `deviceQuestion`. Jobs and evals (`deviceQuestions: false`, set
-by `runEvalTask`) deny them with `deviceUnattendedDenial`. A guard on words, not a parser: approval
-stays the main control. `!adb devices` in the chat is denied too: the user runs it in a terminal or
-asks the agent. Tests: `test/devices.test.ts` (with an eval whose approver says yes to everything).
+Outside the sandbox the question carries `deviceWarning` in `ApprovalRequest.warning`: a line under
+the preview in the terminal, the chat and editors (ACP). The chat keeps it in the scrollback; the
+question line goes when the user answers, and in the user's Mac check the user did not see a
+question text. Jobs and evals (`deviceQuestions: false`, set by `runEvalTask`) deny them with
+`deviceUnattendedDenial`. A guard on words, not a parser: approval stays the main control. A `!`
+command in the chat is denied too, with a note for the user (run it in a terminal, or ask the
+agent): `runUserCommand` gives its call an id that starts with `USER_CALL_PREFIX`. Tests:
+`test/devices.test.ts` (with an eval whose approver says yes to everything).
 
 ## Tests
 

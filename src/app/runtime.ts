@@ -86,6 +86,7 @@ import {
 import { gateProjectSettings } from "../permissions/projectSettings.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
+import { USER_CALL_PREFIX } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { FileTracker } from "../session/fileTracker.js";
@@ -1068,7 +1069,12 @@ export class Runtime {
     signal: AbortSignal,
   ): Promise<{ text: string; isError: boolean }> {
     const outcome = await this.tools.execute(
-      { type: "tool_use", id: `user-${Date.now()}`, name: "bash", input: { command } },
+      {
+        type: "tool_use",
+        id: `${USER_CALL_PREFIX}${Date.now()}`,
+        name: "bash",
+        input: { command },
+      },
       {
         root: this.root,
         signal,

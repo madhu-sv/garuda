@@ -1,7 +1,13 @@
-import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { afterAll, describe, expect, it } from "vitest";
+import { questionContent } from "../src/acp/approver.js";
+import { Runtime } from "../src/app/runtime.js";
+import { colorPreview } from "../src/cli/approver.js";
+import { noColor } from "../src/cli/chat/markdown.js";
+import { ChatStore } from "../src/cli/chat/store.js";
 import { runEvalTask } from "../src/evals/runner.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
 import { AutoApprover } from "../src/permissions/autoApprover.js";
@@ -15,6 +21,9 @@ import type {
   CallTarget,
   PermissionRequest,
 } from "../src/permissions/types.js";
+import { USER_CALL_PREFIX } from "../src/permissions/types.js";
+import { findOsSandbox } from "../src/sandbox/index.js";
+import { FileSessionStore } from "../src/session/store.js";
 
 /** T14 part 4 (docs/lld/mobile.md): simulators, emulators and devices never run in the sandbox. */
 
@@ -111,17 +120,28 @@ describe("the permission engine", () => {
     expect((await engine(approver).check(request(cmd("swift test")), signal)).allowed).toBe(true);
   });
 
-  it("outside the sandbox: the user is asked, and the question says why", async () => {
+  it("outside the sandbox: the user is asked, with a warning that says why", async () => {
     const approver = new Recorder();
     const decision = await engine(approver).check(request(cmd("adb devices", true)), signal);
     expect(decision.allowed).toBe(true);
     expect(approver.asked).toHaveLength(1);
-    expect(approver.asked[0]?.question).toBe(
-      "This drives an Android emulator or device, which runs as you and can read any of your files. Allow?",
+    expect(approver.asked[0]?.warning).toBe(
+      "This drives an Android emulator or device, which runs as you and can read any of your files.",
     );
-    // Any other command outside the sandbox keeps the default question.
+    // Any other command outside the sandbox has no warning.
     await engine(approver).check(request(cmd("npm install", true)), signal);
-    expect(approver.asked[1]?.question).toBeUndefined();
+    expect(approver.asked[1]?.warning).toBeUndefined();
+  });
+
+  it("a ! command that the user typed gets a note for the user, not for the model", async () => {
+    const decision = await engine(new Recorder()).check(
+      { ...request(cmd("xcrun simctl list devices")), callId: `${USER_CALL_PREFIX}1` },
+      signal,
+    );
+    if (decision.allowed) throw new Error("allowed");
+    expect(decision.reason).toBe(
+      "This command drives the iOS simulator. That runs outside Garuda's sandbox in effect, so a ! command cannot run it. Run it in your own terminal, or ask the agent: it can run it outside the sandbox after your yes.",
+    );
   });
 
   it("the strict profile names no way out", async () => {
@@ -177,5 +197,60 @@ describe("an eval", () => {
     );
     expect(result.passed, result.reason).toBe(true);
     expect(existsSync(join(process.cwd(), "ran.txt"))).toBe(false);
+  });
+});
+
+describe("the warning on screen", () => {
+  const asked: ApprovalRequest = {
+    tool: "bash",
+    target: { kind: "command", command: "adb devices", outsideSandbox: true },
+    preview: "adb devices",
+    isolation: "os",
+    warning:
+      "This drives an Android emulator or device, which runs as you and can read any of your files.",
+  };
+
+  it("the chat keeps it in the scrollback after the answer; the terminal and editors show it", async () => {
+    const store = new ChatStore({ model: "m", sandbox: "s" }, { paint: noColor });
+    const answer = store.ask(asked, signal);
+    store.choose("once");
+    expect(await answer).toBe("once");
+    const scrollback = store
+      .getState()
+      .items.map((i) => ("text" in i ? i.text : ""))
+      .join("\n");
+    expect(scrollback).toContain("! This drives an Android emulator or device");
+    expect(stripVTControlCharacters(colorPreview(asked))).toContain(
+      "! This drives an Android emulator",
+    );
+    expect(JSON.stringify(questionContent(asked))).toContain("! This drives an Android emulator");
+  });
+});
+
+// The runtime marks the user's ! commands, so the engine can tell them apart.
+const found = findOsSandbox();
+describe.runIf("executor" in found)("a ! command in the chat", () => {
+  it("is denied with the user's note", async () => {
+    const root = join(base, "chat");
+    mkdirSync(root, { recursive: true });
+    const runtime = await Runtime.create({
+      root,
+      modelId: "fake",
+      model: async () => new FakeModelClient([]),
+      approver: new Recorder(),
+      store: new FileSessionStore(root),
+      settings: parseSettings({}),
+      mcp: false,
+      hooks: false,
+      commands: false,
+      profiles: [],
+    });
+    try {
+      const result = await runtime.runUserCommand("adb devices", signal);
+      expect(result.isError).toBe(true);
+      expect(result.text).toContain("so a ! command cannot run it");
+    } finally {
+      await runtime.close();
+    }
   });
 });

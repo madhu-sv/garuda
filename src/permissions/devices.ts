@@ -71,16 +71,23 @@ function base(word: string | undefined): string {
   );
 }
 
-/** The model's note when the sandbox refuses a device action. */
-export function deviceDenial(what: string, strict: boolean): string {
+/**
+ * The note when the sandbox refuses a device action: for the model, or for the user when the user
+ * typed the command (`!` in the chat, which never runs outside the sandbox).
+ */
+export function deviceDenial(what: string, strict: boolean, byUser = false): string {
+  const why = `This command drives ${what}. That runs outside Garuda's sandbox in effect`;
+  if (byUser) {
+    return `${why}, so a ! command cannot run it. Run it in your own terminal${strict ? "" : ", or ask the agent: it can run it outside the sandbox after your yes"}.`;
+  }
   return strict
-    ? `This command drives ${what}. That runs outside Garuda's sandbox in effect, and the strict profile allows no command outside it. Do not retry it; tell the user what to run.`
-    : `This command drives ${what}. That runs outside Garuda's sandbox in effect, so Garuda does not run it in the sandbox. If it is needed, run it again with outside_sandbox: true; the user must approve. Prefer tests that need no device (unit tests, a build). The user can also run it in a terminal.`;
+    ? `${why}, and the strict profile allows no command outside it. Do not retry it; tell the user what to run.`
+    : `${why}, so Garuda does not run it in the sandbox. If it is needed, run it again with outside_sandbox: true; the user must approve. Prefer tests that need no device (unit tests, a build).`;
 }
 
-/** The question when the user is asked about a device action outside the sandbox. */
-export function deviceQuestion(what: string): string {
-  return `This drives ${what}, which runs as you and can read any of your files. Allow?`;
+/** The warning under the command when the user is asked about a device action outside the sandbox. */
+export function deviceWarning(what: string): string {
+  return `This drives ${what}, which runs as you and can read any of your files.`;
 }
 
 /** In jobs and evals: no device action, not even outside the sandbox. */

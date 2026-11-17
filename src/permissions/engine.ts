@@ -3,7 +3,7 @@ import { join, sep } from "node:path";
 import type { AuditLogger } from "../audit/logger.js";
 import type { ProfileAccess } from "../lang/profiles.js";
 import type { ExecPolicy, Isolation, NetworkProxyPolicy } from "../sandbox/types.js";
-import { deviceAction, deviceDenial, deviceQuestion, deviceUnattendedDenial } from "./devices.js";
+import { deviceAction, deviceDenial, deviceUnattendedDenial, deviceWarning } from "./devices.js";
 import { realRelative } from "./pathGuard.js";
 import {
   isCommandDisallowedByPolicy,
@@ -26,6 +26,7 @@ import type {
   PermissionGate,
   PermissionRequest,
 } from "./types.js";
+import { USER_CALL_PREFIX } from "./types.js";
 import { prepareWriteScope, scopeDenial, scopePaths } from "./writeScope.js";
 
 /** Environment variables that every command sees. Settings can add more. */
@@ -289,7 +290,11 @@ export class PermissionEngine implements PermissionGate {
             by: "rule",
             reason: nobody
               ? deviceUnattendedDenial(device)
-              : deviceDenial(device, this.policy?.requireSandbox === true),
+              : deviceDenial(
+                  device,
+                  this.policy?.requireSandbox === true,
+                  request.callId?.startsWith(USER_CALL_PREFIX) === true,
+                ),
           },
         };
       }
@@ -367,7 +372,7 @@ export class PermissionEngine implements PermissionGate {
         ...(request.callId === undefined ? {} : { callId: request.callId }),
         ...(info?.change === undefined ? {} : { change: info.change }),
         ...(info?.title === undefined ? {} : { title: info.title }),
-        ...(device === undefined ? {} : { question: deviceQuestion(device) }),
+        ...(device === undefined ? {} : { warning: deviceWarning(device) }),
         ...(info?.hunks === true
           ? {
               selectHunks: (hunks: readonly number[]) => {

@@ -134,11 +134,13 @@ export function header(request: ApprovalRequest): string {
 }
 
 export function colorPreview(
-  { target, preview }: ApprovalRequest,
+  { target, preview, warning: note }: ApprovalRequest,
   /** UX U5: from 140 columns the diff is side by side. */
   columns?: number,
 ): string {
-  const warning = hasHidden(preview) ? `\n${styleText("yellow", `  ${HIDDEN_WARNING}`)}` : "";
+  const warning =
+    (hasHidden(preview) ? `\n${styleText("yellow", `  ${HIDDEN_WARNING}`)}` : "") +
+    (note === undefined ? "" : `\n${styleText("yellow", `  ! ${visible(note)}`)}`);
   if (target.kind === "command") return `${styleText("cyan", `  $ ${visible(preview)}`)}${warning}`;
   if (target.kind === "url") return `${visible(preview)}${warning}`;
   return `${colorDiff(visible(preview), columns)}${warning}`;

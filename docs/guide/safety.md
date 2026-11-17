@@ -160,7 +160,7 @@ A booted iOS simulator runs as you and can read any of your files, and on macOS 
 reach adb's server. So Garuda never runs these commands in the sandbox: `xcrun simctl`,
 `xcrun devicectl`, `xcodebuild test` on a simulator or device, `adb`, `emulator`, Gradle's
 `connected…` and `install…` tasks, and `flutter run`. The agent can run one outside the sandbox;
-then Garuda asks you, and the question says what the command drives. Jobs and evals never run
+then Garuda asks you, with a warning under the command that says what it drives. Jobs and evals never run
 one. Builds and unit tests run in the sandbox as usual. A `!` command in the chat runs only in the
 sandbox, so run these in your own terminal or ask the agent.
 
