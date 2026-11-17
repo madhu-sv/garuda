@@ -60,6 +60,7 @@ Order of checks — the first match decides:
 | 1 | Path target is sensitive and no allow rule *with a pattern* names it (F20) | deny |
 | 2 | A write to a path inside `.git/` | deny |
 | 3 | A deny rule matches (F19) | deny |
+| 3a | A simulator, emulator or device action (`deviceAction`, `devices.ts`; T14 part 4): in the sandbox, or with nobody to ask (a job, a write scope, or `deviceQuestions: false` in evals), also with an allow rule | deny; outside the sandbox it goes on to step 6 or 7, and the question names the device |
 | 3b | Plan mode (0.4) and the tool is not read-only | see below; never asks |
 | 4 | Read-only tool (F17) | allow |
 | 5 | Command target, not `outsideSandbox`, and the executor has isolation | allow (`sandbox`) |
@@ -305,6 +306,22 @@ entries). More than 1,000 matches throw `PolicyPathsOverflow`
 (Codex review of 1370184): the command does not run, because Garuda cannot enforce the rest. Before,
 the list was cut at 1,000 and the other paths had no rule. The same holds for hooks, MCP servers,
 language servers and job tests, which use the same `execPolicy`.
+
+## Devices (`devices.ts`, T14 part 4)
+
+`deviceAction(command)` names what a command drives, from the words of each simple command
+(`commandParts`): `xcrun simctl`, `open -a Simulator` (the iOS simulator); `xcrun devicectl`,
+`ios-deploy`, `xcodebuild test` with an iOS, tvOS, watchOS or visionOS destination that is not
+`generic/` (the simulator or an Apple device); `adb`, `emulator`, Gradle tasks that start with
+`connected`, `install` or `uninstall` and a capital (an Android emulator or device); `flutter run`,
+`drive`, `install`, `attach`, `screenshot`. Builds, unit tests and `xcodebuild -list` are not
+actions. Why: a booted simulator runs as the user (`simctl spawn` reads any file), and on macOS
+adb's server is reachable on localhost from the sandbox. So these never run in the sandbox: the
+model reads `deviceDenial` (the way is `outside_sandbox: true`; in the strict profile there is none).
+Outside the sandbox the user gets `deviceQuestion`. Jobs and evals (`deviceQuestions: false`, set
+by `runEvalTask`) deny them with `deviceUnattendedDenial`. A guard on words, not a parser: approval
+stays the main control. `!adb devices` in the chat is denied too: the user runs it in a terminal or
+asks the agent. Tests: `test/devices.test.ts` (with an eval whose approver says yes to everything).
 
 ## Tests
 

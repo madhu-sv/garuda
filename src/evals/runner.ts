@@ -336,6 +336,8 @@ export async function runEvalTask(task: EvalTask, options: EvalOptions): Promise
       approver: new AutoApprover("once"),
       // T15: no read questions: the auto approver would say yes to every one.
       readQuestions: false,
+      // T14 part 4: no simulator, emulator or device, also not outside the sandbox.
+      deviceQuestions: false,
       ...(options.home === undefined ? {} : { readsHome: options.home }),
       store,
       settings,

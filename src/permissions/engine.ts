@@ -3,6 +3,7 @@ import { join, sep } from "node:path";
 import type { AuditLogger } from "../audit/logger.js";
 import type { ProfileAccess } from "../lang/profiles.js";
 import type { ExecPolicy, Isolation, NetworkProxyPolicy } from "../sandbox/types.js";
+import { deviceAction, deviceDenial, deviceQuestion, deviceUnattendedDenial } from "./devices.js";
 import { realRelative } from "./pathGuard.js";
 import {
   isCommandDisallowedByPolicy,
@@ -69,6 +70,11 @@ export interface PermissionEngineOptions {
    * user's checkout, which holds the answer. Default true.
    */
   readQuestions?: boolean;
+  /**
+   * T14 part 4: false denies simulator, emulator and device actions also outside the sandbox.
+   * Evals set it: their approver answers every question with yes. Default true.
+   */
+  deviceQuestions?: boolean;
 }
 
 /** What the model reads when a job denies a call that its approval list does not cover (0.7). */
@@ -109,6 +115,7 @@ export class PermissionEngine implements PermissionGate {
   private readonly sessionRules: Rule[] = [];
   private readonly home: string;
   private readonly readQuestions: boolean;
+  private readonly deviceQuestions: boolean;
   /** T15 step 2: paths that the user let commands read for this session ("needed" mode). */
   private readonly sessionReadPaths = new Set<string>();
   /** The network proxy for sandboxed commands (0.13), when it runs. */
@@ -126,6 +133,7 @@ export class PermissionEngine implements PermissionGate {
     this.unattended = options.unattended;
     this.home = options.home ?? homedir();
     this.readQuestions = options.readQuestions ?? true;
+    this.deviceQuestions = options.deviceQuestions ?? true;
   }
 
   async check(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision> {
@@ -264,6 +272,29 @@ export class PermissionEngine implements PermissionGate {
       };
     }
 
+    // T14 part 4: a simulator, emulator or device runs outside the sandbox in effect. Never in the
+    // sandbox (also in plan mode); outside it, only with a yes; never in jobs or evals.
+    const device = target?.kind === "command" ? deviceAction(target.command) : undefined;
+    if (device !== undefined && target?.kind === "command") {
+      const inSandbox = target.outsideSandbox !== true && this.isolation !== "none";
+      const nobody =
+        !this.deviceQuestions ||
+        this.unattended !== undefined ||
+        this.settings.writeScope !== undefined;
+      if (inSandbox || nobody) {
+        if (nobody) this.unattended?.onDeny?.(tool, target);
+        return {
+          decision: {
+            allowed: false,
+            by: "rule",
+            reason: nobody
+              ? deviceUnattendedDenial(device)
+              : deviceDenial(device, this.policy?.requireSandbox === true),
+          },
+        };
+      }
+    }
+
     if (this.mode() === "plan" && !request.readOnly) {
       return { decision: this.planDecision(tool, target, allowRule !== undefined) };
     }
@@ -336,6 +367,7 @@ export class PermissionEngine implements PermissionGate {
         ...(request.callId === undefined ? {} : { callId: request.callId }),
         ...(info?.change === undefined ? {} : { change: info.change }),
         ...(info?.title === undefined ? {} : { title: info.title }),
+        ...(device === undefined ? {} : { question: deviceQuestion(device) }),
         ...(info?.hunks === true
           ? {
               selectHunks: (hunks: readonly number[]) => {

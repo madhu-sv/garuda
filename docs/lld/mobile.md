@@ -196,6 +196,17 @@ action without a yes.
   writable" and reads `~/.android/analytics.settings`, which the profile makes readable (the
   warning stays harmless: `~/.android` is never writable).
 
+## As built (part 4: simulators, emulators and devices)
+
+- `src/permissions/devices.ts` (`deviceAction`) and step 3a of the engine (docs/lld/permissions.md):
+  in the sandbox, denied with a note that names `outside_sandbox`; outside it, a question that says
+  what the command drives; in jobs, with a write scope and in evals (`deviceQuestions: false`),
+  denied also with an allow rule. Plan mode denies them too.
+- The named limit of 0.20.1 stays smaller, not closed: `adb` itself no longer runs in the sandbox,
+  but another program (a script that opens localhost:5037) can still reach a running adb server on
+  macOS. The guard reads the command's words; the Seatbelt port rule was not possible.
+- The Android and Xcode profiles' notes already send these commands outside the sandbox.
+
 ## The iOS check on the Mac (2026-11-17; Xcode 27, `garuda-live/ios-probe`: a Swift package, one XCTest test)
 
 - Outside Garuda: `swift test` passed.

@@ -8,6 +8,12 @@
   `denyPaths` match the same way.
 - Blog: "Three ways out of my coding agent's sandbox": the iOS simulator, Gradle's daemon and adb,
   what 0.20.1 and 0.20.2 close, what the next release adds, and the adb gap that stays open.
+- Simulators, emulators and devices (T14): `xcrun simctl`, `xcrun devicectl`, `xcodebuild test` on
+  a simulator or device, `adb`, `emulator`, Gradle's `connected…` and `install…` tasks and
+  `flutter run` never run in the sandbox (a simulator runs as you; on macOS the sandbox reached
+  adb). Outside the sandbox Garuda asks, and the question says what the command drives. Jobs and
+  evals never run them, also with an allow rule. The adb limit of 0.20.1 stays for other programs:
+  a script in the sandbox can still reach a running adb server on macOS.
 - iOS and Swift (T14, not measured yet): a `Package.swift` gets a `swift` profile
   (`swift test --disable-sandbox`: SwiftPM's own sandbox cannot start inside Garuda's), and an Xcode
   project gets an `xcode` profile that builds for the iOS simulator in the sandbox (derived data in
