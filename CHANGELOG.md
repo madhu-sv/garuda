@@ -13,6 +13,8 @@
   during a turn applies from the next turn: the footer shows `BUILD now · PLAN next turn`, and a
   note says so.
 - The Homebrew formula in the repository names 0.20.2 and its tarball hash.
+- Website: Astro 7.4.7, which fixes two advisories (GHSA-r3h5-4585-7x3w, moderate, in the
+  `@astrojs/node` image endpoint, which the static site does not use; GHSA-mh32-jxcr-mh9f, low).
 
 ## 0.20.2 (2026-11-13)
 
