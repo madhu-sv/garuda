@@ -47,6 +47,7 @@ one is in `pnpm.auditConfig.ignoreGhsas` in package.json and in this table.
 | Advisory | Package | Why Garuda is safe |
 | --- | --- | --- |
 | [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) | `braces` (through globby, micromatch) | No fixed version. A model pattern reached it through `glob` and `grep`: `{a,b}` 1900 times ran Node out of memory, and a deep nesting overflowed the stack. `assertSafePattern` (src/tools/files.ts) now refuses a pattern that brace expansion makes into more than 1000 patterns, or that nests `{…}` more than 10 deep. The team policy's `denyPaths` reach `braces` too; they come from the administrator, not the model. |
+| [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) (CVE-2026-112366) | `picomatch` (through globby, micromatch) | No fixed version (through 4.0.7). A model pattern reached it through `glob` and `grep`: `+(*a)` blocked Node for 10 s on one file name of 29 characters, and each longer name takes longer. Garuda turns extglobs off in both calls to globby (`extglob: false`, src/tools/files.ts and the policy's `denyPaths` in src/permissions/sandboxPaths.ts), so `+(…)`, `*(…)`, `@(…)`, `?(…)` and `!(…)` are no longer extglobs. `.gitignore` files go through the `ignore` package, not picomatch. The dev tools (tsup, vite) and the website's build (astro, starlight: `site/package.json` ignores it too) use picomatch 4.0.7 only on Garuda's own files and patterns. |
 
 ## 0.17 updates
 
