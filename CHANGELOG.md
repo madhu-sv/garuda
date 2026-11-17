@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Blog: "Three ways out of my coding agent's sandbox": the iOS simulator, Gradle's daemon and adb,
+  what 0.20.1 and 0.20.2 close, what the next release adds, and the adb gap that stays open.
 - Receipts no longer say "✓ passed" when no test ran (a finding of the 2026-11 review). A
   successful test command passes only with a count of tests that ran. A run that ran none (a count
   of 0, or Gradle `UP-TO-DATE` and `NO-SOURCE`, go's "no test files", Maven's "No tests to run",
