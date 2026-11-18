@@ -108,8 +108,13 @@ describe("Unix-socket deputies (after 0.21.0, docs/lld/sandbox.md)", () => {
     // socket must be named by its real path. The regression: every sandboxed command failed with
     // "Can't create file at /var/run/docker.sock" on a machine with Docker (CI).
     const deny = sandboxPaths("/home/me/p", {}, home, "linux").denyReadPaths;
-    for (const p of socketDenials()) expect(deny).toContain(realPath(p));
-    expect(deny.some((p) => p.includes("/var/run/"))).toBe(realPath("/var/run") === "/var/run");
+    for (const p of socketDenials()) {
+      const canonical = realPath(p);
+      expect(deny).toContain(canonical);
+      // Canonical: no link left in the path, so realPath of it is itself. bubblewrap can then make
+      // the mount point (the regression was `/var/run/docker.sock`, with `/var/run` a link).
+      expect(realPath(canonical)).toBe(canonical);
+    }
     // A socket is not a directory, so pathKind calls it a file: bubblewrap binds /dev/null over it.
     const policy: ExecPolicy = {
       root: "/home/me/p",
