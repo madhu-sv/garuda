@@ -13,10 +13,10 @@ import type { ExecPolicy } from "../src/sandbox/types.js";
  *
  * - The simulator rule (0.20.1): a sandboxed `xcrun simctl` must fail where an outside one works.
  * - adb's port (T14, docs/lld/mobile.md): Garuda's profile blocks localhost:5037 and keeps the rest
- *   of localhost, with the network off and on. Before, the profile allowed localhost and then could
- *   not take one port back out: every form tried blocked all of localhost or nothing. A probe of
- *   eleven rule forms on the user's Mac found that only rules that deny work. An outside host is
- *   tried only with GARUDA_PROBE_INTERNET=1 (the suite never needs the internet).
+ *   of localhost, with the network off and on. This check needs port 5037 to itself, so it skips
+ *   when a real adb server holds it (a dev Mac during Android work); the profile-text test in
+ *   sandbox.test.ts is the always-on guard that the rule is there. An outside host is tried only
+ *   with GARUDA_PROBE_INTERNET=1 (the suite never needs the internet).
  */
 
 const darwin = process.platform === "darwin";
@@ -89,7 +89,7 @@ describe.runIf(darwin)("adb's port, for real (T14)", () => {
   let own = "";
   let remote = "";
   const adb = `127.0.0.1:${ADB}`;
-  let adbReachable = false;
+  let ownsAdbPort = false;
 
   beforeAll(async () => {
     const listen = (port: number, host = "127.0.0.1") =>
@@ -103,8 +103,13 @@ describe.runIf(darwin)("adb's port, for real (T14)", () => {
         });
       });
     local = `127.0.0.1:${await listen(0)}`;
-    // A real adb server may hold 5037 already: then it is the one to block.
-    await listen(ADB).catch(() => undefined);
+    // The test must own 5037 to judge it: with a real adb server there (a dev Mac during Android
+    // work), the port's state is not the test's to control, so it skips. The profile-text test in
+    // sandbox.test.ts is the always-on guard that the rule is present.
+    ownsAdbPort = await listen(ADB).then(
+      () => true,
+      () => false,
+    );
     // This machine's own network address. Seatbelt's "localhost" covers it (the user's Mac,
     // 2026-11-18): it is the same machine, like 127.0.0.1. Printed, not judged.
     const address = Object.values(networkInterfaces())
@@ -119,7 +124,8 @@ describe.runIf(darwin)("adb's port, for real (T14)", () => {
       sandbox: false,
       envAllowlist: ["PATH"],
     });
-    adbReachable = outside.stdout.text.includes(`"${adb}":"ok"`);
+    // Only judge a target the test set up and that is reachable outside the sandbox.
+    if (!outside.stdout.text.includes(`"${adb}":"ok"`)) ownsAdbPort = false;
     if (own !== "" && !outside.stdout.text.includes(`"${own}":"ok"`)) own = "";
     if (remote !== "" && !outside.stdout.text.includes(`"${remote}":"ok"`)) remote = "";
   });
@@ -128,8 +134,11 @@ describe.runIf(darwin)("adb's port, for real (T14)", () => {
   });
 
   it("Garuda's profile blocks 5037 and keeps localhost; the network stays blocked", async () => {
-    if (!adbReachable) {
-      console.log("skipped: nothing listens on 127.0.0.1:5037, also outside the sandbox");
+    if (!ownsAdbPort) {
+      console.log(
+        "skipped: the test could not bind 127.0.0.1:5037 for itself (a real adb server is up). " +
+          "Stop it with `adb kill-server` and run again to check the rule here.",
+      );
       return;
     }
     if (remote === "") console.log("Outside host not tested: set GARUDA_PROBE_INTERNET=1.");
