@@ -1,6 +1,11 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { runtimeDenials, sandboxPaths, socketDenials } from "../src/permissions/sandboxPaths.js";
+import {
+  realPath,
+  runtimeDenials,
+  sandboxPaths,
+  socketDenials,
+} from "../src/permissions/sandboxPaths.js";
 import { bwrapArgs } from "../src/sandbox/bwrap.js";
 import type { ExecPolicy } from "../src/sandbox/types.js";
 
@@ -83,32 +88,41 @@ describe("the Linux runtime folder", () => {
 });
 
 describe("Unix-socket deputies (after 0.21.0, docs/lld/sandbox.md)", () => {
-  it("hides the Docker socket, the system bus and the SSH agent socket", () => {
-    const deny = sandboxPaths("/home/me/p", {}, home, "linux").denyReadPaths;
-    expect(deny).toContain("/var/run/docker.sock");
-    expect(deny).toContain("/run/docker.sock");
-    expect(deny).toContain("/var/run/dbus/system_bus_socket");
+  it("names the Docker socket, the system bus and the SSH agent socket", () => {
+    const paths = socketDenials();
+    expect(paths).toContain("/var/run/docker.sock");
+    expect(paths).toContain("/run/docker.sock");
+    expect(paths).toContain("/var/run/dbus/system_bus_socket");
   });
 
-  it("follows SSH_AUTH_SOCK, and bubblewrap covers a socket with /dev/null", () => {
-    const withAgent = socketDenials({ SSH_AUTH_SOCK: "/tmp/ssh-AB/agent.42" });
-    expect(withAgent).toContain("/tmp/ssh-AB/agent.42");
-    // A relative value is not a path to hide.
+  it("follows SSH_AUTH_SOCK, but only an absolute path", () => {
+    expect(socketDenials({ SSH_AUTH_SOCK: "/tmp/ssh-AB/agent.42" })).toContain(
+      "/tmp/ssh-AB/agent.42",
+    );
     expect(socketDenials({ SSH_AUTH_SOCK: "agent.42" })).not.toContain("agent.42");
     expect(socketDenials({})).not.toContain(undefined as unknown as string);
+  });
+
+  it("goes into the sandbox's denied reads as a real path, so bubblewrap can cover it", () => {
+    // /var/run is a link to /run. bubblewrap cannot make a mount point through a link, so the
+    // socket must be named by its real path. The regression: every sandboxed command failed with
+    // "Can't create file at /var/run/docker.sock" on a machine with Docker (CI).
+    const deny = sandboxPaths("/home/me/p", {}, home, "linux").denyReadPaths;
+    for (const p of socketDenials()) expect(deny).toContain(realPath(p));
+    expect(deny.some((p) => p.includes("/var/run/"))).toBe(realPath("/var/run") === "/var/run");
     // A socket is not a directory, so pathKind calls it a file: bubblewrap binds /dev/null over it.
     const policy: ExecPolicy = {
       root: "/home/me/p",
       sandbox: true,
       writePaths: ["/home/me/p"],
       denyWritePaths: [],
-      denyReadPaths: ["/var/run/docker.sock"],
+      denyReadPaths: ["/run/docker.sock"],
       network: false,
       envAllowlist: [],
       timeoutMs: 1_000,
       maxOutputBytes: 1_000,
     };
     const args = bwrapArgs("docker ps", policy, () => "file").join(" ");
-    expect(args).toContain("--ro-bind /dev/null /var/run/docker.sock");
+    expect(args).toContain("--ro-bind /dev/null /run/docker.sock");
   });
 });

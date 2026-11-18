@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { sandboxPaths } from "../src/permissions/sandboxPaths.js";
+import { realPath, sandboxPaths } from "../src/permissions/sandboxPaths.js";
 import { findOsSandbox } from "../src/sandbox/index.js";
 import type { ExecPolicy } from "../src/sandbox/types.js";
 
@@ -59,6 +59,55 @@ setTimeout(() => process.exit(0), 2000);
     };
     try {
       const result = await run.run(`node ${JSON.stringify(client)}`, policy);
+      expect(result.stdout.text).not.toContain("CONNECTED");
+      expect(result.stdout.text).not.toContain("secret");
+    } finally {
+      server?.close();
+    }
+  });
+
+  // The regression that broke CI: a socket behind a `/var/run`-style link. bubblewrap cannot make a
+  // mount point through a link, so the denial must use the real path. Here the command must still
+  // run (the sandbox did not abort), and must not reach the socket.
+  it("a socket behind a symlinked folder does not break the command", async () => {
+    const run = executor as NonNullable<typeof executor>;
+    const area = join(base, "linked");
+    const realRun = join(area, "run");
+    mkdirSync(realRun, { recursive: true });
+    symlinkSync(realRun, join(area, "var-run"), "dir"); // like /var/run -> /run
+    const root = join(area, "project");
+    mkdirSync(root, { recursive: true });
+    const socket = join(realRun, "d.sock");
+    let server: Server | undefined;
+    await new Promise<void>((resolve, reject) => {
+      server = createServer((c) => c.end("secret\n"));
+      server.once("error", reject);
+      server.listen(socket, resolve);
+    });
+    const client = join(root, "c.cjs");
+    writeFileSync(
+      client,
+      `const net=require("node:net");const s=net.connect(${JSON.stringify(join(area, "var-run", "d.sock"))});
+s.on("connect",()=>{process.stdout.write("CONNECTED");s.destroy();});
+s.on("data",(d)=>process.stdout.write(String(d)));
+s.on("error",()=>process.stdout.write("REFUSED"));
+process.stdout.write("RAN ");setTimeout(()=>process.exit(0),1500);`,
+    );
+    const policy: ExecPolicy = {
+      root,
+      sandbox: true,
+      writePaths: [root, realpathSync(tmpdir())],
+      denyWritePaths: [],
+      // Name the socket through the symlink; realPath makes it mountable.
+      denyReadPaths: [realPath(join(area, "var-run", "d.sock"))],
+      network: false,
+      envAllowlist: ["PATH"],
+      timeoutMs: 10_000,
+      maxOutputBytes: 10_000,
+    };
+    try {
+      const result = await run.run(`node ${JSON.stringify(client)}`, policy);
+      expect(result.stdout.text, result.stderr.text).toContain("RAN");
       expect(result.stdout.text).not.toContain("CONNECTED");
       expect(result.stdout.text).not.toContain("secret");
     } finally {

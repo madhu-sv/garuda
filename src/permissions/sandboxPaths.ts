@@ -240,7 +240,10 @@ export function sandboxPaths(
       ...gradle.denied,
       ...personalDenials(home, root),
       ...runtimeDenials(writePaths, platform),
-      ...socketDenials(),
+      // Real paths: `/var/run` is a link to `/run`, and bubblewrap cannot make a mount point
+      // through a link (every sandboxed command then failed with "Can't create file"). The real
+      // path has no link in it, so bubblewrap covers the socket, and Seatbelt matches it too.
+      ...socketDenials().map(realPath),
       // Both spellings: a denial that matches nothing would leave the file readable.
       ...(settings.denyRead ?? []).flatMap((p) => [expand(p), realPath(expand(p))]),
     ]),

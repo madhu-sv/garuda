@@ -109,8 +109,11 @@ gpg-agent, a git credential helper. Seatbelt denies every outbound Unix-socket c
 (`UNIX_SOCKET_RULE`); Garuda's proxy is TCP, so it is untouched. On Linux `--unshare-net` blocks
 TCP but leaves a pathname socket reachable, so `socketDenials` (sandboxPaths.ts) hides the
 well-known ones (the Docker socket, the system bus, `$SSH_AUTH_SOCK`); gpg-agent sits in
-`~/.gnupg` and ssh-agent in `/run/user/<uid>`, both hidden already. A command-word check still
-turns `docker`, `adb` and the like outside the sandbox (T14), but this closes the class under it.
+`~/.gnupg` and ssh-agent in `/run/user/<uid>`, both hidden already. These paths go into the deny
+list as **real paths**: `/var/run` is a link to `/run`, and bubblewrap cannot make a mount point
+through a link, so `/var/run/docker.sock` by that spelling made every sandboxed command fail with
+"Can't create file" (CI, where Docker exists). A command-word check still turns `docker`, `adb`
+and the like outside the sandbox (T14), but this closes the class under it.
 
 Paths are Scheme strings with `\` and `"` escaped. Since 0.18.1 each denied path under `/Users`
 is also denied under `/System/Volumes/Data/Users` (`withDataVolume`): macOS reaches the same folder
