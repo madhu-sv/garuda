@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Homebrew formula in the repository names 0.21.1 and its tarball hash.
+
 ## 0.21.1 (2026-11-18)
 
 Two sandbox fixes, both raised after the 0.21.0 release. A sandboxed command can no longer talk to
