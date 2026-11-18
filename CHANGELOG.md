@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Build: tsup 9 (a dev dependency; the build output is unchanged). Its node floor (^22.18) is met
+  by the project's engines.
 - Receipts: the test count is tests that ran (passed plus failed), never skipped. A run whose only
   test is skipped now shows "○ no tests ran", not "✓ passed", and a job's verdict treats it as no
   test run (a finding of the second 2026-11 review). node:test, vitest and jest were affected.
