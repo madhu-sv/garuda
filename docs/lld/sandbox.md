@@ -90,7 +90,7 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 (deny network-inbound (local ip "*:*"))
 (deny network-bind (local ip "*:*"))
 (allow network-inbound|bind … "localhost:*")       ; test servers keep working
-(deny network-outbound (remote ip "localhost:5037"))  ; T14: no adb server, network off or on
+(deny network-outbound (remote ip "localhost:5037"))  ; T14: adb port, best-effort (macOS-version)
 (deny network-outbound (remote unix-socket))       ; no Docker/ssh-agent/gpg deputy, on or off
 (deny mach-lookup (global-name-regex #"^com\.apple\.CoreSimulator\."))  ; 0.20.1
 (deny file-read* (literal <markerA>))              ; 0.17: the tracker's markers, last (see below)
@@ -100,7 +100,10 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 
 Outbound rules only deny (in 0.21.1): Seatbelt cannot take one port back out of an allow rule
 (every port denial after an "allow localhost" blocked all of localhost), and adb's port needs that.
-Seatbelt's "localhost" means this machine's addresses. See docs/lld/mobile.md, "adb's port".
+Seatbelt's "localhost" means this machine's addresses. The adb-port rule is best-effort: Seatbelt
+matching varies by macOS version (the GitHub runner did not block it where the user's Mac did), so
+the guarantee against adb is the command-word check (T14 part 4), not this rule. See
+docs/lld/mobile.md, "adb's port".
 
 No deputy over a Unix socket (in 0.21.1, a dev.to reader's point): a command cannot read your
 keys, but a daemon already running with your rights can act for it over a socket — the Docker

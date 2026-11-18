@@ -39,7 +39,7 @@ What each release added, and the known limits of this version.
 | Mobile publishing and device keys unreadable, and no iOS simulator from the sandbox (a security fix, T14 part 0); the read question starts on "No" | Done (0.20.1) |
 | Gradle builds in the sandbox start their own daemons, never one outside it (a security fix); Gradle tests run in the sandbox | Done (0.20.2) |
 | Android and iOS projects (T14): Android, Swift and Xcode profiles; simulators, emulators and devices only outside the sandbox, with a yes and a warning; a `mobile` eval suite (48 of 48 runs); no extglobs in `glob` and `grep` (a security fix) | Done (0.21.0) |
-| Sandbox: no deputy over a Unix socket (the Docker socket, ssh-agent, gpg-agent, credential helpers), and no adb server on macOS (a security fix) | Done (0.21.1) |
+| Sandbox: no deputy over a Unix socket (the Docker socket, ssh-agent, gpg-agent, credential helpers); an adb-port block on recent macOS (best-effort; the command-word check is the guarantee) (a security fix) | Done (0.21.1) |
 
 The rows labelled 0.14–0.17 are branch labels, not versions: the "0.15" and "0.16" branches (code
 intelligence, language plugins) shipped in 0.14.0. The last thirteen rows are versions 0.15.0,

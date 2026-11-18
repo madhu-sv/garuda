@@ -33,9 +33,10 @@ In the sandbox, a command:
   `simctl` read a file that the sandbox hides and wrote one in the home folder. With your yes, such
   a command runs with `outside_sandbox`. Since T14 Garuda does not run `adb` itself in the sandbox
   (below);
-- cannot reach an adb server that you started (`localhost:5037`), and through it your devices
-  (after 0.21.1, on macOS a Seatbelt rule for that port; on Linux each command has its own
-  network). The rest of localhost stays open for local servers;
+- does not reach an adb server that you started (`localhost:5037`): on Linux each command has its
+  own network, and on recent macOS a Seatbelt rule blocks the port (best-effort — Seatbelt matching
+  varies by macOS version; the guarantee is that `adb` itself never runs in the sandbox). The rest
+  of localhost stays open for local servers;
 - cannot talk to a daemon over a Unix socket (after 0.21.1): the Docker socket, your SSH agent,
   gpg-agent and git credential helpers all run with your rights and would act for a command that
   reached them. Garuda's own network proxy uses TCP, so it still works;

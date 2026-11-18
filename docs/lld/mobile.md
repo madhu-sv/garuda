@@ -167,11 +167,19 @@ action without a yes.
   (remote ip "localhost:*")))` replaces "deny all, allow localhost", and `ADB_RULE`,
   `(deny network-outbound (remote ip "localhost:5037"))`, follows it, with the network off and on.
   Inbound and bind rules are as before.
+- **Version-dependent, so defense-in-depth, not the guarantee.** Seatbelt's network matching is
+  undocumented and changes between macOS versions. On the user's Mac (macOS 26) the rule blocks
+  5037; on the GitHub `macos-latest` runner (an older macOS) the same rule did not block it, while
+  the simulator and Unix-socket rules did. So the portable guarantee against adb is the
+  command-word check (part 4): `adb` never runs in the sandbox, whatever the macOS version. The
+  port rule is an extra layer for versions where it works.
 - `test/seatbeltLive.test.ts` (macOS) runs the profile for real: localhost ok, 5037 blocked, the
   machine's own address ok, and with `GARUDA_PROBE_INTERNET=1` the outside host blocked (network
-  off) or ok (network on). The probe's eleven rule forms and their results are above.
-- The device check (part 4) stays: `adb` in the sandbox would now fail anyway, and the note sends
-  it outside with a yes.
+  off) or ok (network on). This behavioural check is **opt-in** (`GARUDA_PROBE_SEATBELT=1`), not
+  part of `pnpm test`/CI, because of the version-dependence above; `sandbox.test.ts` asserts the
+  rule is in the profile and runs everywhere. The probe's eleven rule forms are above.
+- The device check (part 4) stays and is the real guarantee: `adb` never runs in the sandbox, and
+  the note sends it outside with a yes.
   The same file runs the simulator rule for real: a sandboxed `xcrun simctl list devices` must
   fail where an outside one works.
 - `ApprovalRequest.defaultChoice`: the chat and the terminal approver start on it. The read

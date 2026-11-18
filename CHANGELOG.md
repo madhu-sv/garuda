@@ -4,8 +4,10 @@
 
 Two sandbox fixes, both raised after the 0.21.0 release. A sandboxed command can no longer talk to
 a daemon that runs with your rights over a Unix socket (the Docker socket, your SSH agent,
-gpg-agent, a git credential helper), and on macOS it can no longer reach an adb server on
-`localhost:5037`. A reader of the sandbox-escape blog post raised the socket class.
+gpg-agent, a git credential helper). A reader of the sandbox-escape blog post raised the socket
+class. On macOS a Seatbelt rule also blocks an adb server on `localhost:5037` where the macOS
+version supports it; the portable guarantee against adb stays the command-word check (part 4,
+0.21.0), which never runs `adb` in the sandbox.
 
 - Security: sandboxed commands can no longer talk to a daemon over a Unix socket (the Docker
   socket, ssh-agent through `SSH_AUTH_SOCK`, gpg-agent, a git credential helper). Each one runs
@@ -13,12 +15,12 @@ gpg-agent, a git credential helper), and on macOS it can no longer reach an adb 
   Seatbelt profile denies every outbound Unix-socket connection; Garuda's proxy is TCP, so it
   keeps working. On Linux the well-known sockets are hidden (the Docker socket, the system bus,
   `$SSH_AUTH_SOCK`). Raised by a reader of the sandbox-escape post.
-- Security (macOS): sandboxed commands can no longer reach an adb server that you started
-  (`localhost:5037`), and through it your devices. Before, only `adb` itself was kept out; a
-  script could still open the port. The Seatbelt profile's network rules now only deny, which lets
-  one port be blocked: every port rule after "allow localhost" blocked all of localhost. The rest
-  of localhost stays open for local servers and Garuda's proxy. Found with a probe of eleven rule
-  forms on a Mac (`test/seatbeltLive.test.ts`).
+- Security (macOS, best-effort): a Seatbelt rule now also denies an adb server on `localhost:5037`.
+  The profile's outbound rules became deny-only so one port can be blocked (every port denial after
+  an "allow localhost" blocked all of localhost). It holds on recent macOS; Seatbelt's network
+  matching is version-dependent, so on an older macOS it may not block, and the command-word check
+  (0.21.0) stays the guarantee that `adb` never runs in the sandbox. The rest of localhost stays
+  open for local servers and Garuda's proxy.
 - Tests (macOS): Seatbelt rules run for real. A sandboxed `xcrun simctl` must fail where an outside
   one works, and with real sockets the profile must block adb's port and keep the rest of
   localhost. With `GARUDA_PROBE_INTERNET=1` it must also block an outside host.
