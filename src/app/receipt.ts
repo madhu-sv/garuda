@@ -71,7 +71,7 @@ export function hasReceipt(receipt: Receipt): boolean {
 }
 
 const RUNNERS =
-  /(^|[\s;&|(/])(vitest|jest|pytest|py\.test|mvn|mvnw|gradle|gradlew|go\s+test|node\s+--test|(npm|pnpm|yarn|bun)\s+(run\s+)?test|cargo\s+test|tox|nox)\b/;
+  /(^|[\s;&|(/])(vitest|jest|pytest|py\.test|mvn|mvnw|gradle|gradlew|go\s+test|node\s+--test|(npm|pnpm|yarn|bun)\s+(run\s+)?test|cargo\s+test|swift\s+test|xcodebuild\b[^;&|]*\stest(-without-building)?|tox|nox)\b/;
 
 /** A command that runs tests: the project's test command, or a known runner (decision D2). */
 export function isTestCommand(command: string, projectTest: string | undefined): boolean {
@@ -116,6 +116,18 @@ export function parseTestCount(output: string): { total: number; failed: number 
   const maven = [...output.matchAll(/Tests run: (\d+), Failures: (\d+), Errors: (\d+)/g)].at(-1);
   if (maven !== undefined) {
     return { total: num(maven[1]), failed: num(maven[2]) + num(maven[3]) };
+  }
+  // XCTest (swift test, xcodebuild test): the last "Executed 5 tests, with 1 failure" is the total.
+  // Swift Testing adds its own line: "✔ Test run with 3 tests in 1 suite passed", or "✘ … failed
+  // … with 2 issues" (T14). Both run in one `swift test`.
+  const xctest = [...output.matchAll(/Executed (\d+) tests?, with (\d+) failures?/g)].at(-1);
+  const swiftTesting =
+    /Test run with (\d+) tests?\b.*?(passed|failed)(?:.*?with (\d+) issues?)?/.exec(output);
+  if (xctest !== undefined || swiftTesting !== null) {
+    const total = num(xctest?.[1]) + num(swiftTesting?.[1]);
+    const failed =
+      num(xctest?.[2]) + (swiftTesting?.[2] === "failed" ? Math.max(1, num(swiftTesting[3])) : 0);
+    return { total, failed };
   }
   // go test -v: one line per test.
   const passes = output.match(/^\s*--- PASS: /gm)?.length ?? 0;

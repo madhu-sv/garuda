@@ -7,7 +7,7 @@ Website and docs: https://madhu-sv.github.io/garuda/
 Garuda is a coding agent for the terminal, and for editors over the Agent Client Protocol. It reads
 and edits your code, runs commands in an OS sandbox, and keeps an audit log of its permission
 decisions. It works with Claude and with OpenAI-compatible models, local ones too. This is version
-0.20.2. Release notes: [CHANGELOG.md](CHANGELOG.md).
+0.21.0. Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## What Garuda does on your machine
 
@@ -72,6 +72,7 @@ environment still work and win.
 | [Chat, sessions and undo](docs/guide/chat.md) | The chat's keys and commands, sessions, limits, context, plan mode, undo, the todo list. |
 | [Editors](docs/guide/editors.md) | Zed, JetBrains, Neovim, Emacs and VS Code over the Agent Client Protocol. |
 | [Project instructions, commands, skills and agents](docs/guide/projects.md) | `garuda init`, custom slash commands, skills, custom agents, subagents, Java and Python projects. |
+| [Mobile apps](docs/guide/mobile.md) | Android and iOS projects: what runs in the sandbox, what asks first (simulators, emulators, devices), the keys, the eval numbers. |
 | [Sandbox, permissions and policy](docs/guide/safety.md) | The OS sandbox, the network allowlist, staged commands, permissions, hooks, the team policy, the audit log. |
 | [MCP, web and code intelligence](docs/guide/tools.md) | MCP servers, web fetch and search, the code index, language plugins, LSP diagnostics, formatters. |
 | [Scheduled jobs and the night shift](docs/guide/jobs.md) | Plan now, build later on its own branch, with tests before and after and a review. |

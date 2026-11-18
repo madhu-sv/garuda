@@ -11,9 +11,10 @@ export async function expectFailsThenPasses(task: EvalTask): Promise<void> {
   const root = realpathSync(mkdtempSync(join(tmpdir(), `garuda-task-${task.id}-`)));
   try {
     await writeFiles(root, task.files);
-    expect((await runCheck(root, task.check)).ok, "the check must fail before the fix").toBe(false);
+    const before = await runCheck(root, task.check, task.checkTimeoutMs);
+    expect(before.ok, "the check must fail before the fix").toBe(false);
     await writeFiles(root, task.solution);
-    const after = await runCheck(root, task.check);
+    const after = await runCheck(root, task.check, task.checkTimeoutMs);
     expect(after.ok, after.output).toBe(true);
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -86,6 +86,7 @@ import {
 import { gateProjectSettings } from "../permissions/projectSettings.js";
 import { loadSettings, type Settings } from "../permissions/settings.js";
 import type { AgentMode, Approver, CallTarget } from "../permissions/types.js";
+import { USER_CALL_PREFIX } from "../permissions/types.js";
 import { createExecutor, type ExecutorChoice } from "../sandbox/index.js";
 import type { ExecPolicy, Executor } from "../sandbox/types.js";
 import { FileTracker } from "../session/fileTracker.js";
@@ -321,6 +322,8 @@ export interface RuntimeOptions {
   readsHome?: string;
   /** T15: false: no question after a blocked read (evals; see PermissionEngineOptions). */
   readQuestions?: boolean;
+  /** T14 part 4: false denies simulator, emulator and device actions (evals). Default true. */
+  deviceQuestions?: boolean;
   /**
    * The network allowlist (0.13, `settings.network`). `approved`: the list was approved elsewhere
    * (a job's approval, the eval command line), so no question. `home`: where trust.json is (tests).
@@ -587,6 +590,9 @@ export class Runtime {
       ...(options.unattended === undefined ? {} : { unattended: options.unattended }),
       ...(options.readsHome === undefined ? {} : { home: options.readsHome }),
       ...(options.readQuestions === undefined ? {} : { readQuestions: options.readQuestions }),
+      ...(options.deviceQuestions === undefined
+        ? {}
+        : { deviceQuestions: options.deviceQuestions }),
     });
     this.exploreModel = undefined;
     // Off by default: an A/B eval (hard suite, 3 runs per arm) showed no gain in steps or cost.
@@ -1063,7 +1069,12 @@ export class Runtime {
     signal: AbortSignal,
   ): Promise<{ text: string; isError: boolean }> {
     const outcome = await this.tools.execute(
-      { type: "tool_use", id: `user-${Date.now()}`, name: "bash", input: { command } },
+      {
+        type: "tool_use",
+        id: `${USER_CALL_PREFIX}${Date.now()}`,
+        name: "bash",
+        input: { command },
+      },
       {
         root: this.root,
         signal,

@@ -108,7 +108,10 @@ async function main(): Promise<void> {
     .command("eval")
     .description("run the eval tasks in scratch folders and report pass/fail, steps and cost")
     .option("-m, --model <id>", "model id (or set GARUDA_MODEL)")
-    .option("-s, --suite <name>", "basic (default), hard, java, python, medium, all or repo")
+    .option(
+      "-s, --suite <name>",
+      "basic (default), hard, java, python, medium, mobile, all or repo",
+    )
     .option(
       "-t, --task <ids...>",
       "run only these tasks (from any dev suite, or the held-out set with --split)",
@@ -159,7 +162,7 @@ async function main(): Promise<void> {
     )
     .option(
       "--prepare <toolchain>",
-      "java: download Maven plugins and JUnit once; python: check pytest",
+      "java: download Maven plugins and JUnit once; android: Gradle and the Android plugin once; python, swift: check them",
     )
     .option("--from-git", "build the repo suite from this project's recent commits, then exit")
     .option("--commits <n>", "with --from-git: recent commits to look at (default 200)", (v) =>

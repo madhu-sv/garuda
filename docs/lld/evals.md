@@ -17,7 +17,8 @@ same-build A/B runs.
 | `pythonTasks.ts` | Python suite (0.3): 5 pytest projects in src layout (shared mutable default, last short chunk, rename across modules, duration parser from tests, sort order of equal scores). |
 | `projects.ts` | The shared `pom.xml` (fixed plugin and JUnit versions) and `pyproject.toml`, the Java and Python check commands, and `isProtectedPath`. |
 | `toolchains.ts` | The `maven` and `pytest` toolchains: a probe project, `checkToolchains`, `prepareToolchain`. |
-| `suites.ts` | `basic`, `hard`, `java`, `python`, `medium`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
+| `suites.ts` | `basic`, `hard`, `java`, `python`, `medium`, `mobile`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
+| `mobileTasks.ts` | T14 part 6: the mobile suite, 4 Swift packages and 4 Android modules (see below). |
 | `mediumTasks.ts` | T11c (0.17): the medium suite, 10 dev tasks (the first held-out set): multi-file defects, refactors, mutation-checked tests, repository conventions with hidden tests, one vague request. |
 | `heldOutTasks.ts` | T11c (0.17): the held-out split, 10 harder tasks in no suite, each with a trap that a quick fix falls into. Only `--split heldout` or `all` runs them. |
 | `tune.ts` | T11d (0.17): `garuda eval tune`: `decide` (the keep rule), `rejectReason`, `proposerInput`, `PROPOSER_SYSTEM`, `parseProposal`, `readAddendum`, `tune` (the loop; the score and proposer calls are functions). The command is `src/cli/evalTune.ts` (`askProposer`, `runEvalTune`). |
@@ -115,19 +116,39 @@ probe project in a scratch folder with no sandbox and a 120 s limit:
 | --- | --- | --- |
 | `maven` (alias `java`) | `mvn -B -q -o test` on a one-test project | `mvn -B -q test` on the same project (network, 10 min limit): downloads the plugins, the surefire JUnit provider and JUnit into `~/.m2`. |
 | `pytest` (alias `python`) | `python3 -m pytest -q` on a one-test project | None: the user installs pytest. |
+| `swift` (alias `ios`), T14 | `swift test --disable-sandbox` on a one-test Swift package | None: Xcode, or Swift on Linux. |
+| `android`, T14 | `./gradlew testDebugUnitTest --offline --no-daemon -q` on a one-test app module (5 min limit) | Gradle 8.11.1 from services.gradle.org into `~/.gradle/wrapper/dists/gradle-8.11.1-bin/garuda` with curl and unzip, unless a wrapper put it there already; then the probe without `--offline` (network, 10 min limit). |
 
 `garuda eval` checks the toolchains of the chosen tasks before the first model call. When one is missing,
 it prints the hint and the first lines of the probe output, and exits with 1: a missing toolchain would
 fail every task and waste model calls. Evals never download anything by themselves; `--prepare java` does
 it once, when the user asks.
 
-The check and the probes get `JAVA_HOME`, `GRADLE_USER_HOME` and `VIRTUAL_ENV` on top of the default
-environment list.
+The check and the probes get `JAVA_HOME`, `GRADLE_USER_HOME`, `VIRTUAL_ENV`, `ANDROID_HOME`,
+`ANDROID_SDK_ROOT` and `DEVELOPER_DIR` on top of the default environment list.
+
+The mobile suite (T14 part 6, `mobileTasks.ts`): the Swift tasks are packages (`SWIFT_PACKAGE`,
+check `swift test --disable-sandbox`); the Android tasks are one app module with Java sources,
+JUnit 4 and Gson (`ANDROID_PROJECT`, AGP 8.7.3, compileSdk 35), with `GRADLEW` as `gradlew`: a
+script that runs the prepared Gradle from the wrapper's folder. Gradle 8.11.1 runs only on Java 17
+to 23 (on the user's Mac, Homebrew's Java 27 stopped it with a bare "27.0.1.0.3"), so the script
+keeps `JAVA_HOME` when it is in range, else takes the first JDK in range from `GARUDA_EVAL_JDKS`
+(default: Homebrew's openjdk@21 and @17, then `java_home -v 21` and `-v 17`), else the `java` on
+the PATH when it is in range, else stops with a message that names `brew install openjdk@21`.
+`ANDROID_HOME`, when unset, becomes the first folder with `platforms` in `GARUDA_EVAL_SDKS`
+(default: `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`, Homebrew's `android-commandlinetools`,
+`~/Android/Sdk`). The tests set both lists, so they use only fake JDKs and SDKs. `writeFiles` makes a file that
+starts with `#!` executable. An Android task sets `checkTimeoutMs` to 5 minutes (Gradle starts
+cold in each scratch folder; the default is 2). The signing traps add `noLeakCheck`: a `grep` for
+the fake secret in every file but its own, build output skipped and `.garuda` included, so a read
+that printed it into Garuda's transcript fails the task. The traps' secret files are protected.
+The device traps need nothing more: evals deny device commands (`deviceQuestions: false`). Tests:
+`test/evals.mobile.test.ts` (the self-tests run where the toolchains work).
 
 ## Command
 
 ```text
-garuda eval [-m model] [-s basic|hard|java|python|medium|all|repo] [-t ids…] [--repeat n] [--index off|lookup|all]
+garuda eval [-m model] [-s basic|hard|java|python|medium|mobile|all|repo] [-t ids…] [--repeat n] [--index off|lookup|all]
             [--executor auto|os|host] [--max-steps n] [--keep] [--list]
             [--subagents on|off] [--subagent-model spec] [--todo on|off] [--lsp on|off]
             [--keep-thinking on|off] [--format on|off]
@@ -137,7 +158,7 @@ garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the 
 garuda eval tune --addendum <file> [--proposer model] [-m model] [-s suites…] [--rounds n]
                  [--repeat n] [--heldout-repeat n] [--margin n] [--max-cost usd] [--seed n]
                  [--parallel n] [--yes]
-garuda eval --prepare java|python
+garuda eval --prepare java|python|swift|android
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
 

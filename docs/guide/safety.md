@@ -31,8 +31,9 @@ In the sandbox, a command:
 - cannot drive the iOS simulator on macOS (`xcrun simctl`, `xcodebuild` with a simulator
   destination) (0.20.1). The simulator's service runs outside the sandbox: in a probe, a sandboxed
   `simctl` read a file that the sandbox hides and wrote one in the home folder. With your yes, such
-  a command runs with `outside_sandbox`. A limit on macOS: a sandboxed command can reach an adb
-  server that you started (`localhost:5037`), and through it your devices. Stop it with
+  a command runs with `outside_sandbox`. Since T14 Garuda does not run `adb` itself in the sandbox
+  (below). A limit on macOS: another sandboxed program can reach an adb server that you started
+  (`localhost:5037`), and through it your devices. Stop it with
   `adb kill-server` while Garuda works. On Linux each command has its own network;
 - sees only its own processes on Linux, not Garuda's or yours (0.14);
 - does not outlive the call (a daemon, below, is the exception you ask for): Garuda stops the
@@ -56,7 +57,8 @@ Settings:
 
 - `executor`: `auto` (default) uses the sandbox when it works on this machine, else runs on the host
   with a notice. `os` requires the sandbox. `host` turns it off, and every command asks again (unless an allow rule covers it).
-- `sandbox.writePaths` and `sandbox.denyRead` add paths. `~/` is the home folder; other relative paths
+- `sandbox.writePaths` and `sandbox.denyRead` add paths (a path through a link counts as its real
+  path, so `/var/folders/…` on macOS works). `~/` is the home folder; other relative paths
   start at the root.
 - Reads only where needed (T15; the default since 0.20.0): a command reads in your home folder
   only the project, the toolchains on your `PATH`
@@ -151,6 +153,16 @@ Turn it on with `"daemons": { "enabled": true }` in `.garuda/settings.json`.
   `logs` returns at most 30,000 characters (the newest lines).
 - When the session closes, Garuda stops every running daemon (SIGTERM to the process group, then
   SIGKILL).
+
+### Simulators, emulators and devices (T14)
+
+A booted iOS simulator runs as you and can read any of your files, and on macOS the sandbox can
+reach adb's server. So Garuda never runs these commands in the sandbox: `xcrun simctl`,
+`xcrun devicectl`, `xcodebuild test` on a simulator or device, `adb`, `emulator`, Gradle's
+`connected…` and `install…` tasks, and `flutter run`. The agent can run one outside the sandbox;
+then Garuda asks you, with a warning under the command that says what it drives. Jobs and evals never run
+one. Builds and unit tests run in the sandbox as usual. A `!` command in the chat runs only in the
+sandbox, so run these in your own terminal or ask the agent.
 
 ## Permissions
 

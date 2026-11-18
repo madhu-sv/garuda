@@ -62,6 +62,9 @@ export interface FileChange {
   newText: string;
 }
 
+/** The call id of a `!command` that the user typed in the chat (`Runtime.runUserCommand`). */
+export const USER_CALL_PREFIX = "user-";
+
 export interface PermissionRequest {
   tool: string;
   readOnly: boolean;
@@ -140,6 +143,11 @@ export interface ApprovalRequest {
   isolation: Isolation;
   /** A header that replaces the default one (for example, the MCP server consent). */
   title?: string;
+  /**
+   * A line under the preview that says why the call needs care (T14 part 4: what a device command
+   * drives). Unlike the question, the chat keeps it in the scrollback after the answer.
+   */
+  warning?: string;
   /** The question above the choices. Default: "Allow?". */
   question?: string;
   /** The choices to show, in this order. Default: once, session, deny. */

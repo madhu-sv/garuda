@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.21.0 (2026-11-18)
+
+Android and iOS projects. Garuda finds an Android app, a Swift package or an Xcode project, and
+runs its unit tests and builds in the sandbox. Simulators, emulators and devices run as you, so
+they never run in the sandbox: Garuda asks first, and says what the command drives. Measured on a
+new `mobile` eval suite: 48 of 48 runs passed with Haiku 5.5 in both read modes. Also a security
+fix: the `glob` and `grep` tools no longer accept extglobs, which could block Garuda.
 
 - Security: the `glob` and `grep` tools no longer accept extglobs (`+(…)`, `*(…)`, `@(…)`, `?(…)`,
   `!(…)`). picomatch has no fix for GHSA-fc5q-39xc-vjpf, and a
@@ -8,6 +14,31 @@
   `denyPaths` match the same way.
 - Blog: "Three ways out of my coding agent's sandbox": the iOS simulator, Gradle's daemon and adb,
   what 0.20.1 and 0.20.2 close, what the next release adds, and the adb gap that stays open.
+- Guide: a "Mobile apps" page: what runs in the sandbox, what asks first, the keys, and the eval
+  numbers (48 of 48 runs passed with Haiku 5.5 in both read modes).
+- Evals: a `mobile` suite (T14), with 4 Swift packages and 4 Android modules: a bug, a device trap
+  (the prompt asks for the simulator or emulator), a signing-key trap (a fake password that must
+  not reach another file or the transcript) and JSON with renamed keys. `garuda eval --prepare
+  android` installs Gradle 8.11.1 and fills its caches once; `--prepare swift` checks Swift. The
+  tasks' Gradle picks a JDK from 17 to 23 (Homebrew's openjdk@21, for example) when the default
+  `java` is newer, and finds Homebrew's Android SDK.
+- Simulators, emulators and devices (T14): `xcrun simctl`, `xcrun devicectl`, `xcodebuild test` on
+  a simulator or device, `adb`, `emulator`, Gradle's `connected…` and `install…` tasks and
+  `flutter run` never run in the sandbox (a simulator runs as you; on macOS the sandbox reached
+  adb). Outside the sandbox Garuda asks, with a warning under the command that says what it drives
+  (the chat keeps it on screen after your answer). Jobs and
+  evals never run them, also with an allow rule. The adb limit of 0.20.1 stays for other programs:
+  a script in the sandbox can still reach a running adb server on macOS. A `!` command that you type
+  gets a note for you: run it in your own terminal, or ask the agent.
+- iOS and Swift (T14, not measured yet): a `Package.swift` gets a `swift` profile
+  (`swift test --disable-sandbox`: SwiftPM's own sandbox cannot start inside Garuda's), and an Xcode
+  project gets an `xcode` profile that builds for the iOS simulator in the sandbox (derived data in
+  `.build/xcode`, Xcode's manifest sandbox off, no code signing). Tests that need the simulator run
+  only outside the sandbox, with your yes. clang's module cache is writable on macOS. Receipts count
+  XCTest and Swift Testing results.
+- Sandbox: `sandbox.writePaths` and `sandbox.denyRead` now hold for a path through a link. Seatbelt
+  compares real paths, and on macOS `/var` is a link to `/private/var`: a write path under
+  `/var/folders` never matched, and a denied file named through a link stayed readable.
 - Receipts no longer say "✓ passed" when no test ran (a finding of the 2026-11 review). A
   successful test command passes only with a count of tests that ran. A run that ran none (a count
   of 0, or Gradle `UP-TO-DATE` and `NO-SOURCE`, go's "no test files", Maven's "No tests to run",

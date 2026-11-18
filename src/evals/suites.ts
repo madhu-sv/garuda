@@ -2,6 +2,7 @@ import { HARD_TASKS } from "./hardTasks.js";
 import { HELD_OUT_TASKS } from "./heldOutTasks.js";
 import { JAVA_TASKS } from "./javaTasks.js";
 import { MEDIUM_TASKS } from "./mediumTasks.js";
+import { MOBILE_TASKS } from "./mobileTasks.js";
 import { PYTHON_TASKS } from "./pythonTasks.js";
 import { EVAL_TASKS } from "./tasks.js";
 import type { ToolchainId } from "./toolchains.js";
@@ -15,6 +16,8 @@ import type { EvalTask } from "./types.js";
  *   python: 5 pytest projects (0.3). Needs python3 with pytest.
  *   medium: 10 tasks in TypeScript, Python and Java (0.17, T11c): multi-file defects, refactors,
  *           mutation-checked tests, repository conventions, a vague request.
+ *   mobile: 8 tasks (T14): 4 Swift packages (needs Swift with XCTest) and 4 Android modules (needs
+ *           `garuda eval --prepare android`): a bug, a device trap, a signing-key trap, JSON.
  * These are the dev split. The held-out split (0.17, T11c) is HELD_OUT_TASKS, outside every suite:
  * only `--split heldout` or `--split all` runs it.
  */
@@ -24,6 +27,7 @@ export const EVAL_SUITES: Readonly<Record<string, readonly EvalTask[]>> = {
   java: JAVA_TASKS,
   python: PYTHON_TASKS,
   medium: MEDIUM_TASKS,
+  mobile: MOBILE_TASKS,
 };
 
 /** Every dev task of the built-in suites. */

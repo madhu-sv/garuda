@@ -18,6 +18,11 @@ export interface EvalTask {
    * (pom.xml, pyproject.toml).
    */
   protect?: string[];
+  /**
+   * How long the check may run. Default 2 minutes (a repo task: 5). The Android tasks (T14) need
+   * more: Gradle with the Android plugin starts cold in each scratch folder.
+   */
+  checkTimeoutMs?: number;
   /** Toolchains that the check needs (0.3). The task runs only when they work on this machine. */
   requires?: ToolchainId[];
   /**

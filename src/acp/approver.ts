@@ -89,7 +89,7 @@ export class AcpApprover implements Approver {
 }
 
 /** The question's content: the editor's diff view for a file write, then the text preview. */
-function questionContent(request: ApprovalRequest): ToolCallContent[] {
+export function questionContent(request: ApprovalRequest): ToolCallContent[] {
   const content: ToolCallContent[] = [];
   const change = request.change;
   if (
@@ -108,6 +108,7 @@ function questionContent(request: ApprovalRequest): ToolCallContent[] {
   const preview = request.target.kind === "command" ? `$ ${request.preview}` : request.preview;
   lines.push(visible(preview));
   if (hasHidden(request.preview)) lines.push(HIDDEN_WARNING);
+  if (request.warning !== undefined) lines.push(`! ${visible(request.warning)}`);
   content.push(textContent(lines.join("\n")));
   return content;
 }

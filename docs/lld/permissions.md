@@ -60,6 +60,7 @@ Order of checks — the first match decides:
 | 1 | Path target is sensitive and no allow rule *with a pattern* names it (F20) | deny |
 | 2 | A write to a path inside `.git/` | deny |
 | 3 | A deny rule matches (F19) | deny |
+| 3a | A simulator, emulator or device action (`deviceAction`, `devices.ts`; T14 part 4): in the sandbox, or with nobody to ask (a job, a write scope, or `deviceQuestions: false` in evals), also with an allow rule | deny; outside the sandbox it goes on to step 6 or 7, and the question has a warning that names the device |
 | 3b | Plan mode (0.4) and the tool is not read-only | see below; never asks |
 | 4 | Read-only tool (F17) | allow |
 | 5 | Command target, not `outsideSandbox`, and the executor has isolation | allow (`sandbox`) |
@@ -265,9 +266,9 @@ grep never searches them; the code index never indexes them.
 
 | List | Default |
 | --- | --- |
-| Writable | the root, `os.tmpdir()` and `/tmp` (real paths), `~/.cache`, `~/.npm`, `~/.local/share/pnpm`, `~/Library/Caches`, `~/Library/pnpm`, plus `sandbox.writePaths`, plus the caches of the detected language profiles (for example `~/.m2/repository`) |
+| Writable | the root, `os.tmpdir()` and `/tmp` (real paths), `~/.cache`, `~/.npm`, `~/.local/share/pnpm`, `~/Library/Caches`, `~/Library/pnpm`, plus `sandbox.writePaths` (as real paths since T14: Seatbelt compares real paths, so `/var/folders/…` must become `/private/var/folders/…`; `realPath` resolves the nearest folder that exists), plus the caches of the detected language profiles (for example `~/.m2/repository`) |
 | Read-only inside the root | `.git/hooks`, `.git/config`, `.garuda` (they run or apply later, outside the sandbox) |
-| Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.config/anthropic/credentials` (0.19.0: the `ant` CLI's and the Anthropic SDK's stored keys), `~/.cargo/credentials.toml`, `~/.cargo/credentials`, `~/.gem/credentials`, `~/.m2/settings-security.xml` (0.19.1: keys that only publishing needs), on Linux `/run/user/<uid>` (0.19.1, `runtimeDenials`: the session bus, through which the keyring answers; not when a write path is inside it), `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, `~/.garuda/mcp-auth.json`, `~/.garuda/credentials` (0.16), `~/.claude.json`, `~/.claude/.credentials.json` (0.5: tokens of Garuda and Claude Code; the rest of `~/.garuda` and `~/.claude` stays readable, for skills), `~/.android/adbkey`, `~/.emulator_console_auth_token`, `~/.appstoreconnect`, `~/.fastlane`, `~/.expo/state.json`, Dart's `pub-credentials.json` (in `~/Library/Application Support/dart`, `~/.config/dart`) and `~/.pub-cache/credentials.json` (0.20.1: mobile publishing and device keys, docs/lld/mobile.md), plus `sandbox.denyRead` |
+| Unreadable | `~/.ssh`, `~/.aws`, `~/.azure`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config/gcloud`, `~/.config/gh`, `~/.config/anthropic/credentials` (0.19.0: the `ant` CLI's and the Anthropic SDK's stored keys), `~/.cargo/credentials.toml`, `~/.cargo/credentials`, `~/.gem/credentials`, `~/.m2/settings-security.xml` (0.19.1: keys that only publishing needs), on Linux `/run/user/<uid>` (0.19.1, `runtimeDenials`: the session bus, through which the keyring answers; not when a write path is inside it), `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/Library/Keychains`, `~/.garuda/mcp-auth.json`, `~/.garuda/credentials` (0.16), `~/.claude.json`, `~/.claude/.credentials.json` (0.5: tokens of Garuda and Claude Code; the rest of `~/.garuda` and `~/.claude` stays readable, for skills), `~/.android/adbkey`, `~/.emulator_console_auth_token`, `~/.appstoreconnect`, `~/.fastlane`, `~/.expo/state.json`, Dart's `pub-credentials.json` (in `~/Library/Application Support/dart`, `~/.config/dart`) and `~/.pub-cache/credentials.json` (0.20.1: mobile publishing and device keys, docs/lld/mobile.md), plus `sandbox.denyRead` (under the given spelling and the real path, since T14) |
 
 `~/` means the home folder; other relative paths start at the root.
 
@@ -305,6 +306,26 @@ entries). More than 1,000 matches throw `PolicyPathsOverflow`
 (Codex review of 1370184): the command does not run, because Garuda cannot enforce the rest. Before,
 the list was cut at 1,000 and the other paths had no rule. The same holds for hooks, MCP servers,
 language servers and job tests, which use the same `execPolicy`.
+
+## Devices (`devices.ts`, T14 part 4)
+
+`deviceAction(command)` names what a command drives, from the words of each simple command
+(`commandParts`): `xcrun simctl`, `open -a Simulator` (the iOS simulator); `xcrun devicectl`,
+`ios-deploy`, `xcodebuild test` with an iOS, tvOS, watchOS or visionOS destination that is not
+`generic/` (the simulator or an Apple device); `adb`, `emulator`, Gradle tasks that start with
+`connected`, `install` or `uninstall` and a capital (an Android emulator or device); `flutter run`,
+`drive`, `install`, `attach`, `screenshot`. Builds, unit tests and `xcodebuild -list` are not
+actions. Why: a booted simulator runs as the user (`simctl spawn` reads any file), and on macOS
+adb's server is reachable on localhost from the sandbox. So these never run in the sandbox: the
+model reads `deviceDenial` (the way is `outside_sandbox: true`; in the strict profile there is none).
+Outside the sandbox the question carries `deviceWarning` in `ApprovalRequest.warning`: a line under
+the preview in the terminal, the chat and editors (ACP). The chat keeps it in the scrollback; the
+question line goes when the user answers, and in the user's Mac check the user did not see a
+question text. Jobs and evals (`deviceQuestions: false`, set by `runEvalTask`) deny them with
+`deviceUnattendedDenial`. A guard on words, not a parser: approval stays the main control. A `!`
+command in the chat is denied too, with a note for the user (run it in a terminal, or ask the
+agent): `runUserCommand` gives its call an id that starts with `USER_CALL_PREFIX`. Tests:
+`test/devices.test.ts` (with an eval whose approver says yes to everything).
 
 ## Tests
 

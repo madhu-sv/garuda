@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join } from "node:path";
 
 /**
  * Language profiles (0.3). Garuda looks at marker files in the working root (no deep scan, so
@@ -15,7 +15,7 @@ import { isAbsolute, join } from "node:path";
  * The profiles do not start hooks and do not install anything.
  */
 
-export type ProfileId = "maven" | "gradle" | "android" | "python";
+export type ProfileId = "maven" | "gradle" | "android" | "swift" | "xcode" | "python";
 
 export interface LanguageProfile {
   id: ProfileId;
@@ -42,6 +42,9 @@ export interface ProfileAccess {
 export interface DetectOptions {
   home?: string;
   env?: NodeJS.ProcessEnv;
+  /** For tests: the platform and the temp folder (macOS: the per-user cache folder is its sibling). */
+  platform?: NodeJS.Platform;
+  tempDir?: string;
 }
 
 const MAVEN_MARKERS = ["pom.xml"];
@@ -179,6 +182,54 @@ export function detectProfiles(root: string, options: DetectOptions = {}): Langu
     });
   }
 
+  // Swift and Xcode (T14 part 2, docs/lld/mobile.md). A Swift package's tests run in the sandbox;
+  // an Xcode project's tests need the iOS simulator, which the sandbox blocks, so a package comes
+  // first when a project has both.
+  const xcode = xcodeProjects(root);
+  const swiftAccess = (): ProfileAccess => ({
+    writePaths: clangModuleCache(options.platform ?? process.platform, options.tempDir ?? tmpdir()),
+    envAllow: ["DEVELOPER_DIR"],
+  });
+  if (has("Package.swift")) {
+    profiles.push({
+      id: "swift",
+      label: "Swift (SwiftPM)",
+      test: "swift test --disable-sandbox",
+      build: "swift build --disable-sandbox",
+      notes: [
+        "Swift package. Run the tests with `swift test --disable-sandbox`; one test:",
+        "`swift test --disable-sandbox --filter Module.Class/testName`. Build with `swift build --disable-sandbox`.",
+        "--disable-sandbox turns off SwiftPM's own sandbox, which cannot start inside Garuda's (Garuda's",
+        "is stricter). `swift test` runs on macOS: a package that needs iOS APIs (UIKit) tests with",
+        "xcodebuild and the iOS simulator instead, which runs only with outside_sandbox: true and the",
+        "user's yes. The first build fetches the dependencies: it needs the network (ask the user).",
+      ],
+      access: swiftAccess(),
+    });
+  }
+  if (xcode.length > 0) {
+    const project = xcode[0] ?? "";
+    const scheme = basename(project).replace(/\.(xcodeproj|xcworkspace)$/, "");
+    const flag = project.endsWith(".xcworkspace") ? `-workspace ${project}` : `-project ${project}`;
+    const build = `xcodebuild build ${flag} -scheme ${scheme} -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/xcode -skipPackagePluginValidation -skipMacroValidation -IDEPackageSupportDisableManifestSandbox=YES CODE_SIGNING_ALLOWED=NO`;
+    const test = `xcodebuild test ${flag} -scheme ${scheme} -destination 'platform=iOS Simulator,name=<device>' -derivedDataPath .build/xcode`;
+    profiles.push({
+      id: "xcode",
+      label: "iOS (Xcode)",
+      test,
+      build,
+      notes: [
+        `Xcode project (${project}). List the schemes with \`xcodebuild -list ${flag}\`; "${scheme}" is a guess.`,
+        `Build for the simulator in the sandbox with \`${build}\`.`,
+        "The derived data stays in .build/xcode, in the project (add it to .gitignore). Code signing is off.",
+        "Tests need the iOS simulator, which the sandbox blocks: run",
+        `\`${test}\` with outside_sandbox: true; the user must approve. Pick the`,
+        "device from `xcrun simctl list devices available`, also outside the sandbox.",
+      ],
+      access: swiftAccess(),
+    });
+  }
+
   if (PYTHON_MARKERS.some(has)) {
     const runner = pythonRunner(root, has);
     profiles.push({
@@ -200,6 +251,37 @@ export function detectProfiles(root: string, options: DetectOptions = {}): Langu
   }
 
   return profiles;
+}
+
+/** The Xcode projects and workspaces in the root (no deep scan, N3); a workspace first. */
+function xcodeProjects(root: string): string[] {
+  try {
+    const names = readdirSync(root).filter((n) => /\.(xcodeproj|xcworkspace)$/.test(n));
+    return names.sort(
+      (a, b) =>
+        Number(b.endsWith(".xcworkspace")) - Number(a.endsWith(".xcworkspace")) ||
+        a.localeCompare(b),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * clang's module cache on macOS, in the per-user cache folder (`C`, the temp folder's sibling), as
+ * a real path: Seatbelt compares real paths (/private/var). Without it, SwiftPM's manifest and
+ * xcodebuild could not build the Foundation module in the user's iOS check.
+ */
+export function clangModuleCache(platform: NodeJS.Platform, tempDir: string): string[] {
+  if (platform !== "darwin") return [];
+  let temp: string;
+  try {
+    temp = realpathSync(tempDir);
+  } catch {
+    temp = tempDir;
+  }
+  if (basename(temp) !== "T") return [];
+  return [join(dirname(temp), "C", "clang", "ModuleCache")];
 }
 
 /** The Python interpreter for this project: its virtual environment when it has one. */

@@ -4,7 +4,15 @@ import { join } from "node:path";
 import { DEFAULT_ENV_ALLOWLIST } from "../permissions/engine.js";
 import { HostExecutor } from "../sandbox/host.js";
 import { writeFiles } from "./files.js";
-import { MAVEN_POM, PYPROJECT } from "./projects.js";
+import {
+  ANDROID_CHECK,
+  ANDROID_PROJECT,
+  EVAL_GRADLE,
+  MAVEN_POM,
+  PYPROJECT,
+  SWIFT_CHECK,
+  SWIFT_PACKAGE,
+} from "./projects.js";
 
 /**
  * Toolchains for the Java and Python eval suites (0.3). A task that needs a toolchain runs only
@@ -13,7 +21,7 @@ import { MAVEN_POM, PYPROJECT } from "./projects.js";
  * does it once, with the user's consent.
  */
 
-export type ToolchainId = "maven" | "pytest";
+export type ToolchainId = "maven" | "pytest" | "swift" | "android";
 
 export interface Toolchain {
   id: ToolchainId;
@@ -22,6 +30,8 @@ export interface Toolchain {
   files: Record<string, string>;
   /** Proves that the toolchain works with no network. */
   probe: string;
+  /** Default 2 minutes. Gradle with the Android plugin needs more on a cold start. */
+  probeTimeoutMs?: number;
   /** Fills the caches (network). Undefined: the user must install the toolchain. */
   prepare?: string;
   /** What the user can do when the probe fails. */
@@ -29,7 +39,26 @@ export interface Toolchain {
 }
 
 /** Environment variables that the toolchains need, on top of the default list. */
-export const TOOLCHAIN_ENV = ["JAVA_HOME", "GRADLE_USER_HOME", "VIRTUAL_ENV"];
+export const TOOLCHAIN_ENV = [
+  "JAVA_HOME",
+  "GRADLE_USER_HOME",
+  "VIRTUAL_ENV",
+  // T14 part 6: the mobile suite.
+  "ANDROID_HOME",
+  "ANDROID_SDK_ROOT",
+  "DEVELOPER_DIR",
+];
+
+/**
+ * `--prepare android`: Gradle ${EVAL_GRADLE} into the wrapper's folder (as `./gradlew` would put it),
+ * unless one is there, then the probe online, which fills Gradle's caches (the Android plugin,
+ * JUnit, Gson).
+ */
+const ANDROID_PREPARE = [
+  `dists="\${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists/gradle-${EVAL_GRADLE}-bin"`,
+  `if ! ls -d "$dists"/*/gradle-${EVAL_GRADLE} >/dev/null 2>&1; then mkdir -p "$dists/garuda" && curl -fsSL https://services.gradle.org/distributions/gradle-${EVAL_GRADLE}-bin.zip -o "$dists/garuda/gradle.zip" && unzip -q "$dists/garuda/gradle.zip" -d "$dists/garuda" && rm "$dists/garuda/gradle.zip"; fi`,
+  "./gradlew testDebugUnitTest --no-daemon -q",
+].join(" && ");
 
 export const TOOLCHAINS: Readonly<Record<ToolchainId, Toolchain>> = {
   maven: {
@@ -57,6 +86,34 @@ export const TOOLCHAINS: Readonly<Record<ToolchainId, Toolchain>> = {
     probe: "python3 -m pytest -q -p no:cacheprovider",
     hint: "The Python tasks need python3 with pytest 7 or later. Install it, for example with `python3 -m pip install --user pytest`.",
   },
+  swift: {
+    id: "swift",
+    title: "Swift with XCTest",
+    files: {
+      "Package.swift": SWIFT_PACKAGE,
+      "Sources/Shop/Probe.swift":
+        "public enum Probe {\n  public static func one() -> Int { 1 }\n}\n",
+      "Tests/ShopTests/ProbeTests.swift":
+        "import XCTest\n@testable import Shop\n\nfinal class ProbeTests: XCTestCase {\n  func testOne() {\n    XCTAssertEqual(Probe.one(), 1)\n  }\n}\n",
+    },
+    probe: SWIFT_CHECK,
+    hint: "The iOS tasks need Swift with XCTest: Xcode on macOS (run `xcodebuild -runFirstLaunch` once), or a Swift toolchain on Linux.",
+  },
+  android: {
+    id: "android",
+    title: `Android: Gradle ${EVAL_GRADLE}, the Android plugin 8.7.3, SDK platform 35`,
+    files: {
+      ...ANDROID_PROJECT,
+      "app/src/main/java/dev/garuda/shop/Probe.java":
+        "package dev.garuda.shop;\n\npublic final class Probe {\n  private Probe() {}\n\n  public static int one() {\n    return 1;\n  }\n}\n",
+      "app/src/test/java/dev/garuda/shop/ProbeTest.java":
+        "package dev.garuda.shop;\n\nimport static org.junit.Assert.assertEquals;\n\nimport org.junit.Test;\n\npublic class ProbeTest {\n  @Test\n  public void one() {\n    assertEquals(1, Probe.one());\n  }\n}\n",
+    },
+    probe: ANDROID_CHECK,
+    probeTimeoutMs: 5 * 60_000,
+    prepare: ANDROID_PREPARE,
+    hint: `The Android tasks need a JDK from 17 to 23 (JAVA_HOME, or Homebrew's openjdk@21 or @17: \`brew install openjdk@21\`), the Android SDK with platform 35 (ANDROID_HOME, Android Studio's ~/Library/Android/sdk or Homebrew's android-commandlinetools), and Gradle ${EVAL_GRADLE} with the Android plugin in Gradle's caches. Run \`garuda eval --prepare android\` once: it downloads them (network).`,
+  },
 };
 
 export interface ToolchainStatus {
@@ -73,7 +130,11 @@ export async function checkToolchains(ids: readonly ToolchainId[]): Promise<Tool
   return Promise.all(
     [...new Set(ids)].map(async (id) => {
       const toolchain = TOOLCHAINS[id];
-      const r = await inScratch(toolchain, toolchain.probe, PROBE_TIMEOUT_MS);
+      const r = await inScratch(
+        toolchain,
+        toolchain.probe,
+        toolchain.probeTimeoutMs ?? PROBE_TIMEOUT_MS,
+      );
       return { id, ...r };
     }),
   );
@@ -93,6 +154,9 @@ export function toolchainId(name: string): ToolchainId | undefined {
     maven: "maven",
     python: "pytest",
     pytest: "pytest",
+    swift: "swift",
+    ios: "swift",
+    android: "android",
   };
   return aliases[name.toLowerCase()];
 }
