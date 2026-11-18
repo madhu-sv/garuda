@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.21.0 (2026-11-18)
+
+Android and iOS projects. Garuda finds an Android app, a Swift package or an Xcode project, and
+runs its unit tests and builds in the sandbox. Simulators, emulators and devices run as you, so
+they never run in the sandbox: Garuda asks first, and says what the command drives. Measured on a
+new `mobile` eval suite: 48 of 48 runs passed with Haiku 5.5 in both read modes. Also a security
+fix: the `glob` and `grep` tools no longer accept extglobs, which could block Garuda.
 
 - Security: the `glob` and `grep` tools no longer accept extglobs (`+(…)`, `*(…)`, `@(…)`, `?(…)`,
   `!(…)`). picomatch has no fix for GHSA-fc5q-39xc-vjpf, and a
