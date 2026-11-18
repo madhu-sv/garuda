@@ -12,9 +12,11 @@ import type { ExecPolicy } from "../src/sandbox/types.js";
  * Seatbelt tests check the profile's text; these start `sandbox-exec` with it.
  *
  * - The simulator rule (0.20.1): a sandboxed `xcrun simctl` must fail where an outside one works.
- * - A probe for adb's port (docs/lld/mobile.md): which rule blocks localhost:5037 and keeps the rest
- *   of localhost? In the user's hand test (0.20.1) the forms tried blocked all of localhost or
- *   nothing. The probe prints a table and fails only if Garuda's own profile breaks localhost.
+ * - adb's port (T14, docs/lld/mobile.md): Garuda's profile blocks localhost:5037 and keeps the rest
+ *   of localhost, with the network off and on. Before, the profile allowed localhost and then could
+ *   not take one port back out: every form tried blocked all of localhost or nothing. A probe of
+ *   eleven rule forms on the user's Mac found that only rules that deny work. An outside host is
+ *   tried only with GARUDA_PROBE_INTERNET=1 (the suite never needs the internet).
  */
 
 const darwin = process.platform === "darwin";
@@ -79,56 +81,8 @@ for (const target of targets) {
 `;
 
 const ADB = 5037;
-const GARUDA_ALLOW = '(allow network-outbound (remote ip "localhost:*"))';
-const GARUDA_DENY = '(deny network-outbound (remote ip "*:*"))';
-/** Denials only (the form that blocked one port in 0.20.1): no "deny all, allow localhost". */
-const denialsOnly = (p: string, port?: string) =>
-  p
-    .replace(GARUDA_DENY, '(deny network-outbound (require-not (remote ip "localhost:*")))')
-    .replace(
-      GARUDA_ALLOW,
-      port === undefined ? "" : `(deny network-outbound (remote ip "${port}"))`,
-    );
 
-/** Candidate rules: a name and how each changes Garuda's profile. */
-const CANDIDATES: [string, (profile: string) => string][] = [
-  ["Garuda's profile (no port rule)", (p) => p],
-  [
-    'deny remote ip "localhost:5037", after',
-    (p) => `${p}\n(deny network-outbound (remote ip "localhost:5037"))`,
-  ],
-  ['deny remote ip "*:5037", after', (p) => `${p}\n(deny network-outbound (remote ip "*:5037"))`],
-  ['deny remote tcp "*:5037", after', (p) => `${p}\n(deny network-outbound (remote tcp "*:5037"))`],
-  [
-    'deny remote tcp4 "*:5037", after',
-    (p) => `${p}\n(deny network-outbound (remote tcp4 "*:5037"))`,
-  ],
-  [
-    'deny network* remote ip "localhost:5037", after',
-    (p) => `${p}\n(deny network* (remote ip "localhost:5037"))`,
-  ],
-  [
-    "allow localhost with require-not 5037",
-    (p) =>
-      p.replace(
-        GARUDA_ALLOW,
-        '(allow network-outbound (require-all (remote ip "localhost:*") (require-not (remote ip "localhost:5037"))))',
-      ),
-  ],
-  ["denials only, no port rule (control)", (p) => denialsOnly(p)],
-  ['denials only, deny "localhost:5037"', (p) => denialsOnly(p, "localhost:5037")],
-  ['denials only, deny "*:5037"', (p) => denialsOnly(p, "*:5037")],
-  [
-    "allow localhost with require-not *:5037",
-    (p) =>
-      p.replace(
-        GARUDA_ALLOW,
-        '(allow network-outbound (require-all (remote ip "localhost:*") (require-not (remote ip "*:5037"))))',
-      ),
-  ],
-];
-
-describe.runIf(darwin)("a probe for adb's port (T14)", () => {
+describe.runIf(darwin)("adb's port, for real (T14)", () => {
   const servers: Server[] = [];
   const script = join(base, "client.cjs");
   let local = "";
@@ -173,40 +127,25 @@ describe.runIf(darwin)("a probe for adb's port (T14)", () => {
     for (const s of servers) s.close();
   });
 
-  it("prints which rule blocks 5037 and keeps the other port; Garuda's profile keeps localhost", async () => {
+  it("Garuda's profile blocks 5037 and keeps localhost; the network stays blocked", async () => {
     if (!adbReachable) {
       console.log("skipped: nothing listens on 127.0.0.1:5037, also outside the sandbox");
       return;
     }
-    const rows: string[] = [];
-    let garuda: Record<string, string> | undefined;
-    for (const [name, change] of CANDIDATES) {
+    if (remote === "") console.log("Outside host not tested: set GARUDA_PROBE_INTERNET=1.");
+    for (const network of [false, true]) {
       const r = await sandboxed(
-        change(seatbeltProfile(policy)),
+        seatbeltProfile({ ...policy, network }),
         `node '${script}' ${local} ${adb} ${own} ${remote}`,
       );
-      let result: Record<string, string> | undefined;
-      try {
-        result = JSON.parse(r.stdout.text.trim()) as Record<string, string>;
-      } catch {
-        result = undefined;
-      }
-      const cell =
-        result === undefined
-          ? `profile error (exit ${r.exitCode}): ${r.stderr.text.trim().split("\n")[0] ?? ""}`
-          : `other port ${result[local]}, 5037 ${result[adb]}, own address ${own === "" ? "-" : result[own]}, outside ${remote === "" ? "not tested" : result[remote]}`;
-      const wanted =
-        result?.[local] === "ok" &&
-        result?.[adb] !== "ok" &&
-        (remote === "" || result?.[remote] !== "ok");
-      rows.push(`${wanted ? "WORKS " : "      "}${name}: ${cell}`);
-      if (name.startsWith("Garuda")) garuda = result;
+      const result = JSON.parse(r.stdout.text.trim()) as Record<string, string>;
+      console.log(`network ${network ? "on" : "off"}: ${JSON.stringify(result)}`);
+      // Local test servers and Garuda's proxy need localhost; the adb server must stay out of reach.
+      expect(result[local], `network ${network}`).toBe("ok");
+      expect(result[adb], `network ${network}`).not.toBe("ok");
+      // This machine's own address is localhost to Seatbelt: the same machine.
+      if (own !== "") expect(result[own]).toBe("ok");
+      if (remote !== "") expect(result[remote]).toBe(network ? "ok" : "blocked");
     }
-    console.log(`Seatbelt port probe (T14, adb):\n${rows.join("\n")}`);
-    if (remote === "") console.log("Outside host not tested: set GARUDA_PROBE_INTERNET=1.");
-    // Garuda's own profile must keep localhost (local test servers and Garuda's proxy need it),
-    // and, when tested, block the outside host.
-    expect(garuda?.[local]).toBe("ok");
-    if (remote !== "") expect(garuda?.[remote]).not.toBe("ok");
   }, 120_000);
 });

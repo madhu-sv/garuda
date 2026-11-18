@@ -32,9 +32,10 @@ In the sandbox, a command:
   destination) (0.20.1). The simulator's service runs outside the sandbox: in a probe, a sandboxed
   `simctl` read a file that the sandbox hides and wrote one in the home folder. With your yes, such
   a command runs with `outside_sandbox`. Since T14 Garuda does not run `adb` itself in the sandbox
-  (below). A limit on macOS: another sandboxed program can reach an adb server that you started
-  (`localhost:5037`), and through it your devices. Stop it with
-  `adb kill-server` while Garuda works. On Linux each command has its own network;
+  (below);
+- cannot reach an adb server that you started (`localhost:5037`), and through it your devices
+  (after 0.21.0, on macOS a Seatbelt rule for that port; on Linux each command has its own
+  network). The rest of localhost stays open for local servers;
 - sees only its own processes on Linux, not Garuda's or yours (0.14);
 - does not outlive the call (a daemon, below, is the exception you ask for): Garuda stops the
   command's processes when it ends, also ones that left its process group (on macOS since 0.17,

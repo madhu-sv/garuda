@@ -86,14 +86,20 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 (deny file-read* (subpath <denyReadPath>)…)
 (deny lsopen)                                      ; 0.14: no apps through LaunchServices (`open`)
 (deny appleevent-send)                             ; 0.14: no Apple Events (`osascript`)
-(deny network-outbound (remote ip "*:*"))          ; when network is false
+(deny network-outbound (require-not (remote ip "localhost:*")))  ; when network is false
 (deny network-inbound (local ip "*:*"))
 (deny network-bind (local ip "*:*"))
-(allow network-* … "localhost:*")                  ; test servers keep working
+(allow network-inbound|bind … "localhost:*")       ; test servers keep working
+(deny network-outbound (remote ip "localhost:5037"))  ; T14: no adb server, network off or on
+(deny mach-lookup (global-name-regex #"^com\.apple\.CoreSimulator\."))  ; 0.20.1
 (deny file-read* (literal <markerA>))              ; 0.17: the tracker's markers, last (see below)
 (allow file-read* (literal <markerB>))
 (deny file-write* (subpath <markers folder>))
 ```
+
+Outbound rules only deny (after 0.21.0): Seatbelt cannot take one port back out of an allow rule
+(every port denial after an "allow localhost" blocked all of localhost), and adb's port needs that.
+Seatbelt's "localhost" means this machine's addresses. See docs/lld/mobile.md, "adb's port".
 
 Paths are Scheme strings with `\` and `"` escaped. Since 0.18.1 each denied path under `/Users`
 is also denied under `/System/Volumes/Data/Users` (`withDataVolume`): macOS reaches the same folder

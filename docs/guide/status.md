@@ -65,9 +65,10 @@ in 0.21.0:
   simulator, an emulator or a device run only outside the sandbox, with your yes. Flutter and React
   Native have no profile yet; Kotlin and Swift have no code index. See
   [Mobile apps](mobile.md).
-- On macOS a program in the sandbox other than `adb` itself (a script that opens `localhost:5037`)
-  can reach an adb server that you started, and through it your devices. Stop it with
-  `adb kill-server` while Garuda works (T14).
+- In 0.21.0 on macOS, a program in the sandbox other than `adb` itself (a script that opens
+  `localhost:5037`) can reach an adb server that you started, and through it your devices. Stop it
+  with `adb kill-server` while Garuda works. Fixed after 0.21.0 (Unreleased): a Seatbelt rule
+  blocks that port (T14).
 - Token budget: a call's reservation is an estimate (about 4 characters per token, plus the output
   limit), so a provider that counts more input tokens than the estimate can pass the cap by that
   difference.

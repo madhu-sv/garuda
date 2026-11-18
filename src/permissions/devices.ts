@@ -3,8 +3,9 @@ import { commandParts } from "./rules.js";
 /**
  * T14 part 4 (docs/lld/mobile.md): commands that start or drive a simulator, an emulator or a
  * device. These run outside Garuda's sandbox in effect: the simulator runs as the user (finding 2:
- * `simctl spawn` reads any file), and on macOS adb's server is reachable on localhost. So they never
- * run in the sandbox; with `outside_sandbox: true` they ask, and in jobs and evals they are denied.
+ * `simctl spawn` reads any file), and adb's server controls every attached device. The sandbox
+ * blocks both (CoreSimulator's service, and on macOS adb's port since ADB_RULE), so they never run
+ * in the sandbox; with `outside_sandbox: true` they ask, and in jobs and evals they are denied.
  *
  * A guard on the command's words, not a shell parser: approval stays the main control.
  */

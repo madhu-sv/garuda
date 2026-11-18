@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+- Security (macOS): sandboxed commands can no longer reach an adb server that you started
+  (`localhost:5037`), and through it your devices. Before, only `adb` itself was kept out; a
+  script could still open the port. The Seatbelt profile's network rules now only deny, which lets
+  one port be blocked: every port rule after "allow localhost" blocked all of localhost. The rest
+  of localhost stays open for local servers and Garuda's proxy. Found with a probe of eleven rule
+  forms on a Mac (`test/seatbeltLive.test.ts`).
 - Tests (macOS): Seatbelt rules run for real. A sandboxed `xcrun simctl` must fail where an outside
-  one works, and a probe tries rules for adb's port (5037) with real sockets and prints which one
-  blocks only that port.
+  one works, and with real sockets the profile must block adb's port and keep the rest of
+  localhost. With `GARUDA_PROBE_INTERNET=1` it must also block an outside host.
 - The Homebrew formula in the repository names 0.21.0 and its tarball hash.
 
 ## 0.21.0 (2026-11-18)

@@ -88,7 +88,7 @@ describe("Seatbelt profile", () => {
     expect(profile).toContain(
       '(deny file-read* (subpath "/home/u/.ssh") (subpath "/home/u/.netrc"))',
     );
-    expect(profile).toContain('(deny network-outbound (remote ip "*:*"))');
+    expect(profile).toContain('(deny network-outbound (require-not (remote ip "localhost:*")))');
   });
 
   it("does not let a command start apps outside the sandbox (0.14, review)", () => {
@@ -99,21 +99,22 @@ describe("Seatbelt profile", () => {
     }
   });
 
-  it("keeps the simulator service out of reach, with no port rule on localhost (0.20.1)", () => {
+  it("keeps the simulator service and the adb server out of reach (0.20.1, T14)", () => {
     for (const network of [false, true]) {
-      expect(seatbeltProfile(policy({ network }))).toContain(
+      const profile = seatbeltProfile(policy({ network }));
+      expect(profile).toContain(
         '(deny mach-lookup (global-name-regex #"^com\\.apple\\.CoreSimulator\\."))',
       );
+      expect(profile).toContain('(deny network-outbound (remote ip "localhost:5037"))');
+      // Outbound rules only deny: an "allow localhost" made the port rule block all of localhost.
+      expect(profile).not.toContain("(allow network-outbound");
     }
-    // No port rule on localhost: with "allow localhost" before it, Seatbelt denied all of localhost
-    // on the user's Mac, and the proxy and local test servers failed (0.20.1).
-    const profile = seatbeltProfile(policy({ network: false }));
-    expect(profile).not.toMatch(/remote ip "localhost:\d+"/);
   });
 
   it("keeps the network when the policy allows it, and quotes paths", () => {
     const profile = seatbeltProfile(policy({ network: true, writePaths: ['/a "b"\\c'] }));
-    expect(profile).not.toContain("network-outbound");
+    // Only the adb denial (T14): no other network rule.
+    expect(profile.match(/network-outbound/g)).toHaveLength(1);
     expect(profile).toContain('(subpath "/a \\"b\\"\\\\c")');
   });
 });
