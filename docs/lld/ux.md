@@ -295,8 +295,11 @@ sonnet-5.5 · ⛨ seatbelt · no network · ▓▓▓▓▓▓░░░░ 62% �
 - In plan mode, the `PLAN` badge stays first. Since the review of 2026-11 the footer always names
   the mode (`footerModes`, `modeWord`): `BUILD` too, and while a turn runs in the other mode after
   Shift+Tab, `BUILD now · PLAN next turn` (`Status.turnMode`, from `Runtime.activeMode`). The input
-  line starts with `plan ›` in plan mode. A new line comes from `\`+Enter, Alt+Enter or Shift+Enter
-  (`onKey`: `key.meta || key.shift`); Shift+Enter needs a terminal that reports the modifier.
+  line starts with `plan ›` in plan mode. A new line comes from `\`+Enter, Alt+Enter or Shift+Enter.
+  Shift+Enter is read two ways: `key.meta || key.shift` when Ink reports the modifier, and the
+  kitty-protocol sequence `ESC [ 13 ; 2 u` (`csiuEnter`), which Ink does not parse and hands over as
+  raw input; a plain terminal that sends the same bytes for Enter and Shift+Enter cannot be told
+  apart, so `\`+Enter always works.
   `/plan`'s text (`modeText`) says commands run read-only in the sandbox, or, with no sandbox, that
   they do not run — the engine denies them there (P2, second 2026-11 review). Shift+Tab adds a note (`modeSwitchText`): what the mode
   does, and "From the next turn" while a turn runs.

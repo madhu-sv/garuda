@@ -47,9 +47,9 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   chat goes on, and the model learns with your next message that you stopped the task, so it does not
   go on with it unless you ask. A second Ctrl-C during the task exits Garuda at once; Esc never exits.
 - New lines: end the line with `\` and press Enter, or press Alt+Enter (Option+Enter on a Mac with
-  "Use Option as Meta"), or Shift+Enter where the terminal reports it (the kitty keyboard protocol,
-  or xterm's modifyOtherKeys). A plain terminal sends the same bytes for Enter and Shift+Enter, so
-  `\` then Enter is the one that always works. Pasted text keeps its new lines and is never sent by
+  "Use Option as Meta"), or Shift+Enter in a terminal that uses the kitty keyboard
+  protocol (it sends `ESC [ 13 ; 2 u`, which Garuda reads). A plain terminal sends the same bytes
+  for Enter and Shift+Enter, so `\` then Enter is the one that always works. Pasted text keeps its new lines and is never sent by
   itself.
 - `@path` attaches a file or folder: `fix the bug in @src/cart.ts`. The file's text goes with your
   message (numbered, up to 2,000 lines) and counts as read, so the model can edit it at once; a folder gives

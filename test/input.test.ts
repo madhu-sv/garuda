@@ -84,6 +84,30 @@ describe("chat input (0.6)", () => {
     expect(await sent).toBe("one \ntwo");
   });
 
+  it("Shift+Enter under the kitty protocol (CSI-u) adds a new line, not a submit", async () => {
+    const { csiuEnter } = await import("../src/cli/chat/ui.js");
+    // The exact bytes the reviewer sent (ESC [ 13 ; 2 u), and the ESC-stripped form Ink may give.
+    expect(csiuEnter("\x1b[13;2u")).toBe("newline");
+    expect(csiuEnter("[13;2u")).toBe("newline");
+    expect(csiuEnter("[13;3u")).toBe("newline"); // Alt
+    expect(csiuEnter("[13;5u")).toBe("submit"); // Ctrl only
+    expect(csiuEnter("[13u")).toBe("submit"); // plain Enter
+    expect(csiuEnter("[13;1u")).toBe("submit");
+    expect(csiuEnter("x")).toBeUndefined();
+    expect(csiuEnter("[27;2u")).toBeUndefined();
+    // Through the key handler: draft stays, with a new line, and is not submitted.
+    const store = newStore();
+    type(store, "draft");
+    let sent = false;
+    void store.nextInput().then(() => {
+      sent = true;
+    });
+    press(store, "\x1b[13;2u");
+    type(store, "more");
+    expect(sent).toBe(false);
+    expect(store.getState().editor.text).toBe("draft\nmore");
+  });
+
   it("Ctrl-G puts the edited text into the input line; it is not sent", () => {
     const store = newStore();
     type(store, "draft");

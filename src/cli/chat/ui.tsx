@@ -510,13 +510,17 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     actions[input]?.();
     return;
   }
-  if (key.return) {
-    // A new line instead of sending: Alt+Enter, Shift+Enter, or "\" at the end of the text before
-    // the cursor. Shift+Enter works only where the terminal reports the shift (the kitty keyboard
-    // protocol, or xterm modifyOtherKeys); a plain terminal sends the same bytes for Enter and
-    // Shift+Enter, so there "\" then Enter is the newline that always works (2026-11 review, P2).
+  // Enter under the kitty keyboard protocol (CSI-u): the terminal sends ESC [ 13 ; <mod> u, which
+  // Ink does not parse, so it arrives as raw input, not key.return. Shift+Enter is ESC [ 13 ; 2 u
+  // (2026-11 review, P2: it submitted the draft). csiuEnter reads it; a plain terminal that sends
+  // the same bytes for Enter and Shift+Enter still cannot be told apart, so "\" then Enter stays
+  // the newline that always works.
+  const csiu = csiuEnter(input);
+  if (key.return || csiu !== undefined) {
     const before = state.editor.text.slice(0, state.editor.cursor);
-    if (key.meta || key.shift) store.editLine({ type: "insert", text: "\n" });
+    const newline =
+      csiu === undefined ? key.meta === true || key.shift === true : csiu === "newline";
+    if (newline) store.editLine({ type: "insert", text: "\n" });
     else if (before.endsWith("\\")) {
       store.editLine({ type: "backspace" });
       store.editLine({ type: "insert", text: "\n" });
@@ -549,6 +553,21 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
  * for example "run the tests\n" (the terminal turns Enter into \n before raw mode).
  * Each line end is an Enter. Pastes do not come here: they come through usePaste.
  */
+/**
+ * Enter under the kitty keyboard protocol (CSI-u): `ESC [ 13 ; <mod> u`, with or without the ESC
+ * that Ink strips, as for focus events. The modifier is 1 plus a bitmask (shift 1, alt 2, ctrl 4);
+ * Shift or Alt means a new line, like Alt+Enter, and a plain or Ctrl Enter submits. Any other input
+ * is not a CSI-u Enter.
+ */
+export function csiuEnter(input: string): "newline" | "submit" | undefined {
+  const code = input.startsWith("\x1b") ? input.slice(1) : input;
+  const m = /^\[13(?:;(\d+))?u$/.exec(code);
+  if (m === null) return undefined;
+  const bits = (m[1] === undefined ? 1 : Number(m[1])) - 1;
+  // Shift (1) or Alt (2): a new line. Plain (0) or Ctrl (4) only: submit.
+  return (bits & 0b011) !== 0 ? "newline" : "submit";
+}
+
 export function typeAhead(store: ChatStore, chunk: string): void {
   const parts = chunk.split(/\r\n|\r|\n/);
   parts.forEach((part, i) => {
