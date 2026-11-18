@@ -165,6 +165,22 @@ export function runtimeDenials(
   return writePaths.some(inside) ? [] : [dir];
 }
 
+/**
+ * Well-known daemon sockets to hide (after 0.21.0, the Unix-socket deputies: see UNIX_SOCKET_RULE
+ * in seatbelt.ts). On macOS the Seatbelt rule blocks every outbound Unix socket, so this is a
+ * belt-and-braces cover there. On Linux `--unshare-net` leaves a pathname socket reachable, so
+ * hiding these is the real fix: the Docker socket (a container can mount your home folder), the
+ * system bus, and the SSH agent socket that `SSH_AUTH_SOCK` names. gpg-agent's sockets sit in
+ * `~/.gnupg`, which is a denied read already, and `/run/user/<uid>` (ssh-agent, the session bus)
+ * is hidden by `runtimeDenials`.
+ */
+export function socketDenials(env: NodeJS.ProcessEnv = process.env): string[] {
+  const paths = ["/var/run/docker.sock", "/run/docker.sock", "/var/run/dbus/system_bus_socket"];
+  const agent = env.SSH_AUTH_SOCK;
+  if (agent !== undefined && isAbsolute(agent)) paths.push(agent);
+  return paths;
+}
+
 /** A settings path: `~` and `~/…` are in the home folder; relative paths start at the root. */
 export function expandPath(root: string, home: string, path: string): string {
   return path === "~"
@@ -224,6 +240,7 @@ export function sandboxPaths(
       ...gradle.denied,
       ...personalDenials(home, root),
       ...runtimeDenials(writePaths, platform),
+      ...socketDenials(),
       // Both spellings: a denial that matches nothing would leave the file readable.
       ...(settings.denyRead ?? []).flatMap((p) => [expand(p), realPath(expand(p))]),
     ]),

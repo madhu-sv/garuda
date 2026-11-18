@@ -91,6 +91,7 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 (deny network-bind (local ip "*:*"))
 (allow network-inbound|bind … "localhost:*")       ; test servers keep working
 (deny network-outbound (remote ip "localhost:5037"))  ; T14: no adb server, network off or on
+(deny network-outbound (remote unix-socket))       ; no Docker/ssh-agent/gpg deputy, on or off
 (deny mach-lookup (global-name-regex #"^com\.apple\.CoreSimulator\."))  ; 0.20.1
 (deny file-read* (literal <markerA>))              ; 0.17: the tracker's markers, last (see below)
 (allow file-read* (literal <markerB>))
@@ -100,6 +101,16 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 Outbound rules only deny (after 0.21.0): Seatbelt cannot take one port back out of an allow rule
 (every port denial after an "allow localhost" blocked all of localhost), and adb's port needs that.
 Seatbelt's "localhost" means this machine's addresses. See docs/lld/mobile.md, "adb's port".
+
+No deputy over a Unix socket (after 0.21.0, a dev.to reader's point): a command cannot read your
+keys, but a daemon already running with your rights can act for it over a socket — the Docker
+socket (a container mounts your home folder), ssh-agent (`SSH_AUTH_SOCK` signs with your keys),
+gpg-agent, a git credential helper. Seatbelt denies every outbound Unix-socket connection
+(`UNIX_SOCKET_RULE`); Garuda's proxy is TCP, so it is untouched. On Linux `--unshare-net` blocks
+TCP but leaves a pathname socket reachable, so `socketDenials` (sandboxPaths.ts) hides the
+well-known ones (the Docker socket, the system bus, `$SSH_AUTH_SOCK`); gpg-agent sits in
+`~/.gnupg` and ssh-agent in `/run/user/<uid>`, both hidden already. A command-word check still
+turns `docker`, `adb` and the like outside the sandbox (T14), but this closes the class under it.
 
 Paths are Scheme strings with `\` and `"` escaped. Since 0.18.1 each denied path under `/Users`
 is also denied under `/System/Volumes/Data/Users` (`withDataVolume`): macOS reaches the same folder

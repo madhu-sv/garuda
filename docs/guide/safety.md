@@ -36,6 +36,9 @@ In the sandbox, a command:
 - cannot reach an adb server that you started (`localhost:5037`), and through it your devices
   (after 0.21.0, on macOS a Seatbelt rule for that port; on Linux each command has its own
   network). The rest of localhost stays open for local servers;
+- cannot talk to a daemon over a Unix socket (after 0.21.0): the Docker socket, your SSH agent,
+  gpg-agent and git credential helpers all run with your rights and would act for a command that
+  reached them. Garuda's own network proxy uses TCP, so it still works;
 - sees only its own processes on Linux, not Garuda's or yours (0.14);
 - does not outlive the call (a daemon, below, is the exception you ask for): Garuda stops the
   command's processes when it ends, also ones that left its process group (on macOS since 0.17,

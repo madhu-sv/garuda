@@ -108,13 +108,15 @@ describe("Seatbelt profile", () => {
       expect(profile).toContain('(deny network-outbound (remote ip "localhost:5037"))');
       // Outbound rules only deny: an "allow localhost" made the port rule block all of localhost.
       expect(profile).not.toContain("(allow network-outbound");
+      // No deputy over a Unix socket (Docker, ssh-agent, gpg-agent …), network on or off.
+      expect(profile).toContain("(deny network-outbound (remote unix-socket))");
     }
   });
 
   it("keeps the network when the policy allows it, and quotes paths", () => {
     const profile = seatbeltProfile(policy({ network: true, writePaths: ['/a "b"\\c'] }));
-    // Only the adb denial (T14): no other network rule.
-    expect(profile.match(/network-outbound/g)).toHaveLength(1);
+    // With the network on: only the adb denial and the Unix-socket denial, no allowlist rule.
+    expect(profile.match(/network-outbound/g)).toHaveLength(2);
     expect(profile).toContain('(subpath "/a \\"b\\"\\\\c")');
   });
 });

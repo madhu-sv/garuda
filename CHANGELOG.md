@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Security: sandboxed commands can no longer talk to a daemon over a Unix socket (the Docker
+  socket, ssh-agent through `SSH_AUTH_SOCK`, gpg-agent, a git credential helper). Each one runs
+  with your rights and would act for the command, the way a Gradle daemon did. On macOS the
+  Seatbelt profile denies every outbound Unix-socket connection; Garuda's proxy is TCP, so it
+  keeps working. On Linux the well-known sockets are hidden (the Docker socket, the system bus,
+  `$SSH_AUTH_SOCK`). Raised by a reader of the sandbox-escape post.
 - Security (macOS): sandboxed commands can no longer reach an adb server that you started
   (`localhost:5037`), and through it your devices. Before, only `adb` itself was kept out; a
   script could still open the port. The Seatbelt profile's network rules now only deny, which lets

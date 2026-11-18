@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { runtimeDenials, sandboxPaths } from "../src/permissions/sandboxPaths.js";
+import { runtimeDenials, sandboxPaths, socketDenials } from "../src/permissions/sandboxPaths.js";
 import { bwrapArgs } from "../src/sandbox/bwrap.js";
 import type { ExecPolicy } from "../src/sandbox/types.js";
 
@@ -79,5 +79,36 @@ describe("the Linux runtime folder", () => {
     };
     const args = bwrapArgs("secret-tool lookup x y", policy, () => "dir").join(" ");
     expect(args).toContain("--tmpfs /run/user/1000 --remount-ro /run/user/1000");
+  });
+});
+
+describe("Unix-socket deputies (after 0.21.0, docs/lld/sandbox.md)", () => {
+  it("hides the Docker socket, the system bus and the SSH agent socket", () => {
+    const deny = sandboxPaths("/home/me/p", {}, home, "linux").denyReadPaths;
+    expect(deny).toContain("/var/run/docker.sock");
+    expect(deny).toContain("/run/docker.sock");
+    expect(deny).toContain("/var/run/dbus/system_bus_socket");
+  });
+
+  it("follows SSH_AUTH_SOCK, and bubblewrap covers a socket with /dev/null", () => {
+    const withAgent = socketDenials({ SSH_AUTH_SOCK: "/tmp/ssh-AB/agent.42" });
+    expect(withAgent).toContain("/tmp/ssh-AB/agent.42");
+    // A relative value is not a path to hide.
+    expect(socketDenials({ SSH_AUTH_SOCK: "agent.42" })).not.toContain("agent.42");
+    expect(socketDenials({})).not.toContain(undefined as unknown as string);
+    // A socket is not a directory, so pathKind calls it a file: bubblewrap binds /dev/null over it.
+    const policy: ExecPolicy = {
+      root: "/home/me/p",
+      sandbox: true,
+      writePaths: ["/home/me/p"],
+      denyWritePaths: [],
+      denyReadPaths: ["/var/run/docker.sock"],
+      network: false,
+      envAllowlist: [],
+      timeoutMs: 1_000,
+      maxOutputBytes: 1_000,
+    };
+    const args = bwrapArgs("docker ps", policy, () => "file").join(" ");
+    expect(args).toContain("--ro-bind /dev/null /var/run/docker.sock");
   });
 });
