@@ -153,9 +153,12 @@ action without a yes.
   The user's Mac (2026-11-18): no form works. Every port denial after "allow localhost" blocked
   all of localhost; `network*` and `require-not` blocked nothing. So the probe also tries rules
   that only deny (no "deny all, allow localhost"): `(deny network-outbound (require-not (remote ip
-  "localhost:*")))` and a port denial. It adds a third target, a server on the machine's own
-  network address, which every candidate must block too (no internet needed), and Garuda's own
-  profile must block it.
+  "localhost:*")))` and a port denial. Result (the user's Mac, 2026-11-18): denials only, with
+  `localhost:5037` or `*:5037`, block 5037 and keep the other localhost port. A server on the
+  Mac's own network address stayed reachable under every rule, Garuda's too: Seatbelt's
+  "localhost" means this machine's addresses, not only 127.0.0.1. That is the same machine, so it
+  is no way out. Whether denials only still block outside hosts needs the internet, so that check
+  runs only with `GARUDA_PROBE_INTERNET=1` (1.1.1.1:443).
   The same file runs the simulator rule for real: a sandboxed `xcrun simctl list devices` must
   fail where an outside one works.
 - `ApprovalRequest.defaultChoice`: the chat and the terminal approver start on it. The read

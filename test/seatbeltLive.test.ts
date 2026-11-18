@@ -132,7 +132,8 @@ describe.runIf(darwin)("a probe for adb's port (T14)", () => {
   const servers: Server[] = [];
   const script = join(base, "client.cjs");
   let local = "";
-  let lan = "";
+  let own = "";
+  let remote = "";
   const adb = `127.0.0.1:${ADB}`;
   let adbReachable = false;
 
@@ -150,20 +151,23 @@ describe.runIf(darwin)("a probe for adb's port (T14)", () => {
     local = `127.0.0.1:${await listen(0)}`;
     // A real adb server may hold 5037 already: then it is the one to block.
     await listen(ADB).catch(() => undefined);
-    // This machine's own network address: not localhost, so the sandbox must block it. No internet
-    // is needed.
+    // This machine's own network address. Seatbelt's "localhost" covers it (the user's Mac,
+    // 2026-11-18): it is the same machine, like 127.0.0.1. Printed, not judged.
     const address = Object.values(networkInterfaces())
       .flat()
       .find((a) => a !== undefined && a.family === "IPv4" && !a.internal)?.address;
-    if (address !== undefined) lan = `${address}:${await listen(0, address)}`;
+    if (address !== undefined) own = `${address}:${await listen(0, address)}`;
+    // An outside host, only on request: the suite never needs the internet.
+    if (process.env.GARUDA_PROBE_INTERNET === "1") remote = "1.1.1.1:443";
     writeFileSync(script, CLIENT);
-    const outside = await host.run(`node '${script}' ${local} ${adb} ${lan}`, {
+    const outside = await host.run(`node '${script}' ${local} ${adb} ${own} ${remote}`, {
       ...policy,
       sandbox: false,
       envAllowlist: ["PATH"],
     });
     adbReachable = outside.stdout.text.includes(`"${adb}":"ok"`);
-    if (lan !== "" && !outside.stdout.text.includes(`"${lan}":"ok"`)) lan = "";
+    if (own !== "" && !outside.stdout.text.includes(`"${own}":"ok"`)) own = "";
+    if (remote !== "" && !outside.stdout.text.includes(`"${remote}":"ok"`)) remote = "";
   });
   afterAll(() => {
     for (const s of servers) s.close();
@@ -179,7 +183,7 @@ describe.runIf(darwin)("a probe for adb's port (T14)", () => {
     for (const [name, change] of CANDIDATES) {
       const r = await sandboxed(
         change(seatbeltProfile(policy)),
-        `node '${script}' ${local} ${adb} ${lan}`,
+        `node '${script}' ${local} ${adb} ${own} ${remote}`,
       );
       let result: Record<string, string> | undefined;
       try {
@@ -190,18 +194,19 @@ describe.runIf(darwin)("a probe for adb's port (T14)", () => {
       const cell =
         result === undefined
           ? `profile error (exit ${r.exitCode}): ${r.stderr.text.trim().split("\n")[0] ?? ""}`
-          : `other port ${result[local]}, 5037 ${result[adb]}, network ${lan === "" ? "not tested" : result[lan]}`;
+          : `other port ${result[local]}, 5037 ${result[adb]}, own address ${own === "" ? "-" : result[own]}, outside ${remote === "" ? "not tested" : result[remote]}`;
       const wanted =
         result?.[local] === "ok" &&
         result?.[adb] !== "ok" &&
-        (lan === "" || result?.[lan] !== "ok");
+        (remote === "" || result?.[remote] !== "ok");
       rows.push(`${wanted ? "WORKS " : "      "}${name}: ${cell}`);
       if (name.startsWith("Garuda")) garuda = result;
     }
     console.log(`Seatbelt port probe (T14, adb):\n${rows.join("\n")}`);
-    // Garuda's own profile must keep localhost (local test servers and Garuda's proxy need it), and
-    // must block the machine's own network address.
+    if (remote === "") console.log("Outside host not tested: set GARUDA_PROBE_INTERNET=1.");
+    // Garuda's own profile must keep localhost (local test servers and Garuda's proxy need it),
+    // and, when tested, block the outside host.
     expect(garuda?.[local]).toBe("ok");
-    if (lan !== "") expect(garuda?.[lan]).toBe("blocked");
+    if (remote !== "") expect(garuda?.[remote]).not.toBe("ok");
   }, 120_000);
 });
