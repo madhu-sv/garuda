@@ -1,26 +1,13 @@
+import { EventEmitter } from "node:events";
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import { ChatStore } from "../src/cli/chat/store.js";
-import { App, onKey } from "../src/cli/chat/ui.js";
-import { FocusTracker, focusEvent, reportsFocus } from "../src/cli/focus.js";
+import { App } from "../src/cli/chat/ui.js";
+import { FocusTracker, focusEvent, reportsFocus, watchFocus } from "../src/cli/focus.js";
 import { Notifier } from "../src/cli/notify.js";
 import type { ApprovalRequest } from "../src/permissions/types.js";
 
 const newStore = () => new ChatStore({ model: "m", sandbox: "s" }, { paint: (_s, t) => t });
-const KEY = {
-  upArrow: false,
-  downArrow: false,
-  leftArrow: false,
-  rightArrow: false,
-  return: false,
-  escape: false,
-  ctrl: false,
-  meta: false,
-  tab: false,
-  shift: false,
-  backspace: false,
-  delete: false,
-};
 const DONE = {
   kind: "done" as const,
   result: {
@@ -36,11 +23,27 @@ const until = async (check: () => boolean) => {
 };
 
 describe("terminal focus (0.6)", () => {
-  it("reads focus events, with or without ESC; other input is not one", () => {
-    expect(focusEvent("[I")).toBe(true);
+  it("reads the focus event from a raw chunk; the last one wins; other input is not one", () => {
+    expect(focusEvent("\x1b[I")).toBe(true);
     expect(focusEvent("\x1b[O")).toBe(false);
+    // A chunk can carry typed text around the sequence, or two events; the last state wins.
+    expect(focusEvent("hi\x1b[I")).toBe(true);
+    expect(focusEvent("\x1b[O\x1b[I")).toBe(true);
     expect(focusEvent("I")).toBeUndefined();
-    expect(focusEvent("[I am")).toBeUndefined();
+    expect(focusEvent("[I without esc")).toBeUndefined();
+  });
+
+  it("watchFocus reads focus from stdin and detaches", () => {
+    const stdin = new EventEmitter();
+    const seen: boolean[] = [];
+    const stop = watchFocus(stdin as never, (f) => seen.push(f));
+    stdin.emit("data", Buffer.from("\x1b[O"));
+    stdin.emit("data", "a"); // plain input: no event
+    stdin.emit("data", Buffer.from("\x1b[I"));
+    expect(seen).toEqual([false, true]);
+    stop();
+    stdin.emit("data", Buffer.from("\x1b[O"));
+    expect(seen).toEqual([false, true]); // nothing after detach
   });
 
   it("only terminals that report focus, and not inside tmux or screen", () => {
@@ -81,17 +84,6 @@ describe("terminal focus (0.6)", () => {
     plain.turnStarted();
     plain.turnEnded(DONE, 1);
     expect(always).toEqual(["\x07"]);
-  });
-
-  it("focus events never reach the input line", () => {
-    const store = newStore();
-    const seen: boolean[] = [];
-    store.onFocus = (f) => seen.push(f);
-    onKey(store, store.getState(), "[O", KEY);
-    onKey(store, store.getState(), "a", KEY);
-    onKey(store, store.getState(), "[I", KEY);
-    expect(store.getState().editor.text).toBe("a");
-    expect(seen).toEqual([false, true]);
   });
 
   it("in the real Ink input: the codes go to the tracker, typed text to the line", async () => {

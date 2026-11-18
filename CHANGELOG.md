@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Chat: ink 8. Terminal focus (which keeps notifications quiet while the window is focused) now reads
+  the focus sequences from stdin beside ink (`watchFocus`), because ink 8 parses and swallows them
+  before `useInput`. Shift+Enter still adds a new line (ink 8 reports the kitty sequence as the key
+  modifier). Run `pnpm install` after this change to update the lockfile.
 - Build: tsup 9 (a dev dependency; the build output is unchanged). Its node floor (^22.18) is met
   by the project's engines.
 - LSP: vscode-jsonrpc 10 (loaded only when a language server starts). The client uses its stable

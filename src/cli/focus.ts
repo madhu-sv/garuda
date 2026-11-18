@@ -32,12 +32,41 @@ export class FocusTracker {
 }
 
 /**
- * A focus event from the keyboard input, or undefined for other input. Ink gives the sequence
- * without its ESC ("[I", "[O") as one input event of its own.
+ * The focus state in a chunk of raw terminal input, or undefined when it holds no focus event. The
+ * terminal sends ESC [ I (focus in) and ESC [ O (focus out). The last one in the chunk wins.
+ *
+ * Since ink 8 the chat reads focus from stdin directly (`watchFocus`), not from `useInput`: ink 8
+ * parses and swallows the focus sequences, so they never reach a key handler.
  */
-export function focusEvent(input: string): boolean | undefined {
-  const code = input.startsWith("\x1b") ? input.slice(1) : input;
-  if (code === "[I") return true;
-  if (code === "[O") return false;
-  return undefined;
+export function focusEvent(chunk: string): boolean | undefined {
+  const csi = "\x1b[";
+  let state: boolean | undefined;
+  for (let i = chunk.indexOf(csi); i !== -1; i = chunk.indexOf(csi, i + 2)) {
+    const after = chunk[i + 2];
+    if (after === "I") state = true;
+    else if (after === "O") state = false;
+  }
+  return state;
+}
+
+/** A minimal stdin, as both the real one and ink's test stdin satisfy. */
+interface DataStream {
+  on(event: "data", listener: (chunk: Buffer | string) => void): unknown;
+  off(event: "data", listener: (chunk: Buffer | string) => void): unknown;
+}
+
+/**
+ * Watch stdin for terminal focus events, beside ink. A `data` listener sees every chunk, including
+ * the focus sequences that ink 8 consumes before `useInput`. It only reads; it never takes input
+ * from ink. Returns a function that detaches the listener.
+ */
+export function watchFocus(stdin: DataStream, onFocus: (focused: boolean) => void): () => void {
+  const onData = (chunk: Buffer | string) => {
+    const focused = focusEvent(typeof chunk === "string" ? chunk : chunk.toString("latin1"));
+    if (focused !== undefined) onFocus(focused);
+  };
+  stdin.on("data", onData);
+  return () => {
+    stdin.off("data", onData);
+  };
 }
