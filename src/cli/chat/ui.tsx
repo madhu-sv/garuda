@@ -1,9 +1,9 @@
-import { Box, Static, Text, useInput, usePaste } from "ink";
+import { Box, Static, Text, useInput, usePaste, useStdin } from "ink";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { accentInk } from "../accent.js";
 import { terminalPaint } from "../approver.js";
 import { unifiedDiff } from "../diffView.js";
-import { focusEvent } from "../focus.js";
+import { watchFocus } from "../focus.js";
 import { type Marks, marks } from "../marks.js";
 import { screenReaderMode } from "../receiptView.js";
 import { contextBar, contextLevel } from "../uiState.js";
@@ -18,6 +18,11 @@ import type { ChatState, ChatStore, Item } from "./store.js";
 export function App({ store }: { store: ChatStore }) {
   const state = useSyncExternalStore(store.subscribe, store.getState);
   useInput((input, key) => onKey(store, state, input, key));
+  // Terminal focus (0.6): read it from stdin, beside ink. Since ink 8 the focus sequences never
+  // reach useInput (ink parses and swallows them), so a key handler cannot see them. store.onFocus
+  // is read at event time, because inkChat sets it after this mounts.
+  const { stdin } = useStdin();
+  useEffect(() => watchFocus(stdin, (focused) => store.onFocus?.(focused)), [stdin, store]);
   // Bracketed paste: pasted text (new lines too) goes into the line and is never sent.
   usePaste((text) => {
     if (store.getState().approval === undefined) store.editLine({ type: "insert", text });
@@ -447,12 +452,8 @@ export interface Key {
 
 /** Keys to store actions. Exported for tests. */
 export function onKey(store: ChatStore, state: ChatState, input: string, key: Key): void {
-  // Focus reporting (0.6): the terminal tells when its window gets or loses focus. Never text.
-  const focus = focusEvent(input);
-  if (focus !== undefined && !key.ctrl && !key.meta) {
-    store.onFocus(focus);
-    return;
-  }
+  // Terminal focus is read from stdin (watchFocus in App), not here: since ink 8 the focus
+  // sequences never reach useInput.
   if (key.ctrl && input === "c") {
     store.interrupt();
     return;

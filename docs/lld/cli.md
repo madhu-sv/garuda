@@ -14,7 +14,7 @@ The CLI owns the terminal. Nothing below it writes to the terminal directly.
 | `receiptView.ts` | `receiptText` (UX U1): the turn's receipt as a box from 60 columns, else as plain lines (also with no terminal and with `GARUDA_SCREEN_READER=1`); widths in terminal cells (`cells`). |
 | `uiState.ts` | `countChat` (UX U10): the chat count in `~/.garuda/ui.json`; `KEYS_HELP`, `contextBar`, `contextLevel`. |
 | `notify.ts` | Notifications (0.6): `pickChannel`, `notificationBytes`, `Notifier`. See below. |
-| `focus.ts` | Terminal focus (0.6): `reportsFocus`, `FocusTracker`, `focusEvent`, the mode 1004 codes. See below. |
+| `focus.ts` | Terminal focus (0.6): `reportsFocus`, `FocusTracker`, `focusEvent`, `watchFocus`, the mode 1004 codes. See below. |
 | `repl.ts` | Plain chat (readline). Used for pipes, `GARUDA_PLAIN=1`, and the single binary. |
 | `renderer.ts` | `Renderer` interface and `PlainRenderer`: model text to stdout, activity to stderr. |
 | `approver.ts` | `TerminalApprover` (inquirer select), `SwitchApprover` (with `onAsk`, 0.6), shared `header`, `colorPreview` and `colorDiff`; `visible`, `hasHidden`, and (0.15) the plain `headerText` and `HIDDEN_WARNING`, which ACP uses too. |
@@ -107,8 +107,11 @@ commander uses `enablePositionalOptions()`, so options after `eval` belong to `e
   (default 10) and the user did not stop it: done, stopped (the stop reason) or failed.
 - Focus (`focus.ts`): in the Ink chat, when `TERM_PROGRAM` is `iTerm.app`, `ghostty`, `WezTerm` or `vscode`
   (not in tmux or screen) and the channel is not `off`, `runInkChat` writes `ESC [?1004h` after the first
-  render. The terminal then sends `ESC [I` / `ESC [O` when the window gets or loses focus. Ink gives each as
-  one input (`[I`, `[O`); `onKey` sends it to `store.onFocus` (a `FocusTracker`) and never to the input line.
+  render. The terminal then sends `ESC [I` / `ESC [O` when the window gets or loses focus. Since ink 8
+  these never reach `useInput` (ink parses and swallows them), so `watchFocus` reads them from stdin
+  beside ink: a `data` listener (attached by `App`, through `useStdin`) scans each chunk with
+  `focusEvent` and sends the state to `store.onFocus` (a `FocusTracker`); it only reads, never taking
+  input from ink.
   The tracker starts as focused. The `Notifier` sends nothing while `isFocused()` is true; unknown
   (`undefined`) means send. Before `$EDITOR` and at exit (also `process.on("exit")`) Garuda writes
   `ESC [?1004l`; after the editor it turns reporting on again and counts the window as focused. The plain
