@@ -86,14 +86,37 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 (deny file-read* (subpath <denyReadPath>)…)
 (deny lsopen)                                      ; 0.14: no apps through LaunchServices (`open`)
 (deny appleevent-send)                             ; 0.14: no Apple Events (`osascript`)
-(deny network-outbound (remote ip "*:*"))          ; when network is false
+(deny network-outbound (require-not (remote ip "localhost:*")))  ; when network is false
 (deny network-inbound (local ip "*:*"))
 (deny network-bind (local ip "*:*"))
-(allow network-* … "localhost:*")                  ; test servers keep working
+(allow network-inbound|bind … "localhost:*")       ; test servers keep working
+(deny network-outbound (remote ip "localhost:5037"))  ; T14: adb port, best-effort (macOS-version)
+(deny network-outbound (remote unix-socket))       ; no Docker/ssh-agent/gpg deputy, on or off
+(deny mach-lookup (global-name-regex #"^com\.apple\.CoreSimulator\."))  ; 0.20.1
 (deny file-read* (literal <markerA>))              ; 0.17: the tracker's markers, last (see below)
 (allow file-read* (literal <markerB>))
 (deny file-write* (subpath <markers folder>))
 ```
+
+Outbound rules only deny (in 0.21.1): Seatbelt cannot take one port back out of an allow rule
+(every port denial after an "allow localhost" blocked all of localhost), and adb's port needs that.
+Seatbelt's "localhost" means this machine's addresses. The adb-port rule is best-effort: Seatbelt
+matching varies by macOS version (the GitHub runner did not block it where the user's Mac did), so
+the guarantee against adb is the command-word check (T14 part 4), not this rule. See
+docs/lld/mobile.md, "adb's port".
+
+No deputy over a Unix socket (in 0.21.1, a dev.to reader's point): a command cannot read your
+keys, but a daemon already running with your rights can act for it over a socket — the Docker
+socket (a container mounts your home folder), ssh-agent (`SSH_AUTH_SOCK` signs with your keys),
+gpg-agent, a git credential helper. Seatbelt denies every outbound Unix-socket connection
+(`UNIX_SOCKET_RULE`); Garuda's proxy is TCP, so it is untouched. On Linux `--unshare-net` blocks
+TCP but leaves a pathname socket reachable, so `socketDenials` (sandboxPaths.ts) hides the
+well-known ones (the Docker socket, the system bus, `$SSH_AUTH_SOCK`); gpg-agent sits in
+`~/.gnupg` and ssh-agent in `/run/user/<uid>`, both hidden already. These paths go into the deny
+list as **real paths**: `/var/run` is a link to `/run`, and bubblewrap cannot make a mount point
+through a link, so `/var/run/docker.sock` by that spelling made every sandboxed command fail with
+"Can't create file" (CI, where Docker exists). A command-word check still turns `docker`, `adb`
+and the like outside the sandbox (T14), but this closes the class under it.
 
 Paths are Scheme strings with `\` and `"` escaped. Since 0.18.1 each denied path under `/Users`
 is also denied under `/System/Volumes/Data/Users` (`withDataVolume`): macOS reaches the same folder

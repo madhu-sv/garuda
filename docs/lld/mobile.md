@@ -145,6 +145,43 @@ action without a yes.
   Garuda works. bubblewrap needs no rule: a sandboxed command has its own network namespace.
 - Next for adb (T14): a macOS CI job that tests Seatbelt rules with real sockets, so a candidate
   rule needs no hand test; or the network rules written as denials only (the form that worked).
+  Done after 0.21 (`test/seatbeltLive.test.ts`, in CI's macos-latest job and on the user's Mac):
+  the test listens on 127.0.0.1:5037 (or uses a running adb server) and on a second port, and runs
+  a client under Garuda's profile with each candidate rule: the forms of 0.20.1, and new ones
+  (`*:5037`, `remote tcp`, `tcp4`, `network*`, `require-not` with `*:5037`). It prints which rule
+  blocks 5037 and keeps the other port, and fails only if Garuda's own profile breaks localhost.
+  The user's Mac (2026-11-18): no form works. Every port denial after "allow localhost" blocked
+  all of localhost; `network*` and `require-not` blocked nothing. So the probe also tries rules
+  that only deny (no "deny all, allow localhost"): `(deny network-outbound (require-not (remote ip
+  "localhost:*")))` and a port denial. Result (the user's Mac, 2026-11-18): denials only, with
+  `localhost:5037` or `*:5037`, block 5037 and keep the other localhost port. A server on the
+  Mac's own network address stayed reachable under every rule, Garuda's too: Seatbelt's
+  "localhost" means this machine's addresses, not only 127.0.0.1. That is the same machine, so it
+  is no way out. Whether denials only still block outside hosts needs the internet, so that check
+  runs only with `GARUDA_PROBE_INTERNET=1` (1.1.1.1:443). With it (the user's Mac): both denial
+  rows block 5037 and the outside host, and keep the other localhost port.
+
+## adb's port (0.21.1)
+
+- `src/sandbox/seatbelt.ts`: outbound rules only deny. `(deny network-outbound (require-not
+  (remote ip "localhost:*")))` replaces "deny all, allow localhost", and `ADB_RULE`,
+  `(deny network-outbound (remote ip "localhost:5037"))`, follows it, with the network off and on.
+  Inbound and bind rules are as before.
+- **Version-dependent, so defense-in-depth, not the guarantee.** Seatbelt's network matching is
+  undocumented and changes between macOS versions. On the user's Mac (macOS 26) the rule blocks
+  5037; on the GitHub `macos-latest` runner (an older macOS) the same rule did not block it, while
+  the simulator and Unix-socket rules did. So the portable guarantee against adb is the
+  command-word check (part 4): `adb` never runs in the sandbox, whatever the macOS version. The
+  port rule is an extra layer for versions where it works.
+- `test/seatbeltLive.test.ts` (macOS) runs the profile for real: localhost ok, 5037 blocked, the
+  machine's own address ok, and with `GARUDA_PROBE_INTERNET=1` the outside host blocked (network
+  off) or ok (network on). This behavioural check is **opt-in** (`GARUDA_PROBE_SEATBELT=1`), not
+  part of `pnpm test`/CI, because of the version-dependence above; `sandbox.test.ts` asserts the
+  rule is in the profile and runs everywhere. The probe's eleven rule forms are above.
+- The device check (part 4) stays and is the real guarantee: `adb` never runs in the sandbox, and
+  the note sends it outside with a yes.
+  The same file runs the simulator rule for real: a sandboxed `xcrun simctl list devices` must
+  fail where an outside one works.
 - `ApprovalRequest.defaultChoice`: the chat and the terminal approver start on it. The read
   question starts on "deny".
 - To check on the Mac before the release: the Seatbelt tests (the profile must still load), then
@@ -203,9 +240,9 @@ action without a yes.
   in the sandbox, denied with a note that names `outside_sandbox`; outside it, the question has a warning (`ApprovalRequest.warning`)
   that says what the command drives; in jobs, with a write scope and in evals (`deviceQuestions: false`),
   denied also with an allow rule. Plan mode denies them too.
-- The named limit of 0.20.1 stays smaller, not closed: `adb` itself no longer runs in the sandbox,
-  but another program (a script that opens localhost:5037) can still reach a running adb server on
-  macOS. The guard reads the command's words; the Seatbelt port rule was not possible.
+- The named limit of 0.20.1 was smaller in 0.21.0, not closed: `adb` itself no longer ran in the
+  sandbox, but another program (a script that opens localhost:5037) could still reach a running
+  adb server on macOS. Closed in 0.21.1 by `ADB_RULE` (below, "adb's port").
 - The Android and Xcode profiles' notes already send these commands outside the sandbox.
 
 ## As built (part 6: the mobile eval suite)

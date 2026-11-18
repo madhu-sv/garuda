@@ -39,10 +39,11 @@ What each release added, and the known limits of this version.
 | Mobile publishing and device keys unreadable, and no iOS simulator from the sandbox (a security fix, T14 part 0); the read question starts on "No" | Done (0.20.1) |
 | Gradle builds in the sandbox start their own daemons, never one outside it (a security fix); Gradle tests run in the sandbox | Done (0.20.2) |
 | Android and iOS projects (T14): Android, Swift and Xcode profiles; simulators, emulators and devices only outside the sandbox, with a yes and a warning; a `mobile` eval suite (48 of 48 runs); no extglobs in `glob` and `grep` (a security fix) | Done (0.21.0) |
+| Sandbox: no deputy over a Unix socket (the Docker socket, ssh-agent, gpg-agent, credential helpers); an adb-port block on recent macOS (best-effort; the command-word check is the guarantee) (a security fix) | Done (0.21.1) |
 
 The rows labelled 0.14–0.17 are branch labels, not versions: the "0.15" and "0.16" branches (code
-intelligence, language plugins) shipped in 0.14.0. The last twelve rows are versions 0.15.0,
-0.16.0, 0.17.0, 0.18.0, 0.18.1, 0.18.2, 0.19.0, 0.19.1, 0.20.0, 0.20.1, 0.20.2 and 0.21.0.
+intelligence, language plugins) shipped in 0.14.0. The last thirteen rows are versions 0.15.0,
+0.16.0, 0.17.0, 0.18.0, 0.18.1, 0.18.2, 0.19.0, 0.19.1, 0.20.0, 0.20.1, 0.20.2, 0.21.0 and 0.21.1.
 
 The 0.14–0.17 rows were built on stacked branches that were never released. They ship together as
 0.14.0 after the merge gate: the high findings of the branch review are fixed (policy source, audit
@@ -54,7 +55,7 @@ headings in the user guide keep the branch labels (0.14–0.17).
 Before 0.14.0, Garuda reviewed its own code with Fable 5.1, one area at a time (knowledge,
 permissions, tools, sandbox, audit, loop, agents), in plan mode. 0.14.1 adds the cli and extensions
 areas and fixes the open findings of all nine areas (see [CHANGELOG.md](../../CHANGELOG.md)). Known limits
-in 0.21.0:
+in 0.21.1:
 
 - G09: project language plugins are not loaded (no consent flow for their imports yet).
 - Reads: outside the home folder and other volumes, a command in the sandbox reads everything except
@@ -65,9 +66,9 @@ in 0.21.0:
   simulator, an emulator or a device run only outside the sandbox, with your yes. Flutter and React
   Native have no profile yet; Kotlin and Swift have no code index. See
   [Mobile apps](mobile.md).
-- On macOS a program in the sandbox other than `adb` itself (a script that opens `localhost:5037`)
-  can reach an adb server that you started, and through it your devices. Stop it with
-  `adb kill-server` while Garuda works (T14).
+- The device-command check (T14) reads the command's words, so a command that hides the program
+  (a script, or `$(which adb)`) is not turned outside the sandbox by name. The sandbox's own rules
+  still apply: on macOS no Unix socket and no adb port; on Linux its own network.
 - Token budget: a call's reservation is an estimate (about 4 characters per token, plus the output
   limit), so a provider that counts more input tokens than the estimate can pass the cap by that
   difference.

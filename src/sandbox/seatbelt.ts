@@ -49,8 +49,28 @@ export class SeatbeltExecutor extends ProcessExecutor {
 }
 
 /** The simulator's service stays out of reach (0.20.1, docs/lld/mobile.md). */
+/**
+ * No adb server (T14, docs/lld/mobile.md): the server on localhost:5037 that the user started
+ * controls every attached device. Seatbelt cannot take one port back out of an allow rule (every
+ * port denial after "allow localhost" blocked all of localhost), so the network rules below only
+ * deny: this rule then blocks 5037 alone (`test/seatbeltLive.test.ts`, the user's Mac).
+ */
+export const ADB_RULE = '(deny network-outbound (remote ip "localhost:5037"))';
+
 export const SIMULATOR_RULE =
   '(deny mach-lookup (global-name-regex #"^com\\.apple\\.CoreSimulator\\."))';
+
+/**
+ * No deputy over a Unix socket (after 0.21.0, a dev.to reader's point on the sandbox-escape post).
+ * A command cannot read your keys or files, but a daemon already running with your rights can act
+ * for it over its socket: the Docker socket (`docker run -v ~:/h` reads your home folder), the SSH
+ * agent (`SSH_AUTH_SOCK`: it signs with your keys without reading them), gpg-agent, and git
+ * credential helpers that answer over a socket. Same shape as the Gradle daemon. So a sandboxed
+ * command makes no outbound Unix-socket connection. Garuda's own proxy is reached over TCP
+ * (127.0.0.1), so this does not touch it. The network on or off does not change the rule: the
+ * allowlist never meant to allow these.
+ */
+export const UNIX_SOCKET_RULE = "(deny network-outbound (remote unix-socket))";
 
 /** The profile; `extra` (the markers of IPI-04) goes last, so it wins over the rules above. */
 export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = []): string {
@@ -81,18 +101,17 @@ export function seatbeltProfile(policy: ExecPolicy, extra: readonly string[] = [
   lines.push("(deny lsopen)", "(deny appleevent-send)");
   if (!policy.network) {
     // No IP network, except localhost: test suites often start and call a local server.
+    // Seatbelt's "localhost" means this machine's addresses. Outbound rules only deny, so that
+    // ADB_RULE below can block one port (with "deny all, allow localhost" it blocked all of it).
     lines.push(
-      '(deny network-outbound (remote ip "*:*"))',
+      '(deny network-outbound (require-not (remote ip "localhost:*")))',
       '(deny network-inbound (local ip "*:*"))',
       '(deny network-bind (local ip "*:*"))',
-      '(allow network-outbound (remote ip "localhost:*"))',
       '(allow network-inbound (local ip "localhost:*"))',
       '(allow network-bind (local ip "localhost:*"))',
-      // No port rule for adb (localhost:5037) here: after these rules Seatbelt then denied all of
-      // localhost (the user's test, 0.20.1), and the proxy and local test servers failed. A
-      // sandboxed command can reach an adb server that the user started (docs/lld/mobile.md).
     );
   }
+  lines.push(ADB_RULE, UNIX_SOCKET_RULE);
   // No simulator control (0.20.1, docs/lld/mobile.md): CoreSimulator's service runs outside the
   // sandbox with the user's rights. In the user's probes a sandboxed `simctl` read a hidden file
   // (`addmedia`) and wrote one in the home folder (`io screenshot`). With the user's yes,

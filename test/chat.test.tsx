@@ -253,7 +253,9 @@ describe("Ink chat", () => {
   writeFileSync(join(root, "src", "a.js"), "export const a = 1;\n");
 
   const until = async (check: () => boolean) => {
-    const end = Date.now() + 5_000;
+    // 20 s, under the 30 s test limit, as waitUntil in helpers.ts: a 5 s budget was too tight for
+    // an Ink render under the full parallel run (149 workers), and flaked on CI.
+    const end = Date.now() + 20_000;
     while (!check()) {
       if (Date.now() > end) throw new Error("timed out");
       await new Promise((r) => setTimeout(r, 10));
