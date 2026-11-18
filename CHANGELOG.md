@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Homebrew formula in the repository names 0.21.0 and its tarball hash.
+
 ## 0.21.0 (2026-11-18)
 
 Android and iOS projects. Garuda finds an Android app, a Swift package or an Xcode project, and
