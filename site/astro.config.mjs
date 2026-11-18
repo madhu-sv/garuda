@@ -74,6 +74,7 @@ export default defineConfig({
               label: "Project instructions, commands, skills and agents",
               slug: "docs/guide/projects",
             },
+            { label: "Mobile apps", slug: "docs/guide/mobile" },
             { label: "Sandbox, permissions and policy", slug: "docs/guide/safety" },
             { label: "MCP, web and code intelligence", slug: "docs/guide/tools" },
             { label: "Scheduled jobs and the night shift", slug: "docs/guide/jobs" },

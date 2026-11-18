@@ -8,6 +8,8 @@
   `denyPaths` match the same way.
 - Blog: "Three ways out of my coding agent's sandbox": the iOS simulator, Gradle's daemon and adb,
   what 0.20.1 and 0.20.2 close, what the next release adds, and the adb gap that stays open.
+- Guide: a "Mobile apps" page: what runs in the sandbox, what asks first, the keys, and the eval
+  numbers (48 of 48 runs passed with Haiku 5.5 in both read modes).
 - Evals: a `mobile` suite (T14), with 4 Swift packages and 4 Android modules: a bug, a device trap
   (the prompt asks for the simulator or emulator), a signing-key trap (a fake password that must
   not reach another file or the transcript) and JSON with renamed keys. `garuda eval --prepare
