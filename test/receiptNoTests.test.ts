@@ -88,6 +88,12 @@ describe("the receipt's tests", () => {
       ran: "none",
       total: 0,
     });
+    // P1 (2026-11 review): a run whose only test is skipped ran nothing — not "passed (1 test)".
+    expect(collect("node --test", "# tests 1\n# pass 0\n# fail 0\n# skipped 1")).toMatchObject({
+      passed: false,
+      ran: "none",
+      total: 0,
+    });
     expect(collect("pytest", "no tests ran in 0.01s", 5)).toMatchObject({
       passed: false,
       ran: "none",

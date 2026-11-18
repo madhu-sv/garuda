@@ -37,7 +37,15 @@ export async function planHandoff(
 
 /** The text for /plan and /build. */
 export function modeText(runtime: Runtime): string {
-  return runtime.mode === "plan"
-    ? "Plan mode: the agent reads and plans. It cannot change files; commands run read-only in the sandbox. /build (or Shift+Tab) switches back."
-    : "Build mode: the agent can change files and run commands, with the usual approvals.";
+  if (runtime.mode !== "plan") {
+    return "Build mode: the agent can change files and run commands, with the usual approvals.";
+  }
+  // With no OS sandbox, plan mode cannot run commands read-only, so it blocks them (the permission
+  // engine denies a command when isolation is "none"). Saying "read-only in the sandbox" there was
+  // wrong (2026-11 review, P2).
+  const commands =
+    runtime.executor.isolation === "none"
+      ? "It cannot change files, and commands do not run (there is no sandbox here to run them read-only)."
+      : "It cannot change files; commands run read-only in the sandbox.";
+  return `Plan mode: the agent reads and plans. ${commands} /build (or Shift+Tab) switches back.`;
 }

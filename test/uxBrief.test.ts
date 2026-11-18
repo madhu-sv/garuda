@@ -48,8 +48,18 @@ function job(root: string, id: string, over: Partial<Job> = {}): Job {
       answer: "ok",
       proof: {
         verdict: "ready",
-        before: { exitCode: 0, timedOut: false, durationMs: 1, tail: "# tests 120\n# fail 0" },
-        after: { exitCode: 0, timedOut: false, durationMs: 1, tail: "# tests 126\n# fail 0" },
+        before: {
+          exitCode: 0,
+          timedOut: false,
+          durationMs: 1,
+          tail: "# tests 120\n# pass 120\n# fail 0",
+        },
+        after: {
+          exitCode: 0,
+          timedOut: false,
+          durationMs: 1,
+          tail: "# tests 126\n# pass 126\n# fail 0",
+        },
         flags: [],
       },
     },

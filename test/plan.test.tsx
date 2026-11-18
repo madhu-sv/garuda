@@ -7,7 +7,7 @@ import { PLAN_NOTE, Runtime } from "../src/app/runtime.js";
 import { runCommand } from "../src/cli/chat/commands.js";
 import { runChat, statusOf } from "../src/cli/chat/controller.js";
 import { noColor } from "../src/cli/chat/markdown.js";
-import { BUILD_PROMPT, planHandoff } from "../src/cli/chat/plan.js";
+import { BUILD_PROMPT, modeText, planHandoff } from "../src/cli/chat/plan.js";
 import { ChatStore } from "../src/cli/chat/store.js";
 import { App, onKey } from "../src/cli/chat/ui.js";
 import { FakeModelClient, reply, text, toolUse } from "../src/model/fake.js";
@@ -101,6 +101,19 @@ describe("plan mode: the permission engine (0.4)", () => {
   it("with no OS sandbox, commands are denied too", async () => {
     const { check } = engine("plan", "none");
     expect(await check("bash", false, command("ls"))).toMatchObject({ allowed: false });
+  });
+
+  it("the /plan text matches what plan mode does with and without a sandbox (2026-11 review P2)", () => {
+    const text = (isolation: Isolation) =>
+      modeText({ mode: "plan", executor: { isolation } } as unknown as Runtime);
+    expect(text("os")).toContain("commands run read-only in the sandbox");
+    // No sandbox: the engine denies commands, so the text must not promise they run.
+    const none = text("none");
+    expect(none).toContain("commands do not run");
+    expect(none).not.toContain("read-only in the sandbox");
+    expect(
+      modeText({ mode: "build", executor: { isolation: "none" } } as unknown as Runtime),
+    ).toContain("Build mode");
   });
 
   it("web_fetch and MCP tools need an allow rule; a deny rule still wins", async () => {
