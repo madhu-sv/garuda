@@ -5,6 +5,14 @@ date: 2026-11-18
 author: Madhusudhan Vasanth Kumar
 ---
 
+*Update, 18 November 2026: the adb gap below is now closed. In 0.21.1 a sandboxed command cannot
+reach a Unix-socket daemon at all — the Docker socket, the SSH agent, gpg-agent, a git credential
+helper — a class a dev.to reader pointed out after this post. On Linux those sockets are hidden; on
+macOS Seatbelt denies every outbound Unix-socket connection, which also shuts the adb port. On a
+recent macOS a port rule blocks `localhost:5037` as well, though Seatbelt's network matching varies
+by macOS version, so the guarantee against adb is still that `adb` itself never runs in the sandbox.
+The "one gap stays open" note in section 3 is what 0.21.1 fixed.*
+
 Garuda is an open-source coding agent. Its commands run in an OS sandbox: Seatbelt on macOS,
 bubblewrap on Linux. A command can write only in the project, the temp folders and the package
 caches, and it cannot read your keys. People asked me whether Garuda can help with mobile apps. So
