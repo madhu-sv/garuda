@@ -89,10 +89,11 @@ describe("test commands and counts (decision D2)", () => {
       total: 124,
       failed: 2,
     });
+    // The count is tests that ran (passed + failed); skipped and "expected fail" are left out.
     expect(
       parseTestCount("      Tests  1189 passed | 1 expected fail | 55 skipped (1245)"),
     ).toEqual({
-      total: 1245,
+      total: 1189,
       failed: 0,
     });
     expect(parseTestCount("Tests:       2 failed, 122 passed, 124 total")).toEqual({
@@ -102,6 +103,13 @@ describe("test commands and counts (decision D2)", () => {
     expect(parseTestCount("Tests:       5 passed, 5 total")).toEqual({ total: 5, failed: 0 });
     expect(parseTestCount("# tests 12\n# pass 11\n# fail 1")).toEqual({ total: 12, failed: 1 });
     expect(parseTestCount("ℹ tests 3\nℹ pass 3\nℹ fail 0")).toEqual({ total: 3, failed: 0 });
+    // A run with only skipped tests ran nothing: total 0 (P1, 2026-11 review).
+    expect(parseTestCount("# tests 1\n# pass 0\n# fail 0\n# skipped 1")).toEqual({
+      total: 0,
+      failed: 0,
+    });
+    expect(parseTestCount("      Tests  3 skipped (3)")).toEqual({ total: 0, failed: 0 });
+    expect(parseTestCount("Tests:       2 skipped, 2 total")).toEqual({ total: 0, failed: 0 });
     expect(parseTestCount("===== 2 failed, 122 passed in 1.23s =====")).toEqual({
       total: 124,
       failed: 2,

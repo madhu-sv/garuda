@@ -58,17 +58,20 @@ describe("chat input (0.6)", () => {
     expect(stops).toBe(1);
   });
 
-  it("backslash + Enter and Alt+Enter make a new line; Enter sends", async () => {
+  it("backslash + Enter, Alt+Enter and Shift+Enter make a new line; Enter sends", async () => {
     const store = newStore();
     type(store, "first \\");
     press(store, "", { return: true });
     type(store, "second");
     press(store, "", { return: true, meta: true });
     type(store, "third");
-    expect(store.getState().editor.text).toBe("first \nsecond\nthird");
+    // Shift+Enter, where the terminal reports the shift (2026-11 review, P2).
+    press(store, "", { return: true, shift: true });
+    type(store, "fourth");
+    expect(store.getState().editor.text).toBe("first \nsecond\nthird\nfourth");
     const sent = store.nextInput();
     press(store, "", { return: true });
-    expect(await sent).toBe("first \nsecond\nthird");
+    expect(await sent).toBe("first \nsecond\nthird\nfourth");
   });
 
   it("a backslash and Enter in one chunk (fast typing) still make a new line", async () => {

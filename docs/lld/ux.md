@@ -295,7 +295,10 @@ sonnet-5.5 · ⛨ seatbelt · no network · ▓▓▓▓▓▓░░░░ 62% �
 - In plan mode, the `PLAN` badge stays first. Since the review of 2026-11 the footer always names
   the mode (`footerModes`, `modeWord`): `BUILD` too, and while a turn runs in the other mode after
   Shift+Tab, `BUILD now · PLAN next turn` (`Status.turnMode`, from `Runtime.activeMode`). The input
-  line starts with `plan ›` in plan mode. Shift+Tab adds a note (`modeSwitchText`): what the mode
+  line starts with `plan ›` in plan mode. A new line comes from `\`+Enter, Alt+Enter or Shift+Enter
+  (`onKey`: `key.meta || key.shift`); Shift+Enter needs a terminal that reports the modifier.
+  `/plan`'s text (`modeText`) says commands run read-only in the sandbox, or, with no sandbox, that
+  they do not run — the engine denies them there (P2, second 2026-11 review). Shift+Tab adds a note (`modeSwitchText`): what the mode
   does, and "From the next turn" while a turn runs.
 
 ## U11: HTML export
@@ -357,7 +360,7 @@ the plan marks and the selected choice. Cyan stays for links and paths. The acce
 | ID | Question | Suggested default |
 | --- | --- | --- |
 | D1 | Receipt for which turns? | Turns that changed files or ran commands. Others keep the one line. Narrowed after the first live run: commands count only when tests ran, one ran outside the sandbox, or a host was blocked. |
-| D2 | Test counts: parse the known runners, or only ✓ and ✗? | Parse the six runners above. Unknown runners: ✓ and ✗ only. Since the review of 2026-11: "✓ passed" only with a count above 0; else "○ no tests ran" or "exit 0, no test count". |
+| D2 | Test counts: parse the known runners, or only ✓ and ✗? | Parse the six runners above. Unknown runners: ✓ and ✗ only. Since the review of 2026-11: "✓ passed" only with a count above 0; else "○ no tests ran" or "exit 0, no test count". The count is tests that ran (passed + failed): a skipped or todo test is not counted, so a skipped-only run says "no tests ran", not "passed" (P1, second 2026-11 review). |
 | D3 | Watch mode: start a deny-all proxy in every sandboxed chat (loads `node:http`, against N3 today), or guess the host from the error text? | The proxy. Error text is not reliable. Load it on the first bash call, not at start. |
 | D4 | "Allow for this project" writes to `.garuda/settings.json` (in git, so the team sees it) or to `~/.garuda/trust.json` (only this user)? | `.garuda/settings.json`, so it is visible in review. |
 | D5 | A "kept change" for the bottom line: a turn that changed files and was not undone? | Yes. |

@@ -47,7 +47,10 @@ The chat's keys and commands, sessions, limits, context, plan mode, undo, the to
   chat goes on, and the model learns with your next message that you stopped the task, so it does not
   go on with it unless you ask. A second Ctrl-C during the task exits Garuda at once; Esc never exits.
 - New lines: end the line with `\` and press Enter, or press Alt+Enter (Option+Enter on a Mac with
-  "Use Option as Meta"). Pasted text keeps its new lines and is never sent by itself.
+  "Use Option as Meta"), or Shift+Enter where the terminal reports it (the kitty keyboard protocol,
+  or xterm's modifyOtherKeys). A plain terminal sends the same bytes for Enter and Shift+Enter, so
+  `\` then Enter is the one that always works. Pasted text keeps its new lines and is never sent by
+  itself.
 - `@path` attaches a file or folder: `fix the bug in @src/cart.ts`. The file's text goes with your
   message (numbered, up to 2,000 lines) and counts as read, so the model can edit it at once; a folder gives
   its list of entries. The same rules as `read_file`: only files in the folder, no secrets (`.env`, keys),
@@ -152,8 +155,9 @@ garuda --replay 20260923-201500-a1b2            # replay it: no API calls, no to
   Maven, Gradle, go test, cargo test); the count comes from the runner's summary line when Garuda
   knows it. "✓ passed" needs that count to be above 0: a run that the runner says ran no test (a
   count of 0; Gradle's test tasks `UP-TO-DATE`, `NO-SOURCE` or `FROM-CACHE`; go's "no test files";
-  Maven's "No tests to run"; pytest's exit code 5) shows "○ no tests ran", and a successful run with no
-  count shows "exit 0, no test count". Sandbox: the turn's commands by where they ran, and a Network row for hosts that the
+  Maven's "No tests to run"; pytest's exit code 5; or every test skipped) shows "○ no tests ran", and
+  a successful run with no count shows "exit 0, no test count". The count is tests that ran (passed
+  plus failed); skipped tests are not counted, so a skipped-only run does not pass. Sandbox: the turn's commands by where they ran, and a Network row for hosts that the
   allowlist's proxy blocked. A kept change is a turn that changed files and was not undone; "each"
   is the session cost divided by them. Under 60 columns, in a pipe and with
   `GARUDA_SCREEN_READER=1`, the receipt is plain lines. `-p --json` has it as `receipt` in the result.

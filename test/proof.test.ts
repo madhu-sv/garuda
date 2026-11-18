@@ -65,6 +65,21 @@ describe("proof of work: the parts (0.11)", () => {
     expect(detectTestCommand(plain, [])).toBe("node --test");
   });
 
+  it("a skipped-only test run after the job proves nothing (P1, 2026-11 review)", () => {
+    const skipped = {
+      exitCode: 0,
+      timedOut: false,
+      durationMs: 1000,
+      tail: "# tests 1\n# pass 0\n# fail 0\n# skipped 1",
+    };
+    expect(riskFlags({ result: done, test: "node --test", before: pass, after: skipped })).toEqual([
+      {
+        level: "stop",
+        text: "The test command ran no test after the job (0 tests): nothing proves the change works.",
+      },
+    ]);
+  });
+
   it("flags what stops a merge and what needs a look", () => {
     expect(riskFlags({ result: done, test: "t", before: pass, after: pass })).toEqual([]);
     expect(riskFlags({ result: done, test: "t", before: pass, after: fail })).toEqual([

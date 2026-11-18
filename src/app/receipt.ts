@@ -92,18 +92,34 @@ export function isTestCommand(command: string, projectTest: string | undefined):
  */
 export function parseTestCount(output: string): { total: number; failed: number } | undefined {
   const num = (s: string | undefined) => (s === undefined ? 0 : Number(s));
-  // vitest: "Tests  2 failed | 122 passed (124)"
-  const vitest = /^\s*Tests\s+(.*\b(?:passed|failed|skipped)\b.*?)\s+\((\d+)\)\s*$/m.exec(output);
+  // The count is tests that ran: passed + failed, never skipped or todo. A run with only skipped
+  // tests ran nothing, so the receipt says "no tests ran", not "passed" (2026-11 review, P1: a
+  // skipped node:test showed "✓ passed").
+  // vitest: "Tests  2 failed | 122 passed | 55 skipped (1245)". The grand total in () counts
+  // skipped, so add up passed and failed instead. "expected fail" is not "failed".
+  const vitest = /^\s*Tests\s+(.*\b(?:passed|failed|skipped)\b.*?)\s+\(\d+\)\s*$/m.exec(output);
   if (vitest !== null) {
-    return { total: num(vitest[2]), failed: num(/(\d+) failed/.exec(vitest[1] ?? "")?.[1]) };
+    const seg = vitest[1] ?? "";
+    const failed = num(/(\d+) failed/.exec(seg)?.[1]);
+    return { total: num(/(\d+) passed/.exec(seg)?.[1]) + failed, failed };
   }
-  // jest: "Tests:       2 failed, 122 passed, 124 total"
-  const jest = /^Tests:\s+(?:(\d+) failed, )?.*?(\d+) total\s*$/m.exec(output);
-  if (jest !== null) return { total: num(jest[2]), failed: num(jest[1]) };
-  // node:test (tap or spec): "# tests 124" / "ℹ tests 124", and "fail 2"
+  // jest: "Tests:       1 skipped, 2 failed, 122 passed, 124 total" (total counts skipped too).
+  const jest = /^Tests:\s+(.*?) total\s*$/m.exec(output);
+  if (jest !== null) {
+    const seg = jest[1] ?? "";
+    const failed = num(/(\d+) failed/.exec(seg)?.[1]);
+    return { total: num(/(\d+) passed/.exec(seg)?.[1]) + failed, failed };
+  }
+  // node:test (tap or spec): "# tests 124" / "ℹ tests 124", "# pass", "# fail". "tests" counts
+  // skipped and todo, so the count that ran is pass + fail.
   const nodeTotal = /^(?:#|ℹ) tests (\d+)\s*$/m.exec(output);
   if (nodeTotal !== null) {
-    return { total: num(nodeTotal[1]), failed: num(/^(?:#|ℹ) fail (\d+)\s*$/m.exec(output)?.[1]) };
+    const pass = /^(?:#|ℹ) pass (\d+)\s*$/m.exec(output);
+    const fail = /^(?:#|ℹ) fail (\d+)\s*$/m.exec(output);
+    const failed = num(fail?.[1]);
+    // Older node without the pass/fail lines: fall back to "tests".
+    const ran = pass !== null || fail !== null ? num(pass?.[1]) + failed : num(nodeTotal[1]);
+    return { total: ran, failed };
   }
   // pytest: "==== 2 failed, 122 passed in 1.23s ====" (also errors)
   const pytest = /^=+ (.*\b(?:passed|failed)\b.*) in [\d.]+s(?: \([^)]*\))? =+\s*$/m.exec(output);

@@ -511,9 +511,12 @@ export function onKey(store: ChatStore, state: ChatState, input: string, key: Ke
     return;
   }
   if (key.return) {
-    // A new line instead of sending: Alt+Enter, or "\" at the end of the text before the cursor.
+    // A new line instead of sending: Alt+Enter, Shift+Enter, or "\" at the end of the text before
+    // the cursor. Shift+Enter works only where the terminal reports the shift (the kitty keyboard
+    // protocol, or xterm modifyOtherKeys); a plain terminal sends the same bytes for Enter and
+    // Shift+Enter, so there "\" then Enter is the newline that always works (2026-11 review, P2).
     const before = state.editor.text.slice(0, state.editor.cursor);
-    if (key.meta) store.editLine({ type: "insert", text: "\n" });
+    if (key.meta || key.shift) store.editLine({ type: "insert", text: "\n" });
     else if (before.endsWith("\\")) {
       store.editLine({ type: "backspace" });
       store.editLine({ type: "insert", text: "\n" });

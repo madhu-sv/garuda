@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Receipts: the test count is tests that ran (passed plus failed), never skipped. A run whose only
+  test is skipped now shows "○ no tests ran", not "✓ passed", and a job's verdict treats it as no
+  test run (a finding of the second 2026-11 review). node:test, vitest and jest were affected.
+- Chat: Shift+Enter adds a new line, like Alt+Enter, where the terminal reports the modifier (the
+  kitty keyboard protocol or xterm modifyOtherKeys); on a plain terminal `\` then Enter still is
+  the newline that always works (second 2026-11 review).
+- Chat: `/plan` no longer says commands run read-only in the sandbox when there is no sandbox; it
+  says they do not run, which is what plan mode does there (second 2026-11 review).
 - The Homebrew formula in the repository names 0.21.1 and its tarball hash.
 
 ## 0.21.1 (2026-11-18)
