@@ -145,6 +145,13 @@ action without a yes.
   Garuda works. bubblewrap needs no rule: a sandboxed command has its own network namespace.
 - Next for adb (T14): a macOS CI job that tests Seatbelt rules with real sockets, so a candidate
   rule needs no hand test; or the network rules written as denials only (the form that worked).
+  Done after 0.21 (`test/seatbeltLive.test.ts`, in CI's macos-latest job and on the user's Mac):
+  the test listens on 127.0.0.1:5037 (or uses a running adb server) and on a second port, and runs
+  a client under Garuda's profile with each candidate rule: the forms of 0.20.1, and new ones
+  (`*:5037`, `remote tcp`, `tcp4`, `network*`, `require-not` with `*:5037`). It prints which rule
+  blocks 5037 and keeps the other port, and fails only if Garuda's own profile breaks localhost.
+  The same file runs the simulator rule for real: a sandboxed `xcrun simctl list devices` must
+  fail where an outside one works.
 - `ApprovalRequest.defaultChoice`: the chat and the terminal approver start on it. The read
   question starts on "deny".
 - To check on the Mac before the release: the Seatbelt tests (the profile must still load), then

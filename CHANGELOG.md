@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tests (macOS): Seatbelt rules run for real. A sandboxed `xcrun simctl` must fail where an outside
+  one works, and a probe tries rules for adb's port (5037) with real sockets and prints which one
+  blocks only that port.
 - The Homebrew formula in the repository names 0.21.0 and its tarball hash.
 
 ## 0.21.0 (2026-11-18)
