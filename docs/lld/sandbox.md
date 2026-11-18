@@ -98,11 +98,11 @@ With `policy.sandbox === false`, the OS executors launch the program with no iso
 (deny file-write* (subpath <markers folder>))
 ```
 
-Outbound rules only deny (after 0.21.0): Seatbelt cannot take one port back out of an allow rule
+Outbound rules only deny (in 0.21.1): Seatbelt cannot take one port back out of an allow rule
 (every port denial after an "allow localhost" blocked all of localhost), and adb's port needs that.
 Seatbelt's "localhost" means this machine's addresses. See docs/lld/mobile.md, "adb's port".
 
-No deputy over a Unix socket (after 0.21.0, a dev.to reader's point): a command cannot read your
+No deputy over a Unix socket (in 0.21.1, a dev.to reader's point): a command cannot read your
 keys, but a daemon already running with your rights can act for it over a socket — the Docker
 socket (a container mounts your home folder), ssh-agent (`SSH_AUTH_SOCK` signs with your keys),
 gpg-agent, a git credential helper. Seatbelt denies every outbound Unix-socket connection

@@ -32,7 +32,7 @@ commands. For details per profile, see [Projects](projects.md).
 
 A simulator, an emulator or a device runs as you: a booted iOS simulator can read any of your
 files, and an adb server controls every attached device. The sandbox cannot reach either (after
-0.21.0 also not adb's port on macOS), so these commands would fail in it. Garuda never runs them
+0.21.1 also not adb's port on macOS, nor any daemon over a Unix socket), so these commands would fail in it. Garuda never runs them
 in the sandbox:
 
 - `xcrun simctl`, `xcrun devicectl`, `open -a Simulator`;
@@ -81,9 +81,6 @@ To run the suite yourself, see [Evals](evals.md) (`garuda eval --prepare android
 
 ## Known limits
 
-- In 0.21.0 on macOS, a program in the sandbox other than `adb` itself (a script that opens
-  `localhost:5037`) could still reach an adb server that you started. After 0.21.0 a Seatbelt rule
-  blocks that port; on Linux each command has its own network.
 - The device check reads the command's words. A command that hides the program (a script, or
   `$(which adb)`) is not found by it; the sandbox's own rules still apply to it.
 - The suite's Swift tasks are packages, not apps: no task yet asks for an Xcode app build in an

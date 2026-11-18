@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.21.1 (2026-11-18)
+
+Two sandbox fixes, both raised after the 0.21.0 release. A sandboxed command can no longer talk to
+a daemon that runs with your rights over a Unix socket (the Docker socket, your SSH agent,
+gpg-agent, a git credential helper), and on macOS it can no longer reach an adb server on
+`localhost:5037`. A reader of the sandbox-escape blog post raised the socket class.
 
 - Security: sandboxed commands can no longer talk to a daemon over a Unix socket (the Docker
   socket, ssh-agent through `SSH_AUTH_SOCK`, gpg-agent, a git credential helper). Each one runs
