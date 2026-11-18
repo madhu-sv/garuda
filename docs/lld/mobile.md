@@ -150,6 +150,12 @@ action without a yes.
   a client under Garuda's profile with each candidate rule: the forms of 0.20.1, and new ones
   (`*:5037`, `remote tcp`, `tcp4`, `network*`, `require-not` with `*:5037`). It prints which rule
   blocks 5037 and keeps the other port, and fails only if Garuda's own profile breaks localhost.
+  The user's Mac (2026-11-18): no form works. Every port denial after "allow localhost" blocked
+  all of localhost; `network*` and `require-not` blocked nothing. So the probe also tries rules
+  that only deny (no "deny all, allow localhost"): `(deny network-outbound (require-not (remote ip
+  "localhost:*")))` and a port denial. It adds a third target, a server on the machine's own
+  network address, which every candidate must block too (no internet needed), and Garuda's own
+  profile must block it.
   The same file runs the simulator rule for real: a sandboxed `xcrun simctl list devices` must
   fail where an outside one works.
 - `ApprovalRequest.defaultChoice`: the chat and the terminal approver start on it. The read

@@ -1,6 +1,6 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
-import { tmpdir } from "node:os";
+import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HostExecutor } from "../src/sandbox/host.js";
@@ -62,15 +62,16 @@ describe.runIf(darwin)("the simulator rule, for real (0.20.1)", () => {
   }, 120_000);
 });
 
-// The client: connects to each port on 127.0.0.1 and prints {port: "ok" | "blocked"}.
+// The client: connects to each host:port and prints {"host:port": "ok" | "blocked" | "timeout"}.
 const CLIENT = `
 const net = require("node:net");
-const ports = process.argv.slice(2).map(Number);
+const targets = process.argv.slice(2);
 const out = {};
-let left = ports.length;
-for (const port of ports) {
-  const s = net.connect({ host: "127.0.0.1", port });
-  const done = (r) => { if (out[port] === undefined) { out[port] = r; s.destroy(); if (--left === 0) console.log(JSON.stringify(out)); } };
+let left = targets.length;
+for (const target of targets) {
+  const [host, port] = target.split(":");
+  const s = net.connect({ host, port: Number(port) });
+  const done = (r) => { if (out[target] === undefined) { out[target] = r; s.destroy(); if (--left === 0) console.log(JSON.stringify(out)); } };
   s.on("connect", () => done("ok"));
   s.on("error", () => done("blocked"));
   setTimeout(() => done("timeout"), 3000);
@@ -79,6 +80,15 @@ for (const port of ports) {
 
 const ADB = 5037;
 const GARUDA_ALLOW = '(allow network-outbound (remote ip "localhost:*"))';
+const GARUDA_DENY = '(deny network-outbound (remote ip "*:*"))';
+/** Denials only (the form that blocked one port in 0.20.1): no "deny all, allow localhost". */
+const denialsOnly = (p: string, port?: string) =>
+  p
+    .replace(GARUDA_DENY, '(deny network-outbound (require-not (remote ip "localhost:*")))')
+    .replace(
+      GARUDA_ALLOW,
+      port === undefined ? "" : `(deny network-outbound (remote ip "${port}"))`,
+    );
 
 /** Candidate rules: a name and how each changes Garuda's profile. */
 const CANDIDATES: [string, (profile: string) => string][] = [
@@ -105,6 +115,9 @@ const CANDIDATES: [string, (profile: string) => string][] = [
         '(allow network-outbound (require-all (remote ip "localhost:*") (require-not (remote ip "localhost:5037"))))',
       ),
   ],
+  ["denials only, no port rule (control)", (p) => denialsOnly(p)],
+  ['denials only, deny "localhost:5037"', (p) => denialsOnly(p, "localhost:5037")],
+  ['denials only, deny "*:5037"', (p) => denialsOnly(p, "*:5037")],
   [
     "allow localhost with require-not *:5037",
     (p) =>
@@ -118,30 +131,39 @@ const CANDIDATES: [string, (profile: string) => string][] = [
 describe.runIf(darwin)("a probe for adb's port (T14)", () => {
   const servers: Server[] = [];
   const script = join(base, "client.cjs");
-  let other = 0;
+  let local = "";
+  let lan = "";
+  const adb = `127.0.0.1:${ADB}`;
   let adbReachable = false;
 
   beforeAll(async () => {
-    const listen = (port: number) =>
+    const listen = (port: number, host = "127.0.0.1") =>
       new Promise<number>((resolve, reject) => {
         const server = createServer((socket) => socket.end());
         server.once("error", reject);
-        server.listen(port, "127.0.0.1", () => {
+        server.listen(port, host, () => {
           servers.push(server);
           const address = server.address();
           resolve(typeof address === "object" && address !== null ? address.port : port);
         });
       });
-    other = await listen(0);
+    local = `127.0.0.1:${await listen(0)}`;
     // A real adb server may hold 5037 already: then it is the one to block.
     await listen(ADB).catch(() => undefined);
+    // This machine's own network address: not localhost, so the sandbox must block it. No internet
+    // is needed.
+    const address = Object.values(networkInterfaces())
+      .flat()
+      .find((a) => a !== undefined && a.family === "IPv4" && !a.internal)?.address;
+    if (address !== undefined) lan = `${address}:${await listen(0, address)}`;
     writeFileSync(script, CLIENT);
-    const outside = await host.run(`node '${script}' ${other} ${ADB}`, {
+    const outside = await host.run(`node '${script}' ${local} ${adb} ${lan}`, {
       ...policy,
       sandbox: false,
       envAllowlist: ["PATH"],
     });
-    adbReachable = outside.stdout.text.includes(`"${ADB}":"ok"`);
+    adbReachable = outside.stdout.text.includes(`"${adb}":"ok"`);
+    if (lan !== "" && !outside.stdout.text.includes(`"${lan}":"ok"`)) lan = "";
   });
   afterAll(() => {
     for (const s of servers) s.close();
@@ -153,11 +175,11 @@ describe.runIf(darwin)("a probe for adb's port (T14)", () => {
       return;
     }
     const rows: string[] = [];
-    let garuda = "";
+    let garuda: Record<string, string> | undefined;
     for (const [name, change] of CANDIDATES) {
       const r = await sandboxed(
         change(seatbeltProfile(policy)),
-        `node '${script}' ${other} ${ADB}`,
+        `node '${script}' ${local} ${adb} ${lan}`,
       );
       let result: Record<string, string> | undefined;
       try {
@@ -168,13 +190,18 @@ describe.runIf(darwin)("a probe for adb's port (T14)", () => {
       const cell =
         result === undefined
           ? `profile error (exit ${r.exitCode}): ${r.stderr.text.trim().split("\n")[0] ?? ""}`
-          : `other port ${result[other]}, 5037 ${result[ADB]}`;
-      const wanted = result?.[other] === "ok" && result?.[ADB] !== "ok";
+          : `other port ${result[local]}, 5037 ${result[adb]}, network ${lan === "" ? "not tested" : result[lan]}`;
+      const wanted =
+        result?.[local] === "ok" &&
+        result?.[adb] !== "ok" &&
+        (lan === "" || result?.[lan] !== "ok");
       rows.push(`${wanted ? "WORKS " : "      "}${name}: ${cell}`);
-      if (name.startsWith("Garuda")) garuda = result?.[other] ?? "error";
+      if (name.startsWith("Garuda")) garuda = result;
     }
     console.log(`Seatbelt port probe (T14, adb):\n${rows.join("\n")}`);
-    // Garuda's own profile must keep localhost: local test servers and Garuda's proxy need it.
-    expect(garuda).toBe("ok");
+    // Garuda's own profile must keep localhost (local test servers and Garuda's proxy need it), and
+    // must block the machine's own network address.
+    expect(garuda?.[local]).toBe("ok");
+    if (lan !== "") expect(garuda?.[lan]).toBe("blocked");
   }, 120_000);
 });
