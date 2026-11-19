@@ -6,6 +6,12 @@
   the focus sequences from stdin beside ink (`watchFocus`), because ink 8 parses and swallows them
   before `useInput`. Shift+Enter still adds a new line (ink 8 reports the kitty sequence as the key
   modifier). Run `pnpm install` after this change to update the lockfile.
+- Chat: the view no longer overlaps or garbles itself when the window grows or a split pane opens.
+  On the primary screen ink clears before a re-render only when the terminal narrows; on a wider
+  window its line-relative erase missed the reflowed frame and the old one stayed behind. Garuda now
+  redraws cleanly once the size settles: it pushes the viewport into the scrollback, homes the
+  cursor and draws a fresh frame, which needs no row count and so cannot be thrown off by reflow
+  (`watchResize`, `recoverFrame`).
 - Build: tsup 9 (a dev dependency; the build output is unchanged). Its node floor (^22.18) is met
   by the project's engines.
 - LSP: vscode-jsonrpc 10 (loaded only when a language server starts). The client uses its stable

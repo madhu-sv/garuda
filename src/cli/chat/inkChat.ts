@@ -8,17 +8,11 @@ import type { Notifier } from "../notify.js";
 import type { Renderer } from "../renderer.js";
 import { runChat, statusOf } from "./controller.js";
 import { editInEditor } from "./externalEditor.js";
+import { clearScreenKeepingScrollback, recoverFrame, watchResize } from "./resize.js";
 import { ChatStore } from "./store.js";
 import { App } from "./ui.js";
 
-/**
- * A clear screen that keeps what was there (0.18.1): new lines push the old screen up into the
- * scrollback, as `clear` does in most terminals, then the cursor goes to the top. ESC[2J alone
- * drops the old screen in some terminals.
- */
-export function clearScreenKeepingScrollback(rows: number): string {
-  return `${"\n".repeat(Math.max(1, rows))}\u001b[H`;
-}
+export { clearScreenKeepingScrollback };
 
 /**
  * The Ink chat (0.2). The CLI loads this module with import() only for a chat on a
@@ -57,6 +51,14 @@ export async function runInkChat(
   approver.current = store;
   setEventTarget(store);
   const ink = render(createElement(App, { store }), { exitOnCtrlC: false });
+  // Resize recovery (0.21.x): on a wider window Ink's relative erase overlaps the reflowed frame, so
+  // redraw cleanly once the size settles. Only on a real terminal; a pipe never resizes.
+  const stopResize =
+    process.stdout.isTTY === true
+      ? watchResize(process.stdout, () =>
+          recoverFrame(process.stdout, ink, createElement(App, { store })),
+        )
+      : () => {};
   const reportFocus = (on: boolean) => {
     if (focus !== undefined) process.stdout.write(on ? FOCUS_REPORTING_ON : FOCUS_REPORTING_OFF);
   };
@@ -87,6 +89,7 @@ export async function runInkChat(
   try {
     await runChat(runtime, store, sessionPath, exitClean, notifier, tour);
   } finally {
+    stopResize();
     reportFocus(false);
     ink.unmount();
   }
