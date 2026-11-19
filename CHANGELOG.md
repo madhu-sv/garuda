@@ -6,6 +6,16 @@
   the focus sequences from stdin beside ink (`watchFocus`), because ink 8 parses and swallows them
   before `useInput`. Shift+Enter still adds a new line (ink 8 reports the kitty sequence as the key
   modifier). Run `pnpm install` after this change to update the lockfile.
+- Chat: the view no longer overlaps or garbles itself when the window resizes or a split pane opens.
+  A resize reflows the lines already on screen, but ink erases its live frame by a row count that
+  the reflow makes wrong, so the old frame was left behind (wider) or its rewrapped rows stayed above
+  the new one (narrower). A row count can never be right once a line wraps to a different number of
+  rows, so Garuda repaints the whole view at the new width once the size settles: it erases the
+  viewport absolutely and mounts the chat again, which lays everything out afresh. The start banner
+  is a fixed-width block, so it is redrawn at the new width too (`watchResize`, `repaintFresh`,
+  `renderBanner`). The repaint re-emits the finished lines, so the scrollback holds the conversation
+  once more after each resize — the price of a correct live view on the primary screen, which keeps
+  the scrollback the alternate screen would drop.
 - Build: tsup 9 (a dev dependency; the build output is unchanged). Its node floor (^22.18) is met
   by the project's engines.
 - LSP: vscode-jsonrpc 10 (loaded only when a language server starts). The client uses its stable
