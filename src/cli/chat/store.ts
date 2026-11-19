@@ -403,6 +403,28 @@ export class ChatStore implements Renderer, Approver, Interruptible {
     this.add({ kind: "output", text });
   }
 
+  /** The start banner's item id, so a resize can redraw it at the new width (0.21.x). */
+  private bannerId: number | undefined;
+
+  /** Print the start banner and remember it, so {@link updateBanner} can replace it on a resize. */
+  printBanner(text: string): void {
+    this.bannerId = this.nextId;
+    this.add({ kind: "output", text });
+  }
+
+  /**
+   * Replace the start banner's text (0.21.x). The banner is a fixed-width block, so a resize must
+   * redraw it at the new width or it reflows; the repaint re-emits the items, this one included.
+   */
+  updateBanner(text: string): void {
+    if (this.bannerId === undefined) return;
+    this.update({
+      items: this.state.items.map((item) =>
+        item.id === this.bannerId && item.kind === "output" ? { ...item, text } : item,
+      ),
+    });
+  }
+
   /** Echo a command line, for commands that do not start a turn. */
   echo(prompt: string): void {
     this.add({ kind: "user", text: prompt });

@@ -1,12 +1,13 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  clearScreenKeepingScrollback,
-  type InkHandle,
+  HOME_AND_ERASE_DOWN,
   type ResizableOutput,
-  recoverFrame,
+  repaintFresh,
+  type Unmountable,
   watchResize,
 } from "../src/cli/chat/resize.js";
+import { ChatStore } from "../src/cli/chat/store.js";
 
 /** A stdout double: mutable size, a captured write, and the "resize" event watchResize listens to. */
 class FakeStdout extends EventEmitter implements ResizableOutput {
@@ -72,40 +73,52 @@ describe("resize recovery (0.21.x)", () => {
     expect(settles).toBe(0);
   });
 
-  it("recoverFrame clears absolutely, resets Ink, then redraws, in that order", () => {
+  it("repaintFresh unmounts, erases the viewport absolutely, then remounts, in that order", () => {
     const out = new FakeStdout(80, 30);
     const order: string[] = [];
-    const node = { app: true };
-    const ink: InkHandle = {
-      clear: () => order.push("ink.clear"),
-      rerender: (n) => {
-        expect(n).toBe(node);
-        order.push("rerender");
-      },
-    };
+    const ink: Unmountable = { unmount: () => order.push("unmount") };
     const originalWrite = out.write.bind(out);
     out.write = (data: string) => {
-      order.push("write");
+      order.push(`write:${data === HOME_AND_ERASE_DOWN ? "home-erase" : "other"}`);
       originalWrite(data);
     };
-    recoverFrame(out, ink, node);
-    // The absolute clear must land before Ink forgets the old frame and draws the new one, or the
-    // redraw starts from the wrong cursor.
-    expect(order).toEqual(["write", "ink.clear", "rerender"]);
-    // The clear pushes the whole viewport (rows high) into the scrollback and homes the cursor.
-    expect(out.writes).toEqual([clearScreenKeepingScrollback(30)]);
-    expect(out.writes[0]).toBe(`${"\n".repeat(30)}\u001b[H`);
+    repaintFresh(out, ink, () => order.push("remount"));
+    // The old frame must stop and the viewport be erased before the fresh mount draws, or the new
+    // frame lands on top of the old one.
+    expect(order).toEqual(["unmount", "write:home-erase", "remount"]);
+    // The erase is absolute (home + erase-down), never a row count that reflow would invalidate.
+    expect(out.writes).toEqual([HOME_AND_ERASE_DOWN]);
+    expect(HOME_AND_ERASE_DOWN).toBe("\u001b[H\u001b[J");
   });
 
-  it("recoverFrame falls back to 24 rows when stdout reports none", () => {
-    const writes: string[] = [];
-    const out: ResizableOutput = {
-      columns: 80,
-      write: (data) => writes.push(data),
-      on: () => undefined,
-      off: () => undefined,
-    };
-    recoverFrame(out, { clear: () => {}, rerender: () => {} }, null);
-    expect(writes[0]).toBe(clearScreenKeepingScrollback(24));
+  it("the store redraws the banner at the new width, and leaves later items alone", () => {
+    const store = new ChatStore(
+      { model: "m", sandbox: "s" },
+      { paint: (_s, t) => t, keyHints: false },
+    );
+    store.printBanner("banner at 80");
+    store.print("a finished line");
+    expect(store.getState().items.map((i) => (i.kind === "output" ? i.text : i.kind))).toEqual([
+      "banner at 80",
+      "a finished line",
+    ]);
+    store.updateBanner("banner at 44");
+    // Only the banner item changes; the finished line stays.
+    expect(store.getState().items.map((i) => (i.kind === "output" ? i.text : i.kind))).toEqual([
+      "banner at 44",
+      "a finished line",
+    ]);
+  });
+
+  it("updateBanner does nothing when no banner was printed", () => {
+    const store = new ChatStore(
+      { model: "m", sandbox: "s" },
+      { paint: (_s, t) => t, keyHints: false },
+    );
+    store.print("just a line");
+    store.updateBanner("should be ignored");
+    expect(store.getState().items.map((i) => (i.kind === "output" ? i.text : i.kind))).toEqual([
+      "just a line",
+    ]);
   });
 });

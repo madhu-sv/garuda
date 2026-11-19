@@ -1,16 +1,27 @@
 /**
  * Resize recovery (0.21.x). The Ink chat draws on the primary screen, so finished lines stay in the
- * scrollback. Ink clears before a re-render only when the terminal gets NARROWER (or shorter with
- * the cursor shown). When it gets WIDER, Ink re-renders with a line-relative erase
- * (`eraseLines(previousLineCount)`), but the terminal has already reflowed the soft-wrapped live
- * frame, so the erase count no longer matches the rows on screen: the old frame is left behind and
- * the new one overlaps it. Opening a split pane resizes the window too, so the same thing shows
- * there.
+ * scrollback. When the terminal resizes, it reflows the soft-wrapped lines already on screen, but
+ * Ink erases its live frame by a line count (`eraseLines(previousLineCount)`) that no longer matches
+ * the rows the reflow produced. On a wider window the old frame is left behind and the new one
+ * overlaps it; on a narrower one (a split pane is a resize too) the old frame's rewrapped rows stay
+ * above the new one. Every row-relative erase fails the same way, because a soft-wrapped line is one
+ * row before the resize and several after, so the count can never be right. A tracked cursor does
+ * not save it either: Ink's cursor row is in its own un-reflowed coordinates.
  *
- * The cure is an absolute clear, which needs no row count and so cannot be thrown off by reflow:
- * push the viewport into the scrollback and home the cursor, reset Ink's frame memory, then draw a
- * fresh frame. A short debounce coalesces the burst of resize events a drag sends into one redraw.
+ * The only cure that survives reflow is an absolute repaint at the new width: erase the whole
+ * viewport with no row count, then draw the view again from scratch. Ink has no public "repaint
+ * everything" call — a fresh render re-emits the `<Static>` scrollback, a live re-render does not —
+ * so the repaint unmounts and mounts again. The store holds the state, so the new mount shows the
+ * same view. A short debounce coalesces the burst of resize events a drag sends into one repaint.
+ *
+ * The cost is that the mount re-emits the finished lines, so the scrollback holds the conversation
+ * once more after each resize. That keeps the active view correct, which the primary screen cannot
+ * otherwise guarantee; the alternate screen would avoid the repaint but drop the scrollback, which
+ * is the trade this chat has chosen against.
  */
+
+/** Home the cursor and erase to the end of the screen. Absolute, so no reflow can throw it off. */
+export const HOME_AND_ERASE_DOWN = "\u001b[H\u001b[J";
 
 /**
  * A clear screen that keeps what was there (0.18.1): new lines push the old screen up into the
@@ -30,31 +41,26 @@ export interface ResizableOutput {
   off(event: "resize", listener: () => void): unknown;
 }
 
-/** The part of the Ink render instance the recovery uses. */
-export interface InkHandle {
-  /** Erase the current frame and forget it, so the next render starts clean. */
-  clear(): void;
-  /** Re-render the given element now. */
-  rerender(node: unknown): void;
+/** The part of the Ink render instance the repaint unmounts. */
+export interface Unmountable {
+  unmount(): void;
 }
 
 /**
- * Redraw the live frame cleanly after a resize. The absolute clear comes first, so the cursor sits
- * at the top of a blank viewport; `ink.clear()` then resets Ink's own frame memory (its relative
- * erase at the home row is a no-op), and the re-render draws the fresh frame from there. The old
- * viewport, banner included, is left in the scrollback where the terminal reflows it like any
- * history.
+ * Repaint the whole view at the new size. Unmount first so the old frame stops, erase the viewport
+ * absolutely (a row count would be wrong after reflow), then `remount` mounts a fresh Ink render,
+ * which draws the view again from the top of the cleared screen.
  */
-export function recoverFrame(stdout: ResizableOutput, ink: InkHandle, node: unknown): void {
-  stdout.write(clearScreenKeepingScrollback(stdout.rows ?? 24));
-  ink.clear();
-  ink.rerender(node);
+export function repaintFresh(stdout: ResizableOutput, ink: Unmountable, remount: () => void): void {
+  ink.unmount();
+  stdout.write(HOME_AND_ERASE_DOWN);
+  remount();
 }
 
 /**
  * Watch `stdout` for resize and call `onSettle` once the size stops changing. Events that do not
  * change the size are ignored; a burst is coalesced with a trailing debounce. Returns a function
- * that detaches the listener and drops any pending redraw.
+ * that detaches the listener and drops any pending repaint.
  */
 export function watchResize(
   stdout: ResizableOutput,

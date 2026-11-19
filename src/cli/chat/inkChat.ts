@@ -8,7 +8,7 @@ import type { Notifier } from "../notify.js";
 import type { Renderer } from "../renderer.js";
 import { runChat, statusOf } from "./controller.js";
 import { editInEditor } from "./externalEditor.js";
-import { clearScreenKeepingScrollback, recoverFrame, watchResize } from "./resize.js";
+import { clearScreenKeepingScrollback, repaintFresh, watchResize } from "./resize.js";
 import { ChatStore } from "./store.js";
 import { App } from "./ui.js";
 
@@ -23,7 +23,8 @@ export async function runInkChat(
   approver: SwitchApprover,
   /** Sends the runtime's agent events to the chat view. */
   setEventTarget: (renderer: Renderer) => void,
-  banner: string,
+  /** The start banner for a given width, so a resize can redraw it instead of reflowing it. */
+  renderBanner: (columns: number) => string,
   sessionPath: (id: string) => string,
   exitNow: () => never,
   /** A first line to run, as if typed (garuda init runs "/init"). */
@@ -46,18 +47,25 @@ export async function runInkChat(
     // UX U12: GARUDA_MOTION, the project's ui.motion, or screen-reader mode.
     reducedMotion: motionReduced(process.env, runtime.uiSettings),
   });
-  store.print(banner);
+  const bannerWidth = () => process.stdout.columns || 80;
+  store.printBanner(renderBanner(bannerWidth()));
   if (firstInput !== undefined) store.enqueue(firstInput);
   approver.current = store;
   setEventTarget(store);
-  const ink = render(createElement(App, { store }), { exitOnCtrlC: false });
-  // Resize recovery (0.21.x): on a wider window Ink's relative erase overlaps the reflowed frame, so
-  // redraw cleanly once the size settles. Only on a real terminal; a pipe never resizes.
+  const mount = () => render(createElement(App, { store }), { exitOnCtrlC: false });
+  let ink = mount();
+  // Resize recovery (0.21.x): a resize reflows the frame, which Ink's row-relative erase cannot
+  // redraw cleanly, so repaint the whole view at the new width once the size settles. The banner is
+  // a fixed-width block, so redraw it at the new width first. Only on a real terminal; a pipe never
+  // resizes. See resize.ts for why a full repaint is the only reliable cure.
   const stopResize =
     process.stdout.isTTY === true
-      ? watchResize(process.stdout, () =>
-          recoverFrame(process.stdout, ink, createElement(App, { store })),
-        )
+      ? watchResize(process.stdout, () => {
+          store.updateBanner(renderBanner(bannerWidth()));
+          repaintFresh(process.stdout, ink, () => {
+            ink = mount();
+          });
+        })
       : () => {};
   const reportFocus = (on: boolean) => {
     if (focus !== undefined) process.stdout.write(on ? FOCUS_REPORTING_ON : FOCUS_REPORTING_OFF);

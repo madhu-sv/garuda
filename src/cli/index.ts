@@ -685,21 +685,26 @@ async function start(options: Options, program: Command): Promise<number> {
     ink: ink !== undefined,
   };
   const { screenReaderMode } = await import("./receiptView.js");
-  let startBanner = banner(bannerInfo, {
-    columns: process.stdout.columns || 80,
-    color: colorLevel(process.stdout),
-    // 0.18.1: the Ink chat centres the banner; a screen reader gets it as it is.
-    center: ink !== undefined && !screenReaderMode(),
-    ...(process.stdout.rows ? { rows: process.stdout.rows } : {}),
-    screenReader: screenReaderMode(),
-  });
+  // The core banner is a fixed-width block. Keep it as a function of width (0.21.x), so a resize can
+  // redraw it at the new width instead of letting the terminal reflow it; the parts after it are
+  // plain lines that wrap on their own, so they are built once.
+  const renderCore = (columns: number) =>
+    banner(bannerInfo, {
+      columns,
+      color: colorLevel(process.stdout),
+      // 0.18.1: the Ink chat centres the banner; a screen reader gets it as it is.
+      center: ink !== undefined && !screenReaderMode(),
+      ...(process.stdout.rows ? { rows: process.stdout.rows } : {}),
+      screenReader: screenReaderMode(),
+    });
+  let bannerExtras = "";
   // A dist/ older than its checkout (the user's live run: a new patch, no rebuild) says so.
   {
     const { BUILD_COMMIT } = await import("../buildInfo.js");
     const { CHAT_STALE, garudaCommit, staleBuildNote } = await import("../buildCheck.js");
     const stale = staleBuildNote(BUILD_COMMIT, await garudaCommit(), CHAT_STALE);
     if (stale !== undefined) {
-      startBanner += `\n${colorLevel(process.stdout) === "none" ? stale : styleText("yellow", stale)}`;
+      bannerExtras += `\n${colorLevel(process.stdout) === "none" ? stale : styleText("yellow", stale)}`;
     }
   }
   // UX U7: the jobs that ended since the last chat, once. UX U9: the first-run tour, once per
@@ -711,22 +716,24 @@ async function start(options: Options, program: Command): Promise<number> {
     const brief = await morningBrief(root, (style, text) =>
       colored ? styleText(style, text) : text,
     ).catch(() => undefined);
-    if (brief !== undefined) startBanner += `\n${brief}\n`;
+    if (brief !== undefined) bannerExtras += `\n${brief}\n`;
     const { initTip } = await import("../init/detect.js");
     const tip = initTip(root);
     const { firstRunTour } = await import("./tour.js");
     const first = await firstRunTour(root, homedir(), runtime.profiles).catch(() => undefined);
     if (first !== undefined) {
       tour = first.prompts;
-      startBanner += `\n${first.text}${tip === undefined ? "" : " /init sets up AGENTS.md for this project."}`;
+      bannerExtras += `\n${first.text}${tip === undefined ? "" : " /init sets up AGENTS.md for this project."}`;
     } else if (tip !== undefined) {
       const shown =
         ink !== undefined && !screenReaderMode()
           ? centerLines([tip], process.stdout.columns || 80)[0]
           : tip;
-      startBanner += `\n${shown}`;
+      bannerExtras += `\n${shown}`;
     }
   }
+  const renderBanner = (columns: number) => renderCore(columns) + bannerExtras;
+  const startBanner = renderBanner(process.stdout.columns || 80);
   const sessionPath = (id: string) => join(store.dir, `${id}.jsonl`);
   // Notifications (0.6): only for a chat on a terminal; escape codes go to the terminal itself.
   const notify = runtime.notificationSettings;
@@ -755,7 +762,7 @@ async function start(options: Options, program: Command): Promise<number> {
       runtime,
       approver,
       setEventTarget,
-      startBanner,
+      renderBanner,
       sessionPath,
       exitNow,
       options.firstInput,
