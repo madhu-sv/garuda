@@ -246,6 +246,16 @@ interface ChatState {
   (`accent.ts`), reduced motion and the screen-reader marks (`marks.ts`); docs/lld/ux.md has the
   details. The footer starts one space in, under the
   box's border. The chat does not use the alternate screen: the terminal's scrollback stays.
+- Resize (0.21.x, `chat/resize.ts`): a resize reflows the lines already on screen, so Ink's
+  row-relative erase of the live frame no longer matches the rows it drew, and the old frame is left
+  behind (a wider window) or its rewrapped rows stay above the new one (a narrower one, a split pane
+  included). `watchResize` debounces the resize events; once the size settles `repaintFresh`
+  repaints the whole view at the new width: it unmounts, erases the viewport absolutely
+  (`HOME_AND_ERASE_DOWN`, which needs no row count the reflow could break), then mounts the chat
+  again from the store's state. The banner is a fixed-width block, so `index.ts` passes
+  `renderBanner(columns)` and the chat redraws it at the new width (`ChatStore.printBanner` and
+  `updateBanner`). The mount re-emits the `<Static>` items, so the scrollback holds the conversation
+  once more after each resize: the cost of a correct live view on the normal screen.
 - `/export --html` (UX U11, `exportHtml.ts`) and `garuda advise` (UX U8, `advise.ts`; `index.ts`
   registers the command).
 - The start (UX U7, U9): `index.ts` adds `morningBrief` and `firstRunTour` to the banner (the
