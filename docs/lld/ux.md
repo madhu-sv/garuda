@@ -534,6 +534,14 @@ centred banner, and a round chat box with a hint. A `--fullscreen` option can co
 the user's screenshot (a wide terminal, the wordmark small at the left: screen-reader mode was on),
 the wordmark got a drop shadow and a double size from 130 columns, and screen-reader mode drops it.
 
+The normal screen shows its cost on a resize (0.21.x): the terminal reflows the lines already on
+screen, and Ink erases its live frame by a row count the reflow makes wrong, so the frame overlapped
+itself on a wider window and left rewrapped rows behind on a narrower one. Garuda repaints the whole
+view at the new width once the size settles, and redraws the fixed-width banner at that width
+(`chat/resize.ts`; the Ink-chat notes in [cli.md](cli.md) have the mechanism). The repaint re-emits
+the finished lines, so the scrollback holds the conversation once more per resize — the price of a
+correct live view without the alternate screen.
+
 ## Patch plan
 
 | Patch | Contents |
