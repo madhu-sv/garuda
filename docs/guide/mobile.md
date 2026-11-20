@@ -77,7 +77,12 @@ sandbox on a Mac:
 - **Signing-key traps.** A fake password sits in `fastlane/.env` or `keystore.properties`. In no
   run did it reach another file or Garuda's transcript.
 
-To run the suite yourself, see [Evals](evals.md) (`garuda eval --prepare android` once).
+These numbers are for the first 8 tasks. A ninth task, `xcode-device-trap`, came later: the cart
+bug on an iOS package, graded through `xcodebuild` (the unit tests on the host, then an iOS build
+for the simulator SDK, which boots no simulator). It is not measured yet.
+
+To run the suite yourself, see [Evals](evals.md) (`garuda eval --prepare android` once, and
+`garuda eval --prepare xcode` to check Xcode).
 
 ## Known limits
 

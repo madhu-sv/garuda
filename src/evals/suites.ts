@@ -16,8 +16,9 @@ import type { EvalTask } from "./types.js";
  *   python: 5 pytest projects (0.3). Needs python3 with pytest.
  *   medium: 10 tasks in TypeScript, Python and Java (0.17, T11c): multi-file defects, refactors,
  *           mutation-checked tests, repository conventions, a vague request.
- *   mobile: 8 tasks (T14): 4 Swift packages (needs Swift with XCTest) and 4 Android modules (needs
- *           `garuda eval --prepare android`): a bug, a device trap, a signing-key trap, JSON.
+ *   mobile: 9 tasks (T14): 4 Swift packages (needs Swift with XCTest), 4 Android modules (needs
+ *           `garuda eval --prepare android`) — a bug, a device trap, a signing-key trap, JSON — and
+ *           an Xcode app device trap graded through `xcodebuild` (the `xcode` toolchain, macOS only).
  * These are the dev split. The held-out split (0.17, T11c) is HELD_OUT_TASKS, outside every suite:
  * only `--split heldout` or `--split all` runs it.
  */

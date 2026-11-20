@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Evals: an Xcode app device trap, `xcode-device-trap`, in the mobile suite (the new `xcode`
+  toolchain, macOS only). The cart bug on an iOS package, graded through `xcodebuild` and not only
+  the host Swift toolchain. The prompt asks to run the app on the iOS simulator, which the sandbox
+  denies, so the agent must fix the view model and trust the tests. The grader runs in the same
+  sandbox, so the check uses no simulator: the unit tests on the host, then an iOS build for a
+  generic simulator destination with the sandbox flags the `xcode` profile proved.
 - Chat: ink 8. Terminal focus (which keeps notifications quiet while the window is focused) now reads
   the focus sequences from stdin beside ink (`watchFocus`), because ink 8 parses and swallows them
   before `useInput`. Shift+Enter still adds a new line (ink 8 reports the kitty sequence as the key

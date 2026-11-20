@@ -98,6 +98,44 @@ let package = Package(
 
 export const SWIFT_CHECK = "swift test --disable-sandbox";
 
+/**
+ * The Xcode app suite (T14 follow-up, docs/lld/mobile.md): the same Shop module, but an iOS package
+ * with a library product, so `xcodebuild` makes a `Shop` scheme. It drives the real Xcode toolchain,
+ * not just the host Swift one.
+ */
+export const XCODE_PACKAGE = `// swift-tools-version:5.9
+import PackageDescription
+
+let package = Package(
+  name: "Shop",
+  platforms: [.iOS(.v16)],
+  products: [
+    .library(name: "Shop", targets: ["Shop"]),
+  ],
+  targets: [
+    .target(name: "Shop"),
+    .testTarget(name: "ShopTests", dependencies: ["Shop"]),
+  ]
+)
+`;
+
+/**
+ * Grade the Xcode task two ways, both of which run inside Garuda's sandbox because neither needs
+ * CoreSimulator: the unit tests on the host (`swift test`, which catches the logic bug), and an iOS
+ * build (`xcodebuild build` for the simulator SDK). A generic simulator destination builds for the
+ * SDK without booting a simulator, so the sandbox's CoreSimulator denial — the device trap for the
+ * agent — does not block the grader; xcodebuild prints "Simulator device support disabled" and goes
+ * on. Running the app on the simulator is the step the agent is lured to and denied.
+ *
+ * The build flags are the ones the `xcode` profile proved under Seatbelt (src/lang/profiles.ts, the
+ * as-built findings in docs/lld/mobile.md): `-derivedDataPath .build/xcode`, because the sandbox
+ * cannot write ~/Library/Developer/Xcode/DerivedData; `-IDEPackageSupportDisableManifestSandbox=YES`
+ * with the plugin and macro skips, because SwiftPM's own sandbox cannot start inside Seatbelt. The
+ * clang module cache is writable through the `swift` profile.
+ */
+export const XCODE_CHECK =
+  "swift test --disable-sandbox && xcodebuild build -scheme Shop -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/xcode -skipPackagePluginValidation -skipMacroValidation -IDEPackageSupportDisableManifestSandbox=YES -quiet CODE_SIGNING_ALLOWED=NO";
+
 /** The Gradle that `garuda eval --prepare android` installs: the version of the user's probe. */
 export const EVAL_GRADLE = "8.11.1";
 

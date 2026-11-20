@@ -12,6 +12,8 @@ import {
   PYPROJECT,
   SWIFT_CHECK,
   SWIFT_PACKAGE,
+  XCODE_CHECK,
+  XCODE_PACKAGE,
 } from "./projects.js";
 
 /**
@@ -21,7 +23,7 @@ import {
  * does it once, with the user's consent.
  */
 
-export type ToolchainId = "maven" | "pytest" | "swift" | "android";
+export type ToolchainId = "maven" | "pytest" | "swift" | "android" | "xcode";
 
 export interface Toolchain {
   id: ToolchainId;
@@ -114,6 +116,21 @@ export const TOOLCHAINS: Readonly<Record<ToolchainId, Toolchain>> = {
     prepare: ANDROID_PREPARE,
     hint: `The Android tasks need a JDK from 17 to 23 (JAVA_HOME, or Homebrew's openjdk@21 or @17: \`brew install openjdk@21\`), the Android SDK with platform 35 (ANDROID_HOME, Android Studio's ~/Library/Android/sdk or Homebrew's android-commandlinetools), and Gradle ${EVAL_GRADLE} with the Android plugin in Gradle's caches. Run \`garuda eval --prepare android\` once: it downloads them (network).`,
   },
+  xcode: {
+    id: "xcode",
+    title: "Xcode: xcodebuild for the iOS Simulator SDK",
+    files: {
+      "Package.swift": XCODE_PACKAGE,
+      "Sources/Shop/Probe.swift":
+        "public enum Probe {\n  public static func one() -> Int { 1 }\n}\n",
+      "Tests/ShopTests/ProbeTests.swift":
+        "import XCTest\n@testable import Shop\n\nfinal class ProbeTests: XCTestCase {\n  func testOne() {\n    XCTAssertEqual(Probe.one(), 1)\n  }\n}\n",
+    },
+    probe: XCODE_CHECK,
+    // swift test, then a cold iOS build: longer than the default two minutes.
+    probeTimeoutMs: 6 * 60_000,
+    hint: "The Xcode task needs Xcode on macOS with an iOS Simulator runtime (Xcode > Settings > Platforms; run `xcodebuild -runFirstLaunch` once). It builds for the iOS Simulator SDK with a generic destination, so no simulator boots and it runs inside the sandbox.",
+  },
 };
 
 export interface ToolchainStatus {
@@ -157,6 +174,7 @@ export function toolchainId(name: string): ToolchainId | undefined {
     swift: "swift",
     ios: "swift",
     android: "android",
+    xcode: "xcode",
   };
   return aliases[name.toLowerCase()];
 }

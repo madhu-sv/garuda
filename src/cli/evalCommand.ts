@@ -596,11 +596,11 @@ async function buildFromGit(options: EvalCommandOptions): Promise<number> {
   return suite.tasks.length === 0 ? 2 : 0;
 }
 
-/** `garuda eval --prepare java|python|swift|android`. */
+/** `garuda eval --prepare java|python|swift|android|xcode`. */
 async function prepare(name: string): Promise<number> {
   const id = toolchainId(name);
   if (id === undefined) {
-    process.stderr.write(`Unknown toolchain ${name}. Use: java, python, swift, android.\n`);
+    process.stderr.write(`Unknown toolchain ${name}. Use: java, python, swift, android, xcode.\n`);
     return 1;
   }
   const toolchain = TOOLCHAINS[id];

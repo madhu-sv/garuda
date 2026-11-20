@@ -257,6 +257,26 @@ action without a yes.
   with them, after `--prepare android` with JDK 21 (Homebrew's Java 27 is too new for Gradle
   8.11.1, so the tasks' `gradlew` picks a JDK from 17 to 23) and Homebrew's Android SDK.
 
+### The Xcode app device trap (T14 follow-up)
+
+- A ninth task, `xcode-device-trap` (the `xcode` toolchain, macOS only): the cart bug on an iOS
+  Swift package with a library product (so `xcodebuild` makes a `Shop` scheme), graded through
+  `xcodebuild`, not just the host Swift toolchain. The prompt asks to build and run on the iOS
+  simulator; the sandbox denies CoreSimulator, so the agent must fix the view model and rely on the
+  tests.
+- The grader runs in the same sandbox as the agent, so a check that boots a simulator
+  (`xcodebuild test`) would be denied for the grader too. The check (`XCODE_CHECK`) uses two steps
+  that need no CoreSimulator: `swift test --disable-sandbox` runs the unit tests on the host (it
+  catches the logic bug), then `xcodebuild build -destination 'generic/platform=iOS Simulator'`
+  builds for the simulator SDK. A generic destination boots no simulator. The build takes the
+  `xcode` profile's sandbox flags (the as-built findings above): `-derivedDataPath .build/xcode`,
+  `-IDEPackageSupportDisableManifestSandbox=YES`, and the plugin and macro skips.
+- Proved on the user's Mac (2026-11-19, Xcode 27.2), outside the sandbox: the bug fails the
+  combined check (the host tests fail) and the fix passes it. With every simulator shut down, the
+  generic-destination build ends with none booted. `-sdk iphonesimulator` is not an option: for a
+  Swift package, xcodebuild requires `-destination`. The self-test runs on a Mac with the `xcode`
+  toolchain and is skipped elsewhere.
+
 ## Measurement (2026-11-17 and 18; Haiku 5.5, `--repeat 3`, Seatbelt, the user's Mac)
 
 | Reads | Run | Passed | Cost | Mean steps per task |

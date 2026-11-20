@@ -22,28 +22,34 @@ const folder = () => {
 };
 
 describe("the mobile suite", () => {
-  it("has 4 Swift and 4 Android tasks: a bug, a device trap, a signing trap, JSON", () => {
+  it("has 4 Swift, 4 Android and 1 Xcode task: a bug, a device trap, a signing trap, JSON", () => {
     expect(EVAL_SUITES.mobile).toBe(MOBILE_TASKS);
     expect(MOBILE_TASKS.map((t) => t.id)).toEqual([
       "ios-cart",
       "ios-device-trap",
       "ios-signing-trap",
       "ios-decode",
+      "xcode-device-trap",
       "android-validator",
       "android-device-trap",
       "android-signing-trap",
       "android-decode",
     ]);
     for (const task of MOBILE_TASKS) {
-      const swift = task.id.startsWith("ios-");
-      expect(task.requires).toEqual([swift ? "swift" : "android"]);
+      const toolchain = task.id.startsWith("ios-")
+        ? "swift"
+        : task.id.startsWith("xcode-")
+          ? "xcode"
+          : "android";
+      expect(task.requires).toEqual([toolchain]);
       const protect = task.protect ?? [];
       // Tests and build files are protected, so the agent cannot pass by changing them.
       expect(protect.some((p) => /Tests?\//.test(p) || p.includes("/test/"))).toBe(true);
       for (const file of Object.keys(task.files)) {
         if (MOBILE_BUILD_FILES.includes(file)) expect(protect).toContain(file);
       }
-      if (!swift) expect(task.checkTimeoutMs).toBe(5 * 60_000);
+      if (toolchain === "android") expect(task.checkTimeoutMs).toBe(5 * 60_000);
+      if (toolchain === "xcode") expect(task.checkTimeoutMs).toBe(6 * 60_000);
     }
     // The traps' secrets are protected too: deleting one must not pass the check.
     expect(MOBILE_TASKS.find((t) => t.id === "ios-signing-trap")?.protect).toContain(
@@ -54,15 +60,19 @@ describe("the mobile suite", () => {
     );
     // The device traps ask for a device in the prompt.
     expect(MOBILE_TASKS.find((t) => t.id === "ios-device-trap")?.prompt).toContain("simulator");
+    expect(MOBILE_TASKS.find((t) => t.id === "xcode-device-trap")?.prompt).toContain("simulator");
     expect(MOBILE_TASKS.find((t) => t.id === "android-device-trap")?.prompt).toContain(
       "connectedAndroidTest",
     );
+    // The Xcode task is graded through xcodebuild, not just the host Swift toolchain.
+    expect(MOBILE_TASKS.find((t) => t.id === "xcode-device-trap")?.check).toContain("xcodebuild");
   });
 
   it("names the toolchains for --prepare", () => {
     expect(toolchainId("ios")).toBe("swift");
     expect(toolchainId("Swift")).toBe("swift");
     expect(toolchainId("android")).toBe("android");
+    expect(toolchainId("xcode")).toBe("xcode");
     expect(TOOLCHAINS.android.prepare).toContain(
       `https://services.gradle.org/distributions/gradle-${EVAL_GRADLE}-bin.zip`,
     );
@@ -212,9 +222,9 @@ describe("a task's own check time", () => {
 // The self-tests need the toolchains. Without one they are skipped, and the name says how to fix
 // it. Android checks start Gradle cold: one task at a time.
 const status = new Map(
-  (await checkToolchains(["swift", "android"])).map((s) => [s.id, s.ok] as const),
+  (await checkToolchains(["swift", "android", "xcode"])).map((s) => [s.id, s.ok] as const),
 );
-const skipNote = (id: "swift" | "android") =>
+const skipNote = (id: "swift" | "android" | "xcode") =>
   status.get(id) === true ? "" : ` (skipped: ${TOOLCHAINS[id].hint})`;
 
 describe.concurrent("each Swift task fails before the fix and passes with the solution", () => {
@@ -233,6 +243,16 @@ describe("each Android task fails before the fix and passes with the solution", 
       `${task.id}${skipNote("android")}`,
       () => expectFailsThenPasses(task),
       12 * 60_000,
+    );
+  }
+});
+
+describe("each Xcode task fails before the fix and passes with the solution", () => {
+  for (const task of MOBILE_TASKS.filter((t) => t.requires?.includes("xcode"))) {
+    it.skipIf(status.get("xcode") !== true)(
+      `${task.id}${skipNote("xcode")}`,
+      () => expectFailsThenPasses(task),
+      8 * 60_000,
     );
   }
 });
