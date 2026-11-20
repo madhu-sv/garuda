@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Profiles: Flutter (T14 part 3). A `pubspec.yaml` with a `flutter` section or dependency gets
+  `flutter test`, which runs in the headless engine with no device. The sandbox may write the pub
+  cache's package folders (not its executables or credentials) and, in the Flutter SDK, only its lock
+  file and `engine.realm`, never the tool or the Dart SDK, which run outside the sandbox later. The
+  SDK comes from `FLUTTER_ROOT` or the `flutter` on `PATH`. A new `pub` network preset (`pub.dev`,
+  `storage.googleapis.com`), and the receipt counts `flutter test` and `dart test`. From two probes
+  on the user's Mac (Flutter 3.50.1).
+- Profiles: Flutter's settings and telemetry are readable in "needed" mode (`~/.config/flutter` or
+  `$XDG_CONFIG_HOME/flutter`, the older `~/.flutter_settings` and `~/.flutter_tool_state`,
+  `~/.flutter`, `~/.dart-tool`), never writable, and `XDG_CONFIG_HOME` reaches sandboxed commands.
+  The first `flutter test` in the sandbox on the user's Mac stopped because the hidden settings
+  folder looked missing, and Flutter tried to create it.
+- Profiles: Flutter's two telemetry files that every command writes (the session file and the log
+  in `~/.dart-tool`) are writable in the sandbox; the consent file is not. The second `flutter test`
+  in the sandbox stopped when analytics could not touch the session file.
+- Profiles: with these, `flutter test` passes inside Seatbelt on the user's Mac ("needed" reads; a
+  logic test and a widget test). The sandbox hint no longer counts Flutter's `engine.stamp` line as
+  a block: a failing Flutter command (a failing test, say) had looked blocked by the sandbox, which
+  points the model to a run outside it.
 - Evals: SwiftPM's `.build/` and Gradle's `.gradle/` count as build output, so they are left out
   of a run's changed files. An agent's own `swift test` or `./gradlew` run showed thousands of
   "unexpected" changes (2322 in the first `xcode-device-trap` run); every Swift and Android task

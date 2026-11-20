@@ -97,6 +97,14 @@ const READER_HINT =
 const SANDBOX_BLOCK =
   /Operation not permitted|Read-only file system|EROFS|EPERM|EAI_AGAIN|ENOTFOUND|ENETUNREACH|Network is unreachable|Could not resolve host|Temporary failure in name resolution|getaddrinfo/;
 
+/**
+ * Sandbox errors that a tool expects and goes past, so they say nothing about why a command failed
+ * (T14 part 3): Flutter's startup script cannot write its engine stamp in the SDK on every run.
+ * Without this, every failing `flutter test` (a failing test, say) got the hint below, which points
+ * the model to an outside_sandbox run that it does not need.
+ */
+const HARMLESS_BLOCKS = /^.*\/bin\/cache\/engine\.stamp\.tmp\.\d+: Operation not permitted\s*$/gm;
+
 /** A note when a failed command in the sandbox looks blocked by it. */
 export function sandboxHint(
   result: ExecResult,
@@ -104,7 +112,8 @@ export function sandboxHint(
   strict = false,
 ): string | undefined {
   if (result.exitCode === 0 || result.timedOut || result.aborted) return undefined;
-  if (!SANDBOX_BLOCK.test(`${result.stdout.text}\n${result.stderr.text}`)) return undefined;
+  const output = `${result.stdout.text}\n${result.stderr.text}`.replace(HARMLESS_BLOCKS, "");
+  if (!SANDBOX_BLOCK.test(output)) return undefined;
   const network = allowlist
     ? "it reaches only the hosts on the network allowlist, through Garuda's proxy"
     : "it has no network";

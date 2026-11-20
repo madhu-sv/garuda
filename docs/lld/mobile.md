@@ -1,7 +1,7 @@
 # Mobile apps (T14): design
 
-Status: parts 0, 1, 2, 4, 6 and 7 built (0.20.1, 0.20.2 and 0.21); Flutter (part 3) and code
-intelligence (part 5) later. The sections "The problem" and "Findings" describe 0.20.0, before the
+Status: parts 0, 1, 2, 4, 6 and 7 built (0.20.1, 0.20.2 and 0.21); the Flutter profile (part 3)
+built after 0.21.1, without Flutter eval tasks yet; code intelligence (part 5) later. The sections "The problem" and "Findings" describe 0.20.0, before the
 work. The measurement is below.
 
 ## The problem
@@ -276,6 +276,65 @@ action without a yes.
   generic-destination build ends with none booted. `-sdk iphonesimulator` is not an option: for a
   Swift package, xcodebuild requires `-destination`. The self-test runs on a Mac with the `xcode`
   toolchain and is skipped elsewhere.
+
+### The Flutter profile (part 3, as built)
+
+Two probes on the user's Mac (2026-11-20; Flutter 3.50.1 from Homebrew, `FLUTTER_ROOT`
+`/opt/homebrew/share/flutter`, outside the sandbox) ran `flutter pub get --offline` and
+`flutter test` on a small package (a logic test and a widget test) and listed every file written
+outside the project:
+
+- The first run (no `~/.pub-cache` yet) unpacked the SDK's bundled packages into a new pub cache,
+  offline: about 27,500 files in `hosted` and `hosted-hashes`, plus `active_roots`. It also wrote
+  `packages/flutter_tools/.dart_tool` in the SDK, once, after the Flutter upgrade.
+- Every run writes three files in the SDK's `bin/cache` (`lockfile`, `engine.stamp`,
+  `engine.realm`), one `active_roots` entry, and two telemetry files in `~/.dart-tool`.
+
+The SDK's `bin/cache` holds the Flutter tool and the Dart SDK, which run outside the sandbox later,
+so it stays read-only, as settings files do. Flutter's startup script
+(`bin/internal/update_engine_version.sh`) rewrites `engine.stamp` and `engine.realm` on every run:
+the stamp from `FLUTTER_PREBUILT_ENGINE_VERSION` or the SDK's engine version, through a temporary
+file and `mv` (`echo … >"$es_tmp" && mv …`); the realm from `FLUTTER_REALM`, or empty, with a
+plain `>`. So a write from the sandbox to either file is overwritten before Flutter reads it. The
+profile makes writable only `lockfile` (empty) and `engine.realm` (the plain `>` that the script
+needs); the stamp's temporary file would need all of `bin/cache`, and its failure does not stop the
+script (`&&`), so each sandboxed command prints one error about it. `~/.dart-tool` (telemetry)
+stays read-only.
+
+- `flutterSdk`: `FLUTTER_ROOT`, else the `flutter` on `PATH`, two folders up from its real path. An
+  SDK has `bin/flutter` and `packages/flutter_tools`: `/opt/homebrew` has a `bin/flutter` link
+  too. FVM's per-project SDKs (`.fvm/flutter_sdk`) are not found yet: FVM was not on the Mac to
+  check.
+- The pub cache: `hosted`, `hosted-hashes`, `active_roots`, `git`, `_temp`. Not its `bin` or
+  `global_packages`, which hold executables, and not `credentials.json` (denied since 0.20.1).
+- The `pub` preset names `pub.dev` and `storage.googleapis.com`, where pub.dev keeps the archives.
+  The proxy checks hosts, not paths, so the preset also reaches other Cloud Storage buckets.
+- The receipt counts `flutter test` and `dart test` from package:test's last counter line
+  (`+passed ~skipped -failed`).
+- The first run inside Seatbelt on the Mac (`!flutter test`, "needed" reads): the script printed
+  the expected `engine.stamp.tmp…: Operation not permitted` and went on, so the lock and the realm
+  were writable. Then the Flutter tool stopped: "Flutter failed to create a directory at
+  ~/.config/flutter". The folder exists, but "needed" mode hides it, so the tool tried to create
+  it. The profile now makes Flutter's settings readable (`$XDG_CONFIG_HOME/flutter` or
+  `~/.config/flutter`, and the older `~/.flutter_settings` and `~/.flutter_tool_state` that the
+  tool checks first) and its telemetry (`~/.flutter`, `~/.dart-tool`), and passes
+  `XDG_CONFIG_HOME`. None of them is writable: the settings name the JDK and the Android SDK that
+  later runs use, outside the sandbox too.
+- The second run inside Seatbelt: past the settings, the tool stopped in unified_analytics while it
+  reported an error (`_handleToolError` → `AnalyticsImpl.send`): "Failed to set file modification
+  time" on `~/.dart-tool/dart-flutter-telemetry-session.json`. That crash hid the error it was
+  reporting. The profile now makes writable the session file and the telemetry log, which every
+  command writes (the probes) and which hold no code or settings. The consent file
+  (`dart-flutter-telemetry.config`) stays read-only, so the sandbox cannot turn telemetry on.
+- The third run inside Seatbelt reached the tests: "Test directory "test" not found", because
+  `flutter create --empty` makes no test folder. With a logic test and a widget test added, the
+  fourth run passed: `00:00 +2: All tests passed!`, exit 0, in Seatbelt with "needed" reads, and
+  only the expected `engine.stamp` line on stderr (2026-11-20).
+- The third run also showed a false hint: `sandboxHint` matched the `engine.stamp` line's
+  "Operation not permitted", so a failure that the project caused read as a sandbox block, which
+  points the model to an outside_sandbox run that it does not need. `HARMLESS_BLOCKS` in
+  `tools/bash.ts` drops that line before the check; a real block next to it still gets the hint.
+- Not yet: Flutter tasks in the `mobile` suite.
 
 ## Measurement (2026-11-17 and 18; Haiku 5.5, `--repeat 3`, Seatbelt, the user's Mac)
 

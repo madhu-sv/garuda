@@ -123,7 +123,8 @@ no host, but it records each host that a command asks for. After the command:
   ↑↓ and Enter, or 1 2 3 · y = 1 · p = 2 · n or Esc = 3
 ```
 
-- A known registry host maps to its preset (`npm`, `pypi`, `maven`, `go`, `cargo`, `github`). Any
+- A known registry host maps to its preset (`npm`, `pypi`, `maven`, `google`, `pub`, `go`, `cargo`,
+  `github`). Any
   other host is named as it is.
 - The choice gives the model a note, as the allowlist does today: "registry.npmjs.org works in the
   sandbox now. Run the command again in the sandbox." So the model stops asking to leave the sandbox.
