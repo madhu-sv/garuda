@@ -161,6 +161,11 @@ describe("changed and unexpected files", () => {
     put("dist/out.js", "o");
     put("pkg/__pycache__/m.pyc", "c");
     put("Main.class", "c");
+    // SwiftPM's and Xcode's output (the user's xcode-device-trap run: 2322 such files were counted
+    // as unexpected changes) and Gradle's folder in the project.
+    put(".build/out/Shop.build/CartViewModel.o", "o");
+    put(".build/xcode/Build/Products/x", "x");
+    put(".gradle/8.11.1/fileHashes/fileHashes.bin", "h");
     expect(changedPaths(before, await treeState(root))).toEqual([
       "src/a.js",
       "src/b.js",

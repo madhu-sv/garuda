@@ -47,7 +47,8 @@ Every part works with a fake model in the tests.
 - `changed`: the files that the run added, changed or deleted, relative to the task's start state.
   For a written task, the start state is `files`; for a repo task, the worktree at `base` with the
   added tests. Garuda's own folders (`.garuda/`) and build output are left out: `node_modules/`,
-  `target/`, `build/`, `dist/`, `__pycache__/`, `.pytest_cache/`, `*.class`, `*.pyc`.
+  `target/`, `build/`, `dist/`, `__pycache__/`, `.pytest_cache/`, `.build/` (SwiftPM, and the Xcode
+  task's derived data), `.gradle/`, `*.class`, `*.pyc`.
 - `unexpected`: the files in `changed` that are not in the task's `solution` and do not match its
   new optional `allowChanges` globs (for example `src/**` for a task that may touch any source
   file). A repo task's expected files are the files of its real commit.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Evals: SwiftPM's `.build/` and Gradle's `.gradle/` count as build output, so they are left out
+  of a run's changed files. An agent's own `swift test` or `./gradlew` run showed thousands of
+  "unexpected" changes (2322 in the first `xcode-device-trap` run); every Swift and Android task
+  was affected.
 - Evals: an Xcode app device trap, `xcode-device-trap`, in the mobile suite (the new `xcode`
   toolchain, macOS only). The cart bug on an iOS package, graded through `xcodebuild` and not only
   the host Swift toolchain. The prompt asks to run the app on the iOS simulator, which the sandbox
