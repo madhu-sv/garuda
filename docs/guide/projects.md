@@ -139,6 +139,7 @@ The banner shows what it found, for example `Java (Maven)`.
 | An Android Gradle project (the Android plugin in the root or `app/` build file, the settings or the version catalog) | `./gradlew testDebugUnitTest --offline` (T14; in place of the Gradle row) | the same Gradle caches and `~/.gradle/android`; `~/.android/debug.keystore` and `analytics.settings` are readable, `~/.android` never writable |
 | `Package.swift` | `swift test --disable-sandbox` (T14) | clang's module cache in macOS's per-user cache folder |
 | `*.xcodeproj`, `*.xcworkspace` | builds for the iOS simulator in the sandbox (`xcodebuild build … -derivedDataPath .build/xcode`); tests need the simulator, so they run only outside the sandbox, with your yes (T14) | as for `Package.swift` |
+| `pubspec.yaml` of a Flutter project | `flutter test` (T14) | the pub cache's package folders; in the Flutter SDK only its lock file and `engine.realm`, never its tool |
 | `pyproject.toml`, `setup.py`, `requirements.txt` … | `python3 -m pytest -q` (or the project's `.venv`, `uv run`, `poetry run`) | `~/.local/share/uv` |
 
 - The commands run offline, because the sandbox has no network. When a dependency is missing, the model

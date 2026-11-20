@@ -1,8 +1,8 @@
 # Mobile apps
 
-Android and iOS projects in Garuda's sandbox: what works, what asks, and what is out of scope. Every
-claim here comes from the `mobile` eval suite or from a probe on a Mac (Xcode 27, iOS 27.2,
-Android SDK 35). Flutter and React Native have no profile of their own yet.
+Android, iOS and Flutter projects in Garuda's sandbox: what works, what asks, and what is out of
+scope. Every claim here comes from the `mobile` eval suite or from a probe on a Mac (Xcode 27, iOS
+27.2, Android SDK 35, Flutter 3.50.1). React Native has no profile of its own yet.
 
 ## What works in the sandbox
 
@@ -11,6 +11,7 @@ Android SDK 35). Flutter and React Native have no profile of their own yet.
 | Android (Gradle, Kotlin or Java) | the Android plugin in a Gradle file | `./gradlew testDebugUnitTest --offline` | `./gradlew compileDebugSources --offline` (no signing) |
 | Swift package | `Package.swift` | `swift test --disable-sandbox` | `swift build --disable-sandbox` |
 | Xcode project or workspace | `*.xcodeproj`, `*.xcworkspace` | only outside the sandbox (below) | `xcodebuild build … -destination 'generic/platform=iOS Simulator'` |
+| Flutter | `pubspec.yaml` with a `flutter` section or dependency | `flutter test` | — (`flutter analyze` checks the code) |
 
 The chat's start shows the profile ("This looks like Swift (SwiftPM)"), and the agent gets its
 commands. For details per profile, see [Projects](projects.md).
@@ -27,6 +28,14 @@ commands. For details per profile, see [Projects](projects.md).
 - **Xcode.** The build writes derived data in `.build/xcode` in the project (add it to
   `.gitignore`), with code signing and Xcode's own manifest sandbox off. The scheme is a guess from
   the project's name: check it with `xcodebuild -list`.
+- **Flutter.** `flutter test` runs in Flutter's headless engine on your computer, so it needs no
+  device. The pub cache's package folders are writable; its executables and `credentials.json` are
+  not. In the Flutter SDK the sandbox writes only two small files that every `flutter` command
+  writes (its lock file and `engine.realm`), never the Flutter tool or the Dart SDK, which run
+  outside the sandbox later. So each command prints one harmless error about `engine.stamp`. After
+  `flutter upgrade`, run one `flutter` command outside Garuda first: it rebuilds the tool in the
+  SDK. For new packages, add the `pub` preset to `network.allow`, or run `flutter pub get` once
+  outside Garuda.
 
 ## What asks first
 
@@ -38,7 +47,7 @@ in the sandbox:
 - `xcrun simctl`, `xcrun devicectl`, `open -a Simulator`;
 - `xcodebuild test` on a simulator or a device (so iOS app tests);
 - `adb`, `emulator`, Gradle's `connected…` and `install…` tasks (so instrumented tests);
-- `flutter run`, `drive`, `install`, `attach`.
+- `flutter run`, `drive`, `install`, `attach`, `screenshot`.
 
 The agent can run one outside the sandbox. Then Garuda asks you, and a line under the command says
 what it drives:
@@ -88,10 +97,14 @@ To run the suite yourself, see [Evals](evals.md) (`garuda eval --prepare android
 
 - The device check reads the command's words. A command that hides the program (a script, or
   `$(which adb)`) is not found by it; the sandbox's own rules still apply to it.
-- The suite's Swift tasks are packages, not apps: no task yet asks for an Xcode app build in an
-  eval. The Xcode profile's build was checked by hand on a Mac.
+- The suite's Swift tasks are packages, not apps. `xcode-device-trap` builds its package with
+  `xcodebuild` for the iOS simulator, but no task builds an Xcode app project yet. The Xcode
+  profile's build of an app was checked by hand on a Mac.
 - Not in scope: UI automation, App Store or Play Store upload, signed release builds, device farms.
-- Flutter and React Native: no profile yet. React Native's TypeScript side works as any Node
+- Flutter: Garuda finds the SDK from `FLUTTER_ROOT` or the `flutter` on your `PATH`; FVM's
+  per-project SDKs are not supported yet. A plain Dart package has no profile, and the `mobile` suite
+  has no Flutter tasks yet.
+- React Native: no profile yet. React Native's TypeScript side works as any Node
   project; Metro and Expo's dev server are long-running processes, which need background
   processes (off by default).
 - Kotlin and Swift have no code index or language expert yet.

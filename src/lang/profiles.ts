@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 
 /**
  * Language profiles (0.3). Garuda looks at marker files in the working root (no deep scan, so
@@ -15,7 +15,7 @@ import { basename, dirname, isAbsolute, join } from "node:path";
  * The profiles do not start hooks and do not install anything.
  */
 
-export type ProfileId = "maven" | "gradle" | "android" | "swift" | "xcode" | "python";
+export type ProfileId = "maven" | "gradle" | "android" | "swift" | "xcode" | "flutter" | "python";
 
 export interface LanguageProfile {
   id: ProfileId;
@@ -96,6 +96,8 @@ export function isAndroid(root: string): boolean {
   return false;
 }
 const PYTHON_ENV = ["VIRTUAL_ENV"];
+/** Flutter's own folders and its mirrors' settings (T14 part 3). No secrets. */
+const FLUTTER_ENV = ["FLUTTER_ROOT", "PUB_CACHE", "PUB_HOSTED_URL", "FLUTTER_STORAGE_BASE_URL"];
 
 /**
  * The caches under the home folder that builds write. Only these subfolders: for example
@@ -105,6 +107,21 @@ const MAVEN_CACHES = [".m2/repository", ".m2/wrapper"];
 // Not "daemon": the user's daemon registry stays hidden from the sandbox, which has its own (T14).
 // "workers": a test process makes its working folder there (the user's Mac check, T14).
 const GRADLE_CACHES = ["caches", "wrapper", "native", "jdks", ".tmp", "notifications", "workers"];
+/**
+ * The pub cache's package folders (T14 part 3): the packages, their hashes, the projects that use
+ * them, git dependencies and pub's download folder. Not `bin` or `global_packages` (executables that
+ * run outside the sandbox later), and not `credentials.json`, which stays denied.
+ */
+const PUB_CACHE_DIRS = ["hosted", "hosted-hashes", "active_roots", "git", "_temp"];
+/**
+ * The files in the Flutter SDK that every `flutter` command writes (the user's Mac, Flutter
+ * 3.50.1): the startup lock and the engine realm. Neither holds code, and the startup script
+ * rewrites the realm on every run (from FLUTTER_REALM), so a write from the sandbox cannot last.
+ * Not `bin/cache` as a whole: it holds the Flutter tool and the Dart SDK, which run outside the
+ * sandbox later. The script also writes `engine.stamp` through a temporary file in `bin/cache`;
+ * that write fails in the sandbox, and the script goes on (`&&`) with the stamp it has.
+ */
+const FLUTTER_SDK_FILES = ["bin/cache/lockfile", "bin/cache/engine.realm"];
 /** pip and uv caches are under ~/.cache and ~/Library/Caches, which every profile may write. */
 const PYTHON_CACHES = [".local/share/uv"];
 
@@ -230,6 +247,44 @@ export function detectProfiles(root: string, options: DetectOptions = {}): Langu
     });
   }
 
+  // Flutter (T14 part 3, docs/lld/mobile.md): `flutter test` runs in the headless engine on the
+  // computer, so it needs no device and runs in the sandbox.
+  if (has("pubspec.yaml") && isFlutter(root)) {
+    const sdk = flutterSdk(env);
+    const pubCache = userHome(env.PUB_CACHE, join(home, ".pub-cache"));
+    profiles.push({
+      id: "flutter",
+      label: "Flutter",
+      test: "flutter test",
+      notes: [
+        "Flutter project (pubspec.yaml). Run the tests with `flutter test`; one file: `flutter test test/x_test.dart`;",
+        "one test: `flutter test --plain-name 'name'`. Check the code with `flutter analyze`.",
+        "The packages come from the pub cache: `flutter pub get --offline`. If a package is missing, ask the user",
+        'to add the "pub" preset to the network allowlist, or run `flutter pub get` with outside_sandbox: true.',
+        "flutter run, drive, install, attach and screenshot, and the tests in integration_test/, need a simulator,",
+        "emulator or device: they run only outside the sandbox, with the user's yes. Prefer `flutter test`.",
+        "Each flutter command tries to update bin/cache/engine.stamp in the Flutter SDK, which the sandbox does",
+        "not let it write: an error line about engine.stamp is expected and harmless. After `flutter upgrade`,",
+        "the first flutter command must run outside the sandbox: it rebuilds the Flutter tool in the SDK.",
+        ...(sdk === undefined
+          ? [
+              "Flutter was not found (FLUTTER_ROOT, or `flutter` on PATH), so the SDK's lock file is not writable",
+              "and flutter commands may fail in the sandbox. Ask the user how they run Flutter.",
+            ]
+          : []),
+      ],
+      access: {
+        writePaths: [
+          ...PUB_CACHE_DIRS.map((p) => join(pubCache, p)),
+          ...(sdk === undefined ? [] : FLUTTER_SDK_FILES.map((f) => join(sdk, f))),
+        ],
+        envAllow: FLUTTER_ENV,
+        // An SDK in the home folder (~/development/flutter) is hidden in "needed" mode.
+        ...(sdk === undefined ? {} : { readPaths: [sdk] }),
+      },
+    });
+  }
+
   if (PYTHON_MARKERS.some(has)) {
     const runner = pythonRunner(root, has);
     profiles.push({
@@ -251,6 +306,51 @@ export function detectProfiles(root: string, options: DetectOptions = {}): Langu
   }
 
   return profiles;
+}
+
+/** A pubspec.yaml with a `flutter:` section or a `sdk: flutter` dependency (a Dart package has neither). */
+function isFlutter(root: string): boolean {
+  try {
+    const text = readFileSync(join(root, "pubspec.yaml"), "utf8").slice(0, 200_000);
+    return /^flutter:/m.test(text) || /^\s+sdk:\s*["']?flutter\b/m.test(text);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The Flutter SDK as a real path (Seatbelt compares real paths): FLUTTER_ROOT, else the `flutter` on
+ * PATH, two folders up from its real path (Homebrew: /opt/homebrew/bin/flutter is a link into
+ * /opt/homebrew/share/flutter/bin). An SDK has bin/flutter and packages/flutter_tools. Undefined when
+ * neither is a Flutter SDK.
+ */
+export function flutterSdk(env: NodeJS.ProcessEnv): string | undefined {
+  const sdk = (dir: string): string | undefined => {
+    try {
+      const real = realpathSync(dir);
+      // bin/flutter alone is not enough: /opt/homebrew has one too (a link into the SDK).
+      const isSdk =
+        existsSync(join(real, "bin", "flutter")) &&
+        existsSync(join(real, "packages", "flutter_tools"));
+      return isSdk ? real : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  if (env.FLUTTER_ROOT !== undefined && isAbsolute(env.FLUTTER_ROOT)) {
+    const found = sdk(env.FLUTTER_ROOT);
+    if (found !== undefined) return found;
+  }
+  for (const dir of (env.PATH ?? "").split(delimiter)) {
+    if (dir === "" || !existsSync(join(dir, "flutter"))) continue;
+    try {
+      const found = sdk(dirname(dirname(realpathSync(join(dir, "flutter")))));
+      if (found !== undefined) return found;
+    } catch {
+      // A broken link: try the next folder.
+    }
+  }
+  return undefined;
 }
 
 /** The Xcode projects and workspaces in the root (no deep scan, N3); a workspace first. */

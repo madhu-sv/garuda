@@ -71,7 +71,7 @@ export function hasReceipt(receipt: Receipt): boolean {
 }
 
 const RUNNERS =
-  /(^|[\s;&|(/])(vitest|jest|pytest|py\.test|mvn|mvnw|gradle|gradlew|go\s+test|node\s+--test|(npm|pnpm|yarn|bun)\s+(run\s+)?test|cargo\s+test|swift\s+test|xcodebuild\b[^;&|]*\stest(-without-building)?|tox|nox)\b/;
+  /(^|[\s;&|(/])(vitest|jest|pytest|py\.test|mvn|mvnw|gradle|gradlew|go\s+test|node\s+--test|(npm|pnpm|yarn|bun)\s+(run\s+)?test|cargo\s+test|swift\s+test|flutter\s+test|dart\s+test|xcodebuild\b[^;&|]*\stest(-without-building)?|tox|nox)\b/;
 
 /** A command that runs tests: the project's test command, or a known runner (decision D2). */
 export function isTestCommand(command: string, projectTest: string | undefined): boolean {
@@ -144,6 +144,13 @@ export function parseTestCount(output: string): { total: number; failed: number 
     const failed =
       num(xctest?.[2]) + (swiftTesting?.[2] === "failed" ? Math.max(1, num(swiftTesting[3])) : 0);
     return { total, failed };
+  }
+  // package:test (flutter test, dart test): "00:02 +3 ~1 -1: Some tests failed." The last counter
+  // line has the totals: + passed, ~ skipped, - failed (T14 part 3).
+  const dartTest = [...output.matchAll(/^\s*\d+:\d\d \+(\d+)(?: ~\d+)?(?: -(\d+))?:/gm)].at(-1);
+  if (dartTest !== undefined) {
+    const failed = num(dartTest[2]);
+    return { total: num(dartTest[1]) + failed, failed };
   }
   // go test -v: one line per test.
   const passes = output.match(/^\s*--- PASS: /gm)?.length ?? 0;
