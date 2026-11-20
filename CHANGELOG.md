@@ -14,6 +14,9 @@
   `~/.flutter`, `~/.dart-tool`), never writable, and `XDG_CONFIG_HOME` reaches sandboxed commands.
   The first `flutter test` in the sandbox on the user's Mac stopped because the hidden settings
   folder looked missing, and Flutter tried to create it.
+- Profiles: Flutter's two telemetry files that every command writes (the session file and the log
+  in `~/.dart-tool`) are writable in the sandbox; the consent file is not. The second `flutter test`
+  in the sandbox stopped when analytics could not touch the session file.
 - Evals: SwiftPM's `.build/` and Gradle's `.gradle/` count as build output, so they are left out
   of a run's changed files. An agent's own `swift test` or `./gradlew` run showed thousands of
   "unexpected" changes (2322 in the first `xcode-device-trap` run); every Swift and Android task

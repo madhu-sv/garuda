@@ -48,6 +48,10 @@ const detect = (root: string, env: NodeJS.ProcessEnv = {}) =>
 const PUB_DIRS = ["hosted", "hosted-hashes", "active_roots", "git", "_temp"].map((d) =>
   join(HOME, ".pub-cache", d),
 );
+const TELEMETRY_WRITES = [
+  join(HOME, ".dart-tool", "dart-flutter-telemetry-session.json"),
+  join(HOME, ".dart-tool", "dart-flutter-telemetry.log"),
+];
 const SETTINGS_READS = [
   join(HOME, ".config", "flutter"),
   ...[".flutter_settings", ".flutter_tool_state", ".flutter", ".dart-tool"].map((p) =>
@@ -69,15 +73,20 @@ describe("the Flutter profile", () => {
     expect(detect(project("name: util\ndependencies:\n  path: ^1.9.0\n"))).toEqual([]);
   });
 
-  it("writes only the pub cache's package folders and two files of the SDK, never its tool", () => {
+  it("writes the pub cache's package folders, two SDK files and two telemetry files, no more", () => {
     const sdk = sdkAt(join(base, "flutter-sdk"));
     const [app] = detect(project(FLUTTER_APP), { FLUTTER_ROOT: sdk });
     expect(app?.access.writePaths).toEqual([
       ...PUB_DIRS,
       join(sdk, "bin", "cache", "lockfile"),
       join(sdk, "bin", "cache", "engine.realm"),
+      ...TELEMETRY_WRITES,
     ]);
     const writes = app?.access.writePaths ?? [];
+    // Telemetry: the session and the log (the user's sandbox run stopped on the session file), not
+    // the consent file and not the folder, so the sandbox cannot turn telemetry on.
+    expect(writes).not.toContain(join(HOME, ".dart-tool", "dart-flutter-telemetry.config"));
+    expect(writes).not.toContain(join(HOME, ".dart-tool"));
     // bin/cache holds the Flutter tool and the Dart SDK, which run outside the sandbox later.
     expect(writes).not.toContain(join(sdk, "bin", "cache"));
     expect(writes).not.toContain(sdk);
@@ -117,7 +126,7 @@ describe("the Flutter profile", () => {
 
   it("without an SDK: the pub cache only, and a note that says why flutter may fail", () => {
     const [app] = detect(project(FLUTTER_APP), { PATH: "/nowhere" });
-    expect(app?.access.writePaths).toEqual(PUB_DIRS);
+    expect(app?.access.writePaths).toEqual([...PUB_DIRS, ...TELEMETRY_WRITES]);
     expect(app?.access.readPaths).toEqual(SETTINGS_READS);
     expect(app?.notes.join("\n")).toContain("Flutter was not found");
     // With an SDK there is no such note.

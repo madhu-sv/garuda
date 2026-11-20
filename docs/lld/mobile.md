@@ -320,6 +320,12 @@ stays read-only.
   tool checks first) and its telemetry (`~/.flutter`, `~/.dart-tool`), and passes
   `XDG_CONFIG_HOME`. None of them is writable: the settings name the JDK and the Android SDK that
   later runs use, outside the sandbox too.
+- The second run inside Seatbelt: past the settings, the tool stopped in unified_analytics while it
+  reported an error (`_handleToolError` → `AnalyticsImpl.send`): "Failed to set file modification
+  time" on `~/.dart-tool/dart-flutter-telemetry-session.json`. That crash hid the error it was
+  reporting. The profile now makes writable the session file and the telemetry log, which every
+  command writes (the probes) and which hold no code or settings. The consent file
+  (`dart-flutter-telemetry.config`) stays read-only, so the sandbox cannot turn telemetry on.
 - Not yet: a passing run inside Seatbelt, and Flutter tasks in the `mobile` suite.
 
 ## Measurement (2026-11-17 and 18; Haiku 5.5, `--repeat 3`, Seatbelt, the user's Mac)

@@ -114,6 +114,16 @@ const FLUTTER_ENV = [
  * are older places that Flutter checks first; `.flutter` holds older telemetry.
  */
 const FLUTTER_HOME_READS = [".flutter_settings", ".flutter_tool_state", ".flutter", ".dart-tool"];
+/**
+ * The two telemetry files that every `flutter` command writes (the user's probes). Without them the
+ * tool stopped in the sandbox: "Failed to set file modification time" on the session file, while it
+ * reported an error. Neither holds code or settings. The consent file
+ * (`dart-flutter-telemetry.config`) stays read-only, so the sandbox cannot turn telemetry on.
+ */
+const FLUTTER_TELEMETRY_WRITES = [
+  ".dart-tool/dart-flutter-telemetry-session.json",
+  ".dart-tool/dart-flutter-telemetry.log",
+];
 
 /**
  * The caches under the home folder that builds write. Only these subfolders: for example
@@ -293,6 +303,7 @@ export function detectProfiles(root: string, options: DetectOptions = {}): Langu
         writePaths: [
           ...PUB_CACHE_DIRS.map((p) => join(pubCache, p)),
           ...(sdk === undefined ? [] : FLUTTER_SDK_FILES.map((f) => join(sdk, f))),
+          ...FLUTTER_TELEMETRY_WRITES.map((f) => join(home, f)),
         ],
         envAllow: FLUTTER_ENV,
         // An SDK in the home folder (~/development/flutter) is hidden in "needed" mode, as are
