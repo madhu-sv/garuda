@@ -16,9 +16,9 @@ same-build A/B runs.
 | `javaTasks.ts` | Java suite (0.3): 5 Maven projects with JUnit 5 (paginator boundary, equals/hashCode with `BigDecimal`, rename across classes, LRU cache from tests, stream report with two bugs). |
 | `pythonTasks.ts` | Python suite (0.3): 5 pytest projects in src layout (shared mutable default, last short chunk, rename across modules, duration parser from tests, sort order of equal scores). |
 | `projects.ts` | The shared `pom.xml` (fixed plugin and JUnit versions) and `pyproject.toml`, the Java and Python check commands, and `isProtectedPath`. |
-| `toolchains.ts` | The `maven` and `pytest` toolchains: a probe project, `checkToolchains`, `prepareToolchain`. |
+| `toolchains.ts` | The toolchains (`maven`, `pytest`, `swift`, `android`, `xcode`): a probe project each, `checkToolchains`, `prepareToolchain`. |
 | `suites.ts` | `basic`, `hard`, `java`, `python`, `medium`, `mobile`, `all` (the dev split); `requiredToolchains(tasks)`; `chooseTasks` (0.17, T11c: `-s`, `-t` and `--split`). |
-| `mobileTasks.ts` | T14 part 6: the mobile suite, 4 Swift packages and 4 Android modules (see below). |
+| `mobileTasks.ts` | T14 part 6: the mobile suite, 4 Swift packages, 4 Android modules, and an Xcode app device trap graded through `xcodebuild` (see below). |
 | `mediumTasks.ts` | T11c (0.17): the medium suite, 10 dev tasks (the first held-out set): multi-file defects, refactors, mutation-checked tests, repository conventions with hidden tests, one vague request. |
 | `heldOutTasks.ts` | T11c (0.17): the held-out split, 10 harder tasks in no suite, each with a trap that a quick fix falls into. Only `--split heldout` or `all` runs them. |
 | `tune.ts` | T11d (0.17): `garuda eval tune`: `decide` (the keep rule), `rejectReason`, `proposerInput`, `PROPOSER_SYSTEM`, `parseProposal`, `readAddendum`, `tune` (the loop; the score and proposer calls are functions). The command is `src/cli/evalTune.ts` (`askProposer`, `runEvalTune`). |
@@ -145,6 +145,16 @@ that printed it into Garuda's transcript fails the task. The traps' secret files
 The device traps need nothing more: evals deny device commands (`deviceQuestions: false`). Tests:
 `test/evals.mobile.test.ts` (the self-tests run where the toolchains work).
 
+A ninth task, `xcode-device-trap` (T14 follow-up, the `xcode` toolchain, macOS only), drives the
+same cart bug through `xcodebuild`, not just the host Swift toolchain: `XCODE_PACKAGE` is an iOS
+package with a library product (so `xcodebuild` makes a `Shop` scheme), and `XCODE_CHECK` runs
+`swift test --disable-sandbox` (the logic bug, on the host) then `xcodebuild build` for a generic
+iOS Simulator destination with the `xcode` profile's sandbox flags (`-derivedDataPath .build/xcode`,
+`-IDEPackageSupportDisableManifestSandbox=YES`, the plugin and macro skips). Both halves run in
+the sandbox because neither needs CoreSimulator — a generic destination builds for the SDK without
+booting a simulator — so the grader is not blocked by the simulator denial that traps the agent
+(`checkTimeoutMs` 6 minutes, for the cold iOS build). docs/lld/mobile.md has the details.
+
 ## Command
 
 ```text
@@ -158,7 +168,7 @@ garuda eval compare <a> <b> [--seed n]      # two reports or run folders of the 
 garuda eval tune --addendum <file> [--proposer model] [-m model] [-s suites…] [--rounds n]
                  [--repeat n] [--heldout-repeat n] [--margin n] [--max-cost usd] [--seed n]
                  [--parallel n] [--yes]
-garuda eval --prepare java|python|swift|android
+garuda eval --prepare java|python|swift|android|xcode
 garuda eval --from-git [--commits n] [--since date] [--max-tasks n] [--test-command cmd]
 ```
 

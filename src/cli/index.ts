@@ -162,7 +162,7 @@ async function main(): Promise<void> {
     )
     .option(
       "--prepare <toolchain>",
-      "java: download Maven plugins and JUnit once; android: Gradle and the Android plugin once; python, swift: check them",
+      "java: download Maven plugins and JUnit once; android: Gradle and the Android plugin once; python, swift, xcode: check them",
     )
     .option("--from-git", "build the repo suite from this project's recent commits, then exit")
     .option("--commits <n>", "with --from-git: recent commits to look at (default 200)", (v) =>

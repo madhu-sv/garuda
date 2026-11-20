@@ -21,6 +21,11 @@ const IGNORED_DIRS = new Set([
   "dist",
   "__pycache__",
   ".pytest_cache",
+  // SwiftPM's build folder, where the Xcode task's derived data goes too (.build/xcode), and
+  // Gradle's folder in the project. Without them an agent's own `swift test` or `./gradlew` run
+  // showed thousands of "unexpected" changes (the user's xcode-device-trap run, 2026-11-20).
+  ".build",
+  ".gradle",
 ]);
 const IGNORED_FILE = /\.(class|pyc)$/;
 
