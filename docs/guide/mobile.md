@@ -32,7 +32,8 @@ commands. For details per profile, see [Projects](projects.md).
   device. The pub cache's package folders are writable; its executables and `credentials.json` are
   not. In the Flutter SDK the sandbox writes only two small files that every `flutter` command
   writes (its lock file and `engine.realm`), never the Flutter tool or the Dart SDK, which run
-  outside the sandbox later. So each command prints one harmless error about `engine.stamp`. After
+  outside the sandbox later. So each command prints one harmless error about `engine.stamp`.
+  Flutter's settings (`~/.config/flutter`) and telemetry are readable, not writable. After
   `flutter upgrade`, run one `flutter` command outside Garuda first: it rebuilds the tool in the
   SDK. For new packages, add the `pub` preset to `network.allow`, or run `flutter pub get` once
   outside Garuda.

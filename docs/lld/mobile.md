@@ -311,7 +311,16 @@ stays read-only.
   The proxy checks hosts, not paths, so the preset also reaches other Cloud Storage buckets.
 - The receipt counts `flutter test` and `dart test` from package:test's last counter line
   (`+passed ~skipped -failed`).
-- Not yet: a run inside Seatbelt on the Mac, and Flutter tasks in the `mobile` suite.
+- The first run inside Seatbelt on the Mac (`!flutter test`, "needed" reads): the script printed
+  the expected `engine.stamp.tmp…: Operation not permitted` and went on, so the lock and the realm
+  were writable. Then the Flutter tool stopped: "Flutter failed to create a directory at
+  ~/.config/flutter". The folder exists, but "needed" mode hides it, so the tool tried to create
+  it. The profile now makes Flutter's settings readable (`$XDG_CONFIG_HOME/flutter` or
+  `~/.config/flutter`, and the older `~/.flutter_settings` and `~/.flutter_tool_state` that the
+  tool checks first) and its telemetry (`~/.flutter`, `~/.dart-tool`), and passes
+  `XDG_CONFIG_HOME`. None of them is writable: the settings name the JDK and the Android SDK that
+  later runs use, outside the sandbox too.
+- Not yet: a passing run inside Seatbelt, and Flutter tasks in the `mobile` suite.
 
 ## Measurement (2026-11-17 and 18; Haiku 5.5, `--repeat 3`, Seatbelt, the user's Mac)
 

@@ -97,7 +97,23 @@ export function isAndroid(root: string): boolean {
 }
 const PYTHON_ENV = ["VIRTUAL_ENV"];
 /** Flutter's own folders and its mirrors' settings (T14 part 3). No secrets. */
-const FLUTTER_ENV = ["FLUTTER_ROOT", "PUB_CACHE", "PUB_HOSTED_URL", "FLUTTER_STORAGE_BASE_URL"];
+const FLUTTER_ENV = [
+  "FLUTTER_ROOT",
+  "PUB_CACHE",
+  "PUB_HOSTED_URL",
+  "FLUTTER_STORAGE_BASE_URL",
+  // Flutter keeps its settings in $XDG_CONFIG_HOME/flutter when it is set: the same folder inside
+  // the sandbox as outside.
+  "XDG_CONFIG_HOME",
+];
+/**
+ * Flutter's settings and telemetry in the home folder, readable in "needed" mode, never writable.
+ * Without them the tool sees no settings folder, tries to create ~/.config/flutter and stops (the
+ * user's Mac, in the sandbox). The settings name the JDK and the Android SDK that later runs use,
+ * outside the sandbox too, so they stay read-only. `.flutter_settings` and `.flutter_tool_state`
+ * are older places that Flutter checks first; `.flutter` holds older telemetry.
+ */
+const FLUTTER_HOME_READS = [".flutter_settings", ".flutter_tool_state", ".flutter", ".dart-tool"];
 
 /**
  * The caches under the home folder that builds write. Only these subfolders: for example
@@ -279,8 +295,13 @@ export function detectProfiles(root: string, options: DetectOptions = {}): Langu
           ...(sdk === undefined ? [] : FLUTTER_SDK_FILES.map((f) => join(sdk, f))),
         ],
         envAllow: FLUTTER_ENV,
-        // An SDK in the home folder (~/development/flutter) is hidden in "needed" mode.
-        ...(sdk === undefined ? {} : { readPaths: [sdk] }),
+        // An SDK in the home folder (~/development/flutter) is hidden in "needed" mode, as are
+        // Flutter's settings and telemetry.
+        readPaths: [
+          ...(sdk === undefined ? [] : [sdk]),
+          join(userHome(env.XDG_CONFIG_HOME, join(home, ".config")), "flutter"),
+          ...FLUTTER_HOME_READS.map((p) => join(home, p)),
+        ],
       },
     });
   }

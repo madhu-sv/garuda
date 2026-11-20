@@ -48,6 +48,12 @@ const detect = (root: string, env: NodeJS.ProcessEnv = {}) =>
 const PUB_DIRS = ["hosted", "hosted-hashes", "active_roots", "git", "_temp"].map((d) =>
   join(HOME, ".pub-cache", d),
 );
+const SETTINGS_READS = [
+  join(HOME, ".config", "flutter"),
+  ...[".flutter_settings", ".flutter_tool_state", ".flutter", ".dart-tool"].map((p) =>
+    join(HOME, p),
+  ),
+];
 
 describe("the Flutter profile", () => {
   it("a pubspec with a flutter section or a flutter dependency; a Dart package is not Flutter", () => {
@@ -79,14 +85,19 @@ describe("the Flutter profile", () => {
     for (const p of ["", "bin", "global_packages", "credentials.json"]) {
       expect(writes).not.toContain(join(HOME, ".pub-cache", p));
     }
-    // An SDK in the home folder is hidden in "needed" mode: the profile reads it.
-    expect(app?.access.readPaths).toEqual([sdk]);
+    // An SDK in the home folder is hidden in "needed" mode: the profile reads it, and Flutter's
+    // settings and telemetry (the user's sandbox run: without ~/.config/flutter, Flutter tried to
+    // create it and stopped).
+    expect(app?.access.readPaths).toEqual([sdk, ...SETTINGS_READS]);
     expect(app?.access.envAllow).toEqual([
       "FLUTTER_ROOT",
       "PUB_CACHE",
       "PUB_HOSTED_URL",
       "FLUTTER_STORAGE_BASE_URL",
+      "XDG_CONFIG_HOME",
     ]);
+    // The settings are readable, never writable: they name the JDK and SDKs that later runs use.
+    for (const p of SETTINGS_READS) expect(writes).not.toContain(p);
   });
 
   it("finds the SDK from flutter on PATH through Homebrew's link, as a real path", () => {
@@ -107,13 +118,19 @@ describe("the Flutter profile", () => {
   it("without an SDK: the pub cache only, and a note that says why flutter may fail", () => {
     const [app] = detect(project(FLUTTER_APP), { PATH: "/nowhere" });
     expect(app?.access.writePaths).toEqual(PUB_DIRS);
-    expect(app?.access.readPaths).toBeUndefined();
+    expect(app?.access.readPaths).toEqual(SETTINGS_READS);
     expect(app?.notes.join("\n")).toContain("Flutter was not found");
     // With an SDK there is no such note.
     const sdk = sdkAt(join(base, "sdk2"));
     expect(detect(project(FLUTTER_APP), { FLUTTER_ROOT: sdk })[0]?.notes.join("\n")).not.toContain(
       "Flutter was not found",
     );
+  });
+
+  it("XDG_CONFIG_HOME moves Flutter's settings folder when it is absolute", () => {
+    const [moved] = detect(project(FLUTTER_APP), { XDG_CONFIG_HOME: "/data/config" });
+    expect(moved?.access.readPaths).toContain("/data/config/flutter");
+    expect(moved?.access.readPaths).not.toContain(join(HOME, ".config", "flutter"));
   });
 
   it("PUB_CACHE moves the cache when it is absolute", () => {
