@@ -5,6 +5,8 @@ import { afterAll, describe, expect, it } from "vitest";
 import { isTestCommand, parseTestCount } from "../src/app/receipt.js";
 import { detectProfiles, flutterSdk } from "../src/lang/profiles.js";
 import { NETWORK_PRESETS, presetFor } from "../src/net/allowlist.js";
+import type { ExecResult } from "../src/sandbox/types.js";
+import { sandboxHint } from "../src/tools/bash.js";
 
 /** T14 part 3 (docs/lld/mobile.md): the Flutter profile, from the user's probes (Flutter 3.50.1). */
 
@@ -204,5 +206,52 @@ describe("the receipt reads flutter test", () => {
     expect(parseTestCount("00:00 +2 ~1: All tests passed!")).toEqual({ total: 2, failed: 0 });
     // Only skipped tests: none ran, so the receipt says "no tests ran", not "passed".
     expect(parseTestCount("00:00 +0 ~2: All tests skipped.")).toEqual({ total: 0, failed: 0 });
+  });
+});
+
+/** A finished command, as the sandbox returns it. */
+function ran(exitCode: number, stdout: string, stderr = ""): ExecResult {
+  const out = (text: string) => ({ text, truncated: false, totalBytes: text.length });
+  return {
+    exitCode,
+    signal: null,
+    stdout: out(stdout),
+    stderr: out(stderr),
+    timedOut: false,
+    aborted: false,
+    durationMs: 1,
+  };
+}
+
+/** The line that every sandboxed flutter command prints (the user's Mac, all three runs). */
+const STAMP =
+  "/opt/homebrew/share/flutter/bin/internal/update_engine_version.sh: line 71: /opt/homebrew/share/flutter/bin/cache/engine.stamp.tmp.14551: Operation not permitted";
+
+describe("the sandbox hint", () => {
+  it("names the sandbox when a failed command shows a block, and not for a success", () => {
+    expect(sandboxHint(ran(1, "", "touch: /etc/x: Operation not permitted"))).toContain(
+      "The sandbox may have blocked this command",
+    );
+    expect(sandboxHint(ran(1, "", "curl: (6) Could not resolve host: pub.dev"))).toContain(
+      "it has no network",
+    );
+    expect(sandboxHint(ran(0, "", "touch: /etc/x: Operation not permitted"))).toBeUndefined();
+  });
+
+  it("ignores Flutter's engine.stamp line: a failing flutter test is not a sandbox block", () => {
+    // The user's run: no test folder, exit 1. The cause is the project, not the sandbox.
+    expect(sandboxHint(ran(1, "", `${STAMP}\nTest directory "test" not found.`))).toBeUndefined();
+    // A failing test, with the stamp line.
+    expect(sandboxHint(ran(1, "00:01 +1 -1: Some tests failed.", `${STAMP}\n`))).toBeUndefined();
+    // A real block next to the stamp line still gets the hint.
+    expect(
+      sandboxHint(
+        ran(
+          1,
+          "",
+          `${STAMP}\nFileSystemException: Cannot open file, path = '/Users/u/x' (OS Error: Operation not permitted, errno = 1)`,
+        ),
+      ),
+    ).toContain("The sandbox may have blocked this command");
   });
 });

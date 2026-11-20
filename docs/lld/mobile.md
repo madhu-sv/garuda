@@ -326,7 +326,15 @@ stays read-only.
   reporting. The profile now makes writable the session file and the telemetry log, which every
   command writes (the probes) and which hold no code or settings. The consent file
   (`dart-flutter-telemetry.config`) stays read-only, so the sandbox cannot turn telemetry on.
-- Not yet: a passing run inside Seatbelt, and Flutter tasks in the `mobile` suite.
+- The third run inside Seatbelt reached the tests: "Test directory "test" not found", because
+  `flutter create --empty` makes no test folder. With a logic test and a widget test added, the
+  fourth run passed: `00:00 +2: All tests passed!`, exit 0, in Seatbelt with "needed" reads, and
+  only the expected `engine.stamp` line on stderr (2026-11-20).
+- The third run also showed a false hint: `sandboxHint` matched the `engine.stamp` line's
+  "Operation not permitted", so a failure that the project caused read as a sandbox block, which
+  points the model to an outside_sandbox run that it does not need. `HARMLESS_BLOCKS` in
+  `tools/bash.ts` drops that line before the check; a real block next to it still gets the hint.
+- Not yet: Flutter tasks in the `mobile` suite.
 
 ## Measurement (2026-11-17 and 18; Haiku 5.5, `--repeat 3`, Seatbelt, the user's Mac)
 
